@@ -12,4 +12,4 @@ codes 是面向单用户的 Linux 自托管 Codex 网页工作台，电脑浏览
 
 发生断连或回执不确定时，先使用 **Check result**，不要重复发送。未能从原生历史证明结束的操作会继续锁定。远程访问默认建议 SSH 隧道，手机使用需要配置私有 HTTPS 入口。
 
-更多说明：[架构](architecture.md)、[验收标准](acceptance.md)、[开发里程碑](roadmap.md)、[运行与恢复](operations.md)。正式发版、发布标签和部署须由项目所有者另行确认。
+更多说明：[架构](architecture.md)、[验收标准](acceptance.md)、[开发里程碑](roadmap.md)、[待实现与待验收清单](requirements.md)、[运行与恢复](operations.md)。正式发版、发布标签和部署须由项目所有者另行确认。

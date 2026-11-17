@@ -102,6 +102,7 @@ It is excluded from CI and the default test command. Unexpected approvals are re
 - [Architecture and decisions](docs/architecture.md)
 - [Small-scale acceptance and current evidence](docs/acceptance.md)
 - [Development milestones](docs/roadmap.md)
+- [Remaining implementation and acceptance](docs/requirements.md)
 - [Operations and recovery](docs/operations.md)
 - [Changelog](CHANGELOG.md)
 - [中文说明](docs/README.zh-CN.md)

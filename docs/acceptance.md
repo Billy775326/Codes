@@ -14,15 +14,15 @@ Target: one owner, one Linux host, a desktop browser for development, and a phon
 | Long history         | Open the latest 12 turns, load another page, type, then switch conversations                                       | Browser test against 100 synthetic turns           |
 | Authentication       | APIs require a session; foreign origins and hosts are rejected; logout revokes the cookie                          | HTTP tests                                         |
 | CLI compatibility    | Initialize and read model/thread metadata with an empty temporary CLI home                                         | `npm run test:native`                              |
-| Live execution       | A real model turn streams, can be stopped, and preserves native history                                            | Pending isolated live acceptance                   |
+| Live execution       | A real model turn streams, can be stopped, and preserves native history                                            | Passed basic isolated read/write/interrupt pilot   |
 | Live approvals       | Real CLI command/file/permission approvals and questions resolve correctly under the owner's policy                | Pending isolated live acceptance                   |
 | Deployment           | The intended service user, HTTPS proxy, phone, restart, backup, and restore work together                          | Pending deployment acceptance                      |
 
 ## Local evidence
 
-Automated checks use Node 24.22.3 on Linux. Browser checks use Chrome 148.0.7778.215 with Playwright 1.64.0 at 1440×1000 and 390×844. The default tests create temporary data and use no account credentials, real model prompts, or project commands. The separately invoked live pilot uses the server login and model quota.
+Automated checks use Node 24.22.3 on Linux. Browser checks use Chrome 148.0.7778.215 with Playwright 1.64.0 at 1440×1000, 820×900, 390×844, and 320×640. The default tests create temporary data and use no account credentials, real model prompts, or project commands. The separately invoked live pilot uses the server login and model quota.
 
-The browser suite covers streaming and reload; a closed desktop followed by phone approval; offline recovery with a retained draft; an accepted request whose HTTP response is lost; interruption; and bounded long history. Its history case rejects an observed long task of 250 ms or more during page loading and typing. This is a local acceptance threshold, not a production performance guarantee or a benchmark against another application.
+Login coverage checks responsive layout, token visibility, rejected credentials, pending controls, keyboard submission, and recovery from an initial connection failure. The browser suite also covers streaming and reload; a closed desktop followed by phone approval; offline recovery with a retained draft; an accepted request whose HTTP response is lost; interruption; and bounded long history. Its history case rejects an observed long task of 250 ms or more during page loading and typing. This is a local acceptance threshold, not a production performance guarantee or a benchmark against another application.
 
 The native smoke uses CLI 0.167.0 and an empty temporary `CODEX_HOME`. It checks initialization, model metadata, a new read-only thread, metadata read, and empty-history behavior. It deliberately sends no model request. A successful smoke must not be presented as complete live execution acceptance.
 
