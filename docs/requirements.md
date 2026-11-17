@@ -1,6 +1,6 @@
 # Remaining implementation and acceptance
 
-codes has a working single-owner preview. Conversations, streaming, approvals/questions, file selections, current-turn diffs, token sign-in, and bounded browser recovery are implemented. Basic live reading, editing, native history, and interruption have passed an isolated pilot.
+codes has a working single-owner preview. Searchable conversation navigation, native rename/archive/restore, streaming, approvals/questions, file selections, current-turn diffs, token sign-in, and bounded browser recovery are implemented. Basic live reading, editing, native history, and interruption have passed an isolated pilot.
 
 This document separates proposed implementation work from acceptance of existing behavior. Priorities are recommendations based on the current source and documented limits; they are not completed features or a commitment to implement the entire list in the current task.
 
@@ -11,11 +11,12 @@ This document separates proposed implementation work from acceptance of existing
 | R1  | P0       | Extend unknown-result recovery and its diagnostics | Reconciliation currently scans the latest 12 turns. Locate an operation by its known turn/client identity beyond that window, explain why it is still locked, and offer a safe next action. Never clear an unknown execution merely to enable another send.                         |
 | R2  | P0       | Scale history, tool output, and file previews      | The browser stops older-history loading at 240 displayed messages, output is clipped, and file lines are all rendered. Add navigable bounded windows or virtualization, explicit truncation notices, and paginated directory entries. Validate responsiveness on the intended host. |
 | R3  | P1       | Package service supervision and health checks      | The current trial is a manually started process. Provide a reviewed service template, explicit runtime/account configuration, bounded restart behavior, and a readiness check. A restart must preserve unknown outcomes and never resend work.                                      |
-| R4  | P1       | Complete conversation navigation and management    | Add conversation search, rename/archive controls, and discovery beyond the latest 30 native conversations and 200 local summaries. Preserve native history as the source of truth.                                                                                                  |
 | R5  | P1       | Complete project registration management           | The UI currently adds/selects directories. Add registration rename/removal and clear handling of missing/moved paths. Removing a registration must not delete its directory or native conversations.                                                                                |
 | R6  | P1       | Expose useful runtime diagnostics                  | The API reports basic runtime state/version, but the UI lacks a dedicated status view. Show actionable CLI availability/version/authentication and connection errors without exposing credentials or raw sensitive logs.                                                            |
 
-R1 and R2 are the recommended next engineering steps because recovery and responsiveness are the main reasons for this project. The current limits already bound many resources; extending them must retain those bounds.
+**R4 basic conversation management is implemented.** The sidebar supports case-insensitive title search, native cursor pagination, rename, archive/restore, protected active/unknown tasks, and retained drafts. Search scans a bounded portion at a time; permanent deletion, full-text search, and export remain outside this change. See [conversation management](conversations.md) and [acceptance](acceptance.md) for scope and evidence.
+
+R1 and R2 remain the recommended next engineering steps because recovery and responsiveness are the main reasons for this project. The current limits already bound many resources; extending them must retain those bounds.
 
 ## Existing behavior still requiring acceptance
 

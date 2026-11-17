@@ -71,6 +71,9 @@ export class Service {
   private loaded = new Set<string>();
   private reads = new Map<string, Promise<Thread>>();
   private admission: Promise<void> = Promise.resolve();
+  private managing = new Set<string>();
+  private metadataRevision = 0;
+  private metadataRevisions = new Map<string, number>();
   private actions = new Map<
     string,
     { action: Action; rpcId: string | number; epoch: string; permissions?: unknown }
@@ -107,36 +110,341 @@ export class Service {
       throw new AppError('INVALID_DIRECTORY', 'Choose an existing directory.');
     return this.store.addProject(name || basename(canonical), canonical);
   }
+  private metadataChanged(id: string) {
+    this.metadataRevisions.delete(id);
+    this.metadataRevisions.set(id, ++this.metadataRevision);
+    if (this.metadataRevisions.size > 512)
+      this.metadataRevisions.delete(this.metadataRevisions.keys().next().value!);
+  }
+  private observeConversation(
+    id: string,
+    change: { title?: string; archived?: boolean },
+    force = false,
+  ) {
+    const saved = this.store.thread(id);
+    if (!saved) return;
+    let settled = false;
+    if (change.archived !== undefined) {
+      const operation = this.store.pendingManagement(id);
+      if (
+        operation &&
+        (operation.archived === change.archived || operation.epoch !== this.driver.epoch)
+      ) {
+        settled = true;
+        this.store.update(
+          operation.id,
+          operation.archived === change.archived ? 'completed' : 'failed',
+          undefined,
+          operation.archived === change.archived
+            ? undefined
+            : 'The requested archive state was not applied before the CLI stopped.',
+        );
+      }
+    }
+    const changed =
+      (change.title !== undefined && change.title !== saved.title) ||
+      (change.archived !== undefined && change.archived !== saved.archived);
+    if (!force && !changed && !settled) return saved;
+    if (changed) this.metadataChanged(id);
+    this.store.setMetadata(id, change);
+    const updated = this.store.thread(id)!;
+    const cached = this.cache.get(id);
+    if (cached) Object.assign(cached, change, { managementPending: updated.managementPending });
+    this.events.publish('summary', updated, id);
+    this.events.publish('state', { ...change, managementPending: updated.managementPending }, id);
+    return updated;
+  }
   async list(projectId: string) {
+    await this.conversations(projectId, { limit: 30 });
+    return this.store.summaries(projectId);
+  }
+  async conversations(
+    projectId: string,
+    options: { cursor?: string; search?: string; archived?: boolean; limit?: number } = {},
+  ) {
     const project = this.project(projectId);
-    try {
-      const page = await this.driver.call('thread/list', {
-        cwd: project.path,
-        limit: 30,
-        archived: false,
-        sourceKinds: ['cli', 'appServer', 'vscode'],
-        modelProviders: [],
-      });
-      if (!Array.isArray(page.data))
-        throw new AppError('PROTOCOL_ERROR', 'Invalid conversation list.', 502);
+    const search = (options.search ?? '').trim().slice(0, 120);
+    const archived = options.archived === true;
+    const limit = Math.min(50, Math.max(1, options.limit ?? 30));
+    let nativeCursor: string | undefined;
+    if (options.cursor) {
+      try {
+        const c = JSON.parse(Buffer.from(options.cursor, 'base64url').toString());
+        if (
+          c.projectId !== projectId ||
+          c.search !== search ||
+          c.archived !== archived ||
+          typeof c.nativeCursor !== 'string'
+        )
+          throw new Error();
+        nativeCursor = c.nativeCursor;
+      } catch {
+        throw new AppError(
+          'LIST_CURSOR',
+          'This conversation page no longer matches the current filters.',
+        );
+      }
+    }
+    const encode = (cursor: string) =>
+      Buffer.from(JSON.stringify({ projectId, search, archived, nativeCursor: cursor })).toString(
+        'base64url',
+      );
+    const seen = new Set<string>();
+    let scanned = 0;
+    const deadline = Date.now() + 20_000;
+    for (let pageNumber = 0; pageNumber < 4; pageNumber++) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0)
+        throw new AppError('LIST_TIMEOUT', 'Conversation browsing timed out. Try again.', 504);
+      const readRevision = this.metadataRevision;
+      const page = await this.driver.call(
+        'thread/list',
+        {
+          cwd: project.path,
+          cursor: nativeCursor,
+          limit,
+          archived,
+          sourceKinds: ['cli', 'appServer', 'vscode'],
+          modelProviders: [],
+          sortKey: 'updated_at',
+          sortDirection: 'desc',
+        },
+        remaining,
+      );
+      if (
+        !Array.isArray(page.data) ||
+        (page.nextCursor != null && typeof page.nextCursor !== 'string')
+      )
+        throw new AppError('PROTOCOL_ERROR', 'Invalid conversation page.', 502);
+      const data: import('../shared/types.js').Summary[] = [];
+      const ids = new Set<string>();
       for (const raw of page.data) {
+        scanned++;
         if (!record(raw) || typeof raw.id !== 'string' || raw.cwd !== project.path) continue;
-        if (!this.store.thread(raw.id))
+        const saved = this.store.thread(raw.id);
+        const title = text(raw.name || raw.preview, 80) || 'Untitled conversation';
+        if (!saved)
           this.store.saveThread(
             {
               id: raw.id,
               projectId,
-              title: text(raw.name || raw.preview, 80) || 'Untitled conversation',
+              title,
               state: state(raw.status),
               updatedAt: Number(raw.updatedAt || 0) * 1000,
+              archived,
             },
             { permission: 'read-only' },
           );
+        else {
+          if (saved.projectId !== projectId)
+            throw new AppError(
+              'PROJECT_OWNERSHIP',
+              'The conversation belongs to another project.',
+              403,
+            );
+          if ((this.metadataRevisions.get(raw.id) ?? 0) <= readRevision)
+            this.observeConversation(raw.id, { title, archived });
+        }
+        const summary = this.store.thread(raw.id)!;
+        if (
+          !!summary.archived === archived &&
+          (!search || summary.title.toLowerCase().includes(search.toLowerCase())) &&
+          !ids.has(summary.id)
+        ) {
+          data.push({
+            ...summary,
+            updatedAt: Math.max(summary.updatedAt, Number(raw.updatedAt || 0) * 1000),
+          });
+          ids.add(summary.id);
+        }
       }
-    } catch (error) {
-      throw error;
+      if (page.nextCursor && page.nextCursor === nativeCursor)
+        throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
+      const nextCursor = page.nextCursor ? encode(page.nextCursor) : null;
+      if (data.length || !nextCursor || pageNumber === 3) return { data, nextCursor, scanned };
+      if (seen.has(page.nextCursor))
+        throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
+      seen.add(page.nextCursor);
+      nativeCursor = page.nextCursor;
     }
-    return this.store.summaries(projectId);
+    throw new AppError('PROTOCOL_ERROR', 'Invalid conversation scan.', 502);
+  }
+  private async conversationOwner(id: string) {
+    const saved = this.store.thread(id);
+    if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+    const project = this.project(saved.projectId);
+    const response = await this.driver.call('thread/read', { threadId: id, includeTurns: false });
+    if (response.thread?.cwd !== project.path)
+      throw new AppError(
+        'PROJECT_OWNERSHIP',
+        'This conversation no longer belongs to the project.',
+        403,
+      );
+    return { saved, native: response.thread };
+  }
+  async rename(id: string, operationId: string, name: string) {
+    const input = { name };
+    const receipt = this.store.existing(operationId, id, 'rename', input);
+    if (receipt) {
+      if (receipt.state !== 'completed')
+        throw new AppError(
+          'MANAGEMENT_UNKNOWN',
+          'The rename result is not confirmed. Refresh the conversation list.',
+          409,
+        );
+      return this.store.thread(id)!;
+    }
+    if (this.managing.has(id) || this.store.pendingManagement(id))
+      throw new AppError(
+        'MANAGEMENT_BUSY',
+        'Wait for the current conversation change to finish.',
+        409,
+      );
+    this.managing.add(id);
+    try {
+      await this.conversationOwner(id);
+      this.store.begin(operationId, id, 'rename', input);
+      await this.driver.call('thread/name/set', { threadId: id, name });
+      this.store.update(operationId, 'completed');
+      return this.observeConversation(id, { title: name })!;
+    } catch (error) {
+      if (this.store.operation(operationId))
+        this.store.update(
+          operationId,
+          error instanceof AppError && !error.uncertain ? 'failed' : 'unknown',
+        );
+      throw error;
+    } finally {
+      this.managing.delete(id);
+    }
+  }
+  async archive(id: string, operationId: string, archived: boolean) {
+    const input = { archived };
+    const receipt = this.store.existing(operationId, id, 'archive', input);
+    if (receipt) {
+      if (receipt.state !== 'completed')
+        throw new AppError(
+          'MANAGEMENT_UNKNOWN',
+          'The archive result is not confirmed. Refresh its status before continuing.',
+          409,
+        );
+      return this.store.thread(id)!;
+    }
+    if (this.managing.has(id) || this.store.pendingManagement(id))
+      throw new AppError(
+        'MANAGEMENT_BUSY',
+        'Check the pending conversation change before trying again.',
+        409,
+      );
+    this.managing.add(id);
+    try {
+      const { saved, native } = await this.conversationOwner(id);
+      if (this.store.active(id) || native.status?.type === 'active')
+        throw new AppError(
+          'CONVERSATION_ACTIVE',
+          'Stop the current task and confirm its result before archiving this conversation.',
+          409,
+        );
+      if (!!saved.archived === archived) return saved;
+      if (archived) {
+        try {
+          const page = await this.driver.call('thread/turns/list', {
+            threadId: id,
+            limit: 1,
+            itemsView: 'notLoaded',
+            sortDirection: 'desc',
+          });
+          if (!Array.isArray(page.data))
+            throw new AppError('PROTOCOL_ERROR', 'Invalid active-turn metadata.', 502);
+          if (page.data[0]?.status === 'inProgress')
+            throw new AppError(
+              'CONVERSATION_ACTIVE',
+              'The native conversation still has an unfinished turn. Confirm its result before archiving.',
+              409,
+            );
+        } catch (error) {
+          if (!(
+            error instanceof AppError &&
+            error.code === 'CLI_ERROR' &&
+            error.message.includes(
+              'is not materialized yet; thread/turns/list is unavailable before first user message',
+            )
+          ))
+            throw error;
+        }
+      }
+      this.store.begin(
+        operationId,
+        id,
+        'archive',
+        input,
+        JSON.stringify({ archived, epoch: this.driver.epoch }),
+      );
+      this.observeConversation(id, {}, true);
+      await this.driver.call(archived ? 'thread/archive' : 'thread/unarchive', { threadId: id });
+      this.store.update(operationId, 'completed');
+      this.loaded.delete(id);
+      return this.observeConversation(id, { archived })!;
+    } catch (error) {
+      const receipt = this.store.operation(operationId);
+      if (receipt?.state === 'completed') return this.store.thread(id)!;
+      if (receipt) {
+        this.store.update(
+          operationId,
+          error instanceof AppError && !error.uncertain ? 'failed' : 'unknown',
+        );
+        this.observeConversation(id, {}, true);
+      }
+      throw error;
+    } finally {
+      this.managing.delete(id);
+    }
+  }
+  async checkManagement(id: string) {
+    const { saved } = await this.conversationOwner(id);
+    const operation = this.store.pendingManagement(id);
+    if (!operation) return saved;
+    const project = this.project(saved.projectId);
+    const deadline = Date.now() + 20_000;
+    for (const archived of [true, false]) {
+      let cursor: string | undefined;
+      const seen = new Set<string>();
+      for (let pageNumber = 0; pageNumber < 4; pageNumber++) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0)
+          throw new AppError(
+            'MANAGEMENT_UNKNOWN',
+            'The status check timed out. The conversation remains protected.',
+            409,
+          );
+        const page = await this.driver.call(
+          'thread/list',
+          {
+            cwd: project.path,
+            archived,
+            cursor,
+            limit: 50,
+            sourceKinds: ['cli', 'appServer', 'vscode'],
+            modelProviders: [],
+          },
+          Math.min(remaining, 5000),
+        );
+        if (!Array.isArray(page.data))
+          throw new AppError('PROTOCOL_ERROR', 'Invalid conversation status page.', 502);
+        if (page.data.some((row: any) => row.id === id))
+          return this.observeConversation(id, { archived })!;
+        if (!page.nextCursor) break;
+        if (seen.has(page.nextCursor))
+          throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
+        seen.add(page.nextCursor);
+        cursor = page.nextCursor;
+      }
+    }
+    throw new AppError(
+      'MANAGEMENT_UNKNOWN',
+      'The status could not be located in this scan. Search both active and archived views; the conversation remains protected.',
+      409,
+    );
   }
   async create(projectId: string, settings: Settings) {
     const project = this.project(projectId);
@@ -387,6 +695,18 @@ export class Service {
     }
     if (Buffer.byteLength(prompt + context) > 100_000)
       throw new AppError('INPUT_LIMIT', 'The prompt and attached context exceed 100 KB.');
+    if (this.store.thread(id)?.archived)
+      throw new AppError(
+        'CONVERSATION_ARCHIVED',
+        'Restore this conversation before sending another task.',
+        409,
+      );
+    if (this.managing.has(id) || this.store.pendingManagement(id))
+      throw new AppError(
+        'MANAGEMENT_BUSY',
+        'The conversation metadata is still being changed. Check its status before sending.',
+        409,
+      );
     const { existing } = this.store.begin(operationId, id, 'send', input, prompt);
     if (existing) return existing;
     thread.pending = { id: operationId, text: prompt, state: 'dispatching' };
@@ -565,9 +885,28 @@ export class Service {
     }
   }
   private boundary(thread: Thread) {
+    const previous = this.store.thread(thread.id);
+    // The first prompt also supplies a title. Protect it from older thread/list replies.
+    if (previous && (previous.title !== thread.title || !!previous.archived !== !!thread.archived))
+      this.metadataChanged(thread.id);
     this.store.saveThread(thread, thread.settings);
     const { id, projectId, title, state, updatedAt } = thread;
-    this.events.publish('summary', { id, projectId, title, state, updatedAt }, id);
+    thread.executionPending = !!thread.pending;
+    thread.managementPending = !!this.store.pendingManagement(id);
+    this.events.publish(
+      'summary',
+      {
+        id,
+        projectId,
+        title,
+        state,
+        updatedAt,
+        archived: thread.archived ?? false,
+        executionPending: thread.executionPending,
+        managementPending: thread.managementPending,
+      },
+      id,
+    );
     this.events.publish(
       'state',
       {
@@ -594,6 +933,22 @@ export class Service {
   private notification(event: any) {
     if (!record(event.params)) return;
     const p = event.params;
+    if (
+      event.method === 'thread/name/updated' &&
+      typeof p.threadId === 'string' &&
+      typeof p.threadName === 'string'
+    ) {
+      this.observeConversation(p.threadId, { title: text(p.threadName, 80) });
+      return;
+    }
+    if (
+      (event.method === 'thread/archived' || event.method === 'thread/unarchived') &&
+      typeof p.threadId === 'string'
+    ) {
+      this.loaded.delete(p.threadId);
+      this.observeConversation(p.threadId, { archived: event.method === 'thread/archived' });
+      return;
+    }
     if (event.method === 'thread/closed') {
       this.loaded.delete(p.threadId);
       const closed = this.cache.get(p.threadId);

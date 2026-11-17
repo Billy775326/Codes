@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -19,6 +19,7 @@ import { ApiError, message, post, request } from './api';
 import { Feed } from './feed';
 import { Brand, Icon } from './primitives';
 import { Login } from './Login';
+import { Conversations } from './Conversations';
 import './style.css';
 
 const labels: Record<string, string> = {
@@ -265,7 +266,6 @@ function App() {
     void request<Summary[]>(`/projects/${projectId}/threads`, {}, controller.signal)
       .then((list) => {
         setThreads(list);
-        if (!list.some((x) => x.id === threadId)) setThreadId('');
       })
       .catch((e) => {
         if (!controller.signal.aborted) notice(e);
@@ -301,12 +301,16 @@ function App() {
       window.removeEventListener('online', focus);
     };
   }, [projectId, threadId, auth, retry]);
-  const select = (id: string) => {
-    setThread(undefined);
+  const select = useCallback((id: string) => {
+    setThread((current) => (current?.id === id ? current : undefined));
     setThreadId(id);
     setSidebar(false);
     follow.current = true;
-  };
+  }, []);
+  const conversationUpdated = useCallback((summary: Summary) => {
+    setThreads((list) => [summary, ...list.filter((row) => row.id !== summary.id)].slice(0, 200));
+    setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
+  }, []);
   useEffect(() => {
     save('codes.thread', threadId);
     setDraft(saved(`codes.draft.${threadId || 'new'}`).slice(0, 50_000));
@@ -353,7 +357,11 @@ function App() {
         return;
       }
       flush();
-      if (e.kind === 'state' && !(e.data as Partial<Thread>).pending) {
+      if (
+        e.kind === 'state' &&
+        Object.hasOwn(e.data as object, 'pending') &&
+        !(e.data as Partial<Thread>).pending
+      ) {
         save(`codes.operation.${threadId}`, '');
         setReceipt('');
       }
@@ -437,7 +445,8 @@ function App() {
     setError('');
   };
   const send = async () => {
-    if (busy || !draft.trim() || !projectId) return;
+    if (busy || !draft.trim() || !projectId || thread?.archived || thread?.managementPending)
+      return;
     setBusy(true);
     setError('');
     let id = threadId;
@@ -661,32 +670,14 @@ function App() {
           <Icon name="plus" />
           New conversation<span>↵</span>
         </button>
-        <div className="workspace-label conversation-label">
-          CONVERSATIONS<span>{threads.length || ''}</span>
-        </div>
-        <nav aria-label="Conversations">
-          {threads.map((t) => (
-            <button
-              key={t.id}
-              className={`thread-link ${t.id === threadId ? 'active' : ''}`}
-              disabled={busy}
-              onClick={() => select(t.id)}
-            >
-              <span className={`status-dot ${t.state}`} />
-              <span>{t.title}</span>
-              {['waitingApproval', 'waitingInput'].includes(t.state) && (
-                <span className="attention">!</span>
-              )}
-            </button>
-          ))}
-          {!threads.length && (
-            <p className="muted empty-nav">
-              Your conversations
-              <br />
-              will appear here.
-            </p>
-          )}
-        </nav>
+        <Conversations
+          projectId={projectId}
+          selectedId={threadId}
+          updates={threads}
+          disabled={busy}
+          onSelect={select}
+          onUpdated={conversationUpdated}
+        />
         <div className="sidebar-footer">
           <div className="host-symbol">
             <Icon name="terminal" size={17} />
@@ -757,6 +748,36 @@ function App() {
           <div className="simulation-strip">
             <span>DEMO WORKSPACE</span>Responses are simulated. No models, commands, or file changes
             are executed.
+          </div>
+        )}
+        {(thread?.archived || thread?.managementPending) && (
+          <div className="conversation-lock-banner" role="status">
+            <span>
+              <Icon name="archive" size={14} />
+              {thread.managementPending
+                ? 'A conversation change needs confirmation. Check its status before sending.'
+                : 'This conversation is archived. Restore it to continue.'}
+            </span>
+            <button
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void post<Summary>(
+                  '/threads/' +
+                    thread.id +
+                    '/' +
+                    (thread.managementPending ? 'management-status' : 'archive'),
+                  thread.managementPending
+                    ? {}
+                    : { operationId: crypto.randomUUID(), archived: false },
+                )
+                  .then(conversationUpdated)
+                  .catch(notice)
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {thread.managementPending ? 'Check status' : 'Restore conversation'}
+            </button>
           </div>
         )}
         <div
@@ -918,11 +939,16 @@ function App() {
             <textarea
               aria-label="Message Codex"
               value={draft}
+              readOnly={!!thread?.archived || !!thread?.managementPending}
               onChange={(e) => changeDraft(e.target.value)}
               placeholder={
-                active
-                  ? 'Write your next thought…'
-                  : 'Ask Codex to explore, build, or fix something…'
+                thread?.archived
+                  ? 'Restore this conversation to continue…'
+                  : thread?.managementPending
+                    ? 'Check conversation status to continue…'
+                    : active
+                      ? 'Write your next thought…'
+                      : 'Ask Codex to explore, build, or fix something…'
               }
               maxLength={50_000}
               onKeyDown={(e) => {
@@ -992,7 +1018,14 @@ function App() {
                   className="send-button"
                   aria-label="Send message"
                   onClick={() => void send()}
-                  disabled={busy || !draft.trim() || !projectId || !!receipt}
+                  disabled={
+                    busy ||
+                    !draft.trim() ||
+                    !projectId ||
+                    !!receipt ||
+                    !!thread?.archived ||
+                    !!thread?.managementPending
+                  }
                 >
                   <Icon name="arrow" size={18} />
                 </button>

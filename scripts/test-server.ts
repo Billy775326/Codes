@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 const directory = await mkdtemp(join(tmpdir(), 'codes-browser-'));
 const project = join(directory, 'sample-project');
 await mkdir(project);
+await mkdir(join(project, 'conversation-fixtures'));
 await writeFile(
   join(project, 'README.md'),
   '# Sample project\n\nA fixture for isolated browser acceptance.\n',

@@ -47,6 +47,9 @@ export interface Summary {
   title: string;
   state: State;
   updatedAt: number;
+  archived?: boolean;
+  managementPending?: boolean;
+  executionPending?: boolean;
 }
 export interface Thread extends Summary {
   messages: Message[];
@@ -104,3 +107,9 @@ export const limits = {
   active: 4,
   idleThreads: 20,
 } as const;
+
+export interface ConversationPage {
+  data: Summary[];
+  nextCursor: string | null;
+  scanned: number;
+}

@@ -8,6 +8,7 @@ A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interfa
 
 - Projects backed by existing directories on the host.
 - Native Codex conversations, streamed assistant text, and command/file activity.
+- Searchable, paginated conversation navigation with native rename, archive, and restore controls.
 - Command, file, and turn-scoped permission approvals; structured user questions.
 - Read-only file browsing and line-range attachments with file-change checks.
 - Read-only current-turn diffs and paginated native conversation history.
@@ -103,6 +104,7 @@ It is excluded from CI and the default test command. Unexpected approvals are re
 - [Small-scale acceptance and current evidence](docs/acceptance.md)
 - [Development milestones](docs/roadmap.md)
 - [Remaining implementation and acceptance](docs/requirements.md)
+- [Conversation management](docs/conversations.md)
 - [Operations and recovery](docs/operations.md)
 - [Changelog](CHANGELOG.md)
 - [中文说明](docs/README.zh-CN.md)

@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, chmodSync } from 'node:fs';
+import { mkdirSync, chmodSync, openSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Operation, Project, Settings, Summary } from '../shared/types.js';
 import { AppError } from '../shared/errors.js';
@@ -13,7 +13,7 @@ export class Store {
     chmodSync(join(directory, 'codes.sqlite'), 0o600);
     if (
       this.db.prepare("SELECT name FROM sqlite_master WHERE name='meta'").get() &&
-      (this.db.prepare('SELECT version FROM meta').get() as any)?.version !== 1
+      ![1, 2].includes((this.db.prepare('SELECT version FROM meta').get() as any)?.version)
     ) {
       this.db.close();
       throw new AppError(
@@ -24,12 +24,35 @@ export class Store {
     }
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=1000;
       CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL);
-      INSERT INTO meta SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM meta);
+      INSERT INTO meta SELECT 2 WHERE NOT EXISTS (SELECT 1 FROM meta);
       CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT UNIQUE NOT NULL);
-      CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), title TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL, settings TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), title TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL, settings TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id), kind TEXT NOT NULL, digest TEXT NOT NULL, state TEXT NOT NULL, turn_id TEXT, error TEXT, pending_text TEXT, created_at INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS active_turn ON operations(thread_id) WHERE kind='send' AND state IN ('dispatching','acknowledged','unknown');`);
-    if ((this.db.prepare('SELECT version FROM meta').get() as any).version !== 1)
+    if ((this.db.prepare('SELECT version FROM meta').get() as any).version === 1) {
+      const backup = join(
+        directory,
+        'codes.schema-v1-' + Date.now() + '-' + randomUUID() + '.sqlite',
+      );
+      try {
+        closeSync(openSync(backup, 'wx', 0o600));
+        this.db.prepare('VACUUM INTO ?').run(backup);
+      } catch (error) {
+        this.db.close();
+        throw error;
+      }
+      this.db.exec('BEGIN IMMEDIATE');
+      try {
+        this.db.exec(
+          'ALTER TABLE threads ADD COLUMN archived INTEGER NOT NULL DEFAULT 0; UPDATE meta SET version=2; COMMIT;',
+        );
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        this.db.close();
+        throw error;
+      }
+    }
+    if ((this.db.prepare('SELECT version FROM meta').get() as any).version !== 2)
       throw new AppError(
         'DATABASE_VERSION',
         'This database was created by an unsupported version.',
@@ -52,9 +75,11 @@ export class Store {
   summaries(projectId: string): Summary[] {
     return (
       this.db
-        .prepare('SELECT * FROM threads WHERE project_id=? ORDER BY updated_at DESC LIMIT 200')
+        .prepare(
+          'SELECT * FROM threads WHERE project_id=? AND archived=0 ORDER BY updated_at DESC LIMIT 200',
+        )
         .all(projectId) as any[]
-    ).map(this.summary);
+    ).map((row) => this.summary(row));
   }
   summary(row: any): Summary {
     return {
@@ -63,6 +88,9 @@ export class Store {
       title: row.title,
       state: row.state,
       updatedAt: row.updated_at,
+      archived: !!row.archived,
+      managementPending: !!this.pendingManagement(row.id),
+      executionPending: !!this.active(row.id),
     };
   }
   thread(id: string): (Summary & { settings: Settings }) | undefined {
@@ -72,7 +100,7 @@ export class Store {
   saveThread(thread: Summary, settings: Settings) {
     this.db
       .prepare(
-        'INSERT INTO threads VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,state=excluded.state,updated_at=excluded.updated_at,settings=excluded.settings',
+        'INSERT INTO threads(id,project_id,title,state,updated_at,settings,archived) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,state=excluded.state,updated_at=excluded.updated_at,settings=excluded.settings,archived=excluded.archived',
       )
       .run(
         thread.id,
@@ -81,7 +109,26 @@ export class Store {
         thread.state,
         thread.updatedAt,
         JSON.stringify(settings),
+        Number(thread.archived ?? false),
       );
+  }
+  pendingManagement(
+    threadId: string,
+  ): { id: string; archived: boolean; epoch: string } | undefined {
+    const row = this.db
+      .prepare(
+        "SELECT id,pending_text FROM operations WHERE thread_id=? AND kind='archive' AND state IN ('dispatching','acknowledged','unknown') ORDER BY created_at DESC LIMIT 1",
+      )
+      .get(threadId) as any;
+    if (!row) return;
+    const value = JSON.parse(row.pending_text);
+    return { id: row.id, archived: value.archived, epoch: value.epoch };
+  }
+  setMetadata(id: string, change: { title?: string; archived?: boolean }) {
+    if (change.title !== undefined)
+      this.db.prepare('UPDATE threads SET title=? WHERE id=?').run(change.title, id);
+    if (change.archived !== undefined)
+      this.db.prepare('UPDATE threads SET archived=? WHERE id=?').run(Number(change.archived), id);
   }
   operation(id: string): Operation | undefined {
     const row = this.db.prepare('SELECT * FROM operations WHERE id=?').get(id) as any;

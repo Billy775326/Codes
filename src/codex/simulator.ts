@@ -107,11 +107,26 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       });
     if (method === 'account/read')
       return result(id, { account: { type: 'mock' }, requiresOpenaiAuth: false });
-    if (method === 'thread/list')
+    if (method === 'thread/list') {
+      const all = [...threads.values()]
+        .filter((t) => t.cwd === p.cwd && !!t.archived === !!p.archived)
+        .sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id));
+      const start = Number(p.cursor ?? 0);
+      const end = start + (p.limit ?? 30);
       return result(id, {
-        data: [...threads.values()].filter((t) => t.cwd === p.cwd).map(summary),
-        nextCursor: null,
+        data: all.slice(start, end).map(summary),
+        nextCursor: end < all.length ? String(end) : null,
       });
+    }
+    if (method === 'test/seedConversations') {
+      for (let i = 0; i < Math.min(p.count ?? 0, 400); i++) {
+        const t: any = create(p.cwd);
+        t.name = 'Fixture conversation ' + i;
+        t.updatedAt = i + 1000;
+      }
+      save();
+      return result(id, {});
+    }
     if (method === 'thread/start') {
       const thread = create(p.cwd);
       note('thread/started', { thread: summary(thread) });
@@ -179,9 +194,20 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     if (method === 'thread/name/set') {
       thread.name = p.name;
       save();
+      note('thread/name/updated', { threadId: thread.id, threadName: p.name });
       return result(id, {});
     }
+    if (method === 'thread/archive' || method === 'thread/unarchive') {
+      if (thread.status.type === 'active')
+        return send({ id, error: { code: -32600, message: 'A turn is active' } });
+      thread.archived = method === 'thread/archive';
+      save();
+      note(thread.archived ? 'thread/archived' : 'thread/unarchived', { threadId: thread.id });
+      return result(id, thread.archived ? {} : { thread: summary(thread) });
+    }
     if (method === 'turn/start') {
+      if (thread.archived)
+        return send({ id, error: { code: -32600, message: 'Restore the conversation first' } });
       if (thread.status.type === 'active')
         return send({ id, error: { code: -32600, message: 'A turn is already active' } });
       const text = p.input

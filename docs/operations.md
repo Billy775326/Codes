@@ -8,7 +8,7 @@ Run codes as the Linux account that owns the projects and is already signed in t
 
 Native task transcripts and CLI authentication remain in the server user's Codex home. codes keeps project metadata, settings, execution receipts, and pending prompt text for recovery. Browser drafts are stored in that browser's local storage, so use a trusted browser profile. Signing out clears the server session, not local drafts. Question answers are not stored as plaintext by the codes operation journal; the CLI may retain them according to its own behavior.
 
-Completed/failed operation receipts are retained for 30 days. Unknown operations are retained until resolved. Treat the data directory and native Codex home as private user data. To back up, stop codes and back up both locations, preserving permissions. This preview has no automatic migration or restore tool; a newer unsupported database schema is rejected rather than reset.
+Completed/failed operation receipts are retained for 30 days. Unknown operations are retained until resolved. Treat the data directory and native Codex home as private user data. To back up, stop codes and back up both locations, preserving permissions. Schema 1 is automatically backed up and migrated to schema 2 on startup to add archive metadata. See [migration and rollback](conversations.md#metadata-migration-and-rollback). There is no automatic restore tool; unsupported database versions are rejected rather than reset.
 
 ## Process lifecycle
 
@@ -44,7 +44,7 @@ An unknown result that cannot be proven terminal remains locked. Inspect the tas
 ## Known preview limits
 
 - One selected conversation receives detailed events in each browser. An idle browser subscribes to project summaries so newly created conversations appear without refreshing.
-- The list shows up to 200 locally known conversations and discovers the latest 30 native conversations per project per list read. Native archived conversations are excluded.
+- The sidebar browses native conversations in pages of up to 30, with separate active/archived views. Case-insensitive title search scans up to four native pages per request; use Next to continue. A failed read retains the displayed portion and offers refresh. The project summary snapshot remains capped at 200; it is not the discovery limit.
 - Empty CLI threads are materialized lazily. If the CLI is restarted before the first user message, an empty thread may no longer be readable; create a new conversation.
 - Native item display is capped. Huge outputs may exceed the 4 MiB protocol frame and require CLI inspection.
 - File context is a checksum-verified copy of selected lines at send time, not a live editor. Hidden paths are intentionally excluded from the file browser.

@@ -127,3 +127,54 @@ it('keeps simulator seeding unavailable in the normal application', async () => 
     ).status,
   ).toBe(404);
 });
+
+it('validates conversation mutations and exposes only the native-shaped management API', async () => {
+  async function post(path: string, body: unknown) {
+    return fetch(origin + '/api' + path, {
+      method: 'POST',
+      headers: { origin, cookie },
+      body: JSON.stringify(body),
+    });
+  }
+  const project = (await (await post('/projects', { path: directory })).json()) as { id: string };
+  const thread = (await (
+    await post('/projects/' + project.id + '/threads', { permission: 'read-only' })
+  ).json()) as { id: string };
+  const { randomUUID } = await import('node:crypto');
+  for (const name of ['', ' '.repeat(2), 'x'.repeat(81)])
+    expect(
+      (await post('/threads/' + thread.id + '/rename', { operationId: randomUUID(), name })).status,
+    ).toBe(400);
+  expect(
+    (
+      await post('/threads/' + thread.id + '/rename', {
+        operationId: randomUUID(),
+        name: '  API title  ',
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await post('/threads/' + thread.id + '/archive', {
+        operationId: randomUUID(),
+        archived: 'true',
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await fetch(origin + '/api/projects/' + project.id + '/conversations?archived=wrong', {
+        headers: { cookie },
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (await post('/projects/' + project.id + '/seed-conversations', { count: 250 })).status,
+  ).toBe(404);
+  const page = (await (
+    await fetch(origin + '/api/projects/' + project.id + '/conversations?search=api', {
+      headers: { cookie },
+    })
+  ).json()) as { data: { title: string }[] };
+  expect(page.data.map((row) => row.title)).toEqual(['API title']);
+});

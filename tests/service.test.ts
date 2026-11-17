@@ -202,6 +202,9 @@ it('reconciles a lost acknowledgement and lost terminal notification by client m
     service.send(thread.id, id, '[lost-ack] [lost-terminal]', thread.settings),
   ).rejects.toMatchObject({ code: 'RESULT_UNKNOWN' });
   expect(service.store.operation(id)?.state).toBe('unknown');
+  await expect(service.archive(thread.id, randomUUID(), true)).rejects.toMatchObject({
+    code: 'CONVERSATION_ACTIVE',
+  });
   await expect(
     service.send(thread.id, randomUUID(), 'duplicate?', thread.settings),
   ).rejects.toMatchObject({ code: 'EXECUTION_UNKNOWN' });
@@ -267,4 +270,175 @@ it('expires live approvals and blocks accidental resends after the runtime exits
   await expect(
     service.send(thread.id, randomUUID(), 'Again', thread.settings),
   ).rejects.toMatchObject({ code: 'EXECUTION_UNKNOWN' });
+});
+
+it('renames native conversations without interrupting their task or changing its receipt', async () => {
+  const { service, thread } = await fixture();
+  const sendId = randomUUID();
+  await service.send(thread.id, sendId, '[approve] Rename while working', thread.settings);
+  await until(() => thread.actions.length > 0);
+  const renameId = randomUUID();
+  await expect(service.rename(thread.id, renameId, 'Focused work')).resolves.toMatchObject({
+    title: 'Focused work',
+    executionPending: true,
+  });
+  await expect(service.rename(thread.id, renameId, 'Focused work')).resolves.toMatchObject({
+    title: 'Focused work',
+  });
+  await expect(service.rename(thread.id, renameId, 'Other')).rejects.toMatchObject({
+    code: 'OPERATION_CONFLICT',
+  });
+  expect(service.store.active(thread.id)?.id).toBe(sendId);
+  expect(
+    (await service.driver.call('thread/read', { threadId: thread.id, includeTurns: false })).thread
+      .name,
+  ).toBe('Focused work');
+  await expect(service.archive(thread.id, randomUUID(), true)).rejects.toMatchObject({
+    code: 'CONVERSATION_ACTIVE',
+  });
+  await service.interrupt(thread.id);
+});
+it('paginates beyond 200 conversations, searches titles without case sensitivity, and scopes cursors', async () => {
+  const { service, project } = await fixture();
+  await service.driver.call('test/seedConversations', { cwd: project.path, count: 250 });
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  let firstCursor = '';
+  do {
+    const page = await service.conversations(project.id, { cursor });
+    expect(page.data.length).toBeLessThanOrEqual(30);
+    for (const row of page.data) {
+      expect(seen.has(row.id)).toBe(false);
+      seen.add(row.id);
+    }
+    cursor = page.nextCursor ?? undefined;
+    firstCursor ||= cursor ?? '';
+  } while (cursor);
+  expect(seen.size).toBe(251);
+  const found = await service.conversations(project.id, { search: 'FIXTURE CONVERSATION 24' });
+  expect(found.data).toHaveLength(10);
+  expect(found.data.every((row) => row.title.startsWith('Fixture conversation 24'))).toBe(true);
+  await expect(
+    service.conversations(project.id, { cursor: firstCursor, archived: true }),
+  ).rejects.toMatchObject({ code: 'LIST_CURSOR' });
+  await expect(
+    service.conversations(project.id, { cursor: firstCursor, search: 'changed' }),
+  ).rejects.toMatchObject({ code: 'LIST_CURSOR' });
+  await expect(service.conversations(project.id, { cursor: 'invalid' })).rejects.toMatchObject({
+    code: 'LIST_CURSOR',
+  });
+});
+it('archives and restores native history while refusing new work in the archived view', async () => {
+  const { service, project, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), 'Keep this history', thread.settings);
+  await until(() => thread.state === 'completed');
+  const id = randomUUID();
+  await expect(service.archive(thread.id, id, true)).resolves.toMatchObject({
+    archived: true,
+    managementPending: false,
+  });
+  await expect(service.archive(thread.id, id, true)).resolves.toMatchObject({ archived: true });
+  expect((await service.conversations(project.id)).data).toHaveLength(0);
+  expect((await service.conversations(project.id, { archived: true })).data).toHaveLength(1);
+  expect(
+    (await service.history(thread.id)).messages.filter((row) => row.kind === 'user'),
+  ).toHaveLength(1);
+  await expect(
+    service.send(thread.id, randomUUID(), 'Forbidden', thread.settings),
+  ).rejects.toMatchObject({ code: 'CONVERSATION_ARCHIVED' });
+  await expect(service.archive(thread.id, randomUUID(), false)).resolves.toMatchObject({
+    archived: false,
+  });
+  await service.send(thread.id, randomUUID(), 'After restoration', thread.settings);
+  await until(() => thread.state === 'completed');
+  expect(
+    (await service.history(thread.id)).messages.filter((row) => row.kind === 'user'),
+  ).toHaveLength(2);
+});
+it('keeps an uncertain archive protected until native evidence proves its result', async () => {
+  const { service, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation(async (method, params, timeout) => {
+      if (method === 'thread/archive')
+        throw new AppError('RPC_TIMEOUT', 'Test-only lost acknowledgement', 504, true);
+      return call(method, params, timeout);
+    });
+  const id = randomUUID();
+  await expect(service.archive(thread.id, id, true)).rejects.toMatchObject({ code: 'RPC_TIMEOUT' });
+  expect(service.store.thread(thread.id)?.managementPending).toBe(true);
+  await expect(
+    service.send(thread.id, randomUUID(), 'Do not dispatch', thread.settings),
+  ).rejects.toMatchObject({ code: 'MANAGEMENT_BUSY' });
+  await service.checkManagement(thread.id);
+  expect(service.store.operation(id)?.state).toBe('unknown');
+  spy.mockRestore();
+  await call('thread/archive', { threadId: thread.id });
+  await until(() => service.store.operation(id)?.state === 'completed');
+  expect(service.store.thread(thread.id)).toMatchObject({
+    archived: true,
+    managementPending: false,
+  });
+});
+it('does not import a stale list title over a concurrent native rename', async () => {
+  const { service, project, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  let release!: () => void;
+  const paused = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let captured!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    captured = resolve;
+  });
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation(async (method, params, timeout) => {
+      const response = await call(method, params, timeout);
+      if (method === 'thread/list') {
+        captured();
+        await paused;
+      }
+      return response;
+    });
+  const listing = service.conversations(project.id);
+  await ready;
+  await service.rename(thread.id, randomUUID(), 'New title wins');
+  release();
+  expect((await listing).data.find((row) => row.id === thread.id)?.title).toBe('New title wins');
+  spy.mockRestore();
+});
+it('does not replace the first task title with an earlier empty native list response', async () => {
+  const { service, project, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  let release!: () => void;
+  const paused = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let captured!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    captured = resolve;
+  });
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation(async (method, params, timeout) => {
+      const response = await call(method, params, timeout);
+      if (method === 'thread/list') {
+        captured();
+        await paused;
+      }
+      return response;
+    });
+  const listing = service.conversations(project.id);
+  await ready;
+  await service.send(thread.id, randomUUID(), '[approve] First task title', thread.settings);
+  await until(() => thread.actions.length > 0);
+  release();
+  expect((await listing).data.find((row) => row.id === thread.id)?.title).toBe(
+    '[approve] First task title',
+  );
+  expect(thread.title).toBe('[approve] First task title');
+  spy.mockRestore();
+  await service.interrupt(thread.id);
 });

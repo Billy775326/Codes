@@ -83,6 +83,44 @@ try {
     'PASS: live workspace-write edit and native change/diff events in the disposable fixture.',
   );
 
+  await service.rename(thread.id, randomUUID(), 'codes live conversation management');
+  assert.equal(
+    (await service.driver.call('thread/read', { threadId: thread.id, includeTurns: false })).thread
+      .name,
+    'codes live conversation management',
+  );
+  await service.archive(thread.id, randomUUID(), true);
+  assert.ok(
+    (await service.conversations(project.id, { archived: true })).data.some(
+      (row) => row.id === thread.id,
+    ),
+  );
+  assert.ok(!(await service.conversations(project.id)).data.some((row) => row.id === thread.id));
+  await assert.rejects(
+    service.send(thread.id, randomUUID(), 'This must not dispatch', thread.settings),
+    { code: 'CONVERSATION_ARCHIVED' },
+  );
+  assert.ok(
+    (await service.history(thread.id)).messages.some((row) => row.clientId === operationId),
+  );
+  await service.archive(thread.id, randomUUID(), false);
+  await service.send(
+    thread.id,
+    randomUUID(),
+    'Reply with exactly RESTORED_VERIFIED. Do not run commands or change files.',
+    { permission: 'read-only' },
+  );
+  await terminal(thread);
+  assert.equal(thread.state, 'completed');
+  assert.ok(
+    thread.messages.some(
+      (row) => row.kind === 'assistant' && row.text.includes('RESTORED_VERIFIED'),
+    ),
+  );
+  console.log(
+    'PASS: native rename, archived discovery, retained history, send protection, restoration, and a new turn after restoration.',
+  );
+
   const stopped = await service.create(project.id, { permission: 'read-only' });
   await service.send(
     stopped.id,

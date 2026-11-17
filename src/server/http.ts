@@ -185,6 +185,22 @@ export async function application(
               cursor: { seq: service.events.seq, epoch: service.events.epoch },
             });
           }
+          if (segments[3] === 'conversations' && method === 'GET') {
+            const options = z
+              .object({
+                search: z.string().max(120).default(''),
+                archived: z.enum(['true', 'false']).default('false'),
+                cursor: z.string().max(4096).optional(),
+              })
+              .parse(Object.fromEntries(url.searchParams));
+            return json(
+              response,
+              await service.conversations(projectId, {
+                ...options,
+                archived: options.archived === 'true',
+              }),
+            );
+          }
           if (segments[3] === 'threads' && method === 'GET')
             return json(response, await service.list(projectId));
           if (segments[3] === 'threads' && method === 'POST')
@@ -203,6 +219,23 @@ export async function application(
               await service.file(projectId, url.searchParams.get('path') ?? ''),
             );
           if (
+            segments[3] === 'seed-conversations' &&
+            method === 'POST' &&
+            options.test &&
+            service.driver.mode === 'mock'
+          ) {
+            const p = service.project(projectId);
+            const input = z
+              .object({ count: z.number().int().min(1).max(400) })
+              .strict()
+              .parse(await body(request));
+            await service.driver.call('test/seedConversations', {
+              cwd: p.path,
+              count: input.count,
+            });
+            return json(response, await service.conversations(projectId));
+          }
+          if (
             segments[3] === 'seed' &&
             method === 'POST' &&
             options.test &&
@@ -215,6 +248,22 @@ export async function application(
         }
         if (segments[1] === 'threads' && segments[2]) {
           const id = segments[2];
+          if (segments[3] === 'rename' && method === 'POST') {
+            const p = z
+              .object({ operationId: z.uuid(), name: z.string().trim().min(1).max(80) })
+              .strict()
+              .parse(await body(request));
+            return json(response, await service.rename(id, p.operationId, p.name));
+          }
+          if (segments[3] === 'archive' && method === 'POST') {
+            const p = z
+              .object({ operationId: z.uuid(), archived: z.boolean() })
+              .strict()
+              .parse(await body(request));
+            return json(response, await service.archive(id, p.operationId, p.archived));
+          }
+          if (segments[3] === 'management-status' && method === 'POST')
+            return json(response, await service.checkManagement(id));
           if (segments[3] === 'snapshot' && method === 'GET') {
             const thread = await service.read(id);
             return json(response, {

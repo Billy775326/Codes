@@ -23,7 +23,7 @@ test('an idle browser receives conversations created on another device without r
     await expect(observer.getByRole('heading', { name: 'What are we working on?' })).toBeVisible();
     const prompt = `[approve] New conversation handoff ${Date.now()}`;
     await send(originator, prompt);
-    await observer.getByRole('button', { name: prompt, exact: false }).click();
+    await observer.locator('.thread-link').filter({ hasText: prompt }).click();
     await expect(observer.getByRole('button', { name: 'Approve once' })).toBeVisible();
     await observer.getByRole('button', { name: 'Decline', exact: true }).click();
     await expect(originator.getByText('Stopped', { exact: true })).toBeVisible();
@@ -69,7 +69,7 @@ test('a phone can approve after the originating desktop page is closed', async (
   const phone = await mobile.newPage();
   await login(phone);
   await phone.getByRole('button', { name: 'Open navigation' }).click();
-  await phone.getByRole('button', { name: prompt, exact: false }).click();
+  await phone.locator('.thread-link').filter({ hasText: prompt }).click();
   await expect(phone.getByRole('button', { name: 'Approve once' })).toBeVisible();
   await phone.screenshot({ path: 'test-results/mobile-approval.png', fullPage: true });
   await phone.getByRole('button', { name: 'Approve once' }).click();
@@ -136,7 +136,7 @@ test('bounded long history remains usable while typing and switching conversatio
     });
   });
   await page.reload();
-  await page.getByRole('button', { name: 'Rendering reference', exact: false }).click();
+  await page.locator('.thread-link').filter({ hasText: 'Rendering reference' }).click();
   await expect(page.getByTestId('message-assistant')).toHaveCount(12);
   const timings = await page.evaluate(async () => {
     const tasks: number[] = [];
