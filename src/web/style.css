@@ -1167,85 +1167,9 @@ code {
   color: #d19292;
   background: #d192920b;
 }
-.login-shell {
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 30px;
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(ellipse at 60% 45%, #8b63c50a, transparent 70%), #121316;
-}
-.login-orbit {
-  position: absolute;
-  width: 720px;
-  height: 720px;
-  right: -210px;
-  top: calc(50% - 360px);
-  border: 1px solid #b4a1f30b;
-  border-radius: 50%;
-  pointer-events: none;
-}
-.login-orbit:before,
-.login-orbit:after {
-  position: absolute;
-  inset: 60px;
-  content: '';
-  border: 1px solid #b4a1f30b;
-  border-radius: 50%;
-}
-.login-orbit:after {
-  inset: 120px;
-}
-.login-card {
-  width: 380px;
-  z-index: 1;
-}
-.login-card .brand {
-  margin-bottom: 65px;
-}
-.login-card .eyebrow {
-  font-size: 8px;
-}
-.login-card h1 {
-  font-size: 38px;
-  font-weight: 500;
-  letter-spacing: -1.3px;
-  line-height: 1.2;
-  margin: 18px 0;
-}
-.login-card > p:not(.eyebrow) {
-  font-size: 12px;
-  line-height: 1.9;
-  color: #898290;
-  margin-bottom: 35px;
-}
-.login-card form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.login-card label,
 .modal label {
   font-size: 10px;
   color: #aea4b9;
-}
-.login-card input {
-  font-size: 12px;
-}
-.login-card .primary {
-  margin-top: 3px;
-  justify-content: space-between;
-  font-size: 12px;
-  padding: 12px 15px;
-}
-.login-card > small {
-  display: block;
-  margin-top: 27px;
-  font-size: 10px;
-  color: #655d70;
-  line-height: 1.9;
 }
 .modal-backdrop {
   position: fixed;
@@ -1599,12 +1523,6 @@ code {
   }
   .error-banner {
     font-size: 10px;
-  }
-  .login-card .brand {
-    margin-bottom: 50px;
-  }
-  .login-card h1 {
-    font-size: 34px;
   }
   .context-panel {
     width: 100%;

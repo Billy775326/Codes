@@ -13,3 +13,4 @@
 ### Changed
 
 - Set the default workspace port to 6670. Set `CODES_PORT` to use a different listener port.
+- Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.

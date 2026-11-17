@@ -17,6 +17,8 @@ import type {
 } from '../shared/types';
 import { ApiError, message, post, request } from './api';
 import { Feed } from './feed';
+import { Brand, Icon } from './primitives';
+import { Login } from './Login';
 import './style.css';
 
 const labels: Record<string, string> = {
@@ -50,65 +52,6 @@ const save = (key: string, value: string) => {
     /* Private browsing can disable draft storage. */
   }
 };
-function Icon({ name, size = 18 }: { name: string; size?: number }) {
-  const paths: Record<string, React.ReactNode> = {
-    plus: <path d="M12 5v14M5 12h14" />,
-    arrow: <path d="M12 19V5m-6 6 6-6 6 6" />,
-    chevron: <path d="m9 5 7 7-7 7" />,
-    menu: <path d="M4 6h16M4 12h16M4 18h16" />,
-    file: (
-      <>
-        <path d="M14 3H6v18h12V7Z" />
-        <path d="M14 3v5h5M9 12h6m-6 4h6" />
-      </>
-    ),
-    folder: <path d="M3 7V5h7l2 2h9v13H3Z" />,
-    review: (
-      <>
-        <path d="M8 3H4v18h4M16 3h4v18h-4M9 8h6m-3-3v6m-3 5h6" />
-      </>
-    ),
-    close: <path d="m6 6 12 12M6 18 18 6" />,
-    attach: <path d="m8 12 6-6a4 4 0 0 1 6 6l-8 8a6 6 0 0 1-8-8l8-8m-5 11 8-8" />,
-    stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
-    terminal: (
-      <>
-        <path d="m4 5 6 7-6 7m9 0h7" />
-      </>
-    ),
-    logout: (
-      <>
-        <path d="M10 4H4v16h6m-1-8h12m-4-4 4 4-4 4" />
-      </>
-    ),
-    check: <path d="m5 12 4 4L19 6" />,
-  };
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.65"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {paths[name] ?? paths.file}
-    </svg>
-  );
-}
-function Brand() {
-  return (
-    <span className="brand">
-      <span className="brand-mark">
-        c<span>›</span>
-      </span>
-      codes<span className="brand-tag">WORKSPACE</span>
-    </span>
-  );
-}
 const MessageView = memo(function MessageView({
   item,
   streaming,
@@ -647,66 +590,28 @@ function App() {
   };
   if (auth !== 'ready')
     return (
-      <main className="login-shell">
-        <div className="login-orbit" />
-        <section className="login-card">
-          <Brand />
-          <p className="eyebrow">YOUR SERVER. YOUR WORKSPACE.</p>
-          <h1>
-            A little closer
-            <br />
-            to your next idea.
-          </h1>
-          <p>
-            Bring your Codex workspace to the browser.
-            <br />
-            Sign in with your server’s access token.
-          </p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setBusy(true);
-              void post('/login', { token })
-                .then(() => {
-                  setToken('');
-                  setError('');
-                  return init();
-                })
-                .catch(notice)
-                .finally(() => setBusy(false));
-            }}
-          >
-            <label htmlFor="access-token">Workspace access token</label>
-            <input
-              id="access-token"
-              type="password"
-              autoComplete="current-password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              autoFocus
-              placeholder="Enter your access token"
-            />
-            <button className="primary" disabled={busy || !token}>
-              {auth === 'loading'
-                ? 'Connect to workspace'
-                : busy
-                  ? 'Connecting…'
-                  : 'Open workspace'}
-              <Icon name="chevron" />
-            </button>
-            {error && (
-              <p className="error-text" role="alert">
-                {error}
-              </p>
-            )}
-          </form>
-          <small>
-            Use the token in your server’s data directory.
-            <br />
-            Codex authentication stays on the host.
-          </small>
-        </section>
-      </main>
+      <Login
+        token={token}
+        error={error}
+        checking={auth === 'loading'}
+        busy={busy}
+        onTokenChange={setToken}
+        onRetry={() => {
+          setError('');
+          void init();
+        }}
+        onSubmit={() => {
+          setBusy(true);
+          setError('');
+          void post('/login', { token })
+            .then(() => {
+              setToken('');
+              return init();
+            })
+            .catch(notice)
+            .finally(() => setBusy(false));
+        }}
+      />
     );
   return (
     <div className={`app ${panel ? 'has-panel' : ''}`}>
