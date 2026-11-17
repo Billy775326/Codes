@@ -1,0 +1,810 @@
+import { randomUUID, createHash } from 'node:crypto';
+import { realpath, readFile, readdir, stat } from 'node:fs/promises';
+import { resolve, relative, basename, isAbsolute } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import type { Driver } from '../codex/driver.js';
+import { Store } from './store.js';
+import { Events } from './events.js';
+import { AppError, record } from '../shared/errors.js';
+import {
+  limits,
+  type Thread,
+  type Settings,
+  type Message,
+  type Action,
+  type Attachment,
+  type FileContent,
+  type State,
+} from '../shared/types.js';
+
+const text = (value: unknown, maximum: number = limits.item) =>
+  typeof value === 'string' ? value.slice(0, maximum) : '';
+const terminal = (status: unknown) =>
+  ['completed', 'failed', 'interrupted'].includes(String(status));
+function state(raw: any): State {
+  if (raw?.type === 'active')
+    return raw.activeFlags?.includes('waitingOnApproval')
+      ? 'waitingApproval'
+      : raw.activeFlags?.includes('waitingOnUserInput')
+        ? 'waitingInput'
+        : 'running';
+  return raw?.type === 'systemError' ? 'failed' : raw?.type === 'notLoaded' ? 'unknown' : 'idle';
+}
+function item(raw: any, turnId: string): Message | undefined {
+  if (!record(raw) || typeof raw.id !== 'string') return;
+  if (raw.type === 'userMessage')
+    return {
+      id: raw.id,
+      turnId,
+      kind: 'user',
+      text: Array.isArray(raw.content)
+        ? raw.content.map((x: any) => text(x?.text)).join('\n')
+        : text(raw.text),
+      clientId: typeof raw.clientId === 'string' ? raw.clientId : undefined,
+    };
+  if (raw.type === 'agentMessage')
+    return { id: raw.id, turnId, kind: 'assistant', text: text(raw.text) };
+  if (raw.type === 'commandExecution')
+    return {
+      id: raw.id,
+      turnId,
+      kind: 'command',
+      text: [text(raw.command), text(raw.aggregatedOutput)].filter(Boolean).join('\n\n'),
+      status: text(raw.status),
+    };
+  if (raw.type === 'fileChange')
+    return {
+      id: raw.id,
+      turnId,
+      kind: 'change',
+      text: Array.isArray(raw.changes)
+        ? raw.changes.map((x: any) => `${text(x.path)}\n${text(x.diff)}`).join('\n\n')
+        : '',
+      status: text(raw.status),
+    };
+  return undefined;
+}
+
+export class Service {
+  readonly events = new Events();
+  private cache = new Map<string, Thread>();
+  private loaded = new Set<string>();
+  private reads = new Map<string, Promise<Thread>>();
+  private admission: Promise<void> = Promise.resolve();
+  private actions = new Map<
+    string,
+    { action: Action; rpcId: string | number; epoch: string; permissions?: unknown }
+  >();
+  constructor(
+    readonly store: Store,
+    readonly driver: Driver,
+  ) {
+    driver.on('notification', (event) => this.notification(event));
+    driver.on('request', (event) => this.request(event));
+    driver.on('offline', () => {
+      this.loaded.clear();
+      for (const thread of this.cache.values()) {
+        for (const action of thread.actions) action.status = 'expired';
+        if (thread.pending) {
+          thread.pending.state = 'unknown';
+          store.update(thread.pending.id, 'unknown');
+          thread.state = 'unknown';
+        }
+        this.boundary(thread);
+      }
+      this.actions.clear();
+      this.events.publish('runtime', driver.system());
+    });
+  }
+  project(id: string) {
+    const project = this.store.projects().find((x) => x.id === id);
+    if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Project not found.', 404);
+    return project;
+  }
+  async addProject(path: string, name?: string) {
+    const canonical = await realpath(path);
+    if (!(await stat(canonical)).isDirectory())
+      throw new AppError('INVALID_DIRECTORY', 'Choose an existing directory.');
+    return this.store.addProject(name || basename(canonical), canonical);
+  }
+  async list(projectId: string) {
+    const project = this.project(projectId);
+    try {
+      const page = await this.driver.call('thread/list', {
+        cwd: project.path,
+        limit: 30,
+        archived: false,
+        sourceKinds: ['cli', 'appServer', 'vscode'],
+        modelProviders: [],
+      });
+      if (!Array.isArray(page.data))
+        throw new AppError('PROTOCOL_ERROR', 'Invalid conversation list.', 502);
+      for (const raw of page.data) {
+        if (!record(raw) || typeof raw.id !== 'string' || raw.cwd !== project.path) continue;
+        if (!this.store.thread(raw.id))
+          this.store.saveThread(
+            {
+              id: raw.id,
+              projectId,
+              title: text(raw.name || raw.preview, 80) || 'Untitled conversation',
+              state: state(raw.status),
+              updatedAt: Number(raw.updatedAt || 0) * 1000,
+            },
+            { permission: 'read-only' },
+          );
+      }
+    } catch (error) {
+      throw error;
+    }
+    return this.store.summaries(projectId);
+  }
+  async create(projectId: string, settings: Settings) {
+    const project = this.project(projectId);
+    const result = await this.driver.call('thread/start', {
+      cwd: project.path,
+      sandbox: settings.permission,
+      approvalPolicy: 'on-request',
+      ...(settings.model ? { model: settings.model } : {}),
+    });
+    if (
+      !record(result.thread) ||
+      typeof result.thread.id !== 'string' ||
+      result.thread.cwd !== project.path
+    )
+      throw new AppError('PROTOCOL_ERROR', 'Invalid new conversation.', 502, true);
+    const thread: Thread = {
+      id: result.thread.id,
+      projectId,
+      title: 'Untitled conversation',
+      state: 'idle',
+      updatedAt: Date.now(),
+      messages: [],
+      actions: [],
+      olderCursor: null,
+      settings,
+      diff: '',
+    };
+    this.store.saveThread(thread, settings);
+    this.loaded.add(thread.id);
+    await this.remember(thread);
+    this.boundary(thread);
+    return thread;
+  }
+  private remember(thread: Thread) {
+    const work = this.admission.then(async () => {
+      if (!this.cache.has(thread.id) && this.cache.size >= limits.idleThreads) {
+        const candidate = [...this.cache.values()].find(
+          (x) => !x.pending && !['running', 'waitingApproval', 'waitingInput'].includes(x.state),
+        );
+        if (candidate) {
+          if (this.loaded.has(candidate.id)) {
+            await this.driver.call('thread/unsubscribe', { threadId: candidate.id });
+            this.loaded.delete(candidate.id);
+          }
+          this.cache.delete(candidate.id);
+        } else throw new AppError('CAPACITY', 'Too many active conversations.', 429);
+      }
+      this.cache.set(thread.id, thread);
+    });
+    // Keep the queue usable after a failed admission; the caller still receives the failure.
+    this.admission = work.catch(() => undefined);
+    return work;
+  }
+  async read(id: string): Promise<Thread> {
+    const existing = this.cache.get(id);
+    if (existing) return existing;
+    const pending = this.reads.get(id);
+    if (pending) return pending;
+    const reading = this.load(id);
+    this.reads.set(id, reading);
+    try {
+      return await reading;
+    } finally {
+      this.reads.delete(id);
+    }
+  }
+  private async load(id: string) {
+    const saved = this.store.thread(id);
+    if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+    this.project(saved.projectId);
+    const page = await this.history(id);
+    const pending = this.store.active(id);
+    const thread: Thread = {
+      ...saved,
+      state: pending ? 'unknown' : page.state,
+      messages: page.messages,
+      actions: [],
+      olderCursor: page.olderCursor,
+      settings: saved.settings,
+      diff: page.messages
+        .filter((m) => m.kind === 'change' && m.turnId === page.turns.at(-1)?.id)
+        .map((m) => m.text)
+        .join('\n'),
+      pending,
+    };
+    await this.remember(thread);
+    return thread;
+  }
+  async history(id: string, continuation?: string) {
+    const deadline = Date.now() + 25_000;
+    const call = (method: string, params: unknown) => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0)
+        throw new AppError('HISTORY_TIMEOUT', 'History loading timed out. Try again.', 504);
+      return this.driver.call(method, params, remaining);
+    };
+    const saved = this.store.thread(id);
+    if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+    const project = this.project(saved.projectId);
+    let cursor: string | undefined;
+    if (continuation) {
+      try {
+        const decoded = JSON.parse(Buffer.from(continuation, 'base64url').toString());
+        if (decoded.id !== id || typeof decoded.cursor !== 'string') throw new Error();
+        cursor = decoded.cursor;
+      } catch {
+        throw new AppError('HISTORY_CURSOR', 'Invalid history cursor.');
+      }
+    }
+    const header = await call('thread/read', { threadId: id, includeTurns: false });
+    if (header.thread?.cwd !== project.path)
+      throw new AppError(
+        'PROJECT_OWNERSHIP',
+        'The conversation no longer belongs to this project.',
+        403,
+      );
+    let page;
+    try {
+      page = await call('thread/turns/list', {
+        threadId: id,
+        cursor,
+        limit: limits.page,
+        sortDirection: 'desc',
+        itemsView: 'summary',
+      });
+    } catch (error) {
+      // CLI 0.167.0 creates threads lazily. An empty in-memory thread has no turn page yet.
+      if (
+        !continuation &&
+        error instanceof AppError &&
+        error.code === 'CLI_ERROR' &&
+        error.message.includes(
+          'is not materialized yet; thread/turns/list is unavailable before first user message',
+        )
+      )
+        return {
+          messages: [] as Message[],
+          olderCursor: null,
+          state: 'idle' as State,
+          turns: [] as any[],
+        };
+      throw error;
+    }
+    if (!Array.isArray(page.data))
+      throw new AppError('PROTOCOL_ERROR', 'Invalid conversation history.', 502);
+    const turns = page.data.slice().reverse();
+    const messages: Message[] = [];
+    let messageBytes = 0;
+    // Bounded pagination keeps oversized tool results out of a single native RPC response.
+    for (const turn of turns) {
+      if (typeof turn.id !== 'string')
+        throw new AppError('PROTOCOL_ERROR', 'Invalid turn identity.', 502);
+      let next: string | undefined;
+      const seen = new Set<string>();
+      do {
+        const items = await call('thread/items/list', {
+          threadId: id,
+          turnId: turn.id,
+          cursor: next,
+          limit: 20,
+          sortDirection: 'asc',
+        });
+        if (!Array.isArray(items.data))
+          throw new AppError('PROTOCOL_ERROR', 'Invalid item history.', 502);
+        for (const entry of items.data) {
+          const mapped = item(entry.item, turn.id);
+          if (mapped) {
+            messageBytes += Buffer.byteLength(mapped.text);
+            if (messages.length >= 240 || messageBytes > 2 * 1024 * 1024)
+              throw new AppError(
+                'HISTORY_LIMIT',
+                'This history page exceeds the display limit. Use the CLI to inspect this conversation.',
+                413,
+              );
+            messages.push(mapped);
+          }
+        }
+        next = items.nextCursor ?? undefined;
+        if (next && (seen.has(next) || seen.size >= 100))
+          throw new AppError(
+            'HISTORY_LIMIT',
+            'History pagination exceeded the supported limit.',
+            502,
+          );
+        if (next) seen.add(next);
+      } while (next);
+    }
+    const latest = turns.at(-1);
+    return {
+      messages,
+      olderCursor: page.nextCursor
+        ? Buffer.from(JSON.stringify({ id, cursor: page.nextCursor })).toString('base64url')
+        : null,
+      state: (state(header.thread.status) === 'running'
+        ? 'running'
+        : terminal(latest?.status)
+          ? latest.status
+          : latest?.status === 'inProgress'
+            ? 'unknown'
+            : 'idle') as State,
+      turns,
+    };
+  }
+  async send(
+    id: string,
+    operationId: string,
+    prompt: string,
+    settings: Settings,
+    attachments: Attachment[] = [],
+  ) {
+    const thread = await this.read(id);
+    const project = this.project(thread.projectId);
+    const input = { prompt, settings, attachments };
+    const receipt = this.store.existing(operationId, id, 'send', input);
+    if (receipt) return receipt;
+    let context = '';
+    for (const attachment of attachments) {
+      const file = await this.file(project.id, attachment.path);
+      if (file.sha !== attachment.sha)
+        throw new AppError(
+          'FILE_CHANGED',
+          'An attached file changed. Open and attach it again.',
+          409,
+        );
+      if (
+        attachment.fromLine < 1 ||
+        attachment.toLine < attachment.fromLine ||
+        attachment.toLine > file.lines
+      )
+        throw new AppError('LINE_RANGE', 'Invalid file selection.');
+      context += `\n\nFile context ${JSON.stringify({ path: file.path, fromLine: attachment.fromLine, toLine: attachment.toLine })}:\n${file.text
+        .split('\n')
+        .slice(attachment.fromLine - 1, attachment.toLine)
+        .join('\n')}`;
+    }
+    if (Buffer.byteLength(prompt + context) > 100_000)
+      throw new AppError('INPUT_LIMIT', 'The prompt and attached context exceed 100 KB.');
+    const { existing } = this.store.begin(operationId, id, 'send', input, prompt);
+    if (existing) return existing;
+    thread.pending = { id: operationId, text: prompt, state: 'dispatching' };
+    let dispatched = false;
+    try {
+      // A concurrent history read may have evicted this object while it was idle.
+      // Re-admit the now-leased thread before it can receive any execution events.
+      await this.remember(thread);
+      if (this.store.activeCount() > limits.active)
+        throw new AppError(
+          'CAPACITY',
+          'Finish an active conversation before starting another.',
+          429,
+        );
+      if (!this.loaded.has(id)) {
+        await this.driver.call('thread/resume', {
+          threadId: id,
+          excludeTurns: true,
+          cwd: project.path,
+        });
+        this.loaded.add(id);
+      }
+      thread.settings = settings;
+      thread.title = thread.title === 'Untitled conversation' ? prompt.slice(0, 64) : thread.title;
+      thread.state = 'running';
+      thread.updatedAt = Date.now();
+      this.boundary(thread);
+      dispatched = true;
+      const result = await this.driver.call('turn/start', {
+        threadId: id,
+        clientUserMessageId: operationId,
+        input: [{ type: 'text', text: prompt + context, text_elements: [] }],
+        sandboxPolicy:
+          settings.permission === 'read-only'
+            ? { type: 'readOnly' }
+            : { type: 'workspaceWrite', writableRoots: [project.path], networkAccess: false },
+        approvalPolicy: 'on-request',
+        ...(settings.model ? { model: settings.model } : {}),
+      });
+      if (typeof result.turn?.id !== 'string')
+        throw new AppError('PROTOCOL_ERROR', 'The CLI did not return a turn identity.', 502, true);
+      const stored = this.store.operation(operationId)!;
+      if (stored.state !== 'completed') {
+        this.store.update(operationId, 'acknowledged', result.turn.id);
+        if (thread.pending) thread.pending.state = 'acknowledged';
+      }
+      thread.turnId = result.turn.id;
+      this.boundary(thread);
+      return this.store.operation(operationId)!;
+    } catch (error) {
+      const terminalReceipt = this.store.operation(operationId);
+      // A matching terminal event is stronger evidence than a late acknowledgement timeout.
+      if (terminalReceipt?.state === 'completed') return terminalReceipt;
+      const uncertain = dispatched && (!(error instanceof AppError) || error.uncertain);
+      this.store.update(
+        operationId,
+        uncertain ? 'unknown' : 'failed',
+        undefined,
+        error instanceof AppError ? error.message : 'The request failed.',
+      );
+      if (uncertain) {
+        thread.state = 'unknown';
+        if (thread.pending) thread.pending.state = 'unknown';
+      } else {
+        delete thread.pending;
+        thread.state = 'failed';
+      }
+      this.boundary(thread);
+      throw error;
+    }
+  }
+  async reconcile(id: string) {
+    const thread = await this.read(id);
+    const pending = this.store.active(id);
+    if (!pending) return thread;
+    const history = await this.history(id);
+    const match = history.turns.find((turn: any) =>
+      history.messages.some(
+        (message) => message.turnId === turn.id && message.clientId === pending.id,
+      ),
+    );
+    if (match && terminal(match.status)) {
+      this.store.complete(id, match.id);
+      thread.state = match.status;
+      thread.messages = history.messages;
+      thread.diff = history.messages
+        .filter((m) => m.kind === 'change' && m.turnId === match.id)
+        .map((m) => m.text)
+        .join('\n');
+      this.events.publish('diff', thread.diff, id);
+      delete thread.pending;
+      this.boundary(thread);
+    }
+    return thread;
+  }
+  async interrupt(id: string) {
+    const thread = await this.read(id);
+    if (!thread.turnId)
+      throw new AppError(
+        'TURN_UNKNOWN',
+        'The active turn cannot be identified. Check its result first.',
+        409,
+      );
+    const turnId = thread.turnId;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        await this.driver.call('turn/interrupt', { threadId: id, turnId });
+        return { requested: true };
+      } catch (error) {
+        if (
+          error instanceof AppError &&
+          error.code === 'CLI_ERROR' &&
+          error.message === 'no active turn to interrupt'
+        ) {
+          if (!thread.pending && terminal(thread.state))
+            return { requested: false, alreadyFinished: true };
+          // CLI 0.167.0 can acknowledge turn/start before its runner is registered.
+          // Cancellation of this same turn is safe to retry; task dispatch is never retried.
+          if (attempt < 9 && thread.turnId === turnId) {
+            await delay(100);
+            continue;
+          }
+        }
+        throw error;
+      }
+    }
+    throw new AppError('INTERRUPT_UNCONFIRMED', 'Interruption was not acknowledged.', 409);
+  }
+  async answer(
+    id: string,
+    operationId: string,
+    resolution: { decision?: string; answers?: Record<string, string> },
+  ) {
+    const receipt = this.store.existing(operationId, undefined, 'answer', { id, resolution });
+    if (receipt) return receipt;
+    const entry = this.actions.get(id);
+    if (!entry || entry.epoch !== this.driver.epoch || entry.action.status !== 'pending') {
+      throw new AppError('STALE_ACTION', 'This request was already answered or has expired.', 409);
+    }
+    const action = entry.action;
+    let response: unknown;
+    if (action.kind === 'questions') {
+      const answers: Record<string, { answers: string[] }> = {};
+      for (const question of action.questions ?? []) {
+        const value = resolution.answers?.[question.id]?.trim();
+        if (!value)
+          throw new AppError('ANSWER_REQUIRED', 'Answer each question before submitting.');
+        answers[question.id] = { answers: [value] };
+      }
+      response = { answers };
+    } else {
+      if (!action.decisions.includes(resolution.decision ?? ''))
+        throw new AppError('INVALID_DECISION', 'Choose an available decision.');
+      response =
+        action.kind === 'permissions'
+          ? {
+              permissions: resolution.decision === 'accept' ? entry.permissions : {},
+              scope: 'turn',
+            }
+          : { decision: resolution.decision };
+    }
+    const { existing } = this.store.begin(operationId, action.threadId, 'answer', {
+      id,
+      resolution,
+    });
+    if (existing) return existing;
+    action.status = 'responding';
+    this.emitActions(action.threadId);
+    try {
+      await this.driver.answer(entry.rpcId, response);
+      this.store.update(operationId, 'completed');
+      return this.store.operation(operationId)!;
+    } catch (error) {
+      this.store.update(operationId, 'unknown');
+      throw error;
+    }
+  }
+  private boundary(thread: Thread) {
+    this.store.saveThread(thread, thread.settings);
+    const { id, projectId, title, state, updatedAt } = thread;
+    this.events.publish('summary', { id, projectId, title, state, updatedAt }, id);
+    this.events.publish(
+      'state',
+      {
+        state,
+        title,
+        updatedAt,
+        turnId: thread.turnId,
+        pending: thread.pending ?? null,
+        settings: thread.settings,
+      },
+      id,
+    );
+    this.emitActions(id);
+  }
+  private emitActions(id: string) {
+    this.events.publish(
+      'actions',
+      this.cache
+        .get(id)
+        ?.actions.filter((a) => a.status === 'pending' || a.status === 'responding') ?? [],
+      id,
+    );
+  }
+  private notification(event: any) {
+    if (!record(event.params)) return;
+    const p = event.params;
+    if (event.method === 'thread/closed') {
+      this.loaded.delete(p.threadId);
+      const closed = this.cache.get(p.threadId);
+      if (closed?.pending) {
+        this.store.update(closed.pending.id, 'unknown');
+        closed.pending.state = 'unknown';
+        closed.state = 'unknown';
+        for (const action of closed.actions) action.status = 'expired';
+        for (const [id, entry] of this.actions)
+          if (entry.action.threadId === closed.id) this.actions.delete(id);
+        this.boundary(closed);
+      }
+      return;
+    }
+    const thread = this.cache.get(p.threadId);
+    if (!thread) return;
+    if (event.method === 'serverRequest/resolved') {
+      for (const entry of this.actions.values())
+        if (entry.action.threadId === thread.id && entry.rpcId === p.requestId) {
+          entry.action.status = 'answered';
+          this.actions.delete(entry.action.id);
+        }
+      this.emitActions(thread.id);
+      return;
+    }
+    if (
+      event.method === 'item/agentMessage/delta' ||
+      event.method === 'item/commandExecution/outputDelta'
+    ) {
+      const message = thread.messages.find((x) => x.id === p.itemId);
+      if (message && typeof p.delta === 'string') {
+        const remaining = limits.item - message.text.length;
+        const delta = p.delta.slice(0, Math.max(0, remaining));
+        message.text += delta;
+        if (delta) this.events.publish('text', { id: message.id, delta }, thread.id);
+      }
+      return;
+    }
+    if (event.method === 'item/started' || event.method === 'item/completed') {
+      this.applyItem(thread, p.item, p.turnId);
+      return;
+    }
+    if (event.method === 'turn/diff/updated') {
+      thread.diff = text(p.diff);
+      this.events.publish('diff', thread.diff, thread.id);
+      return;
+    }
+    if (event.method === 'turn/started' || event.method === 'turn/completed') {
+      if (!record(p.turn) || typeof p.turn.id !== 'string') return;
+      for (const raw of Array.isArray(p.turn.items) ? p.turn.items : [])
+        this.applyItem(thread, raw, p.turn.id);
+      if (event.method === 'turn/started') {
+        thread.turnId = p.turn.id;
+        thread.state = 'running';
+        thread.diff = '';
+        this.events.publish('diff', '', thread.id);
+      } else if (thread.turnId === p.turn.id || !thread.turnId) {
+        thread.state = terminal(p.turn.status) ? p.turn.status : 'unknown';
+        const pending = this.store.active(thread.id);
+        if (
+          pending &&
+          (this.store.operation(pending.id)?.turnId === p.turn.id ||
+            thread.messages.some((m) => m.turnId === p.turn.id && m.clientId === pending.id))
+        ) {
+          this.store.complete(thread.id, p.turn.id);
+          delete thread.pending;
+        }
+        for (const entry of this.actions.values())
+          if (entry.action.turnId === p.turn.id) {
+            entry.action.status = 'expired';
+            this.actions.delete(entry.action.id);
+          }
+      }
+      thread.updatedAt = Date.now();
+      this.boundary(thread);
+    }
+  }
+  private applyItem(thread: Thread, raw: any, turnId: string) {
+    const message = item(raw, turnId);
+    if (!message) return;
+    const index = thread.messages.findIndex((x) => x.id === message.id);
+    if (index >= 0) thread.messages[index] = message;
+    else thread.messages.push(message);
+    if (thread.messages.length > 300) thread.messages.splice(0, thread.messages.length - 300);
+    if (
+      message.clientId &&
+      thread.pending?.id === message.clientId &&
+      !['completed', 'failed'].includes(this.store.operation(message.clientId)?.state ?? '')
+    )
+      this.store.update(message.clientId, 'acknowledged', turnId);
+    this.events.publish('item', message, thread.id);
+  }
+  private request(event: any) {
+    const p = event.params;
+    const kinds: Record<string, Action['kind']> = {
+      'item/commandExecution/requestApproval': 'command',
+      'item/fileChange/requestApproval': 'file',
+      'item/tool/requestUserInput': 'questions',
+      'item/permissions/requestApproval': 'permissions',
+    };
+    const kind = kinds[event.method];
+    const thread = this.cache.get(p?.threadId);
+    if (
+      !kind ||
+      !thread ||
+      this.actions.size >= 32 ||
+      !['string', 'number'].includes(typeof event.id)
+    ) {
+      void this.driver
+        .reject(event.id)
+        ?.catch(() => console.error('Unable to reject an unsupported CLI interaction.'));
+      return;
+    }
+    const action: Action = {
+      id: randomUUID(),
+      threadId: thread.id,
+      turnId: text(p.turnId),
+      kind,
+      title:
+        kind === 'questions'
+          ? 'Your input is needed'
+          : kind === 'permissions'
+            ? 'Additional permissions requested'
+            : kind === 'file'
+              ? 'File change approval'
+              : 'Command approval',
+      detail: text(
+        p.command || p.reason || p.cwd || 'Review this request before continuing.',
+        8192,
+      ),
+      decisions: kind === 'permissions' ? ['accept', 'decline'] : ['accept', 'decline', 'cancel'],
+      status: 'pending',
+    };
+    action.detail =
+      [
+        p.command && `Command: ${text(p.command, 8192)}`,
+        p.cwd && `Directory: ${text(p.cwd, 2048)}`,
+        p.reason && `Reason: ${text(p.reason, 4096)}`,
+        kind === 'permissions' &&
+          `Requested permissions (this turn only):\n${JSON.stringify(p.permissions ?? {}, null, 2)}`,
+        kind === 'file' &&
+          (thread.messages.find((m) => m.id === p.itemId)?.text ||
+            'The CLI did not provide a patch for this approval. Inspect the workspace before approving.'),
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+        .slice(0, 16384) || action.detail;
+    if (kind === 'questions')
+      action.questions = (Array.isArray(p.questions) ? p.questions : [])
+        .filter((q: any) => typeof q.id === 'string' && typeof q.question === 'string')
+        .map((q: any) => ({
+          id: q.id,
+          question: text(q.question),
+          secret: q.isSecret === true,
+          options: Array.isArray(q.options)
+            ? q.options
+                .filter((x: any) => typeof x.label === 'string')
+                .map((x: any) => ({ label: text(x.label), description: text(x.description) }))
+            : undefined,
+        }));
+    this.actions.set(action.id, {
+      action,
+      rpcId: event.id,
+      epoch: this.driver.epoch,
+      permissions: p.permissions,
+    });
+    thread.actions = thread.actions.filter(
+      (a) => a.status === 'pending' || a.status === 'responding',
+    );
+    thread.actions.push(action);
+    thread.state = kind === 'questions' ? 'waitingInput' : 'waitingApproval';
+    this.boundary(thread);
+  }
+  async file(projectId: string, path: string): Promise<FileContent> {
+    const absolute = await this.safePath(projectId, path);
+    const info = await stat(absolute);
+    if (!info.isFile() || info.size > limits.file)
+      throw new AppError('FILE_LIMIT', 'Choose a text file smaller than 256 KB.');
+    const bytes = await readFile(absolute);
+    if (bytes.length > limits.file)
+      throw new AppError('FILE_LIMIT', 'This file grew beyond the 256 KB limit.');
+    let content: string;
+    try {
+      content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      throw new AppError('BINARY_FILE', 'Only UTF-8 text files are supported.');
+    }
+    if (content.includes('\0')) throw new AppError('BINARY_FILE', 'Only text files are supported.');
+    return {
+      path,
+      text: content,
+      sha: createHash('sha256').update(bytes).digest('hex'),
+      lines: content.split('\n').length,
+    };
+  }
+  async files(projectId: string, path = '') {
+    const absolute = await this.safePath(projectId, path);
+    return (await readdir(absolute, { withFileTypes: true }))
+      .filter((x) => !x.name.startsWith('.'))
+      .slice(0, 200)
+      .map((x) => ({
+        name: x.name,
+        path: path ? `${path}/${x.name}` : x.name,
+        directory: x.isDirectory(),
+      }))
+      .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+  }
+  private async safePath(projectId: string, path: string) {
+    if (
+      isAbsolute(path) ||
+      path.split(/[\\/]/).some((part) => part === '..' || part.startsWith('.'))
+    )
+      throw new AppError('PATH_DENIED', 'This path is outside the file browser scope.', 403);
+    const project = this.project(projectId);
+    const canonical = await realpath(resolve(project.path, path));
+    const rel = relative(project.path, canonical);
+    if (rel.startsWith('..') || isAbsolute(rel))
+      throw new AppError('PATH_DENIED', 'This path is outside the project.', 403);
+    return canonical;
+  }
+  async close() {
+    this.events.close();
+    await this.admission;
+    await this.driver.stop();
+    this.store.close();
+  }
+}
