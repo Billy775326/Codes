@@ -36,7 +36,7 @@ npm run build
 CODES_PROJECT_ROOT=/absolute/path/to/your/project npm start
 ```
 
-Open **http://127.0.0.1:8790**. Sign in using the value in `.local/access-token` (read it on the server with `cat .local/access-token`). That file is generated on first start; keep it private. Projects can also be added through the interface.
+Open **http://127.0.0.1:6670**. Sign in using the value in `.local/access-token` (read it on the server with `cat .local/access-token`). That file is generated on first start; keep it private. Projects can also be added through the interface.
 
 For a simulation without Codex or an account:
 
@@ -53,10 +53,10 @@ For development, run `npm run dev` after installing dependencies. It serves the 
 The default listener is loopback only. For desktop access over SSH:
 
 ```bash
-ssh -L 8790:127.0.0.1:8790 you@your-linux-host
+ssh -L 6670:127.0.0.1:6670 you@your-linux-host
 ```
 
-Then open `http://127.0.0.1:8790` on your computer. Phone access requires a private HTTPS reverse proxy or private network with HTTPS. Set `CODES_PUBLIC_ORIGIN` to the exact browser origin and preserve its `Host` header when proxying. See [operations](docs/operations.md).
+Then open `http://127.0.0.1:6670` on your computer. Phone access requires a private HTTPS reverse proxy or private network with HTTPS. Set `CODES_PUBLIC_ORIGIN` to the exact browser origin and preserve its `Host` header when proxying. See [operations](docs/operations.md).
 
 This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Workspace write** explicitly when a task should edit files.
 
@@ -68,7 +68,7 @@ Set environment variables in the process environment; the application does not a
 | --------------------- | ------------------------- | ------------------------------------------------- |
 | `CODES_RUNTIME`       | `codex`                   | `codex` or `mock`                                 |
 | `CODES_HOST`          | `127.0.0.1`               | Bind address                                      |
-| `CODES_PORT`          | `8790`                    | Listener port, 1024–65535                         |
+| `CODES_PORT`          | `6670`                    | Listener port, 1024–65535                         |
 | `CODES_PUBLIC_ORIGIN` | `http://127.0.0.1:<port>` | Exact allowed browser origin                      |
 | `CODES_DATA_DIR`      | `.local`                  | Private database, token, lock, and simulator data |
 | `CODES_PROJECT_ROOT`  | unset                     | Register an existing directory at startup         |

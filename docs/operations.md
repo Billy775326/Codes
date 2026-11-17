@@ -29,7 +29,7 @@ CODES_PROJECT_ROOT=/absolute/project/path \
 npm start
 ```
 
-Configure the proxy upstream as `http://127.0.0.1:8790`, preserve `Host: codes.example.com`, disable response buffering for `/api/events`, and allow streaming connections to remain open. Terminate HTTPS at the proxy and restrict access to the intended owner. Origin validation is based on the configured public origin, not on untrusted forwarded headers. Subpath mounting is not supported; use a dedicated origin.
+Configure the proxy upstream as `http://127.0.0.1:6670`, preserve `Host: codes.example.com`, disable response buffering for `/api/events`, and allow streaming connections to remain open. Terminate HTTPS at the proxy and restrict access to the intended owner. Origin validation is based on the configured public origin, not on untrusted forwarded headers. Subpath mounting is not supported; use a dedicated origin.
 
 Do not set a browser URL containing the access token. The login form exchanges it for an HttpOnly SameSite cookie; HTTPS origins add Secure. Sessions expire after 12 hours and are lost on service restart. Change the token in the private file or environment, then restart to revoke existing sessions. Logout invalidates its server-side session; an open event stream is closed within its next session check.
 

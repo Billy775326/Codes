@@ -38,7 +38,7 @@ if (!existsSync(tokenPath))
 const token = process.env.CODES_ACCESS_TOKEN ?? readFileSync(tokenPath, 'utf8').trim();
 if (token.length < 16) throw new Error('CODES_ACCESS_TOKEN must contain at least 16 characters.');
 const host = process.env.CODES_HOST ?? '127.0.0.1';
-const port = Number(process.env.CODES_PORT ?? 8790);
+const port = Number(process.env.CODES_PORT ?? 6670);
 if (!Number.isSafeInteger(port) || port < 1024 || port > 65535)
   throw new Error('Choose a CODES_PORT between 1024 and 65535.');
 const origin = process.env.CODES_PUBLIC_ORIGIN ?? `http://127.0.0.1:${port}`;

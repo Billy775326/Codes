@@ -6,7 +6,7 @@ codes 是面向单用户的 Linux 自托管 Codex 网页工作台，电脑浏览
 
 技术路线采用 `codex app-server` 的结构化协议。服务端持有 CLI 进程和任务状态，浏览器负责显示；关闭页面不会停止任务。服务重启会终止自己的 CLI 子进程，未确认结果的操作保留为 unknown，不会自动重发。
 
-请先按英文 [README](../README.md) 安装 Node 24.x 和 Codex CLI 0.167.0，运行 `npm ci`、`npm run build`，再用 `CODES_PROJECT_ROOT=/绝对项目路径 npm start` 启动。默认地址是 `http://127.0.0.1:8790`，登录令牌保存在 `.local/access-token`。Codex 登录沿用服务端用户，不传给浏览器。
+请先按英文 [README](../README.md) 安装 Node 24.x 和 Codex CLI 0.167.0，运行 `npm ci`、`npm run build`，再用 `CODES_PROJECT_ROOT=/绝对项目路径 npm start` 启动。默认地址是 `http://127.0.0.1:6670`，登录令牌保存在 `.local/access-token`。Codex 登录沿用服务端用户，不传给浏览器。
 
 无需模型即可预览：`CODES_RUNTIME=mock CODES_DATA_DIR=.local/demo CODES_PROJECT_ROOT="$PWD" npm start`。界面会明确显示 Simulation；此模式不调用模型、不执行命令、不修改项目文件。
 

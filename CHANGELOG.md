@@ -9,3 +9,7 @@
 - Preserve operation receipts across browser disconnections and service restarts; uncertain execution blocks a second send until a terminal result is confirmed.
 - Add bounded history pagination, event replay, request deadlines, and a clearly labeled simulation runtime for isolated acceptance.
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
+
+### Changed
+
+- Set the default workspace port to 6670. Set `CODES_PORT` to use a different listener port.
