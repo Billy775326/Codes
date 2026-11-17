@@ -14,3 +14,7 @@
 
 - Set the default workspace port to 6670. Set `CODES_PORT` to use a different listener port.
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
+
+### Fixed
+
+- Open conversations with dense tool history by reducing the number of turns per history page when the combined page exceeds display limits. Older-page cursors remain aligned with the returned records; a single oversized turn still reports an explicit limit.

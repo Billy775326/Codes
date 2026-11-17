@@ -49,7 +49,7 @@ Approvals are addressed by the runtime epoch and native request ID. Concurrent c
 
 ## Rendering and resource limits
 
-Streaming deltas update memory and an event buffer, not a database row per token. The UI coalesces deltas at 32 ms and renders an active answer as plain text. Completed messages use memoized Markdown. An idle view subscribes to project summaries without receiving other conversations’ text. Evicting an idle cached thread unsubscribes its native event subscription, allowing the CLI to unload it after its own grace period. Opening a conversation fetches the latest 12 turns; earlier turns are requested separately.
+Streaming deltas update memory and an event buffer, not a database row per token. The UI coalesces deltas at 32 ms and renders an active answer as plain text. Completed messages use memoized Markdown. An idle view subscribes to project summaries without receiving other conversations’ text. Evicting an idle cached thread unsubscribes its native event subscription, allowing the CLI to unload it after its own grace period. Opening a conversation fetches up to the latest 12 turns; earlier turns are requested separately.
 
 | Resource                             | Preview limit                                          |
 | ------------------------------------ | ------------------------------------------------------ |
@@ -71,7 +71,7 @@ Streaming deltas update memory and an event buffer, not a database row per token
 | Slow-client queued output            | 512 KiB before disconnect                              |
 | Completed/failed operation receipts  | 30 days                                                |
 
-Oversized history pages produce an explicit limit error. Very large native tool results can exceed the JSONL frame limit and close the runtime; use the CLI to inspect such conversations. The preview is designed around a small working set, not unlimited logs. Limits are implementation constraints, not measured throughput claims.
+History pages automatically use fewer turns when their combined items exceed the display budget. A single oversized turn still produces an explicit limit error. Very large native tool results can exceed the JSONL frame limit and close the runtime; use the CLI to inspect such conversations. The preview is designed around a small working set, not unlimited logs. Limits are implementation constraints, not measured throughput claims.
 
 ## Compatibility and trust
 

@@ -253,92 +253,105 @@ export class Service {
         'The conversation no longer belongs to this project.',
         403,
       );
-    let page;
-    try {
-      page = await call('thread/turns/list', {
-        threadId: id,
-        cursor,
-        limit: limits.page,
-        sortDirection: 'desc',
-        itemsView: 'summary',
-      });
-    } catch (error) {
-      // CLI 0.167.0 creates threads lazily. An empty in-memory thread has no turn page yet.
-      if (
-        !continuation &&
-        error instanceof AppError &&
-        error.code === 'CLI_ERROR' &&
-        error.message.includes(
-          'is not materialized yet; thread/turns/list is unavailable before first user message',
-        )
-      )
-        return {
-          messages: [] as Message[],
-          olderCursor: null,
-          state: 'idle' as State,
-          turns: [] as any[],
-        };
-      throw error;
-    }
-    if (!Array.isArray(page.data))
-      throw new AppError('PROTOCOL_ERROR', 'Invalid conversation history.', 502);
-    const turns = page.data.slice().reverse();
-    const messages: Message[] = [];
-    let messageBytes = 0;
-    // Bounded pagination keeps oversized tool results out of a single native RPC response.
-    for (const turn of turns) {
-      if (typeof turn.id !== 'string')
-        throw new AppError('PROTOCOL_ERROR', 'Invalid turn identity.', 502);
-      let next: string | undefined;
-      const seen = new Set<string>();
-      do {
-        const items = await call('thread/items/list', {
-          threadId: id,
-          turnId: turn.id,
-          cursor: next,
-          limit: 20,
-          sortDirection: 'asc',
-        });
-        if (!Array.isArray(items.data))
-          throw new AppError('PROTOCOL_ERROR', 'Invalid item history.', 502);
-        for (const entry of items.data) {
-          const mapped = item(entry.item, turn.id);
-          if (mapped) {
+    const hydrate = async (turns: any[]): Promise<Message[] | undefined> => {
+      const messages: Message[] = [];
+      let messageBytes = 0;
+      for (const turn of turns) {
+        if (typeof turn.id !== 'string')
+          throw new AppError('PROTOCOL_ERROR', 'Invalid turn identity.', 502);
+        let next: string | undefined;
+        const seen = new Set<string>();
+        do {
+          const items = await call('thread/items/list', {
+            threadId: id,
+            turnId: turn.id,
+            cursor: next,
+            limit: 20,
+            sortDirection: 'asc',
+          });
+          if (!Array.isArray(items.data))
+            throw new AppError('PROTOCOL_ERROR', 'Invalid item history.', 502);
+          for (const entry of items.data) {
+            const mapped = item(entry.item, turn.id);
+            if (!mapped) continue;
             messageBytes += Buffer.byteLength(mapped.text);
-            if (messages.length >= 240 || messageBytes > 2 * 1024 * 1024)
-              throw new AppError(
-                'HISTORY_LIMIT',
-                'This history page exceeds the display limit. Use the CLI to inspect this conversation.',
-                413,
-              );
+            // A smaller turn page may fit. Discard this attempted page rather than
+            // truncating its items or returning a cursor that skips unread history.
+            if (messages.length >= 240 || messageBytes > 2 * 1024 * 1024) return;
             messages.push(mapped);
           }
-        }
-        next = items.nextCursor ?? undefined;
-        if (next && (seen.has(next) || seen.size >= 100))
-          throw new AppError(
-            'HISTORY_LIMIT',
-            'History pagination exceeded the supported limit.',
-            502,
-          );
-        if (next) seen.add(next);
-      } while (next);
-    }
-    const latest = turns.at(-1);
-    return {
-      messages,
-      olderCursor: page.nextCursor
-        ? Buffer.from(JSON.stringify({ id, cursor: page.nextCursor })).toString('base64url')
-        : null,
-      state: (state(header.thread.status) === 'running'
-        ? 'running'
-        : terminal(latest?.status)
-          ? latest.status
-          : latest?.status === 'inProgress'
-            ? 'unknown'
-            : 'idle') as State,
-      turns,
+          next = items.nextCursor ?? undefined;
+          if (next && (seen.has(next) || seen.size >= 100))
+            throw new AppError(
+              'HISTORY_LIMIT',
+              'History pagination exceeded the supported limit.',
+              502,
+            );
+          if (next) seen.add(next);
+        } while (next);
+      }
+      return messages;
     };
+    let pageLimit: number = limits.page;
+    for (;;) {
+      let page;
+      try {
+        page = await call('thread/turns/list', {
+          threadId: id,
+          cursor,
+          limit: pageLimit,
+          sortDirection: 'desc',
+          itemsView: 'summary',
+        });
+      } catch (error) {
+        // CLI 0.167.0 creates threads lazily; only its specific empty-thread error is benign.
+        if (
+          !continuation &&
+          error instanceof AppError &&
+          error.code === 'CLI_ERROR' &&
+          error.message.includes(
+            'is not materialized yet; thread/turns/list is unavailable before first user message',
+          )
+        )
+          return {
+            messages: [] as Message[],
+            olderCursor: null,
+            state: 'idle' as State,
+            turns: [] as any[],
+          };
+        throw error;
+      }
+      if (!Array.isArray(page.data))
+        throw new AppError('PROTOCOL_ERROR', 'Invalid conversation history.', 502);
+      const turns = page.data.slice().reverse();
+      const messages = await hydrate(turns);
+      if (messages) {
+        const latest = turns.at(-1);
+        return {
+          messages,
+          olderCursor: page.nextCursor
+            ? Buffer.from(JSON.stringify({ id, cursor: page.nextCursor })).toString('base64url')
+            : null,
+          state: (state(header.thread.status) === 'running'
+            ? 'running'
+            : terminal(latest?.status)
+              ? latest.status
+              : latest?.status === 'inProgress'
+                ? 'unknown'
+                : 'idle') as State,
+          turns,
+        };
+      }
+      if (pageLimit === 1 || turns.length <= 1)
+        throw new AppError(
+          'HISTORY_LIMIT',
+          'This turn exceeds the display limit. Use the CLI to inspect this conversation.',
+          413,
+        );
+      // Re-read from the same native cursor. The successful, smaller page supplies
+      // its own next cursor, keeping older turns reachable without duplicates.
+      pageLimit = Math.max(1, Math.min(Math.floor(pageLimit / 2), turns.length - 1));
+    }
   }
   async send(
     id: string,

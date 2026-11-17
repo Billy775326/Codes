@@ -131,6 +131,16 @@ createInterface({ input: process.stdin }).on('line', (line) => {
               type: 'userMessage',
               content: [{ type: 'text', text: `Reference task ${i}` }],
             },
+            ...Array.from(
+              { length: Math.min(Math.max(0, p.extraCommandsPerTurn ?? 0), 300) },
+              (_, command) => ({
+                id: `command-${i}-${command}`,
+                type: 'commandExecution',
+                command: `printf fixture-${command}`,
+                aggregatedOutput: 'Synthetic tool output.',
+                status: 'completed',
+              }),
+            ),
             {
               id: `agent-${i}`,
               type: 'agentMessage',

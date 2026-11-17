@@ -9,6 +9,51 @@ import { Driver } from '../src/codex/driver';
 import { AppError } from '../src/shared/errors';
 import type { Thread } from '../src/shared/types';
 const cleanup: (() => Promise<void>)[] = [];
+it('shrinks dense history pages without skipping or duplicating older turns', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', {
+    cwd: project.path,
+    count: 8,
+    extraCommandsPerTurn: 40,
+  });
+  await service.list(project.id);
+  const id = seeded.thread.id;
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  let pages = 0;
+  do {
+    const page = await service.history(id, cursor);
+    expect(page.messages.length).toBeLessThanOrEqual(240);
+    for (const turn of page.turns) {
+      expect(seen.has(turn.id)).toBe(false);
+      seen.add(turn.id);
+    }
+    expect(page.messages.filter((message) => message.kind === 'command')).toHaveLength(
+      page.turns.length * 40,
+    );
+    cursor = page.olderCursor ?? undefined;
+    pages++;
+  } while (cursor && pages < 10);
+  expect(cursor).toBeUndefined();
+  expect(seen.size).toBe(8);
+  expect(pages).toBeGreaterThan(1);
+  const loaded = await service.read(id);
+  expect(loaded.state).toBe('completed');
+  expect(loaded.messages.length).toBeGreaterThan(0);
+});
+it('keeps an explicit limit for a single oversized turn', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', {
+    cwd: project.path,
+    count: 1,
+    extraCommandsPerTurn: 250,
+  });
+  await service.list(project.id);
+  await expect(service.history(seeded.thread.id)).rejects.toMatchObject({
+    code: 'HISTORY_LIMIT',
+    status: 413,
+  });
+});
 it('does not regress a proven terminal result when its acknowledgement times out later', async () => {
   const { service, thread } = await fixture(1400);
   const id = randomUUID();
