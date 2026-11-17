@@ -141,10 +141,16 @@ test('another client sees metadata changes, and renaming never clears a live exe
     const observer = await second.newPage();
     await login(owner);
     await login(observer);
+    // Force the summary handoff gap: selection must seed navigation from its snapshot.
+    await owner.route('**/api/events?threadId=*', (route) => route.abort());
     const title = '[approve] Managed task ' + Date.now();
     await owner.getByLabel('Message Codex').fill(title);
     await owner.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect(owner.getByRole('button', { name: 'Approve once' })).toBeVisible();
+    await expect(owner.getByRole('button', { name: title, exact: true })).toBeVisible();
+    await owner.unroute('**/api/events?threadId=*');
+    await owner.locator('.connection').click();
+    await expect(owner.locator('.connection')).toHaveText('Connected');
     await observer.getByRole('button', { name: title, exact: true }).click();
     const newTitle = 'Active renamed ' + Date.now();
     const id = await owner.evaluate(() => localStorage.getItem('codes.thread'));

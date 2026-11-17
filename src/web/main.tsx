@@ -307,7 +307,27 @@ function App() {
     setSidebar(false);
     follow.current = true;
   }, []);
-  const conversationUpdated = useCallback((summary: Summary) => {
+  const conversationUpdated = useCallback((value: Summary) => {
+    const {
+      id,
+      projectId,
+      title,
+      state,
+      updatedAt,
+      archived,
+      managementPending,
+      executionPending,
+    } = value;
+    const summary: Summary = {
+      id,
+      projectId,
+      title,
+      state,
+      updatedAt,
+      archived,
+      managementPending,
+      executionPending,
+    };
     setThreads((list) => [summary, ...list.filter((row) => row.id !== summary.id)].slice(0, 200));
     setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
   }, []);
@@ -391,6 +411,9 @@ function App() {
       (snapshot) => {
         deltas.clear();
         setThread(snapshot.thread);
+        // Project summaries may arrive while subscriptions switch. The selected
+        // snapshot is also the authoritative summary for the navigation list.
+        conversationUpdated(snapshot.thread);
         setSettings(snapshot.thread.settings);
       },
       event,

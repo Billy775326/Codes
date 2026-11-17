@@ -20,6 +20,6 @@
 
 ### Fixed
 
-- Preserve the loaded history when reselecting the current conversation, and prevent older list responses from replacing a new task title or a live rename.
+- Preserve the loaded history when reselecting the current conversation, and prevent older list responses from replacing a new task title or a live rename. Seed sidebar metadata from the selected snapshot so a subscription handoff cannot leave a working conversation labeled Untitled.
 
 - Open conversations with dense tool history by reducing the number of turns per history page when the combined page exceeds display limits. Older-page cursors remain aligned with the returned records; a single oversized turn still reports an explicit limit.
