@@ -85,6 +85,7 @@ export interface Thread extends Summary {
   actions: Action[];
   turnId?: string;
   olderCursor: string | null;
+  newerCursor?: string | null;
   settings: Settings;
   diff: string;
   diffTruncated?: boolean;

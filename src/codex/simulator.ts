@@ -211,14 +211,23 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       return result(id, { thread: summary(thread), model: 'simulated-model' });
     if (method === 'thread/unsubscribe') return result(id, { status: 'unsubscribed' });
     if (method === 'thread/turns/list') {
-      const end = p.cursor ? Number(p.cursor) : thread.turns.length;
-      const start = Math.max(0, end - (p.limit ?? 12));
+      const ascending = p.sortDirection === 'asc';
+      const size = p.limit ?? 12;
+      const edge = p.cursor ? Number(p.cursor) : ascending ? 0 : thread.turns.length;
+      const start = ascending ? edge : Math.max(0, edge - size);
+      const end = ascending ? Math.min(thread.turns.length, start + size) : edge;
+      const data = thread.turns.slice(start, end);
+      if (!ascending) data.reverse();
       return result(id, {
-        data: thread.turns
-          .slice(start, end)
-          .reverse()
-          .map((turn: any) => ({ ...turn, items: [], itemsView: 'summary' })),
-        nextCursor: start ? String(start) : null,
+        data: data.map((turn: any) => ({ ...turn, items: [], itemsView: 'summary' })),
+        nextCursor: ascending
+          ? end < thread.turns.length
+            ? String(end)
+            : null
+          : start
+            ? String(start)
+            : null,
+        backwardsCursor: data.length ? String(ascending ? start + 1 : end - 1) : null,
       });
     }
     if (method === 'thread/items/list') {

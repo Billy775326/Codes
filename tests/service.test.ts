@@ -31,6 +31,39 @@ it('retains native turn timing and reply phase through live events and paginated
     'final_answer',
   );
 });
+it('pages native history in both directions with opaque cursors and no lost turn at the reverse anchor', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', { cwd: project.path, count: 40 });
+  await service.list(project.id);
+  const latest = await service.history(seeded.thread.id);
+  const restarted = await service.history(
+    seeded.thread.id,
+    Buffer.from(JSON.stringify({ id: seeded.thread.id, cursor: '', direction: 'older' })).toString(
+      'base64url',
+    ),
+  );
+  expect(restarted.turns).toEqual(latest.turns);
+  expect(restarted.hasNewer).toBe(false);
+  const older = await service.history(seeded.thread.id, latest.olderCursor!);
+  expect(older.hasNewer).toBe(true);
+  expect(older.newerCursor).toBeTruthy();
+  const forward = await service.history(seeded.thread.id, older.newerCursor!);
+  expect(forward.turns[0]?.id).toBe(older.turns.at(-1)?.id);
+  const last = forward.hasNewer
+    ? await service.history(seeded.thread.id, forward.newerCursor!)
+    : forward;
+  expect(last.hasNewer).toBe(false);
+  expect(last.turns.at(-1)?.id).toBe(latest.turns.at(-1)?.id);
+  expect(last.newerCursor).toBeTruthy();
+  await expect(
+    service.history(
+      seeded.thread.id,
+      Buffer.from(
+        JSON.stringify({ id: seeded.thread.id, cursor: '0', direction: 'invalid' }),
+      ).toString('base64url'),
+    ),
+  ).rejects.toMatchObject({ code: 'HISTORY_CURSOR' });
+});
 it('shrinks dense history pages without skipping or duplicating older turns', async () => {
   const { service, project } = await fixture();
   const seeded = await service.driver.call('test/seed', {

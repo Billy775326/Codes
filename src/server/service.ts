@@ -581,6 +581,7 @@ export class Service {
       turns: page.turns,
       actions: [],
       olderCursor: page.olderCursor,
+      newerCursor: page.newerCursor,
       settings: saved.settings,
       diff: page.messages
         .filter((m) => m.kind === 'change' && m.turnId === page.turns.at(-1)?.id)
@@ -606,11 +607,15 @@ export class Service {
     if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
     const project = this.project(saved.projectId);
     let cursor: string | undefined;
+    let direction: 'older' | 'newer' = 'older';
     if (continuation) {
       try {
         const decoded = JSON.parse(Buffer.from(continuation, 'base64url').toString());
         if (decoded.id !== id || typeof decoded.cursor !== 'string') throw new Error();
-        cursor = decoded.cursor;
+        if (decoded.direction !== undefined && !['older', 'newer'].includes(decoded.direction))
+          throw new Error();
+        direction = decoded.direction ?? 'older';
+        cursor = decoded.cursor || undefined;
       } catch {
         throw new AppError('HISTORY_CURSOR', 'Invalid history cursor.');
       }
@@ -669,7 +674,7 @@ export class Service {
           threadId: id,
           cursor,
           limit: pageLimit,
-          sortDirection: 'desc',
+          sortDirection: direction === 'newer' ? 'asc' : 'desc',
           itemsView: 'summary',
         });
       } catch (error) {
@@ -685,6 +690,8 @@ export class Service {
           return {
             messages: [] as Message[],
             olderCursor: null,
+            newerCursor: null,
+            hasNewer: false,
             state: 'idle' as State,
             turns: [] as any[],
           };
@@ -692,15 +699,28 @@ export class Service {
       }
       if (!Array.isArray(page.data))
         throw new AppError('PROTOCOL_ERROR', 'Invalid conversation history.', 502);
-      const turns = page.data.slice().reverse();
+      for (const value of [page.nextCursor, page.backwardsCursor])
+        if (value != null && typeof value !== 'string')
+          throw new AppError('PROTOCOL_ERROR', 'Invalid history continuation.', 502);
+      const turns = direction === 'newer' ? page.data.slice() : page.data.slice().reverse();
       const messages = await hydrate(turns);
       if (messages) {
         const latest = turns.at(-1);
         return {
           messages,
-          olderCursor: page.nextCursor
-            ? Buffer.from(JSON.stringify({ id, cursor: page.nextCursor })).toString('base64url')
-            : null,
+          olderCursor: this.historyCursor(
+            id,
+            direction === 'older' ? page.nextCursor : page.backwardsCursor,
+            'older',
+          ),
+          // Keep a resumable forward edge even at the live end, so a reader can
+          // catch up after the bounded live cache has moved beyond this page.
+          newerCursor: this.historyCursor(
+            id,
+            direction === 'newer' ? (page.nextCursor ?? cursor) : page.backwardsCursor,
+            'newer',
+          ),
+          hasNewer: direction === 'newer' ? !!page.nextCursor : !!cursor && !!page.backwardsCursor,
           state: (state(header.thread.status) === 'running'
             ? 'running'
             : terminal(latest?.status)
@@ -721,6 +741,11 @@ export class Service {
       // its own next cursor, keeping older turns reachable without duplicates.
       pageLimit = Math.max(1, Math.min(Math.floor(pageLimit / 2), turns.length - 1));
     }
+  }
+  private historyCursor(id: string, cursor: unknown, direction: 'older' | 'newer') {
+    return typeof cursor === 'string' && cursor
+      ? Buffer.from(JSON.stringify({ id, cursor, direction })).toString('base64url')
+      : null;
   }
   queueState(id: string) {
     if (!this.store.thread(id))
@@ -1301,6 +1326,8 @@ export class Service {
       thread.state = match.status;
       thread.messages = history.messages;
       thread.turns = history.turns;
+      thread.olderCursor = history.olderCursor;
+      thread.newerCursor = history.newerCursor;
       thread.diff = history.messages
         .filter((m) => m.kind === 'change' && m.turnId === match.id)
         .map((m) => m.text)
@@ -1312,6 +1339,8 @@ export class Service {
     if (!pending && !this.store.steers(id).length) {
       thread.messages = history.messages;
       thread.turns = history.turns;
+      thread.olderCursor = history.olderCursor;
+      thread.newerCursor = history.newerCursor;
       thread.state = history.state;
     }
     this.boundary(thread);
@@ -1482,6 +1511,8 @@ export class Service {
         title,
         updatedAt,
         turnId: thread.turnId,
+        olderCursor: thread.olderCursor,
+        newerCursor: thread.newerCursor,
         turns: thread.turns,
         pending: thread.pending ?? null,
         settings: thread.settings,
@@ -1694,6 +1725,17 @@ export class Service {
     if (index >= 0) thread.messages[index] = message;
     else thread.messages.push(message);
     if (thread.messages.length > 300) thread.messages.splice(0, thread.messages.length - 300);
+    if (thread.messages.length >= 240) {
+      // Live windows can outgrow the native cursor captured when the thread was
+      // opened. Rediscover the current native edge before paging farther back.
+      const cursor = Buffer.from(
+        JSON.stringify({ id: thread.id, cursor: '', direction: 'older' }),
+      ).toString('base64url');
+      if (thread.olderCursor !== cursor) {
+        thread.olderCursor = cursor;
+        this.events.publish('state', { olderCursor: cursor }, thread.id);
+      }
+    }
     if (
       message.clientId &&
       thread.pending?.id === message.clientId &&
