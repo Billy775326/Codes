@@ -83,6 +83,60 @@ try {
     'PASS: live workspace-write edit and native change/diff events in the disposable fixture.',
   );
 
+  const branchSummary = await service.fork(thread.id, randomUUID(), history.turns[0]!.id);
+  const branch = await service.read(branchSummary.id);
+  assert.equal(branch.forkedFromId, thread.id);
+  assert.equal(branch.messages.filter((row) => row.kind === 'user').length, 1);
+  assert.equal(
+    (await service.history(thread.id)).messages.filter((row) => row.kind === 'user').length,
+    2,
+  );
+  assert.equal(await readFile(join(directory, 'README.md'), 'utf8'), 'CODES_LIVE_EDIT_OK\n');
+  service.controlQueue(branch.id, true);
+  await service.enqueue(branch.id, randomUUID(), {
+    text: 'Reply exactly QUEUE_FIRST_VERIFIED. Do not execute commands or change files.',
+    settings: { permission: 'read-only' },
+    attachments: [],
+  });
+  await service.enqueue(branch.id, randomUUID(), {
+    text: 'Reply exactly QUEUE_SECOND_VERIFIED. Do not execute commands or change files.',
+    settings: { permission: 'read-only' },
+    attachments: [],
+  });
+  service.controlQueue(branch.id, false);
+  const queueDeadline = Date.now() + 90_000;
+  while (service.queueState(branch.id).items.length) {
+    if (
+      branch.actions.length ||
+      service.queueState(branch.id).paused ||
+      Date.now() > queueDeadline
+    ) {
+      await service.interrupt(branch.id);
+      throw new Error('The live queue requires manual review. No approval was granted.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(branch.state, 'completed');
+  assert.deepEqual(
+    branch.messages
+      .filter((row) => row.kind === 'user')
+      .slice(-2)
+      .map((row) => row.text),
+    [
+      'Reply exactly QUEUE_FIRST_VERIFIED. Do not execute commands or change files.',
+      'Reply exactly QUEUE_SECOND_VERIFIED. Do not execute commands or change files.',
+    ],
+  );
+  assert.ok(
+    branch.messages.some(
+      (row) => row.kind === 'assistant' && row.text.includes('QUEUE_SECOND_VERIFIED'),
+    ),
+  );
+  assert.equal(await readFile(join(directory, 'README.md'), 'utf8'), 'CODES_LIVE_EDIT_OK\n');
+  console.log(
+    'PASS: native per-turn branch context, unchanged source files/history, and two sequential queued model turns.',
+  );
+
   await service.rename(thread.id, randomUUID(), 'codes live conversation management');
   assert.equal(
     (await service.driver.call('thread/read', { threadId: thread.id, includeTurns: false })).thread

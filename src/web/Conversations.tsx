@@ -14,7 +14,9 @@ interface Props {
   onUpdated: (summary: Summary) => void;
 }
 const isWorking = (row: Summary) =>
-  !!row.executionPending || ['running', 'waitingApproval', 'waitingInput'].includes(row.state);
+  !!row.executionPending ||
+  !!row.queueCount ||
+  ['running', 'waitingApproval', 'waitingInput'].includes(row.state);
 const matches = (row: Summary, archived: boolean, search: string) =>
   !!row.archived === archived && row.title.toLowerCase().includes(search.toLowerCase());
 const signature = (row: Summary) =>
@@ -25,6 +27,8 @@ const signature = (row: Summary) =>
     !!row.archived,
     !!row.managementPending,
     !!row.executionPending,
+    row.queueCount,
+    row.forkedFromId,
   ]);
 function dayLabel(time: number) {
   const today = new Date();
@@ -302,6 +306,11 @@ export const Conversations = memo(function Conversations({
                   >
                     <span className={'status-dot ' + row.state} />
                     <span>{row.title}</span>
+                    {row.forkedFromId && (
+                      <span className="branch-mark" title="Conversation branch">
+                        ⑂
+                      </span>
+                    )}
                     {['waitingApproval', 'waitingInput'].includes(row.state) && (
                       <span className="attention" aria-hidden="true">
                         !
@@ -348,7 +357,7 @@ export const Conversations = memo(function Conversations({
                         disabled={!!pending || isWorking(row)}
                         title={
                           isWorking(row)
-                            ? 'Finish or stop the task and confirm its result first.'
+                            ? 'Finish or stop the task, confirm its result, and remove queued messages first.'
                             : undefined
                         }
                         onClick={() =>

@@ -6,15 +6,15 @@ Run codes as the Linux account that owns the projects and is already signed in t
 
 `CODES_DATA_DIR` contains a SQLite database, WAL files, the workspace access token, and a PID lock. Mock mode also stores synthetic history there. The directory defaults to `.local` and is ignored by Git.
 
-Native task transcripts and CLI authentication remain in the server user's Codex home. codes keeps project metadata, settings, execution receipts, and pending prompt text for recovery. Browser drafts are stored in that browser's local storage, so use a trusted browser profile. Signing out clears the server session, not local drafts. Question answers are not stored as plaintext by the codes operation journal; the CLI may retain them according to its own behavior.
+Native task transcripts and CLI authentication remain in the server user's Codex home. codes keeps project metadata, settings, execution/branch receipts, pending prompt text, and queued messages with attachment references for recovery. Browser drafts are stored in that browser's local storage, so use a trusted browser profile. Signing out clears the server session, not local drafts. Question answers are not stored as plaintext by the codes operation journal; the CLI may retain them according to its own behavior.
 
-Completed/failed operation receipts are retained for 30 days. Unknown operations are retained until resolved. Treat the data directory and native Codex home as private user data. To back up, stop codes and back up both locations, preserving permissions. Schema 1 is automatically backed up and migrated to schema 2 on startup to add archive metadata. See [migration and rollback](conversations.md#metadata-migration-and-rollback). There is no automatic restore tool; unsupported database versions are rejected rather than reset.
+Completed/failed operation receipts are retained for 30 days. Completed/cancelled queue entries are also retained for 30 days. Failed and unknown queue entries remain available for review; remove a failed entry after correcting its cause. Unknown operations are retained until resolved. Treat the data directory and native Codex home as private user data. To back up, stop codes and back up both locations, preserving permissions. Schema 1 and 2 are automatically backed up and migrated to schema 3 on startup to add durable queues and branch receipts. See [migration and rollback](conversations.md#metadata-migration-and-rollback). There is no automatic restore tool; unsupported database versions are rejected rather than reset.
 
 ## Process lifecycle
 
 `SIGTERM` and `SIGINT` close the event streams, stop the child CLI, close SQLite, and remove the lock. A PID lock prevents two instances from using the same data directory. A stale lock is removed only when its process no longer exists. If a PID has been reused, inspect the lock and process manually rather than deleting an in-use lock.
 
-Restarting the service does not promise that a running CLI tool will finish. Unresolved sends become unknown and old approval callbacks expire. Browser closure alone leaves the server task running.
+Restarting the service does not promise that a running CLI tool will finish. Unresolved sends become unknown and old approval callbacks expire. Browser closure alone leaves the server task and its unpaused queue running. On service restart, waiting queues are preserved and paused; possibly dispatched messages become unknown. Check their results, then resume explicitly. See [queue recovery](conversation-workflow.md#queue-recovery).
 
 Use your normal process supervisor with a private environment and an explicit working directory. The repository does not install a daemon or change the running host configuration.
 

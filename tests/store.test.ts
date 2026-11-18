@@ -90,7 +90,7 @@ it('backs up schema 1 before adding archive metadata and preserves pending recei
       state: 'unknown',
     });
     expect(migrated.active('t')).toMatchObject({ id: 'op', state: 'unknown', text: 'saved draft' });
-    expect(migrated.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 2 });
+    expect(migrated.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 3 });
     const backupName = readdirSync(directory).find((name) => name.startsWith('codes.schema-v1-'))!;
     expect(statSync(join(directory, backupName)).mode & 0o777).toBe(0o600);
     const backup = new DatabaseSync(join(directory, backupName), { readOnly: true });
@@ -118,5 +118,51 @@ it('backs up schema 1 before adding archive metadata and preserves pending recei
     });
   } finally {
     reopened.close();
+  }
+});
+
+it('preserves queued messages across restart and pauses uncertain dispatches instead of resending', () => {
+  const { store, directory } = fixture();
+  const payload = {
+    text: 'Queued private fixture',
+    settings: { permission: 'read-only' as const },
+    attachments: [],
+  };
+  store.queue.add('queued', 'a', payload);
+  store.queue.add('sent', 'a', payload);
+  store.queue.set('sent', 'sent');
+  store.close();
+  const reopened = new Store(directory);
+  try {
+    expect(reopened.queue.state('a')).toMatchObject({ paused: true });
+    expect(reopened.queue.get('queued')).toMatchObject({ state: 'queued', text: payload.text });
+    expect(reopened.queue.get('sent')).toMatchObject({ state: 'unknown' });
+    expect(() => reopened.queue.cancel('sent', 'a')).toThrow(/may already be executing/);
+  } finally {
+    reopened.close();
+  }
+});
+it('backs up schema 2 before adding queue tables and preserves archived conversations', () => {
+  const { store, directory } = fixture();
+  store.setMetadata('a', { archived: true });
+  store.db.exec(
+    'DROP TABLE queued_messages; DROP TABLE queue_controls; ALTER TABLE threads DROP COLUMN forked_from_id; ALTER TABLE operations DROP COLUMN result_id; UPDATE meta SET version=2;',
+  );
+  store.close();
+  const upgraded = new Store(directory);
+  try {
+    expect(upgraded.thread('a')).toMatchObject({ archived: true, queueCount: 0 });
+    const backup = readdirSync(directory).find((name) => name.startsWith('codes.schema-v2-'))!;
+    const old = new DatabaseSync(join(directory, backup), { readOnly: true });
+    try {
+      expect(old.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 2 });
+      expect(old.prepare("SELECT archived FROM threads WHERE id='a'").get()).toMatchObject({
+        archived: 1,
+      });
+    } finally {
+      old.close();
+    }
+  } finally {
+    upgraded.close();
   }
 });

@@ -1,0 +1,50 @@
+# Questions, message queues, and conversation branches
+
+For the single workspace owner, these controls extend native Codex conversations in the desktop and mobile browser. They use CLI 0.167.0 and the server account. Browser closure leaves server-side execution and unpaused queues running.
+
+## Answer Codex questions
+
+A native structured question appears in the conversation while Codex waits for input. The card shows question headers, option descriptions, and every required answer. Choose an option; where the native request permits another answer, enter custom text. Questions without options accept free text. Secret inputs are masked and are not saved as plaintext in the codes operation journal or browser storage. The native runtime may retain answers under its own policies.
+
+Submit is enabled only after all questions have an answer. Another signed-in browser can answer the same request; the shared callback accepts one response and expires obsolete controls. Reload retrieves the outstanding request, but unsent form answers are kept only in that page's memory. Cancel task interrupts the native turn and pauses queued work. Ordinary messages in the composer do not answer a pending structured callback.
+
+The existing real-prompting-policy acceptance gate remains open: simulator coverage does not prove a particular host/model will emit these native requests. Resolved callbacks are not duplicated into a separate editable question transcript.
+
+## Quote a historical message
+
+Use Reply below a completed message. Select a passage first to quote that passage, or quote the first 4,000 characters of the message. The composer receives a visible, editable blockquote followed by your existing draft. A quote that would exceed the draft limit is refused without truncating the existing draft.
+
+Write your follow-up after the quote. This is an ordinary user prompt, preserved by the existing per-conversation draft storage. It carries no special execution or approval authority. During a task, use Queue to send it after the current task completes.
+
+## Manage the FIFO queue
+
+While Codex works, the composer offers Queue beside Stop. Queued messages are stored on the server with their settings and attachment references. They run in insertion order after confirmed successful completion of the current task. At most ten unfinished entries are allowed per conversation and 100 across the workspace. A direct send cannot bypass existing queued entries.
+
+Use Edit or Remove for a waiting entry. Editing retains that entry's model, permission, and attachments; remove it and compose a new entry to change those settings. Editing and removal are refused once dispatch may have started. File checksums are revalidated immediately before dispatch, so changed context pauses the queue instead of silently using stale lines. Pause queue holds waiting work while the current task continues. Resume queue explicitly releases waiting work after review.
+
+Snapshots and live events include at most 2,000 characters per queued preview; the UI shows a shorter preview. Edit fetches the full message, and dispatch uses the full stored payload. The preview limit does not truncate the task. Queue payloads and references are private runtime data. Completed/cancelled entries are pruned after 30 days; failed and unknown entries are held for review.
+
+### Queue recovery
+
+- Lost browser acknowledgement: the draft and queue request identity are retained. Use Check queue receipt to confirm that exact request. An edited draft is preserved. Restore pending draft lets you explicitly retry the original queue request with its original identity; it does not silently send another model task.
+- Lost native acknowledgement or runtime exit: the possibly dispatched entry remains protected. Check result correlates native terminal history with its execution receipt. Unknown entries cannot be edited, removed, or bypassed.
+- Stop, failure, or decline: the remaining queue pauses. Remove failed entries after reviewing their cause, then resume deliberately. Stop does not immediately launch the next task.
+- Service restart: queued payloads survive, queues start paused, and possibly dispatched entries are marked unknown. Check results and resume deliberately. The service does not replay uncertain tasks at startup.
+
+If readiness cannot be confirmed or a native task outside codes is unfinished, the queue remains held. Inspect the source task before resuming. Existing bounded history reconciliation limits still apply; this change does not implement the separate R1 recovery expansion.
+
+## Branch through a completed turn
+
+Use Branch from here below a completed Codex reply. Confirm the dialog to create a new native conversation containing history through that reply's completed turn, inclusive. This branches at a turn boundary, so all messages/tool activity in that turn are included. An unfinished or out-of-scope turn is rejected.
+
+The source retains its later turns and queue. The branch starts with Read only, an empty queue, and a native source link. Open source conversation navigates back, including when the parent was not in the current sidebar page. Previously undiscovered parents require a bounded native scan to verify their archive state; an inconclusive scan reports an error instead of assuming the parent can accept new work. The two conversations share the current project directory: branching does not copy, restore, or roll back files, create a Git branch/worktree, or isolate concurrent edits. Use the existing rename controls if you want a distinct branch title.
+
+A branch operation has its own durable receipt and returned conversation ID. Retrying that exact confirmed receipt returns the same branch. An uncertain native fork is not automatically repeated; refresh the list and inspect native branches before another explicit attempt. Browser storage restrictions can prevent retaining receipt IDs across reload, so inspect the conversation list before retrying after a reload in such a browser.
+
+## Storage and verification
+
+Metadata schema 3 adds queue state, branch ancestry, and branch result IDs. Schema 1/2 are backed up before migration. See [migration and rollback](conversations.md#metadata-migration-and-rollback); native histories and authentication remain in the server user's Codex home. Metadata backups alone do not preserve that native history or undo later model work.
+
+The [official app-server documentation](https://learn.chatgpt.com/docs/app-server) defines structured question callbacks and `thread/fork` with `lastTurnId`. Fields were checked against generated schemas from CLI 0.167.0. Queue order, receipts, limits, and browser recovery are codes behavior, tested separately in the simulator. The opt-in live pilot also verifies native fork history, unchanged source files/history, and two queued model turns. Real prompting policies and HTTPS/physical-phone acceptance remain separate gates.
+
+Queue reordering, steering an in-flight turn, permanent deletion, and file-level branch isolation are outside this implementation.

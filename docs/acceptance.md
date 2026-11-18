@@ -36,6 +36,12 @@ The conversation-management implementation passes 45 unit/integration tests and 
 
 The real CLI 0.167.0 live pilot also passed native rename, active/archived discovery, history preservation, send rejection while archived, and a new model turn after restoration. It used only the disposable fixture and the server login. The metadata-only smoke separately passed with an empty temporary Codex home and no model requests. These results do not complete HTTPS/physical-phone, real prompting-policy, or deployment backup/restore acceptance.
 
+## In-conversation workflow acceptance
+
+On 2026-11-18, the workflow checks pass 60 unit/integration tests and 22 simulator browser tests, including the previous regressions. New cases exercise FIFO dispatch, pause/edit/remove, uncertain outcomes, stop/decline behavior, changed queued context, queue capacity and bounded cross-conversation scheduling, bounded broadcasts with full stored messages, schema 1/2 migration, restart holds, native per-turn branching, source archive-state discovery, structured choices/custom/secret answers across clients, quoted drafts, lost queue HTTP receipts, and delayed control responses arriving after newer queue events. Mobile checks include fully visible Queue/Stop controls; synthetic mobile question and desktop queue screenshots were inspected.
+
+The opt-in live pilot with CLI 0.167.0 also passed a native branch through the first completed turn, preservation of later source history and current files, and two sequential queued model turns in that branch. The existing read/write, archive/restore, and interrupt pilot checks passed in the same disposable fixture. The real prompting-policy and deployment gates remain open. These results do not claim queue reordering, in-flight steering, file isolation, or an expanded reconciliation search window.
+
 ## Live pilot evidence
 
 A live pilot with CLI 0.167.0 and the server's existing login passed these checks in a temporary directory:

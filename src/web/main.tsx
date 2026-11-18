@@ -14,12 +14,16 @@ import type {
   Summary,
   System,
   Thread,
+  QueueState,
+  QueuePayload,
 } from '../shared/types';
 import { ApiError, message, post, request } from './api';
 import { Feed } from './feed';
 import { Brand, Icon } from './primitives';
 import { Login } from './Login';
 import { Conversations } from './Conversations';
+import { QueuePanel } from './QueuePanel';
+import './workflow.css';
 import './style.css';
 
 const labels: Record<string, string> = {
@@ -56,7 +60,13 @@ const save = (key: string, value: string) => {
 const MessageView = memo(function MessageView({
   item,
   streaming,
+  onReply,
+  onFork,
+  disabled,
 }: {
+  onReply?: (item: Message) => void;
+  onFork?: (item: Message) => void;
+  disabled?: boolean;
   item: Message;
   streaming: boolean;
 }) {
@@ -72,7 +82,11 @@ const MessageView = memo(function MessageView({
       </details>
     );
   return (
-    <article className={`message ${item.kind}`} data-testid={`message-${item.kind}`}>
+    <article
+      data-message-id={item.id}
+      className={`message ${item.kind}`}
+      data-testid={`message-${item.kind}`}
+    >
       <div className="message-avatar">{item.kind === 'user' ? 'Y' : <span>c›</span>}</div>
       <div className="message-body">
         <div className="message-label">
@@ -93,6 +107,22 @@ const MessageView = memo(function MessageView({
             <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
           )}
         </div>
+        {!streaming && item.turnId && (onReply || onFork) && (
+          <div className="message-actions">
+            {onReply && (
+              <button disabled={disabled} onClick={() => onReply(item)}>
+                <Icon name="reply" size={13} />
+                Reply
+              </button>
+            )}
+            {onFork && (
+              <button disabled={disabled} onClick={() => onFork(item)}>
+                <Icon name="branch" size={13} />
+                Branch from here
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );
@@ -127,36 +157,59 @@ function Approval({
       <div className="approval-heading">
         <span className="approval-dot" />
         <strong>{action.title}</strong>
-        <span className="badge">REVIEW REQUIRED</span>
+        <span className="badge">
+          {action.kind === 'questions' ? 'ANSWER REQUIRED' : 'REVIEW REQUIRED'}
+        </span>
       </div>
-      <pre>{action.detail}</pre>
-      {action.questions?.map((q) => (
-        <label className="question" key={q.id}>
-          {q.question}
-          {q.options && (
-            <div className="question-options">
+      {action.kind !== 'questions' && <pre>{action.detail}</pre>}
+      {action.questions?.map((q, index) => (
+        <fieldset className="question" key={q.id} disabled={disabled}>
+          <legend>
+            <small>
+              {q.header || 'Question ' + (index + 1)} · {index + 1}/{action.questions!.length}
+            </small>
+            {q.question}
+          </legend>
+          {!!q.options?.length && (
+            <div className="question-options" role="group" aria-label={'Options for ' + q.question}>
               {q.options.map((option) => (
                 <button
+                  type="button"
                   key={option.label}
+                  aria-pressed={answers[q.id] === option.label}
                   className={answers[q.id] === option.label ? 'selected' : ''}
                   onClick={() => setAnswers({ ...answers, [q.id]: option.label })}
                   disabled={disabled}
                 >
                   {option.label}
+                  {option.description && <small>{option.description}</small>}
                 </button>
               ))}
             </div>
           )}
-          <input
-            type={q.secret ? 'password' : 'text'}
-            autoComplete="off"
-            aria-label={q.question}
-            value={answers[q.id] ?? ''}
-            onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-            disabled={disabled}
-            placeholder="Your answer"
-          />
-        </label>
+          {(!q.options?.length || q.allowOther) && (
+            <input
+              type={q.secret ? 'password' : 'text'}
+              autoComplete="off"
+              aria-label={q.question}
+              value={answers[q.id] ?? ''}
+              maxLength={4000}
+              onChange={(event) => setAnswers({ ...answers, [q.id]: event.target.value })}
+              disabled={disabled}
+              placeholder={q.options?.length ? 'Or write your own answer' : 'Your answer'}
+              onKeyDown={(event) => {
+                if (
+                  event.key === 'Enter' &&
+                  !event.nativeEvent.isComposing &&
+                  action.questions?.every((question) => answers[question.id]?.trim())
+                ) {
+                  event.preventDefault();
+                  void answer({ answers });
+                }
+              }}
+            />
+          )}
+        </fieldset>
       ))}
       {error && (
         <p role="alert" className="error-text">
@@ -165,9 +218,31 @@ function Approval({
       )}
       <div className="approval-actions">
         {action.kind === 'questions' ? (
-          <button className="primary" disabled={disabled} onClick={() => void answer({ answers })}>
-            Submit answer
-          </button>
+          <>
+            <button
+              className="primary"
+              disabled={
+                disabled ||
+                !action.questions?.length ||
+                action.questions.some((question) => !answers[question.id]?.trim())
+              }
+              onClick={() => void answer({ answers })}
+            >
+              Submit answer
+            </button>
+            <button
+              className="secondary"
+              disabled={disabled}
+              onClick={() => {
+                setBusy(true);
+                void post('/threads/' + action.threadId + '/interrupt')
+                  .catch((error) => setError(message(error)))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Cancel task
+            </button>
+          </>
         ) : (
           action.decisions.map((decision) => (
             <button
@@ -202,7 +277,18 @@ function App() {
   const [models, setModels] = useState<{ id: string; displayName: string }[]>([]);
   const [settings, setSettings] = useState<Settings>({ permission: 'read-only' });
   const [draft, setDraft] = useState('');
+  const [queueRequest, setQueueRequest] = useState<{
+    operationId: string;
+    payload: QueuePayload;
+  }>();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [forking, setForking] = useState<Message>();
+  const [forkBusy, setForkBusy] = useState(false);
+  const forkOperations = useRef(new Map<string, string>());
+  const [forkError, setForkError] = useState('');
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const queueRevision = useRef(0);
+  const queueRevisionAtRender = queueRevision.current;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [connection, setConnection] = useState('Connecting');
@@ -317,6 +403,8 @@ function App() {
       archived,
       managementPending,
       executionPending,
+      forkedFromId,
+      queueCount,
     } = value;
     const summary: Summary = {
       id,
@@ -327,14 +415,23 @@ function App() {
       archived,
       managementPending,
       executionPending,
+      forkedFromId,
+      queueCount,
     };
     setThreads((list) => [summary, ...list.filter((row) => row.id !== summary.id)].slice(0, 200));
     setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
   }, []);
   useEffect(() => {
+    queueRevision.current++;
     save('codes.thread', threadId);
     setDraft(saved(`codes.draft.${threadId || 'new'}`).slice(0, 50_000));
     setReceipt(threadId ? saved(`codes.operation.${threadId}`) : '');
+    try {
+      const stored = saved('codes.queue-request.' + threadId);
+      setQueueRequest(stored ? JSON.parse(stored) : undefined);
+    } catch {
+      setQueueRequest(undefined);
+    }
     setAttachments([]);
     if (!threadId || auth !== 'ready') {
       if (!projectId) setConnection('Ready');
@@ -377,6 +474,7 @@ function App() {
         return;
       }
       flush();
+      if (e.kind === 'queue') queueRevision.current++;
       if (
         e.kind === 'state' &&
         Object.hasOwn(e.data as object, 'pending') &&
@@ -402,6 +500,7 @@ function App() {
           return { ...t, ...data };
         }
         if (e.kind === 'actions') return { ...t, actions: e.data as Action[] };
+        if (e.kind === 'queue') return { ...t, queue: e.data as QueueState };
         if (e.kind === 'diff') return { ...t, diff: String(e.data) };
         return t;
       });
@@ -410,6 +509,7 @@ function App() {
       threadId,
       (snapshot) => {
         deltas.clear();
+        queueRevision.current++;
         setThread(snapshot.thread);
         // Project summaries may arrive while subscriptions switch. The selected
         // snapshot is also the authoritative summary for the navigation list.
@@ -462,13 +562,146 @@ function App() {
     setDraft(value);
     save(`codes.draft.${threadId || 'new'}`, value.slice(0, 50_000));
   };
+  const reply = (item: Message) => {
+    const selected = window.getSelection();
+    const article = selected?.anchorNode?.parentElement?.closest('[data-message-id]');
+    const excerpt =
+      (article?.getAttribute('data-message-id') === item.id
+        ? selected?.toString()
+        : undefined
+      )?.trim() || item.text;
+    const quote =
+      'Regarding this ' +
+      (item.kind === 'assistant' ? 'Codex reply' : 'earlier message') +
+      ':\n' +
+      excerpt
+        .slice(0, 4000)
+        .split('\n')
+        .map((line) => '> ' + line)
+        .join('\n') +
+      '\n\n';
+    if (quote.length + draft.length > 50_000) {
+      setError('Shorten the current draft before adding this quote.');
+      return;
+    }
+    changeDraft(quote + draft);
+    composer.current?.focus();
+  };
+  const enqueue = async () => {
+    if (!threadId || busy || !draft.trim() || thread?.archived || thread?.managementPending) return;
+    setBusy(true);
+    setError('');
+    const key = 'codes.queue-request.' + threadId;
+    const payload = { text: draft, settings, attachments };
+    let operationId = crypto.randomUUID();
+    try {
+      const previous = queueRequest ?? (saved(key) ? JSON.parse(saved(key)) : undefined);
+      if (previous) {
+        const record = previous;
+        if (JSON.stringify(record.payload) !== JSON.stringify(payload))
+          throw new Error('Check the pending queue receipt before changing this draft.');
+        operationId = record.operationId;
+      }
+      save(key, JSON.stringify({ operationId, payload }));
+      setQueueRequest({ operationId, payload });
+      const before = queueRevision.current;
+      const queue = await post<QueueState>('/threads/' + threadId + '/queue', {
+        operationId,
+        ...payload,
+      });
+      setThread((current) =>
+        current?.id === threadId && before === queueRevision.current
+          ? { ...current, queue }
+          : current,
+      );
+      save(key, '');
+      setQueueRequest(undefined);
+      save('codes.draft.' + threadId, '');
+      setDraft('');
+      setAttachments([]);
+    } catch (error) {
+      notice(error);
+      if (error instanceof ApiError && !error.uncertain) {
+        save(key, '');
+        setQueueRequest(undefined);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  const checkQueueReceipt = async () => {
+    if (!queueRequest || !threadId) return;
+    setBusy(true);
+    setError('');
+    try {
+      await request('/threads/' + threadId + '/queue/' + queueRequest.operationId);
+      const before = queueRevision.current;
+      const queue = await request<QueueState>('/threads/' + threadId + '/queue');
+      if (
+        JSON.stringify({ text: draft, settings, attachments }) ===
+        JSON.stringify(queueRequest.payload)
+      ) {
+        save('codes.draft.' + threadId, '');
+        setDraft('');
+        setAttachments([]);
+      }
+      save('codes.queue-request.' + threadId, '');
+      setQueueRequest(undefined);
+      setThread((current) =>
+        current?.id === threadId && before === queueRevision.current
+          ? { ...current, queue }
+          : current,
+      );
+    } catch (error) {
+      notice(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const fork = async () => {
+    if (!forking || !threadId || forkBusy) return;
+    setForkBusy(true);
+    setForkError('');
+    const source = threadId;
+    const key = 'codes.fork.' + source + '.' + forking.turnId;
+    const operationId = forkOperations.current.get(key) || saved(key) || crypto.randomUUID();
+    forkOperations.current.set(key, operationId);
+    save(key, operationId);
+    try {
+      const created = await post<Summary>('/threads/' + source + '/fork', {
+        operationId,
+        lastTurnId: forking.turnId,
+      });
+      save(key, '');
+      forkOperations.current.delete(key);
+      conversationUpdated(created);
+      setForking(undefined);
+      select(created.id);
+      setSettings({ permission: 'read-only', model: settings.model });
+    } catch (error) {
+      setForkError(message(error));
+      if (error instanceof ApiError && !error.uncertain && error.code !== 'FORK_UNKNOWN') {
+        save(key, '');
+        forkOperations.current.delete(key);
+      }
+    } finally {
+      setForkBusy(false);
+    }
+  };
   const newThread = () => {
     select('');
     setSettings({ permission: 'read-only', model: settings.model });
     setError('');
   };
   const send = async () => {
-    if (busy || !draft.trim() || !projectId || thread?.archived || thread?.managementPending)
+    if (
+      busy ||
+      queueRequest ||
+      !draft.trim() ||
+      !projectId ||
+      thread?.archived ||
+      thread?.managementPending
+    )
       return;
     setBusy(true);
     setError('');
@@ -773,6 +1006,27 @@ function App() {
             are executed.
           </div>
         )}
+        {thread?.forkedFromId && (
+          <div className="branch-origin">
+            <Icon name="branch" size={14} />
+            <span>Conversation branch</span>
+            <button
+              onClick={() => {
+                setBusy(true);
+                void request<Summary>('/threads/' + thread.id + '/source')
+                  .then((source) => {
+                    conversationUpdated(source);
+                    select(source.id);
+                  })
+                  .catch(notice)
+                  .finally(() => setBusy(false));
+              }}
+              disabled={busy}
+            >
+              Open source conversation
+            </button>
+          </div>
+        )}
         {(thread?.archived || thread?.managementPending) && (
           <div className="conversation-lock-banner" role="status">
             <span>
@@ -884,6 +1138,18 @@ function App() {
                   <MessageView
                     key={m.id}
                     item={m}
+                    onReply={thread.archived ? undefined : reply}
+                    onFork={
+                      !active || m.turnId !== thread.turnId
+                        ? m.kind === 'assistant'
+                          ? (item) => {
+                              setForking(item);
+                              setForkError('');
+                            }
+                          : undefined
+                        : undefined
+                    }
+                    disabled={busy || forkBusy || thread.managementPending}
                     streaming={
                       m.kind === 'assistant' &&
                       m.turnId === thread.turnId &&
@@ -922,6 +1188,40 @@ function App() {
           </div>
         </div>
         <div className="composer-area">
+          {queueRequest && (
+            <div className="recovery">
+              <span>A queue receipt needs confirmation. Check before sending another message.</span>
+              <button disabled={busy} onClick={() => void checkQueueReceipt()}>
+                Check queue receipt
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  changeDraft(queueRequest.payload.text);
+                  setSettings(queueRequest.payload.settings);
+                  setAttachments(queueRequest.payload.attachments);
+                }}
+              >
+                Restore pending draft
+              </button>
+            </div>
+          )}
+          {thread?.queue && (
+            <QueuePanel
+              key={threadId}
+              threadId={threadId}
+              state={thread.queue}
+              onChange={(queue) =>
+                setThread((current) =>
+                  current?.id === threadId && queueRevisionAtRender === queueRevision.current
+                    ? { ...current, queue }
+                    : current,
+                )
+              }
+              onCheck={reconcile}
+            />
+          )}
+
           {error && (
             <div className="error-banner" role="alert">
               <span>{error}</span>
@@ -961,6 +1261,7 @@ function App() {
             )}
             <textarea
               aria-label="Message Codex"
+              ref={composer}
               value={draft}
               readOnly={!!thread?.archived || !!thread?.managementPending}
               onChange={(e) => changeDraft(e.target.value)}
@@ -982,7 +1283,8 @@ function App() {
                   window.innerWidth > 700
                 ) {
                   e.preventDefault();
-                  if (!active && !receipt) void send();
+                  if (active || thread?.queue?.items.length) void enqueue();
+                  else if (!receipt) void send();
                 }
               }}
             />
@@ -1021,38 +1323,59 @@ function App() {
                 <option value="workspace-write">Workspace write</option>
               </select>
               <div className="toolbar-spacer" />
-              {active ? (
-                <button
-                  className="stop-button"
-                  aria-label="Stop task"
-                  disabled={busy || !thread?.turnId || thread?.state === 'unknown'}
-                  onClick={() => {
-                    setBusy(true);
-                    void post(`/threads/${threadId}/interrupt`)
-                      .catch(notice)
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  <Icon name="stop" size={16} />
-                  Stop
-                </button>
-              ) : (
-                <button
-                  className="send-button"
-                  aria-label="Send message"
-                  onClick={() => void send()}
-                  disabled={
-                    busy ||
-                    !draft.trim() ||
-                    !projectId ||
-                    !!receipt ||
-                    !!thread?.archived ||
-                    !!thread?.managementPending
-                  }
-                >
-                  <Icon name="arrow" size={18} />
-                </button>
-              )}
+              <div className="composer-dispatch-actions">
+                {(active || !!thread?.queue?.items.length) && (
+                  <button
+                    className="queue-send"
+                    aria-label="Queue message"
+                    disabled={
+                      busy ||
+                      !draft.trim() ||
+                      !!thread?.archived ||
+                      !!thread?.managementPending ||
+                      (!!thread?.queue && thread.queue.items.length >= 10)
+                    }
+                    onClick={() => void enqueue()}
+                  >
+                    <Icon name="plus" size={14} />
+                    Queue
+                  </button>
+                )}
+                {active ? (
+                  <button
+                    className="stop-button"
+                    aria-label="Stop task"
+                    disabled={busy || !thread?.turnId || thread?.state === 'unknown'}
+                    onClick={() => {
+                      setBusy(true);
+                      void post(`/threads/${threadId}/interrupt`)
+                        .catch(notice)
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    <Icon name="stop" size={16} />
+                    Stop
+                  </button>
+                ) : (
+                  <button
+                    className="send-button"
+                    aria-label="Send message"
+                    onClick={() => void send()}
+                    disabled={
+                      busy ||
+                      !draft.trim() ||
+                      !projectId ||
+                      !!receipt ||
+                      !!queueRequest ||
+                      !!thread?.queue?.items.length ||
+                      !!thread?.archived ||
+                      !!thread?.managementPending
+                    }
+                  >
+                    <Icon name="arrow" size={18} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div className="composer-hint">
@@ -1068,6 +1391,64 @@ function App() {
           </div>
         </div>
       </div>
+      {forking && (
+        <div className="modal-backdrop">
+          <form
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fork-title"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void fork();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && !forkBusy) setForking(undefined);
+              if (event.key === 'Tab') {
+                const buttons = [
+                  ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                    'button:not(:disabled)',
+                  ),
+                ];
+                if (event.shiftKey && document.activeElement === buttons[0]) {
+                  event.preventDefault();
+                  buttons.at(-1)?.focus();
+                } else if (!event.shiftKey && document.activeElement === buttons.at(-1)) {
+                  event.preventDefault();
+                  buttons[0]?.focus();
+                }
+              }
+            }}
+          >
+            <h2 id="fork-title">Branch from this turn?</h2>
+            <p>
+              Copy the conversation through this completed turn into a new conversation. Later turns
+              and queued messages stay in the source conversation. Both conversations use the
+              current project files; files are not copied or rolled back. The branch starts in Read
+              only.
+            </p>
+            {forkError && (
+              <p className="fork-error" role="alert">
+                {forkError}
+              </p>
+            )}
+            <div className="conversation-confirm-actions">
+              <button
+                type="button"
+                className="secondary"
+                autoFocus
+                disabled={forkBusy}
+                onClick={() => setForking(undefined)}
+              >
+                Cancel
+              </button>
+              <button className="primary" disabled={forkBusy}>
+                {forkBusy ? 'Creating branch…' : 'Create branch'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       {panel && (
         <aside className="context-panel">
           <div className="panel-heading">

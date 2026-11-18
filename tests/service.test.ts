@@ -442,3 +442,275 @@ it('does not replace the first task title with an earlier empty native list resp
   spy.mockRestore();
   await service.interrupt(thread.id);
 });
+
+it('dispatches queued messages in FIFO order only after the active task completes', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[approve] Hold the queue', thread.settings);
+  await until(() => thread.actions.length > 0);
+  const id = randomUUID();
+  await service.enqueue(thread.id, id, {
+    text: 'First queued',
+    settings: thread.settings,
+    attachments: [],
+  });
+  await service.enqueue(thread.id, id, {
+    text: 'First queued',
+    settings: thread.settings,
+    attachments: [],
+  });
+  await expect(
+    service.enqueue(thread.id, id, {
+      text: 'Changed input',
+      settings: thread.settings,
+      attachments: [],
+    }),
+  ).rejects.toMatchObject({ code: 'OPERATION_CONFLICT' });
+  await service.enqueue(thread.id, randomUUID(), {
+    text: 'Second queued',
+    settings: thread.settings,
+    attachments: [],
+  });
+  expect(service.queueState(thread.id).items).toHaveLength(2);
+  await expect(service.archive(thread.id, randomUUID(), true)).rejects.toMatchObject({
+    code: 'CONVERSATION_ACTIVE',
+  });
+  await service.answer(thread.actions[0]!.id, randomUUID(), { decision: 'accept' });
+  await until(
+    () => service.queueState(thread.id).items.length === 0 && thread.state === 'completed',
+  );
+  expect(thread.messages.filter((row) => row.kind === 'user').map((row) => row.text)).toEqual([
+    '[approve] Hold the queue',
+    'First queued',
+    'Second queued',
+  ]);
+});
+it('pauses, edits, and removes waiting messages without cancelling the active task', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[approve] Editing fixture', thread.settings);
+  await until(() => thread.actions.length > 0);
+  const first = randomUUID(),
+    second = randomUUID();
+  await service.enqueue(thread.id, first, {
+    text: 'Remove this',
+    settings: thread.settings,
+    attachments: [],
+  });
+  await service.enqueue(thread.id, second, {
+    text: 'Edit this',
+    settings: thread.settings,
+    attachments: [],
+  });
+  service.controlQueue(thread.id, true);
+  service.editQueued(thread.id, second, 'Edited queued message');
+  service.cancelQueued(thread.id, first);
+  await service.answer(thread.actions[0]!.id, randomUUID(), { decision: 'accept' });
+  await until(() => thread.state === 'completed');
+  expect(thread.messages.filter((row) => row.kind === 'user')).toHaveLength(1);
+  service.controlQueue(thread.id, false);
+  await until(() => service.queueState(thread.id).items.length === 0);
+  expect(thread.messages.filter((row) => row.kind === 'user').map((row) => row.text)).toEqual([
+    '[approve] Editing fixture',
+    'Edited queued message',
+  ]);
+});
+it('holds remaining queued messages after stopping a task until explicitly resumed', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[approve] Stop queue fixture', thread.settings);
+  await until(() => thread.actions.length > 0);
+  await service.enqueue(thread.id, randomUUID(), {
+    text: 'After deliberate resume',
+    settings: thread.settings,
+    attachments: [],
+  });
+  await service.interrupt(thread.id);
+  await until(() => thread.state === 'interrupted');
+  expect(service.queueState(thread.id)).toMatchObject({ paused: true });
+  expect(thread.messages.filter((row) => row.kind === 'user')).toHaveLength(1);
+  service.controlQueue(thread.id, false);
+  await until(() => service.queueState(thread.id).items.length === 0);
+  expect(thread.messages.filter((row) => row.kind === 'user')).toHaveLength(2);
+});
+it('protects an uncertain queued dispatch and reconciles it without resending', async () => {
+  const { service, thread } = await fixture(1400);
+  const first = randomUUID();
+  await service.enqueue(thread.id, first, {
+    text: '[lost-ack] [lost-terminal] Queue uncertainty',
+    settings: thread.settings,
+    attachments: [],
+  });
+  await until(() => service.store.queue.get(first)?.state === 'unknown');
+  await service.enqueue(thread.id, randomUUID(), {
+    text: 'After checking the result',
+    settings: thread.settings,
+    attachments: [],
+  });
+  expect(() => service.controlQueue(thread.id, false)).toThrow(/Check unknown results/);
+  await service.reconcile(thread.id);
+  expect(service.store.queue.get(first)?.state).toBe('completed');
+  expect(service.queueState(thread.id).paused).toBe(true);
+  service.controlQueue(thread.id, false);
+  await until(() => service.queueState(thread.id).items.length === 0);
+  expect(thread.messages.filter((row) => row.kind === 'user')).toHaveLength(2);
+});
+it('revalidates queued file context at dispatch and holds later messages on failure', async () => {
+  const { service, project, thread, directory } = await fixture();
+  await writeFile(join(directory, 'queued.txt'), 'before\n');
+  const file = await service.file(project.id, 'queued.txt');
+  await service.send(thread.id, randomUUID(), '[approve] Context fixture', thread.settings);
+  await until(() => thread.actions.length > 0);
+  const id = randomUUID();
+  await service.enqueue(thread.id, id, {
+    text: 'Read queued context',
+    settings: thread.settings,
+    attachments: [{ path: file.path, sha: file.sha, fromLine: 1, toLine: 1 }],
+  });
+  await service.enqueue(thread.id, randomUUID(), {
+    text: 'Must remain waiting',
+    settings: thread.settings,
+    attachments: [],
+  });
+  await writeFile(join(directory, 'queued.txt'), 'changed\n');
+  await service.answer(thread.actions[0]!.id, randomUUID(), { decision: 'accept' });
+  await until(() => service.store.queue.get(id)?.state === 'failed');
+  expect(service.queueState(thread.id)).toMatchObject({ paused: true });
+  expect(thread.messages.filter((row) => row.kind === 'user')).toHaveLength(1);
+});
+it('bounds the per-conversation queue and does not bypass waiting messages with direct sends', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[approve] Capacity fixture', thread.settings);
+  await until(() => thread.actions.length > 0);
+  for (let i = 0; i < 10; i++)
+    await service.enqueue(thread.id, randomUUID(), {
+      text: 'Waiting ' + i,
+      settings: thread.settings,
+      attachments: [],
+    });
+  await expect(
+    service.enqueue(thread.id, randomUUID(), {
+      text: 'Overflow',
+      settings: thread.settings,
+      attachments: [],
+    }),
+  ).rejects.toMatchObject({ code: 'QUEUE_LIMIT' });
+  await expect(
+    service.send(thread.id, randomUUID(), 'Bypass', thread.settings),
+  ).rejects.toMatchObject({ code: 'QUEUE_PENDING' });
+  await service.interrupt(thread.id);
+});
+it('forks through an exact completed turn without changing the source history or copying its queue', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), 'First source turn', thread.settings);
+  await until(() => thread.state === 'completed');
+  const anchor = thread.messages.find((row) => row.kind === 'assistant')!.turnId;
+  await service.send(thread.id, randomUUID(), 'Second source turn', thread.settings);
+  await until(() => thread.state === 'completed');
+  const op = randomUUID();
+  const child = await service.fork(thread.id, op, anchor);
+  expect(child).toMatchObject({ forkedFromId: thread.id, queueCount: 0 });
+  expect((await service.fork(thread.id, op, anchor)).id).toBe(child.id);
+  await expect(service.fork(thread.id, op, 'different')).rejects.toMatchObject({
+    code: 'OPERATION_CONFLICT',
+  });
+  const branch = await service.read(child.id);
+  expect(branch.settings.permission).toBe('read-only');
+  expect((await service.source(child.id)).id).toBe(thread.id);
+  expect(branch.messages.filter((row) => row.kind === 'user').map((row) => row.text)).toEqual([
+    'First source turn',
+  ]);
+  expect(
+    (await service.history(thread.id)).messages.filter((row) => row.kind === 'user'),
+  ).toHaveLength(2);
+  await service.send(child.id, randomUUID(), 'Branch continuation', branch.settings);
+  await until(() => branch.state === 'completed');
+  expect(
+    (await service.history(thread.id)).messages.filter((row) => row.kind === 'user'),
+  ).toHaveLength(2);
+});
+it('refuses a branch through an unfinished or unknown native turn', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[approve] Incomplete fork', thread.settings);
+  await until(() => thread.actions.length > 0);
+  await expect(service.fork(thread.id, randomUUID(), thread.turnId!)).rejects.toMatchObject({
+    code: 'CLI_ERROR',
+  });
+  await expect(service.fork(thread.id, randomUUID(), 'other-turn')).rejects.toMatchObject({
+    code: 'CLI_ERROR',
+  });
+  await service.interrupt(thread.id);
+});
+
+it('preserves structured question headers and refuses custom answers when native options are closed', async () => {
+  const { service, thread } = await fixture();
+  await service.send(
+    thread.id,
+    randomUUID(),
+    '[question] [no-other] Closed choice fixture',
+    thread.settings,
+  );
+  await until(() => thread.actions.length > 0);
+  const action = thread.actions[0]!;
+  expect(action.questions?.[0]).toMatchObject({ header: 'Direction', allowOther: false });
+  await expect(
+    service.answer(action.id, randomUUID(), { answers: { direction: 'Not an option' } }),
+  ).rejects.toMatchObject({ code: 'INVALID_ANSWER' });
+  await expect(
+    service.answer(action.id, randomUUID(), {
+      answers: { direction: 'Continue', other: 'Wrong question' },
+    }),
+  ).rejects.toMatchObject({ code: 'INVALID_ANSWER' });
+  await service.answer(action.id, randomUUID(), { answers: { direction: 'Continue' } });
+  await until(() => thread.state === 'completed');
+});
+it('bounds queue event previews without clipping the stored or dispatched message', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[approve] Preview fixture', thread.settings);
+  await until(() => thread.actions.length > 0);
+  const text = 'A long queued prompt ' + 'x'.repeat(20_000);
+  const id = randomUUID();
+  await service.enqueue(thread.id, id, { text, settings: thread.settings, attachments: [] });
+  expect(service.queueState(thread.id).items[0]).toMatchObject({ textTruncated: true });
+  expect(service.queueState(thread.id).items[0]!.text.length).toBe(2000);
+  expect(service.store.queue.get(id)?.text).toBe(text);
+  await service.answer(thread.actions[0]!.id, randomUUID(), { decision: 'accept' });
+  await until(() => service.queueState(thread.id).items.length === 0);
+  expect(thread.messages.filter((row) => row.kind === 'user').at(-1)?.text).toBe(text);
+});
+
+it('discovers a native branch source beyond the current page and preserves its archive state', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', { cwd: project.path, count: 2 });
+  const parentId = seeded.thread.id;
+  const forked = await service.driver.call('thread/fork', {
+    threadId: parentId,
+    lastTurnId: 'turn-0',
+    excludeTurns: true,
+  });
+  await service.driver.call('thread/archive', { threadId: parentId });
+  await service.conversations(project.id, { limit: 1 });
+  expect(service.store.thread(forked.thread.id)).toBeTruthy();
+  expect(service.store.thread(parentId)).toBeUndefined();
+  expect(await service.source(forked.thread.id)).toMatchObject({ id: parentId, archived: true });
+});
+
+it('holds additional conversation queues when all four native execution slots are occupied', async () => {
+  const { service, project, thread } = await fixture();
+  const conversations = [thread];
+  for (let i = 0; i < 4; i++) conversations.push(await service.create(project.id, thread.settings));
+  const ids = conversations.map(() => randomUUID());
+  for (let i = 0; i < conversations.length; i++)
+    await service.enqueue(conversations[i]!.id, ids[i]!, {
+      text: '[approve] Concurrent queue ' + i,
+      settings: thread.settings,
+      attachments: [],
+    });
+  await until(
+    () =>
+      service.store.activeCount() === 4 &&
+      conversations.filter((row) => row.actions.length > 0).length === 4,
+  );
+  expect(service.store.queue.get(ids[4]!)?.state).toBe('queued');
+  await service.interrupt(conversations[0]!.id);
+  await until(() => conversations[4]!.actions.length > 0);
+  expect(service.store.activeCount()).toBeLessThanOrEqual(4);
+  expect(service.store.queue.get(ids[4]!)?.state).not.toBe('failed');
+});

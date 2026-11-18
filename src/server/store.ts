@@ -4,16 +4,18 @@ import { mkdirSync, chmodSync, openSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Operation, Project, Settings, Summary } from '../shared/types.js';
 import { AppError } from '../shared/errors.js';
+import { QueueStore, queueSchema } from './queue-store.js';
 
 export class Store {
   readonly db: DatabaseSync;
+  readonly queue: QueueStore;
   constructor(directory: string) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(join(directory, 'codes.sqlite'));
     chmodSync(join(directory, 'codes.sqlite'), 0o600);
     if (
       this.db.prepare("SELECT name FROM sqlite_master WHERE name='meta'").get() &&
-      ![1, 2].includes((this.db.prepare('SELECT version FROM meta').get() as any)?.version)
+      ![1, 2, 3].includes((this.db.prepare('SELECT version FROM meta').get() as any)?.version)
     ) {
       this.db.close();
       throw new AppError(
@@ -24,15 +26,16 @@ export class Store {
     }
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=1000;
       CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL);
-      INSERT INTO meta SELECT 2 WHERE NOT EXISTS (SELECT 1 FROM meta);
+      INSERT INTO meta SELECT 3 WHERE NOT EXISTS (SELECT 1 FROM meta);
       CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT UNIQUE NOT NULL);
-      CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), title TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL, settings TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0);
-      CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id), kind TEXT NOT NULL, digest TEXT NOT NULL, state TEXT NOT NULL, turn_id TEXT, error TEXT, pending_text TEXT, created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), title TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL, settings TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0, forked_from_id TEXT);
+      CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id), kind TEXT NOT NULL, digest TEXT NOT NULL, state TEXT NOT NULL, turn_id TEXT, error TEXT, pending_text TEXT, created_at INTEGER NOT NULL, result_id TEXT);
       CREATE UNIQUE INDEX IF NOT EXISTS active_turn ON operations(thread_id) WHERE kind='send' AND state IN ('dispatching','acknowledged','unknown');`);
-    if ((this.db.prepare('SELECT version FROM meta').get() as any).version === 1) {
+    const version = (this.db.prepare('SELECT version FROM meta').get() as any).version;
+    if (version < 3) {
       const backup = join(
         directory,
-        'codes.schema-v1-' + Date.now() + '-' + randomUUID() + '.sqlite',
+        'codes.schema-v' + version + '-' + Date.now() + '-' + randomUUID() + '.sqlite',
       );
       try {
         closeSync(openSync(backup, 'wx', 0o600));
@@ -43,21 +46,21 @@ export class Store {
       }
       this.db.exec('BEGIN IMMEDIATE');
       try {
+        if (version === 1)
+          this.db.exec('ALTER TABLE threads ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;');
         this.db.exec(
-          'ALTER TABLE threads ADD COLUMN archived INTEGER NOT NULL DEFAULT 0; UPDATE meta SET version=2; COMMIT;',
+          'ALTER TABLE threads ADD COLUMN forked_from_id TEXT; ALTER TABLE operations ADD COLUMN result_id TEXT;' +
+            queueSchema +
+            'UPDATE meta SET version=3; COMMIT;',
         );
       } catch (error) {
         this.db.exec('ROLLBACK');
         this.db.close();
         throw error;
       }
-    }
-    if ((this.db.prepare('SELECT version FROM meta').get() as any).version !== 2)
-      throw new AppError(
-        'DATABASE_VERSION',
-        'This database was created by an unsupported version.',
-        500,
-      );
+    } else this.db.exec(queueSchema);
+    this.queue = new QueueStore(this.db);
+    this.queue.recover();
     this.db.exec(
       "UPDATE operations SET state='unknown' WHERE state IN ('dispatching','acknowledged'); UPDATE threads SET state='unknown' WHERE state IN ('running','waitingApproval','waitingInput');",
     );
@@ -89,6 +92,8 @@ export class Store {
       state: row.state,
       updatedAt: row.updated_at,
       archived: !!row.archived,
+      forkedFromId: row.forked_from_id ?? undefined,
+      queueCount: this.queue.count(row.id),
       managementPending: !!this.pendingManagement(row.id),
       executionPending: !!this.active(row.id),
     };
@@ -100,7 +105,7 @@ export class Store {
   saveThread(thread: Summary, settings: Settings) {
     this.db
       .prepare(
-        'INSERT INTO threads(id,project_id,title,state,updated_at,settings,archived) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,state=excluded.state,updated_at=excluded.updated_at,settings=excluded.settings,archived=excluded.archived',
+        'INSERT INTO threads(id,project_id,title,state,updated_at,settings,archived,forked_from_id) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,state=excluded.state,updated_at=excluded.updated_at,settings=excluded.settings,archived=excluded.archived,forked_from_id=COALESCE(excluded.forked_from_id,threads.forked_from_id)',
       )
       .run(
         thread.id,
@@ -110,6 +115,7 @@ export class Store {
         thread.updatedAt,
         JSON.stringify(settings),
         Number(thread.archived ?? false),
+        thread.forkedFromId ?? null,
       );
   }
   pendingManagement(
@@ -140,6 +146,7 @@ export class Store {
         state: row.state,
         turnId: row.turn_id ?? undefined,
         error: row.error ?? undefined,
+        resultId: row.result_id ?? undefined,
       }
     );
   }
@@ -192,7 +199,9 @@ export class Store {
     if (existing) return { existing };
     try {
       this.db
-        .prepare('INSERT INTO operations VALUES(?,?,?,?,?,?,?,?,?)')
+        .prepare(
+          'INSERT INTO operations(id,thread_id,kind,digest,state,turn_id,error,pending_text,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
+        )
         .run(id, threadId, kind, digest, 'dispatching', null, null, text ?? null, Date.now());
     } catch (error) {
       if ((error as Error).message.includes('UNIQUE'))
@@ -217,7 +226,11 @@ export class Store {
       )
       .run(turnId, threadId, turnId);
   }
+  result(id: string, resultId: string) {
+    this.db.prepare('UPDATE operations SET result_id=? WHERE id=?').run(resultId, id);
+  }
   prune() {
+    this.queue.prune();
     this.db
       .prepare("DELETE FROM operations WHERE state IN ('completed','failed') AND created_at < ?")
       .run(Date.now() - 30 * 86400_000);

@@ -17,7 +17,7 @@ Open the row's actions button. **Rename** accepts a trimmed title of 1–80 char
 
 **Archive** asks for confirmation, then calls native `thread/archive`. History and project files are retained. Codex may also archive conversations spawned by that conversation; the confirmation explains this native behavior. Running tasks, pending approvals/questions, and unresolved execution receipts block archiving. A cheap native turn-metadata check also rejects unfinished turns that codes did not dispatch.
 
-An archived conversation can be read, including after reload. Sending is disabled until **Restore** or **Restore conversation** calls native `thread/unarchive`. Restoring does not resend a previous task. This preview does not offer permanent deletion.
+An archived conversation can be read, including after reload. Sending is disabled until **Restore** or **Restore conversation** calls native `thread/unarchive`. Restoring does not resend a previous task. This preview does not offer permanent deletion. Waiting queued messages must be removed before archiving. See [questions, queues, and branches](conversation-workflow.md) for in-conversation actions.
 
 Codes clients receive metadata changes through existing summary/state events. Refresh the list to discover changes made outside this app-server process. Empty native conversations are materialized lazily and may disappear if the CLI restarts before their first user message.
 
@@ -31,11 +31,11 @@ An uncertain rename asks for a list refresh to inspect the native title. It does
 
 ## Metadata migration and rollback
 
-On the first startup with schema 1, codes writes a consistent SQLite snapshot named `codes.schema-v1-<timestamp>-<uuid>.sqlite` in `CODES_DATA_DIR`, with owner-only permissions, before adding the archive column and recording schema 2. Existing project registrations, settings, and operation receipts are preserved. If backup or migration fails, startup fails; it does not reset the database. Fresh installations start at schema 2. Unsupported versions are rejected.
+On the first startup with schema 1 or 2, codes writes a consistent SQLite snapshot named `codes.schema-v<old-version>-<timestamp>-<uuid>.sqlite` in `CODES_DATA_DIR`, with owner-only permissions, before migrating to schema 3. The migration adds durable queues, native branch ancestry, and branch result receipts; schema 1 also gains the archive column. Existing project registrations, settings, archive flags, and operation receipts are preserved. If backup or migration fails, startup fails; it does not reset the database. Fresh installations start at schema 3. Unsupported versions are rejected.
 
 The backup covers codes metadata only. Native histories, archive locations, and authentication remain in the server account's Codex home. Back up both locations with the service stopped before upgrading. Retain backups privately until the upgrade is accepted.
 
-Older code cannot open schema 2. To roll back, stop the service and preserve the current metadata and Codex home first. Restore a matched pre-upgrade metadata/Codex-home backup under the intended account, preserving permissions, then start the older code. Do not mix a restored database with WAL/SHM files from another database. The automatic schema 1 snapshot alone does not undo native archive changes or preserve work created after the snapshot. Full deployment backup/restore acceptance remains a separate gate.
+Older code cannot open schema 3. To roll back, stop the service and preserve the current metadata and Codex home first. Restore a matched pre-upgrade metadata/Codex-home backup under the intended account, preserving permissions, then start the older code. Do not mix a restored database with WAL/SHM files from another database. The automatic metadata snapshot alone does not undo native archive changes or preserve work created after the snapshot. Full deployment backup/restore acceptance remains a separate gate.
 
 ## Reference decisions
 

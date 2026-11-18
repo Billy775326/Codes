@@ -2,6 +2,8 @@ import type React from 'react';
 
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
+    branch: <path d="M6 3v12a4 4 0 0 0 4 4h5M6 8h8a4 4 0 0 0 4-4M3 3h6M15 1h6M15 16v6" />,
+    reply: <path d="m9 5-6 6 6 6M3 11h10a7 7 0 0 1 7 7v2" />,
     search: (
       <>
         <circle cx="10.5" cy="10.5" r="6.5" />

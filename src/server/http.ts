@@ -248,6 +248,52 @@ export async function application(
         }
         if (segments[1] === 'threads' && segments[2]) {
           const id = segments[2];
+          if (segments[3] === 'source' && method === 'GET')
+            return json(response, await service.source(id));
+          if (segments[3] === 'fork' && method === 'POST') {
+            const input = z
+              .object({ operationId: z.uuid(), lastTurnId: z.string().min(1).max(200) })
+              .strict()
+              .parse(await body(request));
+            return json(response, await service.fork(id, input.operationId, input.lastTurnId));
+          }
+          if (segments[3] === 'queue') {
+            if (method === 'GET' && !segments[4]) return json(response, service.queueState(id));
+            if (segments[4] === 'control' && method === 'POST') {
+              const input = z
+                .object({ paused: z.boolean() })
+                .strict()
+                .parse(await body(request));
+              return json(response, service.controlQueue(id, input.paused));
+            }
+            if (segments[4] && method === 'GET') {
+              service.queueState(id);
+              const item = service.store.queue.get(segments[4]);
+              if (!item || item.threadId !== id)
+                throw new AppError('NOT_FOUND', 'Queued message not found.', 404);
+              return json(response, item);
+            }
+            if (segments[4] && method === 'PATCH') {
+              const input = z
+                .object({ text: z.string().trim().min(1).max(50_000) })
+                .strict()
+                .parse(await body(request));
+              return json(response, service.editQueued(id, segments[4], input.text));
+            }
+            if (segments[4] && method === 'DELETE')
+              return json(response, service.cancelQueued(id, segments[4]));
+            if (method === 'POST') {
+              const input = sendInput.parse(await body(request));
+              return json(
+                response,
+                await service.enqueue(id, input.operationId, {
+                  text: input.text,
+                  settings: input.settings,
+                  attachments: input.attachments,
+                }),
+              );
+            }
+          }
           if (segments[3] === 'rename' && method === 'POST') {
             const p = z
               .object({ operationId: z.uuid(), name: z.string().trim().min(1).max(80) })

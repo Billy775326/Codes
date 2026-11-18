@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Events } from './events.js';
+import { MessageQueue } from './message-queue.js';
 import { AppError, record } from '../shared/errors.js';
 import {
   limits,
@@ -15,6 +16,8 @@ import {
   type Attachment,
   type FileContent,
   type State,
+  type Summary,
+  type QueuePayload,
 } from '../shared/types.js';
 
 const text = (value: unknown, maximum: number = limits.item) =>
@@ -72,6 +75,8 @@ export class Service {
   private reads = new Map<string, Promise<Thread>>();
   private admission: Promise<void> = Promise.resolve();
   private managing = new Set<string>();
+  readonly queue: MessageQueue;
+  private sending = new Map<string, number>();
   private metadataRevision = 0;
   private metadataRevisions = new Map<string, number>();
   private actions = new Map<
@@ -82,10 +87,77 @@ export class Service {
     readonly store: Store,
     readonly driver: Driver,
   ) {
+    this.queue = new MessageQueue(
+      store.queue,
+      async (id, messageId) => {
+        const entry = store.queue.get(messageId)!;
+        return this.send(id, messageId, entry.text, entry.settings, entry.attachments, true);
+      },
+      async (id) => {
+        if (
+          store.activeCount() >= limits.active ||
+          this.sending.has(id) ||
+          store.active(id) ||
+          this.managing.has(id) ||
+          store.pendingManagement(id)
+        )
+          return false;
+        const thread = await this.read(id);
+        if (thread.archived) {
+          store.queue.pause(id, 'Restore the conversation before resuming the queue.');
+          this.queue.notify(id);
+          return false;
+        }
+        const { native } = await this.conversationOwner(id);
+        if (native.status?.type === 'active') {
+          store.queue.pause(
+            id,
+            'A native task is still active. Review its result before resuming.',
+          );
+          this.queue.notify(id);
+          return false;
+        }
+        const page = await this.driver
+          .call('thread/turns/list', {
+            threadId: id,
+            limit: 1,
+            itemsView: 'notLoaded',
+            sortDirection: 'desc',
+          })
+          .catch((error) => {
+            if (
+              error instanceof AppError &&
+              error.code === 'CLI_ERROR' &&
+              error.message.includes(
+                'is not materialized yet; thread/turns/list is unavailable before first user message',
+              )
+            )
+              return { data: [] };
+            throw error;
+          });
+        if (!Array.isArray(page.data))
+          throw new AppError('PROTOCOL_ERROR', 'Invalid native readiness metadata.', 502);
+        if (page.data[0]?.status === 'inProgress') {
+          store.queue.pause(id, 'The last native task has no confirmed result.');
+          this.queue.notify(id);
+          return false;
+        }
+        return store.activeCount() < limits.active;
+      },
+      (id, state) => {
+        const thread = this.cache.get(id);
+        if (thread) thread.queue = state;
+        this.events.publish('queue', state, id);
+        const summary = store.thread(id);
+        if (summary) this.events.publish('summary', summary, id);
+      },
+    );
     driver.on('notification', (event) => this.notification(event));
     driver.on('request', (event) => this.request(event));
     driver.on('offline', () => {
       this.loaded.clear();
+      store.queue.pauseAll('The runtime stopped. Review outcomes before resuming.');
+      for (const id of store.queue.pendingThreads()) this.queue.notify(id);
       for (const thread of this.cache.values()) {
         for (const action of thread.actions) action.status = 'expired';
         if (thread.pending) {
@@ -94,6 +166,7 @@ export class Service {
           thread.state = 'unknown';
         }
         this.boundary(thread);
+        this.queue.notify(thread.id);
       }
       this.actions.clear();
       this.events.publish('runtime', driver.system());
@@ -232,6 +305,7 @@ export class Service {
               state: state(raw.status),
               updatedAt: Number(raw.updatedAt || 0) * 1000,
               archived,
+              forkedFromId: typeof raw.forkedFromId === 'string' ? raw.forkedFromId : undefined,
             },
             { permission: 'read-only' },
           );
@@ -339,7 +413,7 @@ export class Service {
     this.managing.add(id);
     try {
       const { saved, native } = await this.conversationOwner(id);
-      if (this.store.active(id) || native.status?.type === 'active')
+      if (this.store.active(id) || this.store.queue.count(id) || native.status?.type === 'active')
         throw new AppError(
           'CONVERSATION_ACTIVE',
           'Stop the current task and confirm its result before archiving this conversation.',
@@ -471,6 +545,7 @@ export class Service {
       olderCursor: null,
       settings,
       diff: '',
+      queue: this.store.queue.state(result.thread.id),
     };
     this.store.saveThread(thread, settings);
     this.loaded.add(thread.id);
@@ -529,6 +604,7 @@ export class Service {
         .map((m) => m.text)
         .join('\n'),
       pending,
+      queue: this.store.queue.state(id),
     };
     await this.remember(thread);
     return thread;
@@ -661,7 +737,239 @@ export class Service {
       pageLimit = Math.max(1, Math.min(Math.floor(pageLimit / 2), turns.length - 1));
     }
   }
+  queueState(id: string) {
+    if (!this.store.thread(id))
+      throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+    return this.store.queue.state(id);
+  }
+  async enqueue(id: string, messageId: string, payload: QueuePayload) {
+    const saved = this.store.thread(id);
+    if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+    if (saved.archived || saved.managementPending || this.managing.has(id))
+      throw new AppError(
+        'MANAGEMENT_BUSY',
+        'Restore or finish managing the conversation before queueing messages.',
+        409,
+      );
+    if (Buffer.byteLength(payload.text) > 100_000)
+      throw new AppError('INPUT_LIMIT', 'The queued text exceeds 100 KB.');
+    if (this.store.active(id)?.state === 'unknown')
+      this.store.queue.pause(id, 'An execution result is unknown. Check result before resuming.');
+    if (this.store.operation(messageId) && !this.store.queue.get(messageId))
+      throw new AppError(
+        'OPERATION_CONFLICT',
+        'This operation ID belongs to a different task.',
+        409,
+      );
+    this.store.queue.add(messageId, id, payload);
+    this.queue.notify(id);
+    this.queue.wake(id);
+    return this.queueState(id);
+  }
+  editQueued(id: string, messageId: string, text: string) {
+    this.queueState(id);
+    this.store.queue.edit(messageId, id, text);
+    this.queue.notify(id);
+    return this.queueState(id);
+  }
+  cancelQueued(id: string, messageId: string) {
+    this.queueState(id);
+    this.store.queue.cancel(messageId, id);
+    this.queue.notify(id);
+    this.queue.wake(id);
+    return this.queueState(id);
+  }
+  controlQueue(id: string, paused: boolean) {
+    const state = this.queueState(id);
+    if (!paused && state.items.some((row) => ['unknown', 'failed'].includes(row.state)))
+      throw new AppError(
+        'QUEUE_REVIEW',
+        'Check unknown results and remove failed messages before resuming.',
+        409,
+      );
+    if (paused) this.store.queue.pause(id);
+    else this.store.queue.resume(id);
+    this.queue.notify(id);
+    if (!paused) this.queue.wake(id);
+    return this.queueState(id);
+  }
+  async source(id: string) {
+    const { saved, native } = await this.conversationOwner(id);
+    const parentId = saved.forkedFromId || native.forkedFromId;
+    if (typeof parentId !== 'string')
+      throw new AppError('NOT_FOUND', 'This conversation has no native source.', 404);
+    const parent = await this.driver.call(
+      'thread/read',
+      { threadId: parentId, includeTurns: false },
+      5000,
+    );
+    if (parent.thread?.cwd !== this.project(saved.projectId).path)
+      throw new AppError('PROJECT_OWNERSHIP', 'The source belongs to a different project.', 403);
+    const existing = this.store.thread(parentId);
+    if (existing && existing.projectId !== saved.projectId)
+      throw new AppError('PROJECT_OWNERSHIP', 'The source belongs to a different project.', 403);
+    if (!existing) {
+      let archiveState: boolean | undefined;
+      const deadline = Date.now() + 10_000;
+      for (const archived of [false, true]) {
+        let cursor: string | undefined;
+        for (let page = 0; page < 4 && Date.now() < deadline; page++) {
+          const result = await this.driver.call(
+            'thread/list',
+            {
+              cwd: parent.thread.cwd,
+              archived,
+              cursor,
+              limit: 50,
+              modelProviders: [],
+              sourceKinds: ['cli', 'appServer', 'vscode'],
+              ...(parent.thread.name ? { searchTerm: parent.thread.name } : {}),
+            },
+            Math.min(5000, deadline - Date.now()),
+          );
+          if (!Array.isArray(result.data))
+            throw new AppError('PROTOCOL_ERROR', 'Invalid native source metadata.', 502);
+          if (result.data.some((row: any) => row.id === parentId)) {
+            archiveState = archived;
+            break;
+          }
+          if (!result.nextCursor || result.nextCursor === cursor) break;
+          cursor = result.nextCursor;
+        }
+        if (archiveState !== undefined) break;
+      }
+      if (archiveState === undefined)
+        throw new AppError(
+          'SOURCE_NOT_LISTED',
+          'The source archive state could not be verified in this scan. Refresh the conversation views or inspect it in the CLI.',
+          409,
+        );
+      this.store.saveThread(
+        {
+          id: parentId,
+          projectId: saved.projectId,
+          title: text(parent.thread.name || parent.thread.preview, 80) || 'Untitled conversation',
+          state: state(parent.thread.status),
+          updatedAt: Number(parent.thread.updatedAt || 0) * 1000,
+          archived: archiveState,
+          forkedFromId:
+            typeof parent.thread.forkedFromId === 'string' ? parent.thread.forkedFromId : undefined,
+        },
+        { permission: 'read-only' },
+      );
+    }
+    return this.store.thread(parentId)!;
+  }
+  async fork(id: string, operationId: string, lastTurnId: string) {
+    const input = { lastTurnId };
+    const receipt = this.store.existing(operationId, id, 'fork', input);
+    if (receipt) {
+      if (receipt.resultId) return this.store.thread(receipt.resultId)!;
+      if (receipt.state === 'failed')
+        throw new AppError(
+          'FORK_FAILED',
+          receipt.error ?? 'The branch was not created. Choose a completed turn.',
+          409,
+        );
+      throw new AppError(
+        'FORK_UNKNOWN',
+        'A branch may already exist. Refresh the list before creating another.',
+        409,
+        true,
+      );
+    }
+    if (this.managing.has(id) || this.store.pendingManagement(id))
+      throw new AppError('MANAGEMENT_BUSY', 'Finish the current conversation change first.', 409);
+    this.managing.add(id);
+    try {
+      const { saved } = await this.conversationOwner(id);
+      this.store.begin(operationId, id, 'fork', input);
+      const response = await this.driver.call('thread/fork', {
+        threadId: id,
+        lastTurnId,
+        excludeTurns: true,
+        cwd: this.project(saved.projectId).path,
+        sandbox: 'read-only',
+        approvalPolicy: 'on-request',
+        ...(saved.settings.model ? { model: saved.settings.model } : {}),
+      });
+      if (
+        typeof response.thread?.id !== 'string' ||
+        response.thread.id === id ||
+        response.thread.cwd !== this.project(saved.projectId).path
+      )
+        throw new AppError(
+          'PROTOCOL_ERROR',
+          'Invalid branch metadata. Refresh the list before trying again.',
+          502,
+          true,
+        );
+      const child: Summary = {
+        id: response.thread.id,
+        projectId: saved.projectId,
+        title: text(response.thread.name || response.thread.preview, 80) || saved.title,
+        state: 'idle',
+        updatedAt: Number(response.thread.updatedAt || Date.now() / 1000) * 1000,
+        archived: false,
+        forkedFromId: id,
+      };
+      this.store.saveThread(child, {
+        permission: 'read-only',
+        ...(saved.settings.model ? { model: saved.settings.model } : {}),
+      });
+      this.store.result(operationId, child.id);
+      this.store.update(operationId, 'completed');
+      try {
+        await this.driver.call('thread/unsubscribe', { threadId: child.id }, 5000);
+      } catch {
+        console.error('Unable to unsubscribe an unused conversation branch.');
+      }
+      this.events.publish('summary', this.store.thread(child.id), child.id);
+      return this.store.thread(child.id)!;
+    } catch (error) {
+      if (this.store.operation(operationId))
+        this.store.update(
+          operationId,
+          error instanceof AppError && !error.uncertain ? 'failed' : 'unknown',
+          undefined,
+          error instanceof AppError ? error.message : 'The branch result is not confirmed.',
+        );
+      throw error;
+    } finally {
+      this.managing.delete(id);
+      this.queue.wake(id);
+    }
+  }
   async send(
+    id: string,
+    operationId: string,
+    prompt: string,
+    settings: Settings,
+    attachments: Attachment[] = [],
+    fromQueue = false,
+  ) {
+    const existing = this.store.existing(operationId, id, 'send', {
+      prompt,
+      settings,
+      attachments,
+    });
+    if (!fromQueue && !existing && this.store.queue.count(id))
+      throw new AppError(
+        'QUEUE_PENDING',
+        'Add this message to the queue, or resolve the queued messages first.',
+        409,
+      );
+    this.sending.set(id, (this.sending.get(id) ?? 0) + 1);
+    try {
+      return await this.dispatchSend(id, operationId, prompt, settings, attachments);
+    } finally {
+      const remaining = (this.sending.get(id) ?? 1) - 1;
+      if (remaining) this.sending.set(id, remaining);
+      else this.sending.delete(id);
+      this.queue.wake(id);
+    }
+  }
+  private async dispatchSend(
     id: string,
     operationId: string,
     prompt: string,
@@ -781,7 +1089,11 @@ export class Service {
   async reconcile(id: string) {
     const thread = await this.read(id);
     const pending = this.store.active(id);
-    if (!pending) return thread;
+    if (!pending) {
+      this.syncQueue(thread);
+      this.queue.notify(id);
+      return thread;
+    }
     const history = await this.history(id);
     const match = history.turns.find((turn: any) =>
       history.messages.some(
@@ -850,10 +1162,22 @@ export class Service {
     let response: unknown;
     if (action.kind === 'questions') {
       const answers: Record<string, { answers: string[] }> = {};
+      if (
+        Object.keys(resolution.answers ?? {}).some(
+          (id) => !action.questions?.some((question) => question.id === id),
+        )
+      )
+        throw new AppError('INVALID_ANSWER', 'The answer refers to a different question.');
       for (const question of action.questions ?? []) {
         const value = resolution.answers?.[question.id]?.trim();
         if (!value)
           throw new AppError('ANSWER_REQUIRED', 'Answer each question before submitting.');
+        if (
+          question.options?.length &&
+          !question.allowOther &&
+          !question.options.some((option) => option.label === value)
+        )
+          throw new AppError('INVALID_ANSWER', 'Choose one of the supplied options.');
         answers[question.id] = { answers: [value] };
       }
       response = { answers };
@@ -884,7 +1208,34 @@ export class Service {
       throw error;
     }
   }
+  private syncQueue(thread: Thread) {
+    for (const entry of this.store.queue.state(thread.id).items) {
+      if (!['dispatching', 'sent', 'unknown'].includes(entry.state)) continue;
+      const op = this.store.operation(entry.id);
+      if (op?.state === 'completed') {
+        const successful = thread.state === 'completed';
+        this.store.queue.set(
+          entry.id,
+          successful ? 'completed' : 'failed',
+          successful ? undefined : 'The task ended ' + thread.state + '.',
+        );
+        if (!successful)
+          this.store.queue.pause(
+            thread.id,
+            'A task stopped or failed. Review the remaining messages before resuming.',
+          );
+      } else if (op?.state === 'unknown') {
+        this.store.queue.set(entry.id, 'unknown', 'Check result before continuing.');
+        this.store.queue.pause(thread.id, 'An execution result is unknown.');
+      } else if (op?.state === 'failed') {
+        this.store.queue.set(entry.id, 'failed', op.error);
+        this.store.queue.pause(thread.id, 'A queued task failed.');
+      }
+    }
+    thread.queue = this.store.queue.state(thread.id);
+  }
   private boundary(thread: Thread) {
+    this.syncQueue(thread);
     const previous = this.store.thread(thread.id);
     // The first prompt also supplies a title. Protect it from older thread/list replies.
     if (previous && (previous.title !== thread.title || !!previous.archived !== !!thread.archived))
@@ -902,6 +1253,8 @@ export class Service {
         state,
         updatedAt,
         archived: thread.archived ?? false,
+        forkedFromId: thread.forkedFromId,
+        queueCount: this.store.queue.count(id),
         executionPending: thread.executionPending,
         managementPending: thread.managementPending,
       },
@@ -920,6 +1273,13 @@ export class Service {
       id,
     );
     this.emitActions(id);
+    if (!thread.pending) {
+      if (['failed', 'interrupted'].includes(thread.state) && this.store.queue.count(id))
+        this.store.queue.pause(id, 'A task stopped or failed. Review the queue before resuming.');
+      this.queue.wake(id);
+      for (const waiting of this.store.queue.pendingThreads()) this.queue.wake(waiting);
+    }
+    this.queue.notify(id);
   }
   private emitActions(id: string) {
     this.events.publish(
@@ -1101,14 +1461,26 @@ export class Service {
         .filter((q: any) => typeof q.id === 'string' && typeof q.question === 'string')
         .map((q: any) => ({
           id: q.id,
-          question: text(q.question),
+          question: text(q.question, 4000),
           secret: q.isSecret === true,
+          header: text(q.header, 80),
+          allowOther: q.isOther === true,
           options: Array.isArray(q.options)
             ? q.options
                 .filter((x: any) => typeof x.label === 'string')
-                .map((x: any) => ({ label: text(x.label), description: text(x.description) }))
+                .slice(0, 10)
+                .map((x: any) => ({
+                  label: text(x.label, 200),
+                  description: text(x.description, 1000),
+                }))
             : undefined,
         }));
+    if (kind === 'questions' && (!action.questions?.length || action.questions.length > 8)) {
+      void this.driver
+        .reject(event.id)
+        ?.catch(() => console.error('Unable to reject invalid CLI questions.'));
+      return;
+    }
     this.actions.set(action.id, {
       action,
       rpcId: event.id,
@@ -1172,7 +1544,9 @@ export class Service {
   async close() {
     this.events.close();
     await this.admission;
+    const queued = this.queue.close();
     await this.driver.stop();
+    await queued;
     this.store.close();
   }
 }

@@ -28,6 +28,8 @@ export interface Question {
   id: string;
   question: string;
   secret?: boolean;
+  header?: string;
+  allowOther?: boolean;
   options?: { label: string; description?: string }[];
 }
 export interface Action {
@@ -48,6 +50,8 @@ export interface Summary {
   state: State;
   updatedAt: number;
   archived?: boolean;
+  forkedFromId?: string;
+  queueCount?: number;
   managementPending?: boolean;
   executionPending?: boolean;
 }
@@ -58,11 +62,13 @@ export interface Thread extends Summary {
   olderCursor: string | null;
   settings: Settings;
   diff: string;
+  queue?: QueueState;
   pending?: { id: string; text: string; state: string };
 }
 export interface Operation {
   id: string;
   threadId: string;
+  resultId?: string;
   state: 'dispatching' | 'acknowledged' | 'unknown' | 'failed' | 'completed';
   kind: string;
   turnId?: string;
@@ -112,4 +118,23 @@ export interface ConversationPage {
   data: Summary[];
   nextCursor: string | null;
   scanned: number;
+}
+
+export interface QueuePayload {
+  text: string;
+  settings: Settings;
+  attachments: Attachment[];
+}
+export interface QueueItem extends QueuePayload {
+  textTruncated?: boolean;
+  id: string;
+  threadId: string;
+  state: 'queued' | 'dispatching' | 'sent' | 'unknown' | 'failed' | 'completed' | 'cancelled';
+  error?: string;
+  createdAt: number;
+}
+export interface QueueState {
+  items: QueueItem[];
+  paused: boolean;
+  reason?: string;
 }

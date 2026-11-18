@@ -178,3 +178,60 @@ it('validates conversation mutations and exposes only the native-shaped manageme
   ).json()) as { data: { title: string }[] };
   expect(page.data.map((row) => row.title)).toEqual(['API title']);
 });
+
+it('returns bounded queue previews and the full owned message for editing', async () => {
+  const { randomUUID } = await import('node:crypto');
+  const mutate = async (path: string, value: unknown, method = 'POST') =>
+    fetch(origin + '/api' + path, {
+      method,
+      headers: { origin, cookie },
+      body: JSON.stringify(value),
+    });
+  const project = (await (await mutate('/projects', { path: directory })).json()) as { id: string };
+  const thread = (await (
+    await mutate('/projects/' + project.id + '/threads', { permission: 'read-only' })
+  ).json()) as { id: string };
+  await mutate('/threads/' + thread.id + '/queue/control', { paused: true });
+  const id = randomUUID(),
+    text = 'long private fixture ' + 'x'.repeat(5000);
+  const added = (await (
+    await mutate('/threads/' + thread.id + '/queue', {
+      operationId: id,
+      text,
+      settings: { permission: 'read-only' },
+      attachments: [],
+    })
+  ).json()) as { items: { text: string; textTruncated: boolean }[] };
+  expect(added.items[0]).toMatchObject({ textTruncated: true });
+  expect(added.items[0]!.text.length).toBe(2000);
+  const full = (await (
+    await fetch(origin + '/api/threads/' + thread.id + '/queue/' + id, { headers: { cookie } })
+  ).json()) as { text: string; state: string };
+  expect(full).toMatchObject({ text, state: 'queued' });
+  expect(
+    (await mutate('/threads/' + thread.id + '/queue/' + id, { text: 'Edited' }, 'PATCH')).status,
+  ).toBe(200);
+  expect(
+    (
+      await mutate('/threads/' + thread.id + '/fork', {
+        operationId: randomUUID(),
+        lastTurnId: false,
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await fetch(origin + '/api/threads/' + thread.id + '/queue/' + randomUUID(), {
+        headers: { cookie },
+      })
+    ).status,
+  ).toBe(404);
+  expect(
+    (
+      await fetch(origin + '/api/threads/' + thread.id + '/queue/' + id, {
+        method: 'DELETE',
+        headers: { cookie, origin },
+      })
+    ).status,
+  ).toBe(200);
+});

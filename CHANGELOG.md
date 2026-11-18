@@ -4,6 +4,11 @@
 
 ### Added
 
+- Answer native structured questions with option descriptions, custom text when permitted, masked secret fields, and cross-client resolution. Quote a historical message into an editable follow-up draft.
+- Queue up to ten messages per conversation, edit or remove waiting entries, and pause/resume sequential execution. Persist queues across browser closure; service restarts, stopped/failed tasks, and unknown outcomes hold the queue for review. Bound broadcast previews while preserving full editable messages.
+- Create a native conversation branch through a completed turn, retain source navigation, and start the branch in Read only. Branching preserves later source history, shares current project files, and does not copy queued messages.
+- Back up metadata schema 1 or 2 before upgrading to schema 3 for queue and branch receipts.
+
 - Browse native conversations with title search, date groups, and cursor pagination beyond the local summary window. Rename, archive, and restore conversations from the sidebar; archived conversations retain their history and must be restored before sending.
 - Protect running and uncertain executions from archiving, and retain a protected state when an archive acknowledgement is lost. Back up schema 1 metadata before migrating archive flags to schema 2.
 

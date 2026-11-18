@@ -1,6 +1,6 @@
 # Architecture
 
-codes is a single-owner Linux web application. Its execution boundary is the installed Codex CLI App Server. The browser owns presentation; a long-lived Node service owns protocol connections and operation receipts.
+codes is a single-owner Linux web application. Its execution boundary is the installed Codex CLI App Server. The browser owns presentation; a long-lived Node service owns protocol connections and operation receipts and durable message queues.
 
 ## Chosen route
 
@@ -47,6 +47,12 @@ The browser disconnecting does not own the CLI lifetime. A server stop does term
 
 Approvals are addressed by the runtime epoch and native request ID. Concurrent clients share one action state. Only one response can transition a pending action. Permission grants are restricted to the current turn; permanent policy amendments are not exposed. Unsupported interaction methods receive an explicit rejection.
 
+## Queued messages and native branches
+
+A separate queue controller serializes waiting messages through the existing task-dispatch path. SQLite retains payloads, order, controls, and mutation identities; the browser subscribes to bounded previews. Native approvals remain independent callbacks. Uncertain dispatches hold the queue, and restart never automatically replays work. A successful terminal receipt can advance the queue; stop, failure, or decline pauses it for explicit review. Readiness is checked again after asynchronous native reads.
+
+Native `thread/fork` copies conversation context through a completed turn. Branch result IDs are journaled separately from execution receipts, and source metadata is scoped to the registered project. A branch uses the same current files and receives a fresh read-only configuration and empty queue. Codes does not implement file rollback or Git worktrees through this control. See [workflow behavior](conversation-workflow.md).
+
 ## Rendering and resource limits
 
 Streaming deltas update memory and an event buffer, not a database row per token. The UI coalesces deltas at 32 ms and renders an active answer as plain text. Completed messages use memoized Markdown. An idle view subscribes to project summaries without receiving other conversations’ text. Evicting an idle cached thread unsubscribes its native event subscription, allowing the CLI to unload it after its own grace period. Opening a conversation fetches up to the latest 12 turns; earlier turns are requested separately.
@@ -69,6 +75,8 @@ Streaming deltas update memory and an event buffer, not a database row per token
 | Event replay                         | 512 events / 1 MiB                                     |
 | Browser SSE connections              | 32                                                     |
 | Slow-client queued output            | 512 KiB before disconnect                              |
+| Unfinished queued messages           | 10 per conversation / 100 workspace-wide               |
+| Queue event/snapshot text preview    | 2,000 characters per message; full payload retained    |
 | Completed/failed operation receipts  | 30 days                                                |
 
 History pages automatically use fewer turns when their combined items exceed the display budget. A single oversized turn still produces an explicit limit error. Very large native tool results can exceed the JSONL frame limit and close the runtime; use the CLI to inspect such conversations. The preview is designed around a small working set, not unlimited logs. Limits are implementation constraints, not measured throughput claims.

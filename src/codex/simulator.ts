@@ -168,6 +168,22 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     }
     const thread: any = threads.get(p.threadId);
     if (!thread) return send({ id, error: { code: -32600, message: 'Thread not found' } });
+    if (method === 'thread/fork') {
+      const index = thread.turns.findIndex((turn: any) => turn.id === p.lastTurnId);
+      if (index < 0 || thread.turns[index].status === 'inProgress')
+        return send({
+          id,
+          error: { code: -32600, message: 'Choose a completed turn in this conversation' },
+        });
+      const child: any = create(thread.cwd);
+      child.turns = structuredClone(thread.turns.slice(0, index + 1));
+      child.name = thread.name;
+      child.preview = thread.preview;
+      child.forkedFromId = thread.id;
+      save();
+      note('thread/started', { thread: summary(child) });
+      return result(id, { thread: summary(child) });
+    }
     if (method === 'thread/read' || method === 'thread/resume')
       return result(id, { thread: summary(thread) });
     if (method === 'thread/unsubscribe') return result(id, { status: 'unsubscribed' });
@@ -260,9 +276,29 @@ createInterface({ input: process.stdin }).on('line', (line) => {
               ? [
                   {
                     id: 'direction',
+                    header: 'Direction',
+                    isOther: !text.includes('[no-other]'),
                     question: 'What should happen next?',
-                    options: [{ label: 'Continue' }, { label: 'Explain first' }],
+                    options: [
+                      { label: 'Continue', description: 'Continue with the proposed direction.' },
+                      {
+                        label: 'Explain first',
+                        description: 'Review the options before proceeding.',
+                      },
+                    ],
                   },
+                  ...(text.includes('[multiple]')
+                    ? [
+                        {
+                          id: 'private',
+                          header: 'Private fixture',
+                          isSecret: true,
+                          isOther: true,
+                          question: 'Private fixture answer',
+                          options: null,
+                        },
+                      ]
+                    : []),
                 ]
               : undefined,
           },
