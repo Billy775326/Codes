@@ -20,7 +20,7 @@ Write your follow-up after the quote. This is an ordinary user prompt, preserved
 
 While Codex works, the composer offers Queue beside Stop. Queued messages are stored on the server with their settings and attachment references. They run in insertion order after confirmed successful completion of the current task. At most ten unfinished entries are allowed per conversation and 100 across the workspace. A direct send cannot bypass existing queued entries.
 
-Use Edit or Remove for a waiting entry. Editing retains that entry's model, permission, and attachments; remove it and compose a new entry to change those settings. Editing and removal are refused once dispatch may have started. File checksums are revalidated immediately before dispatch, so changed context pauses the queue instead of silently using stale lines. Pause queue holds waiting work while the current task continues. Resume queue explicitly releases waiting work after review.
+Use **Edit text** or **Remove** for a waiting entry. The editor states exactly which fields stay unchanged. Sending, running and unconfirmed entries are locked. If dispatch starts or the entry leaves the queue while you are editing, the local edit becomes read-only and remains available to copy until you close it; it is not silently submitted or discarded. Editing retains that entry's model, permission, and attachments; remove it and compose a new entry to change those settings. Editing and removal are refused once dispatch may have started. File checksums are revalidated immediately before dispatch, so changed context pauses the queue instead of silently using stale lines. Pause queue holds waiting work while the current task continues. Resume queue explicitly releases waiting work after review.
 
 Snapshots and live events include at most 2,000 characters per queued preview; the UI shows a shorter preview. Edit fetches the full message, and dispatch uses the full stored payload. The preview limit does not truncate the task. Queue payloads and references are private runtime data. Completed/cancelled entries are pruned after 30 days; failed and unknown entries are held for review.
 
@@ -47,8 +47,19 @@ Metadata schema 3 adds queue state, branch ancestry, and branch result IDs. Sche
 
 The [official app-server documentation](https://learn.chatgpt.com/docs/app-server) defines structured question callbacks and `thread/fork` with `lastTurnId`. Fields were checked against generated schemas from CLI 0.167.0. Queue order, receipts, limits, and browser recovery are codes behavior, tested separately in the simulator. The opt-in live pilot also verifies native fork history, unchanged source files/history, and two queued model turns. Real prompting policies and HTTPS/physical-phone acceptance remain separate gates.
 
-Queue reordering, steering an in-flight turn, permanent deletion, and file-level branch isolation are outside this implementation.
+Queue reordering, editing and resending an existing historical user turn, permanent deletion, and file-level branch isolation are outside this implementation. Native steering is described below.
 
 ## Native IDE interaction controls
 
-Immediate steering, queue Send now, Plan/Code, reasoning effort, native reviews, browser preferences and supported slash commands are described in the [IDE alignment audit](ide-parity.md). Steering extends the current turn using its settings; it is separate from queue dispatch. Approvals/questions still need an explicit answer or cancellation. Unknown follow-ups keep the conversation protected until native evidence resolves them.
+Immediate steering, queue Add now, Plan/Code, reasoning effort, native reviews, browser preferences and supported slash commands are described in the [IDE alignment audit](ide-parity.md). Steering extends the current turn using its settings; it is separate from queue dispatch. Approvals/questions still need an explicit answer or cancellation. Unknown follow-ups keep the conversation protected until native evidence resolves them.
+
+## Understand delivery buttons
+
+- **Send** starts a new native turn. The composer draft is editable until submission; accepted history is not edited in place.
+- **Queue** waits for a later turn, preserving FIFO order. Waiting text can be edited or removed; once dispatch starts it is locked.
+- **Add now** appends the draft to the currently running turn using its existing settings. Accepted additions cannot be edited or recalled. When an approval, question or uncertain result blocks steering, the button is disabled and the delivery hint explains the available next step.
+- **Add now instead / Queue instead** applies the alternate behavior for this message without changing the saved default. Ctrl/Cmd+Shift+Enter retains the same one-message inversion.
+- **Stop** requests native cancellation and pauses queued work. It does not undo file changes that already happened.
+- **Reply** quotes an existing response into a new draft. **Branch from here** starts a separate conversation through a completed turn and shares the current project files. Neither control edits sent history or rolls back files.
+
+The composer displays the selected action's timing and edit boundary beside the controls, including on phones. Queue entries also distinguish waiting/editable text from sending, running and unconfirmed/locked text. If a queued message uses different settings from the running task, Add now stays disabled with an explanation; it remains queued for its own turn.

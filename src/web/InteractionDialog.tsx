@@ -95,13 +95,18 @@ export function PreferencesDialog({
             change({ ...value, followUp: e.target.value as Preferences['followUp'] })
           }
         >
-          <option value="queue">Queue for the next turn</option>
-          <option value="steer">Steer the running turn</option>
+          <option value="queue">Queue after the current task</option>
+          <option value="steer">Add to the current task</option>
         </select>
       </label>
       <p>
         Ctrl/Cmd+Shift+Enter reverses queue and steer for one follow-up. Steering keeps the running
-        task's settings.
+        task's settings. Accepted additions cannot be edited or recalled.
+      </p>
+      <p>
+        Drafts and waiting queued text are editable. Once sending starts, the message is locked.
+        Reply quotes an existing response; Branch from here creates a separate conversation through
+        that turn and shares current project files. Sent history is not edited in place.
       </p>
       <label>
         Enter behavior

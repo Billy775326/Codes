@@ -16,13 +16,13 @@ Workspace text, line spacing and controls use larger fixed defaults. Older saved
 
 The first user message shows the native turn's start time below its bubble; the final reply's action row shows the native finish time. Dates use the browser's local timezone. Hover for the full date, seconds and timezone; the HTML timestamp also retains its UTC instant. These are turn timestamps, not invented per-item send times. Intermediate activity and same-turn follow-ups have no independent timestamp unless the protocol supplies one. Missing native times leave no placeholder or reserved row.
 
-## Browse earlier messages and return to live replies
+## Scroll through conversation history
 
-**Load earlier messages** opens a separate reading window. The latest 240 live messages continue receiving event updates in the background; loading history cannot evict them. Each historical window also holds at most 240 messages and avoids cutting a turn at its newer edge. Continue loading earlier pages even when that window reaches its limit.
+The conversation is one continuous timeline. Scrolling near the top loads an older native page; scrolling near the bottom fetches newer pages when they have left the display cache. The visible turn stays anchored while pages are inserted or removed. Mouse wheels, touch scrolling, keyboard scrolling and scrollbar dragging share the same pagination path. **Load earlier messages** and the newer-page fallback remain available for explicit loading or retry; **Back to latest** is an optional jump, rather than a required mode switch.
 
-A **Back to latest** button remains above the composer while browsing history or scrolling away from the bottom. **New activity** signals that the live conversation changed while you were reading. Returning to latest uses the live cache immediately, scrolls to the bottom, and preserves your draft. Sending a new message also returns to the live view. The composer and native approval/question handling continue to use the current live task, rather than a historical task's state.
+The browser retains three whole native pages and a separate bounded live cache. Each history page still has the existing 240-message/2 MiB server budget. Pages evicted at the opposite edge remain reachable with native cursors. Overlapping anchor records are deduplicated and refreshed. Live messages join the timeline when the page reaches a contiguous overlap with the live cache; the browser fetches the intervening pages when there is a gap. Reading older records does not stop live event handling or native approval/question controls.
 
-Reconnect updates the live cache while retaining the historical reading window. Switching conversations, changing projects, returning to latest or starting a send cancels an in-flight history request; a late response cannot populate another conversation. History and live caches have separate bounded windows, rather than retaining the whole conversation in the browser.
+New activity does not force the reader to the bottom. At the live end, replies follow automatically; the optional jump also returns there while retaining the draft. Sending a new message returns to the live view. Reconnect preserves the reading window. Switching conversations/projects or jumping to latest cancels pending history reads, and late responses cannot enter another conversation. Failed page reads show an explicit retry instead of a retry loop.
 
 ## When Codex asks a question
 

@@ -124,7 +124,7 @@ test('queue controls retain full long messages, recover lost receipts, and pause
   const queue = page.getByRole('region', { name: 'Queued messages' });
   await expect(queue.locator('li')).toHaveCount(1);
   await queue.getByRole('button', { name: 'Pause queue', exact: true }).click();
-  await queue.getByRole('button', { name: 'Edit', exact: true }).click();
+  await queue.getByRole('button', { name: 'Edit text', exact: true }).click();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue(long);
   await queue.getByLabel('Edit queued message').fill(long + ' edited');
   await queue.getByRole('button', { name: 'Save queued message', exact: true }).click();

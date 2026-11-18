@@ -47,10 +47,10 @@ for (const width of [1440, 390])
     );
     await page.getByRole('button', { name: 'Load earlier messages', exact: true }).click();
     await expect(page.getByRole('status', { name: 'Conversation position' })).toContainText(
-      'Viewing earlier messages',
+      'Earlier messages',
     );
-    await expect(page.getByText('Recent answer 239', { exact: true })).toHaveCount(0);
-    await expect(page.locator('[data-message-id]')).toHaveCount(240);
+    await expect(page.getByText('Recent answer 239', { exact: true })).toHaveCount(1);
+    await expect(page.locator('[data-message-id]')).toHaveCount(264);
     await page.getByLabel('Message Codex').fill('Keep this reading draft');
     // Another client sends through the isolated simulator; the browsing window must not replace live data.
     await page.evaluate(async (id) => {
@@ -111,7 +111,7 @@ test('history can continue paging at the display limit, survives reconnect, and 
   await expect(page.getByText('Earlier prompt -24', { exact: true })).toHaveCount(1);
   await load.click();
   await expect(page.getByText('Earlier prompt -48', { exact: true })).toHaveCount(1);
-  await expect(page.locator('[data-message-id]')).toHaveCount(240);
+  await expect(page.locator('[data-message-id]')).toHaveCount(288);
   await expect(load).toBeEnabled();
   base.thread.messages = [...base.thread.messages.slice(2), ...messages(240, 241)];
   base.thread.turnId = 'history-turn-120';

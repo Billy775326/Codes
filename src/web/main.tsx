@@ -46,6 +46,8 @@ import {
   historyLimit,
   refreshHistory,
   liveRevision,
+  linkedToLatest,
+  type HistoryDirection,
   type HistoryPage,
   type HistoryWindow,
 } from './history';
@@ -215,7 +217,7 @@ const MessageView = memo(function MessageView({
                   {onReply && (
                     <button
                       aria-label="Reply"
-                      title="Reply"
+                      title="Quote this reply into a new draft; the original stays unchanged"
                       disabled={disabled}
                       onClick={() => onReply(item)}
                     >
@@ -226,7 +228,7 @@ const MessageView = memo(function MessageView({
                   {onFork && (
                     <button
                       aria-label="Branch from here"
-                      title="Branch from here"
+                      title="Create a conversation branch through this turn; current project files stay shared"
                       disabled={disabled}
                       onClick={() => onFork(item)}
                     >
@@ -364,10 +366,21 @@ function App() {
   );
   const follow = useRef(true);
   const historyRead = useRef<AbortController | undefined>(undefined);
+  const scrollPosition = useRef(0);
+  const touchPosition = useRef<number | undefined>(undefined);
+  const restoringScroll = useRef(false);
+  const [anchorRevision, setAnchorRevision] = useState(0);
+  const automaticHistory = useRef(new Set<string>());
+  const scrollDirection = useRef<HistoryDirection | undefined>(undefined);
+  const [historyError, setHistoryError] = useState<{
+    direction: HistoryDirection;
+    message: string;
+  }>();
   const [historyWindow, setHistoryWindow] = useState<HistoryWindow>();
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [atLatest, setAtLatest] = useState(true);
   const history = historyWindow?.threadId === threadId ? historyWindow : undefined;
+  const timelineLatest = !history || (!!thread && linkedToLatest(history, thread));
   const visibleMessages = useMemo(
     () => (thread ? (history ? refreshHistory(history, thread) : thread.messages) : []),
     [thread?.messages, history],
@@ -392,12 +405,17 @@ function App() {
     historyRead.current = undefined;
     historyAnchor.current = undefined;
     setLoadingHistory(false);
+    setHistoryError(undefined);
+    automaticHistory.current.clear();
+    scrollDirection.current = undefined;
     setHistoryWindow(undefined);
     setAtLatest(true);
     follow.current = true;
     requestAnimationFrame(() => {
-      if (follow.current && transcript.current)
+      if (follow.current && transcript.current) {
         transcript.current.scrollTop = transcript.current.scrollHeight;
+        scrollPosition.current = transcript.current.scrollTop;
+      }
     });
   }, []);
   useEffect(() => () => historyRead.current?.abort(), [threadId, projectId, auth]);
@@ -686,6 +704,7 @@ function App() {
     const anchor = historyAnchor.current;
     const element = transcript.current;
     if (anchor && element) {
+      restoringScroll.current = true;
       if (anchor.threadId === threadId) {
         const turn = [...element.querySelectorAll<HTMLElement>('.turn')].find(
           (item) => item.dataset.turnId === anchor.turnId,
@@ -695,13 +714,18 @@ function App() {
             turn.getBoundingClientRect().top - element.getBoundingClientRect().top - anchor.offset;
         else element.scrollTop = 0;
       }
+      scrollPosition.current = element.scrollTop;
+      requestAnimationFrame(() => {
+        restoringScroll.current = false;
+        setAnchorRevision((value) => value + 1);
+      });
       historyAnchor.current = undefined;
     }
   }, [visibleMessages, threadId]);
   useEffect(() => {
-    if (!history && follow.current && transcript.current)
+    if (timelineLatest && follow.current && transcript.current)
       transcript.current.scrollTop = transcript.current.scrollHeight;
-  }, [visibleMessages, thread?.actions, thread?.state, history]);
+  }, [visibleMessages, thread?.actions, thread?.state, timelineLatest]);
   useEffect(() => {
     if (!projectId || panel !== 'files') return;
     const controller = new AbortController();
@@ -716,37 +740,43 @@ function App() {
       });
     return () => controller.abort();
   }, [projectId, directory, panel]);
-  const changeDraft = (value: string) => {
-    draftRevision.current++;
-    draftValue.current = value;
-    setDraft(value);
-    save(draftKey(projectId, threadId), value.slice(0, 50_000));
-  };
-  const reply = (item: Message) => {
-    const selected = window.getSelection();
-    const article = selected?.anchorNode?.parentElement?.closest('[data-message-id]');
-    const excerpt =
-      (article?.getAttribute('data-message-id') === item.id
-        ? selected?.toString()
-        : undefined
-      )?.trim() || item.text;
-    const quote =
-      'Regarding this ' +
-      (item.kind === 'assistant' ? 'Codex reply' : 'earlier message') +
-      ':\n' +
-      excerpt
-        .slice(0, 4000)
-        .split('\n')
-        .map((line) => '> ' + line)
-        .join('\n') +
-      '\n\n';
-    if (quote.length + draft.length > 50_000) {
-      setError('Shorten the current draft before adding this quote.');
-      return;
-    }
-    changeDraft(quote + draft);
-    composer.current?.focus();
-  };
+  const changeDraft = useCallback(
+    (value: string) => {
+      draftRevision.current++;
+      draftValue.current = value;
+      setDraft(value);
+      save(draftKey(projectId, threadId), value.slice(0, 50_000));
+    },
+    [projectId, threadId],
+  );
+  const reply = useCallback(
+    (item: Message) => {
+      const selected = window.getSelection();
+      const article = selected?.anchorNode?.parentElement?.closest('[data-message-id]');
+      const excerpt =
+        (article?.getAttribute('data-message-id') === item.id
+          ? selected?.toString()
+          : undefined
+        )?.trim() || item.text;
+      const quote =
+        'Regarding this ' +
+        (item.kind === 'assistant' ? 'Codex reply' : 'earlier message') +
+        ':\n' +
+        excerpt
+          .slice(0, 4000)
+          .split('\n')
+          .map((line) => '> ' + line)
+          .join('\n') +
+        '\n\n';
+      if (quote.length + draftValue.current.length > 50_000) {
+        setError('Shorten the current draft before adding this quote.');
+        return;
+      }
+      changeDraft(quote + draftValue.current);
+      composer.current?.focus();
+    },
+    [changeDraft],
+  );
   const clearAcceptedDraft = (id: string, version: number, origin = id) => {
     // A network acknowledgement belongs to the captured draft, not whatever the
     // user has typed since dispatch. Preserve the next draft and its attachments.
@@ -1027,6 +1057,35 @@ function App() {
     !!thread?.steering?.length ||
     (!!thread && ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
   const project = projects.find((x) => x.id === projectId);
+  const reviewMessage = useCallback(
+    (item: Message, path?: string) => {
+      setDiffTurn(item.turnId === thread?.turnId ? '' : item.turnId);
+      setDiffPath(
+        path?.startsWith((project?.path ?? '') + '/')
+          ? path.slice(project!.path.length + 1)
+          : (path ?? ''),
+      );
+      setPanel('diff');
+    },
+    [thread?.turnId, project?.path],
+  );
+  const branchMessage = useCallback((item: Message) => {
+    setForking(item);
+    setForkError('');
+  }, []);
+  const activeTurnIds = useMemo(
+    () =>
+      thread && ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state)
+        ? [thread.turnId ?? '', thread.pending?.turnId ?? '']
+        : [],
+    [thread?.state, thread?.turnId, thread?.pending?.turnId],
+  );
+  const assistantTail = useMemo(() => {
+    const tails = new Map<string, string>();
+    for (const item of thread?.messages ?? [])
+      if (item.kind === 'assistant') tails.set(item.turnId, item.id);
+    return tails;
+  }, [thread?.messages]);
   const changeTurns = [
     ...new Set(reviewMessages.filter((item) => item.kind === 'change').map((item) => item.turnId)),
   ].reverse();
@@ -1059,6 +1118,31 @@ function App() {
     thread.pending?.kind !== 'review' &&
     !thread.archived &&
     !thread.managementPending;
+  const deliveryMode = active && preferences.followUp === 'steer' ? 'steer' : 'queue';
+  const deliveryBlocked =
+    busy ||
+    !!steerReceipt ||
+    !!queueRequest ||
+    !draft.trim() ||
+    !projectId ||
+    loadingConversation ||
+    !!thread?.archived ||
+    !!thread?.managementPending;
+  const queueBlocked = deliveryBlocked || (thread?.queue?.items.length ?? 0) >= 10;
+  const addBlocked = deliveryBlocked || !canSteer;
+  const deliveryHelp =
+    active || !!thread?.queue?.items.length
+      ? deliveryMode === 'queue'
+        ? (thread?.queue?.items.length ?? 0) >= 10
+          ? 'Queue is full (10 messages). Edit or remove a waiting entry, or use Add now if available.'
+          : active
+            ? 'Queue runs after this task completes. Waiting text can be edited or removed.' +
+              (!canSteer ? ' Add now waits until the pending request or result is resolved.' : '')
+            : 'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.'
+        : canSteer
+          ? 'Add now updates this running task using its current settings. Accepted additions cannot be edited.'
+          : 'Add now is unavailable while awaiting approval, input, or confirmation. Queue a message for later.'
+      : 'Send starts a new turn. Edit this draft before sending; sent history stays unchanged.';
   const selectedModel =
     models.find(
       (entry) =>
@@ -1277,13 +1361,30 @@ function App() {
     document.addEventListener('keydown', shortcut);
     return () => document.removeEventListener('keydown', shortcut);
   }, [auth, busy, settings]);
-  const loadOlder = async () => {
-    const cursor = history ? history.olderCursor : thread?.olderCursor;
-    if (!thread || !cursor || loadingHistory) return;
+  const loadHistory = async (direction: HistoryDirection = 'older', automatic = false) => {
+    const cursor =
+      direction === 'older'
+        ? history
+          ? history.olderCursor
+          : thread?.olderCursor
+        : history?.newerCursor;
+    const key = direction + ':' + cursor;
+    if (
+      !thread ||
+      !cursor ||
+      historyRead.current ||
+      (automatic &&
+        (historyError || automaticHistory.current.has(key) || automaticHistory.current.size >= 32))
+    )
+      return;
+    if (automatic) automaticHistory.current.add(key);
+    else {
+      automaticHistory.current.clear();
+      scrollDirection.current = undefined;
+    }
     const id = thread.id;
     const project = projectId;
     const controller = new AbortController();
-    historyRead.current?.abort();
     historyRead.current = controller;
     setLoadingHistory(true);
     try {
@@ -1308,9 +1409,13 @@ function App() {
           offset: turn ? turn.getBoundingClientRect().top - top : 0,
         };
       }
-      setHistoryWindow((current) => earlierWindow(thread, current, page));
+      setHistoryError(undefined);
+      setHistoryWindow((current) => earlierWindow(thread, current, page, direction));
     } catch (error) {
-      if (!controller.signal.aborted) notice(error);
+      if (!controller.signal.aborted) {
+        setHistoryError({ direction, message: message(error) });
+        if (error instanceof ApiError && error.status === 401) notice(error);
+      }
     } finally {
       if (historyRead.current === controller) {
         historyRead.current = undefined;
@@ -1318,6 +1423,27 @@ function App() {
       }
     }
   };
+  useEffect(() => {
+    if (loadingHistory || historyError || !scrollDirection.current || restoringScroll.current)
+      return;
+    const element = transcript.current;
+    const direction = scrollDirection.current;
+    if (
+      element &&
+      (direction === 'older'
+        ? element.scrollTop < 240
+        : !timelineLatest && element.scrollHeight - element.scrollTop - element.clientHeight < 240)
+    )
+      void loadHistory(direction, true);
+  }, [
+    loadingHistory,
+    history?.olderCursor,
+    history?.newerCursor,
+    timelineLatest,
+    historyError,
+    anchorRevision,
+  ]);
+
   if (auth !== 'ready')
     return (
       <Login
@@ -1587,11 +1713,94 @@ function App() {
         <div
           className="conversation"
           ref={transcript}
+          role="region"
+          aria-label="Conversation timeline"
+          tabIndex={0}
+          onPointerDown={(event) => {
+            // Only a scrollbar drag begins scrolling. Clicking prose or a
+            // disclosure must not turn programmatic focus scrolling into paging.
+            if (
+              event.target === event.currentTarget &&
+              event.clientX >= event.currentTarget.getBoundingClientRect().right - 24
+            ) {
+              automaticHistory.current.clear();
+              scrollDirection.current ??= 'older';
+            }
+          }}
+          onTouchStart={(event) => {
+            touchPosition.current = event.touches[0]?.clientY;
+            automaticHistory.current.clear();
+          }}
+          onTouchMove={(event) => {
+            const y = event.touches[0]?.clientY;
+            if (
+              y === undefined ||
+              touchPosition.current === undefined ||
+              y === touchPosition.current
+            )
+              return;
+            const direction = y > touchPosition.current ? 'older' : 'newer';
+            touchPosition.current = y;
+            automaticHistory.current.clear();
+            scrollDirection.current = direction;
+            const element = event.currentTarget;
+            const bottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+            if (direction === 'newer' && timelineLatest && bottom < 100) {
+              follow.current = true;
+              setAtLatest(true);
+            }
+            if (direction === 'older' ? element.scrollTop < 240 : !timelineLatest && bottom < 240)
+              void loadHistory(direction, true);
+          }}
+          onKeyDown={(event) => {
+            if (['ArrowUp', 'PageUp', 'Home', 'ArrowDown', 'PageDown', 'End'].includes(event.key)) {
+              automaticHistory.current.clear();
+              scrollDirection.current = ['ArrowUp', 'PageUp', 'Home'].includes(event.key)
+                ? 'older'
+                : 'newer';
+            }
+          }}
+          onWheel={(event) => {
+            if (!event.deltaY) return;
+            automaticHistory.current.clear();
+            const direction = event.deltaY < 0 ? 'older' : 'newer';
+            scrollDirection.current = direction;
+            const element = event.currentTarget;
+            if (
+              direction === 'newer' &&
+              timelineLatest &&
+              element.scrollHeight - element.scrollTop - element.clientHeight < 100
+            ) {
+              follow.current = true;
+              setAtLatest(true);
+            }
+            if (
+              direction === 'older'
+                ? element.scrollTop < 240
+                : !timelineLatest &&
+                  element.scrollHeight - element.scrollTop - element.clientHeight < 240
+            )
+              void loadHistory(direction, true);
+          }}
           onScroll={(e) => {
             const el = e.currentTarget;
-            const nearBottom = !history && el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+            const delta = el.scrollTop - scrollPosition.current;
+            scrollPosition.current = el.scrollTop;
+            if (restoringScroll.current) return;
+            const nearBottom =
+              timelineLatest && el.scrollHeight - el.scrollTop - el.clientHeight < 100;
             follow.current = nearBottom;
             setAtLatest(nearBottom);
+            if (delta && scrollDirection.current) {
+              const direction = delta < 0 ? 'older' : 'newer';
+              scrollDirection.current = direction;
+              if (
+                direction === 'older'
+                  ? el.scrollTop < 240
+                  : !timelineLatest && el.scrollHeight - el.scrollTop - el.clientHeight < 240
+              )
+                void loadHistory(direction, true);
+            }
           }}
         >
           <div className="conversation-inner">
@@ -1659,23 +1868,25 @@ function App() {
                   <button
                     className="older"
                     disabled={busy || loadingHistory}
-                    onClick={() => void loadOlder()}
+                    onClick={() => void loadHistory('older')}
                   >
                     {loadingHistory ? 'Loading earlier messages…' : 'Load earlier messages'}
                   </button>
+                )}
+                {historyError?.direction === 'older' && (
+                  <div role="alert" className="history-load-error">
+                    <span>{historyError.message}</span>
+                    <button onClick={() => void loadHistory('older')}>
+                      Retry loading earlier messages
+                    </button>
+                  </div>
                 )}
                 {thread && (
                   <Transcript
                     key={thread.id}
                     messages={visibleMessages}
                     turns={visibleTurns}
-                    activeIds={
-                      ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(
-                        thread.state,
-                      )
-                        ? [thread.turnId ?? '', thread.pending?.turnId ?? '']
-                        : []
-                    }
+                    activeIds={activeTurnIds}
                     render={(m, finalReply, changes, timestamp) => (
                       <MessageView
                         key={m.id}
@@ -1683,35 +1894,19 @@ function App() {
                         actions={finalReply}
                         changes={changes}
                         timestamp={timestamp}
-                        onReview={(item, path) => {
-                          setDiffTurn(item.turnId === thread.turnId ? '' : item.turnId);
-                          setDiffPath(
-                            path?.startsWith(project!.path + '/')
-                              ? path.slice(project!.path.length + 1)
-                              : (path ?? ''),
-                          );
-                          setPanel('diff');
-                        }}
+                        onReview={reviewMessage}
                         onReply={thread.archived ? undefined : reply}
                         onFork={
                           !active || m.turnId !== thread.turnId
                             ? m.kind === 'assistant'
-                              ? (item) => {
-                                  setForking(item);
-                                  setForkError('');
-                                }
+                              ? branchMessage
                               : undefined
                             : undefined
                         }
                         disabled={busy || forkBusy || thread.managementPending}
                         streaming={
                           m.kind === 'assistant' &&
-                          m.id ===
-                            thread.messages
-                              .filter(
-                                (item) => item.kind === 'assistant' && item.turnId === m.turnId,
-                              )
-                              .at(-1)?.id &&
+                          m.id === assistantTail.get(m.turnId) &&
                           (m.turnId === thread.turnId ||
                             (thread.pending?.kind === 'review' &&
                               m.turnId === thread.pending.turnId)) &&
@@ -1720,6 +1915,24 @@ function App() {
                       />
                     )}
                   />
+                )}
+                {history && !timelineLatest && (
+                  <div className="history-page-edge" role="status" aria-label="Newer messages">
+                    {historyError?.direction === 'newer' ? (
+                      <>
+                        <span role="alert">{historyError.message}</span>
+                        <button onClick={() => void loadHistory('newer')}>
+                          Retry loading newer messages
+                        </button>
+                      </>
+                    ) : (
+                      <button disabled={loadingHistory} onClick={() => void loadHistory('newer')}>
+                        {loadingHistory
+                          ? 'Loading messages…'
+                          : 'Continue scrolling for newer messages'}
+                      </button>
+                    )}
+                  </div>
                 )}
                 {thread?.pending &&
                   !thread.messages.some((m) => m.clientId === thread.pending?.id) && (
@@ -1772,13 +1985,13 @@ function App() {
           </div>
         </div>
         <div className="composer-area">
-          {thread && !loadingConversation && (history || !atLatest) && (
+          {thread && !loadingConversation && !atLatest && (
             <div className="history-navigation" role="status" aria-label="Conversation position">
               <span>
                 {history
                   ? liveRevision(thread) !== history.liveRevision
-                    ? 'New activity · Viewing earlier messages'
-                    : 'Viewing earlier messages'
+                    ? 'New activity below'
+                    : 'Earlier messages · Scroll down to continue'
                   : 'More recent messages below'}
               </span>
               <button onClick={returnToLatest} aria-label="Back to latest messages">
@@ -1921,6 +2134,7 @@ function App() {
             )}
             <textarea
               aria-label="Message Codex"
+              aria-describedby="message-delivery-help"
               ref={composer}
               value={draft}
               readOnly={!!thread?.archived || !!thread?.managementPending}
@@ -1931,7 +2145,9 @@ function App() {
                   : thread?.managementPending
                     ? 'Check conversation status to continue…'
                     : active
-                      ? 'Ask for follow-up changes'
+                      ? deliveryMode === 'queue'
+                        ? 'Write a message for the next turn…'
+                        : 'Add a correction to this running task…'
                       : 'Ask Codex anything'
               }
               maxLength={50_000}
@@ -2076,24 +2292,17 @@ function App() {
                     className="queue-send"
                     aria-label={
                       active && preferences.followUp === 'steer'
-                        ? 'Send follow-up now'
+                        ? 'Add to current task'
                         : 'Queue message'
                     }
-                    disabled={
-                      busy ||
-                      !!steerReceipt ||
-                      !!queueRequest ||
-                      (active && preferences.followUp === 'steer' && !canSteer) ||
-                      !draft.trim() ||
-                      !!thread?.archived ||
-                      !!thread?.managementPending ||
-                      (!!thread?.queue && thread.queue.items.length >= 10)
-                    }
+                    title={deliveryHelp}
+                    aria-describedby="message-delivery-help"
+                    disabled={deliveryMode === 'steer' ? addBlocked : queueBlocked}
                     onClick={() => followUp()}
                   >
                     <Icon name="plus" size={14} />
                     <span className="action-label">
-                      {active && preferences.followUp === 'steer' ? 'Send now' : 'Queue'}
+                      {deliveryMode === 'steer' ? 'Add now' : 'Queue'}
                     </span>
                   </button>
                 )}
@@ -2101,7 +2310,7 @@ function App() {
                   <button
                     className="stop-button"
                     aria-label="Stop task"
-                    title="Stop task"
+                    title="Stop the current task and pause queued work; completed file changes remain"
                     disabled={
                       busy ||
                       !thread?.turnId ||
@@ -2137,10 +2346,28 @@ function App() {
                     }
                   >
                     <Icon name="arrow" size={18} />
+                    <span className="action-label">Send</span>
                   </button>
                 )}
               </div>
             </div>
+          </div>
+          <div className="composer-delivery-help" id="message-delivery-help">
+            <span>{deliveryHelp}</span>
+            {active && (
+              <button
+                type="button"
+                disabled={deliveryMode === 'queue' ? addBlocked : queueBlocked}
+                title={
+                  deliveryMode === 'queue'
+                    ? 'Apply this draft to the running task; accepted additions cannot be edited'
+                    : 'Wait for a new turn; waiting text remains editable'
+                }
+                onClick={() => followUp(true)}
+              >
+                {deliveryMode === 'queue' ? 'Add now instead' : 'Queue instead'}
+              </button>
+            )}
           </div>
           <div className="composer-hint work-location">
             <button

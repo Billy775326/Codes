@@ -1346,3 +1346,65 @@
   text-align: right;
   margin-top: 4px;
 }
+
+.app .composer-dispatch-actions .action-label {
+  display: inline;
+}
+.app .composer-delivery-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.app .composer-delivery-help > span {
+  flex: 1 1 220px;
+}
+.app .composer-delivery-help button {
+  flex-shrink: 0;
+  padding: 4px 7px;
+  font-size: 12px;
+}
+.app .queued-text-editor > p,
+.app .queue-edit-scope {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.app .queued-text-editor textarea[readonly] {
+  border-style: dashed;
+}
+.app .history-page-edge,
+.app .history-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+.app .conversation {
+  overflow-anchor: none;
+}
+
+.app .composer-dispatch-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: auto;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.app .composer-dispatch-actions > button > svg,
+.app .composer-dispatch-actions .action-label {
+  flex-shrink: 0;
+}

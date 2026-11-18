@@ -45,6 +45,9 @@
 
 ### Fixed
 
+- Scroll continuously through older and newer native history with automatic bidirectional loading, stable turn anchors, bounded page retention and explicit retry after a failed page read. Keep latest jumping optional and preserve live updates while reading.
+- Make Send, Queue, Add now and Stop labels visible with delivery timing and edit-scope guidance. Lock queue edits once dispatch begins, preserving unsubmitted local text if an entry starts or disappears; explain quoted replies and conversation branches.
+
 - Keep the latest live conversation cache separate from earlier-history browsing, so loading older pages cannot discard newer replies. Offer a persistent Back to latest action with a new-activity indicator, continue paging at the display limit, preserve drafts, and cancel stale history requests on navigation.
 
 - Return expired browser sessions to sign-in instead of leaving conversation snapshots, questions or sidebar requests stuck reconnecting. Preserve selected conversations and composer drafts for sign-in recovery, show permanent snapshot failures with explicit retry, and block sending until the selected history/task status loads.

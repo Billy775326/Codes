@@ -69,7 +69,9 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
   await page.getByLabel('Message Codex').fill('Queued then promoted');
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   const queue = page.getByRole('region', { name: 'Queued messages' });
-  await queue.getByRole('button', { name: 'Send now', exact: true }).click();
+  await queue
+    .getByRole('button', { name: 'Add queued message to current task', exact: true })
+    .click();
   await expect(page.getByTestId('message-user')).toHaveCount(3);
   await expect(page.getByTestId('message-user').first()).toHaveAttribute('data-message-id', first!);
   for (const entry of await page.getByTestId('message-user').all())
@@ -86,7 +88,7 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
     { times: 1 },
   );
   await page.getByLabel('Message Codex').fill('Only accepted once');
-  await page.getByRole('button', { name: 'Send follow-up now', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to current task', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Check follow-up receipt', exact: true }),
   ).toBeVisible();
@@ -107,7 +109,9 @@ test('queue/steer inversion, multiline Enter preferences, and Ctrl+N preserve th
   await page.keyboard.press('Escape');
   await send(page, '[slow] Inverted queue fixture ' + Date.now());
   await page.getByLabel('Message Codex').fill('Queue with reverse shortcut');
-  await expect(page.getByRole('button', { name: 'Send follow-up now', exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Add to current task', exact: true }),
+  ).toBeEnabled();
   await page.getByLabel('Message Codex').press('Control+Shift+Enter');
   await expect(page.getByRole('region', { name: 'Queued messages' })).toContainText(
     'Queue with reverse shortcut',
