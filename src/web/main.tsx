@@ -1,4 +1,12 @@
-import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createRoot } from 'react-dom/client';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -32,6 +40,14 @@ import { PanelMenu } from './PanelMenu';
 import { usePanelFocus } from './usePanelFocus';
 import { ChangeSummary } from './ChangeSummary';
 import { Transcript } from './Transcript';
+import {
+  earlierWindow,
+  historyLimit,
+  refreshHistory,
+  liveRevision,
+  type HistoryPage,
+  type HistoryWindow,
+} from './history';
 import {
   PreferencesDialog,
   ReviewDialog,
@@ -331,8 +347,48 @@ function App() {
   const [receipt, setReceipt] = useState('');
   const feed = useRef<Feed | undefined>(undefined);
   const transcript = useRef<HTMLDivElement>(null);
-  const historyAnchor = useRef<{ height: number; top: number } | undefined>(undefined);
+  const historyAnchor = useRef<{ threadId: string; turnId?: string; offset: number } | undefined>(
+    undefined,
+  );
   const follow = useRef(true);
+  const historyRead = useRef<AbortController | undefined>(undefined);
+  const [historyWindow, setHistoryWindow] = useState<HistoryWindow>();
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [atLatest, setAtLatest] = useState(true);
+  const history = historyWindow?.threadId === threadId ? historyWindow : undefined;
+  const visibleMessages = useMemo(
+    () => (thread ? (history ? refreshHistory(history, thread) : thread.messages) : []),
+    [thread?.messages, history],
+  );
+  const visibleTurns = useMemo(
+    () => [
+      ...(history?.turns ?? []).filter(
+        (turn) => !thread?.turns?.some((latest) => latest.id === turn.id),
+      ),
+      ...(thread?.turns ?? []),
+    ],
+    [history?.turns, thread?.turns],
+  );
+  const reviewMessages = useMemo(() => {
+    const latest = thread?.messages ?? [];
+    if (!history) return latest;
+    const liveIds = new Set(latest.map((item) => item.id));
+    return [...visibleMessages.filter((item) => !liveIds.has(item.id)), ...latest];
+  }, [visibleMessages, thread?.messages, history]);
+  const returnToLatest = useCallback(() => {
+    historyRead.current?.abort();
+    historyRead.current = undefined;
+    historyAnchor.current = undefined;
+    setLoadingHistory(false);
+    setHistoryWindow(undefined);
+    setAtLatest(true);
+    follow.current = true;
+    requestAnimationFrame(() => {
+      if (follow.current && transcript.current)
+        transcript.current.scrollTop = transcript.current.scrollHeight;
+    });
+  }, []);
+  useEffect(() => () => historyRead.current?.abort(), [threadId, projectId, auth]);
   const projectRef = useRef(projectId);
   projectRef.current = projectId;
   const notice = useCallback((e: unknown) => {
@@ -436,18 +492,22 @@ function App() {
       window.removeEventListener('online', focus);
     };
   }, [projectId, threadId, auth, retry]);
-  const select = useCallback((id: string) => {
-    setThread((current) => (current?.id === id ? current : undefined));
-    setThreadId(id);
-    setDiffTurn('');
-    setDiffPath('');
-    if (id !== threadRef.current) {
-      setPanel(null);
-      fileRead.current?.abort();
-    }
-    if (window.innerWidth <= 1099) setSidebar(false);
-    follow.current = true;
-  }, []);
+  const select = useCallback(
+    (id: string) => {
+      setThread((current) => (current?.id === id ? current : undefined));
+      setThreadId(id);
+      returnToLatest();
+      setDiffTurn('');
+      setDiffPath('');
+      if (id !== threadRef.current) {
+        setPanel(null);
+        fileRead.current?.abort();
+      }
+      if (window.innerWidth <= 1099) setSidebar(false);
+      follow.current = true;
+    },
+    [returnToLatest],
+  );
   const conversationUpdated = useCallback((value: Summary) => {
     const {
       id,
@@ -561,7 +621,7 @@ function App() {
             messages: (t.messages.some((m) => m.id === item.id)
               ? t.messages.map((m) => (m.id === item.id ? item : m))
               : [...t.messages, item]
-            ).slice(-240),
+            ).slice(-historyLimit),
           };
         }
         if (e.kind === 'state') {
@@ -579,7 +639,7 @@ function App() {
       (snapshot) => {
         deltas.clear();
         queueRevision.current++;
-        setThread(snapshot.thread);
+        setThread({ ...snapshot.thread, messages: snapshot.thread.messages.slice(-historyLimit) });
         // Project summaries may arrive while subscriptions switch. The selected
         // snapshot is also the authoritative summary for the navigation list.
         conversationUpdated(snapshot.thread);
@@ -611,16 +671,25 @@ function App() {
     element.style.height = Math.min(180, Math.max(66, element.scrollHeight)) + 'px';
   }, [draft, auth]);
   useLayoutEffect(() => {
-    if (historyAnchor.current && transcript.current) {
-      transcript.current.scrollTop =
-        historyAnchor.current.top + transcript.current.scrollHeight - historyAnchor.current.height;
+    const anchor = historyAnchor.current;
+    const element = transcript.current;
+    if (anchor && element) {
+      if (anchor.threadId === threadId) {
+        const turn = [...element.querySelectorAll<HTMLElement>('.turn')].find(
+          (item) => item.dataset.turnId === anchor.turnId,
+        );
+        if (turn)
+          element.scrollTop +=
+            turn.getBoundingClientRect().top - element.getBoundingClientRect().top - anchor.offset;
+        else element.scrollTop = 0;
+      }
       historyAnchor.current = undefined;
     }
-  }, [thread?.messages]);
+  }, [visibleMessages, threadId]);
   useEffect(() => {
-    if (follow.current && transcript.current)
+    if (!history && follow.current && transcript.current)
       transcript.current.scrollTop = transcript.current.scrollHeight;
-  }, [thread?.messages, thread?.actions, thread?.state]);
+  }, [visibleMessages, thread?.actions, thread?.state, history]);
   useEffect(() => {
     if (!projectId || panel !== 'files') return;
     const controller = new AbortController();
@@ -806,6 +875,7 @@ function App() {
       thread?.managementPending
     )
       return;
+    returnToLatest();
     setBusy(true);
     setError('');
     let id = threadId;
@@ -946,18 +1016,16 @@ function App() {
     (!!thread && ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
   const project = projects.find((x) => x.id === projectId);
   const changeTurns = [
-    ...new Set(
-      thread?.messages.filter((item) => item.kind === 'change').map((item) => item.turnId) ?? [],
-    ),
+    ...new Set(reviewMessages.filter((item) => item.kind === 'change').map((item) => item.turnId)),
   ].reverse();
   const selectedDiffTurn = diffTurn || thread?.turnId;
   const changeFiles = new Map<string, FileChange>();
-  for (const message of thread?.messages ?? [])
+  for (const message of reviewMessages)
     if (message.kind === 'change' && message.turnId === selectedDiffTurn)
       for (const file of message.files ?? [])
         changeFiles.set(message.id + ':' + (file.movePath ?? file.path), file);
   const diffPatch = selectedDiffTurn === thread?.turnId ? thread?.diff : undefined;
-  const changeTruncated = thread?.messages.some(
+  const changeTruncated = reviewMessages.some(
     (item) => item.kind === 'change' && item.turnId === selectedDiffTurn && item.truncated,
   );
   const unresolvedQuestions =
@@ -1198,37 +1266,44 @@ function App() {
     return () => document.removeEventListener('keydown', shortcut);
   }, [auth, busy, settings]);
   const loadOlder = async () => {
-    if (!thread?.olderCursor) return;
-    setBusy(true);
+    const cursor = history ? history.olderCursor : thread?.olderCursor;
+    if (!thread || !cursor || loadingHistory) return;
+    const id = thread.id;
+    const project = projectId;
+    const controller = new AbortController();
+    historyRead.current?.abort();
+    historyRead.current = controller;
+    setLoadingHistory(true);
     try {
-      const page = await request<{
-        messages: Message[];
-        turns?: Thread['turns'];
-        olderCursor: string | null;
-      }>(`/threads/${threadId}/history?cursor=${encodeURIComponent(thread.olderCursor)}`);
-      follow.current = false;
-      if (transcript.current)
-        historyAnchor.current = {
-          height: transcript.current.scrollHeight,
-          top: transcript.current.scrollTop,
-        };
-      setThread(
-        (t) =>
-          t && {
-            ...t,
-            olderCursor: page.olderCursor,
-            turns: [...(page.turns ?? []), ...(t.turns ?? [])]
-              .filter((turn, i, all) => all.findIndex((x) => x.id === turn.id) === i)
-              .slice(0, 300),
-            messages: [...page.messages, ...t.messages]
-              .filter((m, i, all) => all.findIndex((x) => x.id === m.id) === i)
-              .slice(0, 240),
-          },
+      const page = await request<HistoryPage>(
+        `/threads/${id}/history?cursor=${encodeURIComponent(cursor)}`,
+        {},
+        controller.signal,
       );
-    } catch (e) {
-      notice(e);
+      if (controller.signal.aborted || threadRef.current !== id || projectRef.current !== project)
+        return;
+      follow.current = false;
+      setAtLatest(false);
+      const element = transcript.current;
+      if (element) {
+        const top = element.getBoundingClientRect().top;
+        const turn = [...element.querySelectorAll<HTMLElement>('.turn')].find(
+          (item) => item.getBoundingClientRect().bottom > top,
+        );
+        historyAnchor.current = {
+          threadId: id,
+          turnId: turn?.dataset.turnId,
+          offset: turn ? turn.getBoundingClientRect().top - top : 0,
+        };
+      }
+      setHistoryWindow((current) => earlierWindow(thread, current, page));
+    } catch (error) {
+      if (!controller.signal.aborted) notice(error);
     } finally {
-      setBusy(false);
+      if (historyRead.current === controller) {
+        historyRead.current = undefined;
+        setLoadingHistory(false);
+      }
     }
   };
   if (auth !== 'ready')
@@ -1502,7 +1577,9 @@ function App() {
           ref={transcript}
           onScroll={(e) => {
             const el = e.currentTarget;
-            follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+            const nearBottom = !history && el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+            follow.current = nearBottom;
+            setAtLatest(nearBottom);
           }}
         >
           <div className="conversation-inner">
@@ -1566,22 +1643,20 @@ function App() {
               </section>
             ) : (
               <>
-                {thread?.olderCursor && (
+                {(history ? history.olderCursor : thread?.olderCursor) && (
                   <button
                     className="older"
-                    disabled={busy || thread.messages.length >= 240}
+                    disabled={busy || loadingHistory}
                     onClick={() => void loadOlder()}
                   >
-                    {thread.messages.length >= 240
-                      ? 'Display limit reached · reopen to see latest'
-                      : 'Load earlier messages'}
+                    {loadingHistory ? 'Loading earlier messages…' : 'Load earlier messages'}
                   </button>
                 )}
                 {thread && (
                   <Transcript
                     key={thread.id}
-                    messages={thread.messages}
-                    turns={thread.turns}
+                    messages={visibleMessages}
+                    turns={visibleTurns}
                     activeIds={
                       ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(
                         thread.state,
@@ -1684,6 +1759,20 @@ function App() {
           </div>
         </div>
         <div className="composer-area">
+          {thread && !loadingConversation && (history || !atLatest) && (
+            <div className="history-navigation" role="status" aria-label="Conversation position">
+              <span>
+                {history
+                  ? liveRevision(thread) !== history.liveRevision
+                    ? 'New activity · Viewing earlier messages'
+                    : 'Viewing earlier messages'
+                  : 'More recent messages below'}
+              </span>
+              <button onClick={returnToLatest} aria-label="Back to latest messages">
+                Back to latest ↓
+              </button>
+            </div>
+          )}
           {!!unresolvedQuestions.length && (
             <div className="question-attention" role="status">
               <span>

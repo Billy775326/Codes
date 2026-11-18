@@ -14,6 +14,14 @@ Grouping changes presentation only; it does not change native history, task disp
 
 Workspace text, line spacing and controls use larger fixed defaults. Older saved display-size values are ignored; existing theme and interaction preferences remain compatible. Dark mode uses layered dark gray surfaces and subdued light text; light and system themes remain available. Narrow composers use two control rows to keep send/stop available with larger text.
 
+## Browse earlier messages and return to live replies
+
+**Load earlier messages** opens a separate reading window. The latest 240 live messages continue receiving event updates in the background; loading history cannot evict them. Each historical window also holds at most 240 messages and avoids cutting a turn at its newer edge. Continue loading earlier pages even when that window reaches its limit.
+
+A **Back to latest** button remains above the composer while browsing history or scrolling away from the bottom. **New activity** signals that the live conversation changed while you were reading. Returning to latest uses the live cache immediately, scrolls to the bottom, and preserves your draft. Sending a new message also returns to the live view. The composer and native approval/question handling continue to use the current live task, rather than a historical task's state.
+
+Reconnect updates the live cache while retaining the historical reading window. Switching conversations, changing projects, returning to latest or starting a send cancels an in-flight history request; a late response cannot populate another conversation. History and live caches have separate bounded windows, rather than retaining the whole conversation in the browser.
+
 ## When Codex asks a question
 
 The native agent decides whether to call `request_user_input`. codes does not manufacture a question for every prompt or treat ordinary assistant prose as a structured request. Code-mode availability is enabled by default for the codes child process with the pinned CLI's `features.default_mode_request_user_input` setting. Set `CODES_CODE_QUESTIONS=0` before starting to retain Plan-only availability. Global Codex configuration is unchanged.

@@ -1304,3 +1304,19 @@
   font-size: 14.3px;
   line-height: 1.7;
 }
+
+.app .history-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.app .history-navigation button {
+  flex-shrink: 0;
+  padding: 5px 8px;
+  font-size: 13px;
+}
