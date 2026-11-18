@@ -32,6 +32,8 @@
 
 ### Changed
 
+- Show Copy, Reply and Branch once per turn below its last loaded assistant reply, remove empty toolbar space from progress messages, and tighten spacing around command summaries.
+
 - Increase workspace text, line spacing and controls with fixed readable defaults. Use softer dark gray surfaces, clearer secondary text and two-row controls for narrow composers. Retire the preview Display size option and ignore its saved value while preserving other browser preferences.
 
 - Organize the browser workspace around persistent desktop project/conversation navigation, central chat and right-side file/change previews. Keep IDE-style model/reasoning menus, edited-file cards and copy actions, with saved dark/light/system themes. Mobile drawers contain keyboard focus and return to typing after attaching context.

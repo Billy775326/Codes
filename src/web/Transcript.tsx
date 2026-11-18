@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import type { Message } from '../shared/types';
-import { groupActivity, commandCounts } from './activity';
+import { groupActivity, commandCounts, replyTargets } from './activity';
 import { Icon } from './primitives';
 
 function CommandGroup({
@@ -67,14 +67,15 @@ export function Transcript({
   render,
 }: {
   messages: Message[];
-  render: (item: Message) => ReactNode;
+  render: (item: Message, finalReply: boolean) => ReactNode;
 }) {
   const entries = useMemo(() => groupActivity(messages), [messages]);
+  const targets = useMemo(() => replyTargets(messages), [messages]);
   return entries.map((entry) =>
     entry.kind === 'commands' ? (
-      <CommandGroup key={entry.key} items={entry.items} render={render} />
+      <CommandGroup key={entry.key} items={entry.items} render={(item) => render(item, false)} />
     ) : (
-      <Fragment key={entry.key}>{render(entry.item)}</Fragment>
+      <Fragment key={entry.key}>{render(entry.item, targets.has(entry.item.id))}</Fragment>
     ),
   );
 }

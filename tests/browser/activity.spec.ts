@@ -67,6 +67,33 @@ test('command runs default to one compact disclosure with visible failure counts
   await page.reload();
   await expect(page.locator('.command-group')).not.toHaveAttribute('open', '');
 });
+test('one action row belongs to the last reply and intermediate prose does not reserve toolbar space', async ({
+  page,
+}) => {
+  await fixture(page, 16);
+  const progress = page
+    .getByTestId('message-assistant')
+    .filter({ hasText: 'Inspecting the workspace.' });
+  const final = page
+    .getByTestId('message-assistant')
+    .filter({ hasText: 'Final response stays visible.' });
+  await expect(progress.getByRole('group', { name: 'Reply actions', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByTestId('message-user').getByRole('button', { name: 'Copy message', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Reply actions', exact: true })).toHaveCount(1);
+  await expect(final.getByRole('button', { name: 'Copy message', exact: true })).toBeVisible();
+  await expect(final.getByRole('button', { name: 'Reply', exact: true })).toBeVisible();
+  const prose = await progress.locator('.prose').boundingBox();
+  const activity = await page.locator('.command-group').boundingBox();
+  expect(activity!.y - (prose!.y + prose!.height)).toBeLessThanOrEqual(16);
+  await final.getByRole('button', { name: 'Reply', exact: true }).click();
+  await expect(page.getByLabel('Message Codex')).toHaveValue(
+    'Regarding this Codex reply:\n> Final response stays visible.\n\n',
+  );
+  await page.screenshot({ path: 'test-results/activity-compact-replies.png', fullPage: true });
+});
+
 test('command status and appended entries update without opening a collapsed run or resetting an open run', async ({
   page,
 }) => {

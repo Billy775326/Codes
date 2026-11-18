@@ -83,6 +83,7 @@ const MessageView = memo(function MessageView({
   onFork,
   disabled,
   onReview,
+  actions = false,
 }: {
   onReply?: (item: Message) => void;
   onFork?: (item: Message) => void;
@@ -90,6 +91,7 @@ const MessageView = memo(function MessageView({
   onReview?: (item: Message, path?: string) => void;
   item: Message;
   streaming: boolean;
+  actions?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState('');
@@ -156,8 +158,8 @@ const MessageView = memo(function MessageView({
             <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
           )}
         </div>
-        {!streaming && item.turnId && (onReply || onFork) && (
-          <div className="message-actions">
+        {actions && !streaming && item.turnId && (onReply || onFork) && (
+          <div className="message-actions" role="group" aria-label="Reply actions">
             <button
               aria-label="Copy message"
               title="Copy message"
@@ -1563,10 +1565,11 @@ function App() {
                 {thread && (
                   <Transcript
                     messages={thread.messages}
-                    render={(m) => (
+                    render={(m, finalReply) => (
                       <MessageView
                         key={m.id}
                         item={m}
+                        actions={finalReply}
                         onReview={(item, path) => {
                           setDiffTurn(item.turnId === thread.turnId ? '' : item.turnId);
                           setDiffPath(
@@ -1590,6 +1593,7 @@ function App() {
                         disabled={busy || forkBusy || thread.managementPending}
                         streaming={
                           m.kind === 'assistant' &&
+                          finalReply &&
                           (m.turnId === thread.turnId ||
                             (thread.pending?.kind === 'review' &&
                               m.turnId === thread.pending.turnId)) &&

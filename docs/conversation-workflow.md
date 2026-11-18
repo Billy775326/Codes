@@ -12,7 +12,7 @@ The existing real-prompting-policy acceptance gate remains open: simulator cover
 
 ## Quote a historical message
 
-Use Reply below a completed message. Select a passage first to quote that passage, or quote the first 4,000 characters of the message. The composer receives a visible, editable blockquote followed by your existing draft. A quote that would exceed the draft limit is refused without truncating the existing draft.
+Use Reply below the last loaded assistant reply of a completed turn. Copy/Reply/Branch share one action row per turn; intermediate progress messages and user bubbles do not reserve separate toolbar rows. Select a passage first to quote that passage, or quote the first 4,000 characters of the message. The composer receives a visible, editable blockquote followed by your existing draft. A quote that would exceed the draft limit is refused without truncating the existing draft.
 
 Write your follow-up after the quote. This is an ordinary user prompt, preserved by the existing per-conversation draft storage. It carries no special execution or approval authority. During a task, use Queue to send it after the current task completes.
 

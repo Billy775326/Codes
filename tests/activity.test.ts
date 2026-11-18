@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import type { Message } from '../src/shared/types';
-import { groupActivity, commandCounts } from '../src/web/activity';
+import { groupActivity, commandCounts, replyTargets } from '../src/web/activity';
 const message = (
   id: string,
   kind: Message['kind'],
@@ -68,4 +68,19 @@ it('distinguishes failed, declined, stopped and missing statuses from successful
       ].map((status, index) => message(String(index), 'command', 'turn', status)),
     ),
   ).toEqual({ running: 3, completed: 1, failed: 2, stopped: 2, unknown: 2 });
+});
+
+it('assigns actions once per turn to its last assistant reply, excluding user messages and tools', () => {
+  expect([
+    ...replyTargets([
+      message('u', 'user'),
+      message('progress', 'assistant'),
+      message('command', 'command'),
+      message('final', 'assistant'),
+      message('next-user', 'user', 'second'),
+      message('next-progress', 'assistant', 'second'),
+      message('notice', 'notice', 'second'),
+    ]),
+  ]).toEqual(['final', 'next-progress']);
+  expect([...replyTargets([message('unscoped', 'assistant', '')])]).toEqual([]);
 });

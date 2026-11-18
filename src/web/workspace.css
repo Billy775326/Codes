@@ -330,7 +330,7 @@
 }
 .app .message {
   display: block;
-  margin: 0 0 20px;
+  margin: 0 0 12px;
   padding: 0;
 }
 .app .message.user {
@@ -408,12 +408,8 @@
   background: transparent;
 }
 .app .message-actions {
-  margin-top: 8px;
+  margin-top: 6px;
   gap: 2px;
-  opacity: 0;
-}
-.app .message:hover .message-actions,
-.app .message:focus-within .message-actions {
   opacity: 1;
 }
 .app .message-actions button {
@@ -1185,7 +1181,7 @@
 }
 
 .app .command-group {
-  margin: 8px 0 16px;
+  margin: 8px 0 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: transparent;

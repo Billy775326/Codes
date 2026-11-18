@@ -33,3 +33,11 @@ export function commandCounts(items: readonly Message[]) {
   }
   return counts;
 }
+
+/** One action row per turn, attached to its last loaded assistant reply. */
+export function replyTargets(messages: readonly Message[]): Set<string> {
+  const last = new Map<string, string>();
+  for (const item of messages)
+    if (item.kind === 'assistant' && item.turnId) last.set(item.turnId, item.id);
+  return new Set(last.values());
+}
