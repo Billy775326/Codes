@@ -47,6 +47,10 @@ Do not set a browser URL containing the access token. The login form exchanges i
 
 ## When the page disconnects
 
+A 401 response from the snapshot, sidebar or question/approval API returns an already signed-in page to the login form. Sign in with the existing token to restore the selected conversation and saved composer draft. The browser does not automatically resend messages or answers. An unsubmitted answer inside a question card may need to be entered again; it is not saved as plaintext browser storage.
+
+Permanent snapshot read failures (such as missing history, denied access or a size limit) stop automatic retry and display the cause with **Retry loading**. The composer keeps editable draft text but disables send/model/permission changes until the selected history and task status have loaded. Transient errors and broken streams retain bounded reconnect behavior.
+
 The UI fetches a fresh snapshot, then replays events after its cursor. A server epoch change or replay-buffer overflow requires another snapshot. Read requests and event handshakes have deadlines; reconnect retries stop after eight consecutive failures. Click the connection indicator to try again.
 
 If an execution receipt is lost, **do not submit the task a second time**. Use **Check result**. The server checks the recorded operation and matches its exact client message ID in recent native history. A terminal result releases the conversation. A missing receipt means the server did not journal the request; the UI retains the draft so the owner can explicitly send again.

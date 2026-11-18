@@ -1158,3 +1158,27 @@
 .app .panel-tabs i {
   background: var(--fg);
 }
+
+.conversation-loading-state {
+  margin: 48px auto;
+  max-width: 420px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+.conversation-loading-state h2 {
+  color: var(--fg);
+  font-size: 16px;
+  font-weight: 500;
+}
+.conversation-loading-state p {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.conversation-loading-state button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 12px;
+  margin-top: 10px;
+  color: var(--fg);
+}

@@ -1,5 +1,5 @@
 import type { Envelope, Snapshot } from '../shared/types';
-import { request } from './api';
+import { ApiError, request } from './api';
 
 /** One owner per selected thread. Snapshot + replay cursor also covers tab suspension. */
 export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapshot> {
@@ -18,6 +18,7 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
     private event: (event: Envelope) => void,
     private status: (state: string) => void,
     private scope: 'threads' | 'projects' = 'threads',
+    private failure?: (error: unknown) => void,
   ) {}
   async connect() {
     if (this.disposed) return;
@@ -77,17 +78,39 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
         if ((!this.ready && Date.now() - handshakeAt > 5000) || Date.now() - this.alive > 35_000)
           this.retry();
       }, 1000);
-    } catch {
-      if (generation === this.generation && !this.disposed) this.retry();
+    } catch (error) {
+      if (generation !== this.generation || this.disposed) return;
+      if (
+        error instanceof ApiError &&
+        (error.code === 'AUTH_REQUIRED' ||
+          (!!error.status &&
+            error.status >= 400 &&
+            error.status < 500 &&
+            ![408, 429].includes(error.status)))
+      ) {
+        this.cleanup();
+        ++this.generation;
+        this.status(
+          error.status === 401 || error.code === 'AUTH_REQUIRED'
+            ? 'Sign in required'
+            : 'Unavailable',
+        );
+        this.failure?.(error);
+        return;
+      }
+      this.retry(error);
     }
   }
-  private retry() {
+  private retry(error?: unknown) {
     this.cleanup();
     ++this.generation;
     if (this.disposed) return;
     this.status('Reconnecting');
     if (++this.attempts > 8) {
       this.status('Disconnected');
+      this.failure?.(
+        error ?? new Error('The connection was lost. Retry to load the latest conversation.'),
+      );
       return;
     }
     this.timer = setTimeout(

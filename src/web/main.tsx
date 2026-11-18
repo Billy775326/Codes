@@ -20,7 +20,7 @@ import type {
   ReviewTarget,
   FileChange,
 } from '../shared/types';
-import { ApiError, message, post, request } from './api';
+import { ApiError, message, post, request, onAuthenticationRequired } from './api';
 import { Feed } from './feed';
 import { Brand, Icon } from './primitives';
 import { Login } from './Login';
@@ -322,10 +322,18 @@ function App() {
   const follow = useRef(true);
   const projectRef = useRef(projectId);
   projectRef.current = projectId;
-  const notice = (e: unknown) => {
-    setError(message(e));
-    if (e instanceof ApiError && e.code === 'AUTH_REQUIRED') setAuth('login');
-  };
+  const notice = useCallback((e: unknown) => {
+    if (e instanceof ApiError && (e.code === 'AUTH_REQUIRED' || e.status === 401)) {
+      setError(
+        'Your session has expired. Sign in again to continue. Your draft is saved in this browser.',
+      );
+      setBusy(false);
+      setAuth('login');
+    } else setError(message(e));
+  }, []);
+  useEffect(() => {
+    if (auth === 'ready') return onAuthenticationRequired(notice);
+  }, [auth, notice]);
   const init = async () => {
     try {
       const [system, projects] = await Promise.all([
@@ -401,6 +409,7 @@ function App() {
       },
       setConnection,
       'projects',
+      notice,
     );
     void stream.connect();
     const focus = () => {
@@ -565,6 +574,8 @@ function App() {
       },
       event,
       setConnection,
+      'threads',
+      notice,
     );
     feed.current = stream;
     void stream.connect();
@@ -777,6 +788,7 @@ function App() {
       queueRequest ||
       !draft.trim() ||
       !projectId ||
+      loadingConversation ||
       thread?.archived ||
       thread?.managementPending
     )
@@ -914,6 +926,7 @@ function App() {
     ]);
     returnToComposer();
   };
+  const loadingConversation = !!threadId && (!thread || thread.id !== threadId);
   const active =
     !!thread?.pending ||
     !!thread?.steering?.length ||
@@ -1220,7 +1233,7 @@ function App() {
               setToken('');
               return init();
             })
-            .catch(notice)
+            .catch((e) => setError(message(e)))
             .finally(() => setBusy(false));
         }}
       />
@@ -1475,7 +1488,33 @@ function App() {
           }}
         >
           <div className="conversation-inner">
-            {!thread?.messages.length && !active ? (
+            {loadingConversation ? (
+              <section
+                className="conversation-loading-state"
+                role="status"
+                aria-label="Conversation loading"
+              >
+                <Icon name="history" size={24} />
+                <h2>
+                  {['Unavailable', 'Disconnected'].includes(connection)
+                    ? 'Unable to load conversation'
+                    : 'Loading conversation…'}
+                </h2>
+                <p>
+                  {['Unavailable', 'Disconnected'].includes(connection)
+                    ? 'Retry, or choose another conversation from the sidebar.'
+                    : 'Retrieving the saved conversation and task status.'}
+                </p>
+                <button
+                  onClick={() => {
+                    setError('');
+                    setRetry((value) => value + 1);
+                  }}
+                >
+                  Retry loading
+                </button>
+              </section>
+            ) : !thread?.messages.length && !active ? (
               <section className="welcome">
                 <h1>Ask Codex</h1>
                 <p>Ask a question, plan a change, or review your code.</p>
@@ -1793,7 +1832,7 @@ function App() {
               <select
                 aria-label="Mode"
                 value={settings.mode ?? 'default'}
-                disabled={active || busy || !modes.length}
+                disabled={active || busy || loadingConversation || !modes.length}
                 onChange={(event) =>
                   setSettings({ ...settings, mode: event.target.value as Settings['mode'] })
                 }
@@ -1813,7 +1852,7 @@ function App() {
                 onChange={(e) =>
                   setSettings({ ...settings, permission: e.target.value as Settings['permission'] })
                 }
-                disabled={active || busy}
+                disabled={active || busy || loadingConversation}
               >
                 <option value="read-only">Read only</option>
                 <option value="workspace-write">Workspace write</option>
@@ -1844,7 +1883,7 @@ function App() {
                         effort: undefined,
                       })
                     }
-                    disabled={active || busy}
+                    disabled={active || busy || loadingConversation}
                   >
                     <option value="">Default model</option>
                     {settings.model && !models.some((entry) => entry.id === settings.model) && (
@@ -1863,7 +1902,7 @@ function App() {
                     ref={effortControl}
                     aria-label="Reasoning effort"
                     value={settings.effort ?? ''}
-                    disabled={active || busy || !selectedModel}
+                    disabled={active || busy || loadingConversation || !selectedModel}
                     onChange={(event) =>
                       setSettings({ ...settings, effort: event.target.value || undefined })
                     }
@@ -1946,6 +1985,7 @@ function App() {
                       busy ||
                       !draft.trim() ||
                       !projectId ||
+                      loadingConversation ||
                       !!receipt ||
                       !!queueRequest ||
                       !!steerReceipt ||
@@ -2001,6 +2041,7 @@ function App() {
           delivery={preferences.review}
           inlineAvailable={
             !!threadId &&
+            !loadingConversation &&
             !active &&
             !thread?.archived &&
             !thread?.managementPending &&
