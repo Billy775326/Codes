@@ -180,3 +180,53 @@ test('new controls, review dialog and phone keyboard fit a mobile viewport', asy
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/ide-mobile-review.png', fullPage: true });
 });
+
+for (const phase of ['create', 'send', 'queue', 'steer'] as const) {
+  test(`a delayed ${phase} response preserves a newer follow-up draft`, async ({ page }) => {
+    await login(page);
+    if (phase === 'queue' || phase === 'steer') {
+      await send(page, '[slow] Follow-up receipt ' + phase + ' ' + Date.now());
+      await expect(page.getByRole('button', { name: 'Stop task' })).toBeEnabled();
+    }
+    let release!: () => void, accepted!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const processed = new Promise<void>((resolve) => {
+      accepted = resolve;
+    });
+    const pattern = phase === 'create' ? '**/api/projects/*/threads' : '**/api/threads/*/' + phase;
+    await page.route(
+      pattern,
+      async (route) => {
+        const response = await route.fetch();
+        accepted();
+        await hold;
+        await route.fulfill({ response });
+      },
+      { times: 1 },
+    );
+    try {
+      const text = '[slow] Original draft ' + phase + ' ' + Date.now();
+      if (phase === 'create' || phase === 'send') await send(page, text);
+      else {
+        await page.getByLabel('Message Codex').fill(text);
+        if (phase === 'queue')
+          await page.getByRole('button', { name: 'Queue message', exact: true }).click();
+        else await page.getByLabel('Message Codex').press('Control+Shift+Enter');
+      }
+      await processed;
+      await page.getByLabel('Message Codex').fill('Keep the next draft after ' + phase);
+      release();
+      await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled();
+      await expect(page.getByLabel('Message Codex')).toHaveValue(
+        'Keep the next draft after ' + phase,
+      );
+      if (phase === 'create' || phase === 'send')
+        await expect(page.getByTestId('message-user').first()).toContainText(text);
+      await stop(page);
+    } finally {
+      release();
+    }
+  });
+}

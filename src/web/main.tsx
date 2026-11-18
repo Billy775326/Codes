@@ -309,6 +309,9 @@ function App() {
   const permissionControl = useRef<HTMLSelectElement>(null);
   const [settings, setSettings] = useState<Settings>({ permission: 'read-only' });
   const [draft, setDraft] = useState('');
+  const draftRevision = useRef(0);
+  const draftValue = useRef(draft);
+  draftValue.current = draft;
   const [queueRequest, setQueueRequest] = useState<{
     operationId: string;
     payload: QueuePayload;
@@ -603,6 +606,8 @@ function App() {
     return () => controller.abort();
   }, [projectId, directory, panel]);
   const changeDraft = (value: string) => {
+    draftRevision.current++;
+    draftValue.current = value;
     setDraft(value);
     save(`codes.draft.${threadId || 'new'}`, value.slice(0, 50_000));
   };
@@ -631,10 +636,23 @@ function App() {
     changeDraft(quote + draft);
     composer.current?.focus();
   };
+  const clearAcceptedDraft = (id: string, version: number, origin = id) => {
+    // A network acknowledgement belongs to the captured draft, not whatever the
+    // user has typed since dispatch. Preserve the next draft and its attachments.
+    if (version !== draftRevision.current) return;
+    save('codes.draft.' + id, '');
+    if (!origin) save('codes.draft.new', '');
+    if (threadRef.current === id || threadRef.current === origin) {
+      draftValue.current = '';
+      setDraft('');
+      setAttachments([]);
+    }
+  };
   const enqueue = async () => {
     if (!threadId || busy || !draft.trim() || thread?.archived || thread?.managementPending) return;
     setBusy(true);
     setError('');
+    const version = draftRevision.current;
     const key = 'codes.queue-request.' + threadId;
     const payload = { text: draft, settings, attachments };
     let operationId = crypto.randomUUID();
@@ -660,9 +678,7 @@ function App() {
       );
       save(key, '');
       setQueueRequest(undefined);
-      save('codes.draft.' + threadId, '');
-      setDraft('');
-      setAttachments([]);
+      clearAcceptedDraft(threadId, version);
     } catch (error) {
       notice(error);
       if (error instanceof ApiError && !error.uncertain) {
@@ -754,12 +770,14 @@ function App() {
     setBusy(true);
     setError('');
     let id = threadId;
+    const origin = threadId;
+    const version = draftRevision.current;
     let operationId = '';
     try {
       if (!id) {
         const created = await post<Thread>(`/projects/${projectId}/threads`, settings);
         id = created.id;
-        save(`codes.draft.${id}`, draft);
+        save(`codes.draft.${id}`, threadRef.current === origin ? draftValue.current : draft);
         setThreads((list) => [created, ...list]);
         select(id);
         setThread(created);
@@ -775,10 +793,7 @@ function App() {
       });
       if (operation.state === 'failed')
         throw new ApiError(operation.error ?? 'The operation failed.', 'OPERATION_FAILED');
-      save(`codes.draft.${id}`, '');
-      save('codes.draft.new', '');
-      setDraft('');
-      setAttachments([]);
+      clearAcceptedDraft(id, version, origin);
       follow.current = true;
       if (operation.state === 'completed') {
         save(`codes.operation.${id}`, '');
@@ -863,6 +878,7 @@ function App() {
   };
   const attach = () => {
     if (!file || attachments.length >= 4) return;
+    draftRevision.current++;
     setAttachments((list) => [
       ...list.filter((x) => x.path !== file.path),
       { path: file.path, sha: file.sha, fromLine: Math.min(...range), toLine: Math.max(...range) },
@@ -951,6 +967,7 @@ function App() {
     }
     const id = threadId;
     const text = draft;
+    const version = draftRevision.current;
     const record = { operationId: crypto.randomUUID(), text };
     setBusy(true);
     setError('');
@@ -966,12 +983,8 @@ function App() {
       if (result.state === 'unknown' || result.state === 'failed')
         throw new Error(result.error || 'Check the follow-up result.');
       save('codes.steer.' + id, '');
-      save('codes.draft.' + id, '');
-      if (threadRef.current === id) {
-        setSteerReceipt(undefined);
-        setDraft('');
-        setAttachments([]);
-      }
+      clearAcceptedDraft(id, version);
+      if (threadRef.current === id) setSteerReceipt(undefined);
     } catch (error) {
       notice(error);
       if (error instanceof ApiError && !error.uncertain) {
@@ -1577,7 +1590,10 @@ function App() {
                     {a.path}:{a.fromLine}–{a.toLine}
                     <button
                       aria-label={`Remove ${a.path}`}
-                      onClick={() => setAttachments((list) => list.filter((x) => x !== a))}
+                      onClick={() => {
+                        draftRevision.current++;
+                        setAttachments((list) => list.filter((x) => x !== a));
+                      }}
                     >
                       ×
                     </button>
@@ -1647,7 +1663,7 @@ function App() {
                     effort: undefined,
                   })
                 }
-                disabled={active}
+                disabled={active || busy}
               >
                 <option value="">Default model</option>
                 {settings.model && !models.some((entry) => entry.id === settings.model) && (
@@ -1667,7 +1683,7 @@ function App() {
                 onChange={(e) =>
                   setSettings({ ...settings, permission: e.target.value as Settings['permission'] })
                 }
-                disabled={active}
+                disabled={active || busy}
               >
                 <option value="read-only">Read only</option>
                 <option value="workspace-write">Workspace write</option>
@@ -1744,7 +1760,7 @@ function App() {
             <select
               aria-label="Mode"
               value={settings.mode ?? 'default'}
-              disabled={active || !modes.length}
+              disabled={active || busy || !modes.length}
               onChange={(event) =>
                 setSettings({ ...settings, mode: event.target.value as Settings['mode'] })
               }
@@ -1761,7 +1777,7 @@ function App() {
               ref={effortControl}
               aria-label="Reasoning effort"
               value={settings.effort ?? ''}
-              disabled={active || !selectedModel}
+              disabled={active || busy || !selectedModel}
               onChange={(event) =>
                 setSettings({ ...settings, effort: event.target.value || undefined })
               }
@@ -2010,11 +2026,13 @@ function App() {
                     </span>
                     <button
                       onClick={() => {
-                        if (file)
+                        if (file) {
+                          draftRevision.current++;
                           setAttachments((list) => [
                             ...list.filter((entry) => entry.path !== file.path),
                             { path: file.path, sha: file.sha, fromLine: 1, toLine: file.lines },
                           ]);
+                        }
                       }}
                       disabled={attachments.length >= 4}
                     >
