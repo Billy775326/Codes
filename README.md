@@ -7,12 +7,12 @@ A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interfa
 ## What is implemented
 
 - Projects backed by existing directories on the host.
-- Native Codex conversations, streamed assistant text, and command/file activity.
+- Native Codex conversations, streamed assistant text, and command/file activity with default-collapsed command groups and visible failure counts.
 - Searchable, paginated conversation navigation with native rename, archive, and restore controls.
 - Command, file, and turn-scoped permission approvals; proactive native questions in Code and Plan, with choices, custom answers, secret inputs, and explicit skipping for optional questions.
 - Quoted follow-up drafts, durable FIFO queues, immediate native steering, and conversation branches through completed turns.
 - Native Plan/Code modes, model-specific reasoning effort, task-plan steps, inline/separate code reviews, and session/context-token status.
-- A browser workspace with persistent desktop project/conversation navigation, central chat, right-side file/change previews, and dark/light/system themes.
+- A browser workspace with persistent desktop project/conversation navigation, central chat, right-side file/change previews, saved display sizes, and dark/light/system themes.
 - IDE-style model/reasoning controls, edited-file cards, questions, approvals and follow-up actions within that Web layout.
 - Browser interaction preferences for Enter, queue/steer inversion, review delivery, and local slash commands.
 - Read-only file browsing with selection or whole-file attachments and file-change checks.

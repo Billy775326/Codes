@@ -508,7 +508,7 @@ export const Conversations = memo(function Conversations({
               </div>
             </form>
           </div>,
-          document.body,
+          document.querySelector<HTMLElement>('.app')!,
         )}
     </section>
   );

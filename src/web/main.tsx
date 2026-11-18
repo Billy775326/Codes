@@ -31,6 +31,7 @@ import { DiffView } from './DiffView';
 import { PanelMenu } from './PanelMenu';
 import { usePanelFocus } from './usePanelFocus';
 import { ChangeSummary } from './ChangeSummary';
+import { Transcript } from './Transcript';
 import {
   PreferencesDialog,
   ReviewDialog,
@@ -226,6 +227,9 @@ function App() {
           : 'enter',
         review: value.review === 'detached' ? 'detached' : 'inline',
         theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
+        displaySize: ['standard', 'comfortable', 'large'].includes(value.displaySize)
+          ? value.displaySize
+          : 'comfortable',
       };
     } catch {
       return { followUp: 'queue', enter: 'enter', review: 'inline' };
@@ -1240,6 +1244,7 @@ function App() {
     );
   return (
     <div
+      data-display-size={preferences.displaySize ?? 'comfortable'}
       data-theme={
         preferences.theme === 'system'
           ? prefersDark
@@ -1559,40 +1564,45 @@ function App() {
                       : 'Load earlier messages'}
                   </button>
                 )}
-                {thread?.messages.map((m) => (
-                  <MessageView
-                    key={m.id}
-                    item={m}
-                    onReview={(item, path) => {
-                      setDiffTurn(item.turnId === thread.turnId ? '' : item.turnId);
-                      setDiffPath(
-                        path?.startsWith(project!.path + '/')
-                          ? path.slice(project!.path.length + 1)
-                          : (path ?? ''),
-                      );
-                      setPanel('diff');
-                    }}
-                    onReply={thread.archived ? undefined : reply}
-                    onFork={
-                      !active || m.turnId !== thread.turnId
-                        ? m.kind === 'assistant'
-                          ? (item) => {
-                              setForking(item);
-                              setForkError('');
-                            }
-                          : undefined
-                        : undefined
-                    }
-                    disabled={busy || forkBusy || thread.managementPending}
-                    streaming={
-                      m.kind === 'assistant' &&
-                      (m.turnId === thread.turnId ||
-                        (thread.pending?.kind === 'review' &&
-                          m.turnId === thread.pending.turnId)) &&
-                      ['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
-                    }
+                {thread && (
+                  <Transcript
+                    messages={thread.messages}
+                    render={(m) => (
+                      <MessageView
+                        key={m.id}
+                        item={m}
+                        onReview={(item, path) => {
+                          setDiffTurn(item.turnId === thread.turnId ? '' : item.turnId);
+                          setDiffPath(
+                            path?.startsWith(project!.path + '/')
+                              ? path.slice(project!.path.length + 1)
+                              : (path ?? ''),
+                          );
+                          setPanel('diff');
+                        }}
+                        onReply={thread.archived ? undefined : reply}
+                        onFork={
+                          !active || m.turnId !== thread.turnId
+                            ? m.kind === 'assistant'
+                              ? (item) => {
+                                  setForking(item);
+                                  setForkError('');
+                                }
+                              : undefined
+                            : undefined
+                        }
+                        disabled={busy || forkBusy || thread.managementPending}
+                        streaming={
+                          m.kind === 'assistant' &&
+                          (m.turnId === thread.turnId ||
+                            (thread.pending?.kind === 'review' &&
+                              m.turnId === thread.pending.turnId)) &&
+                          ['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
+                        }
+                      />
+                    )}
                   />
-                ))}
+                )}
                 {thread?.pending &&
                   !thread.messages.some((m) => m.clientId === thread.pending?.id) && (
                     <MessageView

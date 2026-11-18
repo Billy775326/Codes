@@ -2,6 +2,14 @@
 
 codes follows the published Codex IDE interaction contracts for native clarifications and local patch inspection. Use a desktop to review changes and a phone to answer a pending question. This is an independent Web implementation; it does not include VS Code editor integration or Git stage/revert actions.
 
+## Read command activity
+
+Consecutive command records in one native turn appear as a collapsed count summary. Prose, file changes and turn boundaries end a group, so the original message order stays intact. Running, failed/declined, stopped and unavailable statuses remain visible in the summary. A failed command does not silently become a successful summary.
+
+Expand the summary to inspect individual commands; expand a command again for its captured output. Collapsed groups do not mount command rows or output text. New records and status updates preserve the group's current open/closed choice. Reloading or switching away defaults back to collapsed. Assistant replies, change cards, approvals and questions remain directly visible. Grouping changes browser presentation only; it does not remove native history or change task execution.
+
+**Interaction settings → Display size** offers Standard (100%), Comfortable (110%, default) and Large (125%). These scale workspace typography without enlarging the page beyond its viewport. Dark mode uses layered dark gray surfaces and subdued light text; light and system themes remain available. Narrow composers use two control rows to keep send/stop available with larger text.
+
 ## When Codex asks a question
 
 The native agent decides whether to call `request_user_input`. codes does not manufacture a question for every prompt or treat ordinary assistant prose as a structured request. Code-mode availability is enabled by default for the codes child process with the pinned CLI's `features.default_mode_request_user_input` setting. Set `CODES_CODE_QUESTIONS=0` before starting to retain Plan-only availability. Global Codex configuration is unchanged.
@@ -17,7 +25,7 @@ Responses belong to that native request and turn. Another signed-in device can r
 
 ## Inspect a patch
 
-Open **Review changes**, or expand a **File changes** item in the conversation. File approvals include the proposed patch when the CLI provides one. The list shows changed paths, add/delete/rename information, and addition/deletion counts for the available patch.
+Open **Review changes**, or select **Review** in an **Edited files** card in the conversation. File approvals include the proposed patch when the CLI provides one. The list shows changed paths, add/delete/rename information, and addition/deletion counts for the available patch.
 
 - **Unified** displays the original and resulting line numbers beside each patch row. **Side by side** aligns removed and added blocks; narrow screens can scroll the patch horizontally.
 - Expand a file to inspect it. **Open file** uses the existing read-only project file viewer, including its traversal, hidden-file, symlink, size and UTF-8 checks. Deleted files have no Open action. A path outside the project is rejected rather than opened outside the registered workspace.

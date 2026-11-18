@@ -4,6 +4,8 @@
 
 ### Added
 
+- Fold consecutive command records into a default-collapsed activity summary with visible running/failure counts. Expand the group and then individual commands for output while keeping replies, file changes and pending requests visible.
+
 - Let Codex request clarification in Code as well as Plan using an application-local feature setting. Distinguish required questions from optional ones, offer explicit Skip for optional requests, and provide keyboard-accessible choices and a composer shortcut to pending questions.
 - Preview changes per file with addition/deletion counts, before/after line numbers, unified or side-by-side layouts, revision-specific viewed markers, and read-only file navigation. Inspect earlier loaded turns and proposed patches before file approval.
 - Render long patches in 200-row windows and disclose incomplete patches and command output instead of silently presenting clipped previews as complete.
@@ -29,6 +31,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Increase workspace text, line spacing and controls, default to Comfortable display size (110%), and offer saved Standard (100%) and Large (125%) type-size settings. Use softer dark gray surfaces, clearer secondary text and two-row controls for narrow composers.
 
 - Organize the browser workspace around persistent desktop project/conversation navigation, central chat and right-side file/change previews. Keep IDE-style model/reasoning menus, edited-file cards and copy actions, with saved dark/light/system themes. Mobile drawers contain keyboard focus and return to typing after attaching context.
 

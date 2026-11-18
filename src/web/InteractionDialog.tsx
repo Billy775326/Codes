@@ -59,6 +59,7 @@ export interface Preferences {
   enter: 'enter' | 'cmdIfMultiline' | 'cmdAlways';
   review: 'inline' | 'detached';
   theme?: 'dark' | 'light' | 'system';
+  displaySize?: 'standard' | 'comfortable' | 'large';
 }
 export function PreferencesDialog({
   value,
@@ -84,6 +85,20 @@ export function PreferencesDialog({
           <option value="dark">Dark</option>
           <option value="light">Light</option>
           <option value="system">System</option>
+        </select>
+      </label>
+      <label>
+        Display size
+        <select
+          aria-label="Display size"
+          value={value.displaySize ?? 'comfortable'}
+          onChange={(event) =>
+            change({ ...value, displaySize: event.target.value as Preferences['displaySize'] })
+          }
+        >
+          <option value="standard">Standard · 100%</option>
+          <option value="comfortable">Comfortable · 110%</option>
+          <option value="large">Large · 125%</option>
         </select>
       </label>
       <label>
