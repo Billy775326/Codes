@@ -7,6 +7,7 @@ import { Store } from './store.js';
 import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
 import { ModelSettings } from './model-settings.js';
+import { fileChanges } from './file-changes.js';
 import { z } from 'zod';
 import { AppError, record } from '../shared/errors.js';
 import {
@@ -56,19 +57,25 @@ function item(raw: any, turnId: string): Message | undefined {
       id: raw.id,
       turnId,
       kind: 'command',
-      text: [text(raw.command), text(raw.aggregatedOutput)].filter(Boolean).join('\n\n'),
+      text: text([text(raw.command), text(raw.aggregatedOutput)].filter(Boolean).join('\n\n')),
       status: text(raw.status),
+      truncated:
+        (typeof raw.aggregatedOutput === 'string' ? raw.aggregatedOutput.length : 0) +
+          (typeof raw.command === 'string' ? raw.command.length : 0) >
+        limits.item,
     };
-  if (raw.type === 'fileChange')
+  if (raw.type === 'fileChange') {
+    const changes = fileChanges(raw.changes);
     return {
       id: raw.id,
       turnId,
       kind: 'change',
-      text: Array.isArray(raw.changes)
-        ? raw.changes.map((x: any) => `${text(x.path)}\n${text(x.diff)}`).join('\n\n')
-        : '',
+      text: text(changes.files.map((x) => `${x.path}\n${x.diff}`).join('\n\n')),
       status: text(raw.status),
+      files: changes.files,
+      truncated: changes.truncated,
     };
+  }
   if (raw.type === 'enteredReviewMode' || raw.type === 'exitedReviewMode')
     return {
       id: raw.id,
@@ -1404,26 +1411,37 @@ export class Service {
     const action = entry.action;
     let response: unknown;
     if (action.kind === 'questions') {
-      const answers: Record<string, { answers: string[] }> = {};
-      if (
-        Object.keys(resolution.answers ?? {}).some(
-          (id) => !action.questions?.some((question) => question.id === id),
-        )
-      )
-        throw new AppError('INVALID_ANSWER', 'The answer refers to a different question.');
-      for (const question of action.questions ?? []) {
-        const value = resolution.answers?.[question.id]?.trim();
-        if (!value)
-          throw new AppError('ANSWER_REQUIRED', 'Answer each question before submitting.');
+      if (resolution.decision === 'skip') {
+        if (action.blocking !== false || Object.keys(resolution.answers ?? {}).length)
+          throw new AppError('INVALID_ANSWER', 'Only an optional question can be skipped.');
+        response = { answers: {} };
+      } else {
+        if (resolution.decision)
+          throw new AppError(
+            'INVALID_ANSWER',
+            'Submit answers or explicitly skip an optional question.',
+          );
+        const answers: Record<string, { answers: string[] }> = {};
         if (
-          question.options?.length &&
-          !question.allowOther &&
-          !question.options.some((option) => option.label === value)
+          Object.keys(resolution.answers ?? {}).some(
+            (id) => !action.questions?.some((question) => question.id === id),
+          )
         )
-          throw new AppError('INVALID_ANSWER', 'Choose one of the supplied options.');
-        answers[question.id] = { answers: [value] };
+          throw new AppError('INVALID_ANSWER', 'The answer refers to a different question.');
+        for (const question of action.questions ?? []) {
+          const value = resolution.answers?.[question.id]?.trim();
+          if (!value)
+            throw new AppError('ANSWER_REQUIRED', 'Answer each question before submitting.');
+          if (
+            question.options?.length &&
+            !question.allowOther &&
+            !question.options.some((option) => option.label === value)
+          )
+            throw new AppError('INVALID_ANSWER', 'Choose one of the supplied options.');
+          answers[question.id] = { answers: [value] };
+        }
+        response = { answers };
       }
-      response = { answers };
     } else {
       if (!action.decisions.includes(resolution.decision ?? ''))
         throw new AppError('INVALID_DECISION', 'Choose an available decision.');
@@ -1617,6 +1635,17 @@ export class Service {
           this.actions.delete(entry.action.id);
         }
       this.emitActions(thread.id);
+      if (['waitingInput', 'waitingApproval'].includes(thread.state)) {
+        const remaining = thread.actions.filter(
+          (a) => a.status === 'pending' || a.status === 'responding',
+        );
+        thread.state = remaining.some((a) => a.kind !== 'questions')
+          ? 'waitingApproval'
+          : remaining.length
+            ? 'waitingInput'
+            : 'running';
+        this.boundary(thread);
+      }
       return;
     }
     if (
@@ -1630,6 +1659,10 @@ export class Service {
         const delta = p.delta.slice(0, Math.max(0, remaining));
         message.text += delta;
         if (delta) this.events.publish('text', { id: message.id, delta }, thread.id);
+        if (p.delta.length > Math.max(0, remaining) && !message.truncated) {
+          message.truncated = true;
+          this.events.publish('item', message, thread.id);
+        }
       }
       return;
     }
@@ -1638,8 +1671,11 @@ export class Service {
       return;
     }
     if (event.method === 'turn/diff/updated') {
+      if (p.turnId !== thread.turnId) return;
       thread.diff = text(p.diff);
+      thread.diffTruncated = typeof p.diff === 'string' && p.diff.length > limits.item;
       this.events.publish('diff', thread.diff, thread.id);
+      this.events.publish('state', { diffTruncated: thread.diffTruncated }, thread.id);
       return;
     }
     if (event.method === 'turn/started' || event.method === 'turn/completed') {
@@ -1657,8 +1693,9 @@ export class Service {
         thread.turnId = p.turn.id;
         thread.state = 'running';
         thread.diff = '';
+        thread.diffTruncated = false;
         delete thread.plan;
-        this.events.publish('state', { plan: null }, thread.id);
+        this.events.publish('state', { plan: null, diffTruncated: false }, thread.id);
         this.events.publish('diff', '', thread.id);
       } else if (
         thread.turnId === p.turn.id ||
@@ -1725,6 +1762,7 @@ export class Service {
     if (
       !kind ||
       !thread ||
+      (kind === 'questions' && p.turnId !== thread.turnId) ||
       this.actions.size >= 32 ||
       !['string', 'number'].includes(typeof event.id)
     ) {
@@ -1752,6 +1790,10 @@ export class Service {
       ),
       decisions: kind === 'permissions' ? ['accept', 'decline'] : ['accept', 'decline', 'cancel'],
       status: 'pending',
+      blocking: kind === 'questions' ? p.isBlocking !== false : undefined,
+      files: kind === 'file' ? thread.messages.find((m) => m.id === p.itemId)?.files : undefined,
+      truncated:
+        kind === 'file' ? thread.messages.find((m) => m.id === p.itemId)?.truncated : undefined,
     };
     action.detail =
       [
@@ -1761,8 +1803,10 @@ export class Service {
         kind === 'permissions' &&
           `Requested permissions (this turn only):\n${JSON.stringify(p.permissions ?? {}, null, 2)}`,
         kind === 'file' &&
-          (thread.messages.find((m) => m.id === p.itemId)?.text ||
-            'The CLI did not provide a patch for this approval. Inspect the workspace before approving.'),
+          (action.files?.length
+            ? 'Review the proposed patch below.'
+            : thread.messages.find((m) => m.id === p.itemId)?.text ||
+              'The CLI did not provide a patch for this approval. Inspect the workspace before approving.'),
       ]
         .filter(Boolean)
         .join('\n\n')
@@ -1786,7 +1830,12 @@ export class Service {
                 }))
             : undefined,
         }));
-    if (kind === 'questions' && (!action.questions?.length || action.questions.length > 8)) {
+    if (
+      kind === 'questions' &&
+      (!action.questions?.length ||
+        action.questions.length > 8 ||
+        new Set(action.questions.map((q) => q.id)).size !== action.questions.length)
+    ) {
       void this.driver
         .reject(event.id)
         ?.catch(() => console.error('Unable to reject invalid CLI questions.'));

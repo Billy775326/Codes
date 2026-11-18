@@ -335,7 +335,70 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           ],
         });
       if (!text.includes('[lost-ack]')) result(id, { turn });
-      if (text.includes('[approve]') || text.includes('[question]')) {
+      if (text.includes('[changes]') || text.includes('[file-approve]')) {
+        const diff =
+          '@@ -1,3 +1,3 @@\n export function hello(name: string) {\n-  return `Hello, ${name}`;\n+  return `Welcome, ${name}`;\n }\n';
+        const added =
+          '@@ -0,0 +1,' +
+          (text.includes('[large-patch]') ? 600 : 1) +
+          ' @@\n' +
+          (text.includes('[large-patch]')
+            ? Array.from({ length: 600 }, (_, i) => '+Fixture line ' + i).join('\n')
+            : text.includes('[truncated-patch]')
+              ? ('+' + 'x'.repeat(10000) + '\n').repeat(20)
+              : '+<img src=x onerror=alert(1)>') +
+          '\n';
+        const file = {
+          id: randomUUID(),
+          type: 'fileChange',
+          status: text.includes('[file-approve]') ? 'inProgress' : 'completed',
+          changes: [
+            { path: 'example.ts', kind: { type: 'update', movePath: null }, diff },
+            { path: 'new-file.txt', kind: { type: 'add' }, diff: added },
+          ],
+        };
+        turn.items.push(file);
+        note('item/started', { threadId: thread.id, turnId: turn.id, item: file });
+        note('turn/diff/updated', {
+          threadId: thread.id,
+          turnId: turn.id,
+          diff:
+            'diff --git a/example.ts b/example.ts\n--- a/example.ts\n+++ b/example.ts\n' +
+            diff +
+            'diff --git a/new-file.txt b/new-file.txt\nnew file mode 100644\n--- /dev/null\n+++ b/new-file.txt\n' +
+            added,
+        });
+        if (text.includes('[repeated-edits]')) {
+          const again = {
+            id: randomUUID(),
+            type: 'fileChange',
+            status: 'completed',
+            changes: [
+              {
+                path: 'example.ts',
+                kind: { type: 'update', movePath: null },
+                diff: '@@ -2 +2 @@\n-  return `Welcome, ${name}`;\n+  return `Greetings, ${name}`;\n',
+              },
+            ],
+          };
+          turn.items.push(again);
+          note('item/completed', { threadId: thread.id, turnId: turn.id, item: again });
+          note('turn/diff/updated', {
+            threadId: thread.id,
+            turnId: turn.id,
+            diff:
+              'diff --git a/example.ts b/example.ts\n--- a/example.ts\n+++ b/example.ts\n' +
+              diff.replace('Welcome', 'Greetings') +
+              'diff --git a/new-file.txt b/new-file.txt\nnew file mode 100644\n--- /dev/null\n+++ b/new-file.txt\n' +
+              added,
+          });
+        }
+      }
+      if (
+        text.includes('[approve]') ||
+        text.includes('[question]') ||
+        text.includes('[file-approve]')
+      ) {
         const questions = text.includes('[question]');
         const rpcId = ++serial;
         waiting.set(rpcId, {
@@ -343,18 +406,23 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           resume: (value) => {
             note('serverRequest/resolved', { threadId: thread.id, requestId: rpcId });
             if (!questions && value?.decision !== 'accept') finish(thread, turn, 'interrupted');
-            else respond(thread, turn);
+            else respond(thread, turn, text.includes('[slow]'));
           },
         });
         send({
           id: rpcId,
           method: questions
             ? 'item/tool/requestUserInput'
-            : 'item/commandExecution/requestApproval',
+            : text.includes('[file-approve]')
+              ? 'item/fileChange/requestApproval'
+              : 'item/commandExecution/requestApproval',
           params: {
             threadId: thread.id,
             turnId: turn.id,
-            itemId: randomUUID(),
+            itemId: text.includes('[file-approve]')
+              ? turn.items.find((item: any) => item.type === 'fileChange')?.id
+              : randomUUID(),
+            isBlocking: p.collaborationMode?.mode === 'plan',
             command: 'printf "demo approval"',
             cwd: thread.cwd,
             questions: questions

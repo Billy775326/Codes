@@ -48,11 +48,14 @@ if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !origin.startsWith('htt
   );
 const mode = process.env.CODES_RUNTIME ?? 'codex';
 if (mode !== 'mock' && mode !== 'codex') throw new Error('CODES_RUNTIME must be codex or mock.');
+if (process.env.CODES_CODE_QUESTIONS && !['0', '1'].includes(process.env.CODES_CODE_QUESTIONS))
+  throw new Error('CODES_CODE_QUESTIONS must be 0 or 1.');
 const service = new Service(
   new Store(directory),
   new Driver(mode, {
     binary: process.env.CODES_CODEX_BINARY,
     stateFile: join(directory, 'mock-history.json'),
+    codeQuestions: process.env.CODES_CODE_QUESTIONS !== '0',
   }),
 );
 if (process.env.CODES_PROJECT_ROOT) await service.addProject(process.env.CODES_PROJECT_ROOT);

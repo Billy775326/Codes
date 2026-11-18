@@ -6,6 +6,8 @@ codes 是面向单用户的 Linux 自托管 Codex 网页工作台，电脑浏览
 
 技术路线采用 `codex app-server` 的结构化协议。服务端持有 CLI 进程和任务状态，浏览器负责显示；关闭页面不会停止任务。服务重启会终止自己的 CLI 子进程，未确认结果的操作保留为 unknown，不会自动重发。
 
+会话细节支持 Code/Plan 原生主动提问、必答/可选问题、自定义和保密输入；可选问题可明确跳过，预选项和超时都不会自动当成回答。Code 提问能力只对 codes 子进程开启，可用 `CODES_CODE_QUESTIONS=0` 关闭。文件变更支持逐文件增删统计、行号、统一/并排视图、已加载的历史轮次、审批前预览和长补丁分页；截断会明确提示。这些是只读预览，不包含 Git 暂存或回退。详见[交互说明](conversation-details.md)和[插件对齐审计](ide-parity.md)。
+
 请先按英文 [README](../README.md) 安装 Node 24.x 和 Codex CLI 0.167.0，运行 `npm ci`、`npm run build`，再用 `CODES_PROJECT_ROOT=/绝对项目路径 npm start` 启动。默认地址是 `http://127.0.0.1:6670`，登录令牌保存在 `.local/access-token`。Codex 登录沿用服务端用户，不传给浏览器。
 
 也可以在 Node 24.x 环境中执行一次 `npm run install:command`，将启动命令安装到 `~/.local/bin/codes`。确保该目录在 `PATH` 中后，在任意目录执行 `codes` 即可前台启动，按 Ctrl+C 停止。默认沿用本仓库的 `.local` 数据目录和 6670 端口；显式设置的相对配置路径以调用目录为基准。安装器固定使用安装时的 Node 路径和仓库路径，请保留它们；已有服务运行时不会重复启动或自动重启。使用 `codes --help` 查看说明。

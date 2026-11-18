@@ -21,6 +21,8 @@ const service = new Service(
 );
 try {
   const project = await service.addProject(join(directory, 'project'));
+  const configuration = await service.driver.call('config/read', { includeLayers: false });
+  assert.equal(configuration.config.features.default_mode_request_user_input, true);
   const models = await service.modelSettings.models();
   assert.ok(models.length > 0);
   const modes = await service.modelSettings.modes();

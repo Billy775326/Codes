@@ -25,6 +25,15 @@ export interface Message {
   text: string;
   status?: string;
   clientId?: string;
+  files?: FileChange[];
+  truncated?: boolean;
+}
+export interface FileChange {
+  path: string;
+  kind: 'add' | 'delete' | 'update';
+  movePath?: string;
+  diff: string;
+  truncated?: boolean;
 }
 export interface Question {
   id: string;
@@ -43,6 +52,10 @@ export interface Action {
   detail: string;
   decisions: string[];
   questions?: Question[];
+  /** Missing on older clients/requests: treat questions as required. */
+  blocking?: boolean;
+  files?: FileChange[];
+  truncated?: boolean;
   status: 'pending' | 'responding' | 'answered' | 'expired';
 }
 export interface Summary {
@@ -64,6 +77,7 @@ export interface Thread extends Summary {
   olderCursor: string | null;
   settings: Settings;
   diff: string;
+  diffTruncated?: boolean;
   resolvedModel?: string;
   steering?: (Operation & { text: string })[];
   usage?: { turnId: string; contextTokens: number; totalTokens: number; contextWindow?: number };
@@ -97,6 +111,7 @@ export interface System {
   state: string;
   version: string;
   error?: string;
+  codeQuestions?: boolean;
 }
 export interface Envelope {
   seq: number;

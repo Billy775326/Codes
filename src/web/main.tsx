@@ -18,6 +18,7 @@ import type {
   QueuePayload,
   Model,
   ReviewTarget,
+  FileChange,
 } from '../shared/types';
 import { ApiError, message, post, request } from './api';
 import { Feed } from './feed';
@@ -25,6 +26,8 @@ import { Brand, Icon } from './primitives';
 import { Login } from './Login';
 import { Conversations } from './Conversations';
 import { QueuePanel } from './QueuePanel';
+import { Approval } from './Approval';
+import { DiffView } from './DiffView';
 import {
   PreferencesDialog,
   ReviewDialog,
@@ -72,10 +75,12 @@ const MessageView = memo(function MessageView({
   onReply,
   onFork,
   disabled,
+  onOpenFile,
 }: {
   onReply?: (item: Message) => void;
   onFork?: (item: Message) => void;
   disabled?: boolean;
+  onOpenFile?: (path: string) => void;
   item: Message;
   streaming: boolean;
 }) {
@@ -87,7 +92,16 @@ const MessageView = memo(function MessageView({
           {item.kind === 'command' ? 'Command' : 'File changes'}
           <span>{item.status}</span>
         </summary>
-        <pre>{item.text}</pre>
+        {item.kind === 'change' && item.files?.length ? (
+          <DiffView files={item.files} truncated={item.truncated} openFile={onOpenFile} />
+        ) : (
+          <pre>{item.text}</pre>
+        )}
+        {item.truncated && item.kind === 'command' && (
+          <p className="tool-truncated">
+            Output preview is truncated. Inspect the native CLI history for the complete output.
+          </p>
+        )}
       </details>
     );
   return (
@@ -137,143 +151,6 @@ const MessageView = memo(function MessageView({
     </article>
   );
 });
-function Approval({
-  action,
-  submit,
-}: {
-  action: Action;
-  submit: (
-    action: Action,
-    input: { decision?: string; answers?: Record<string, string> },
-  ) => Promise<void>;
-}) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const answer = async (input: { decision?: string; answers?: Record<string, string> }) => {
-    setBusy(true);
-    setError('');
-    try {
-      await submit(action, input);
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const disabled = busy || action.status !== 'pending';
-  return (
-    <section className="approval" aria-label={action.title}>
-      <div className="approval-heading">
-        <span className="approval-dot" />
-        <strong>{action.title}</strong>
-        <span className="badge">
-          {action.kind === 'questions' ? 'ANSWER REQUIRED' : 'REVIEW REQUIRED'}
-        </span>
-      </div>
-      {action.kind !== 'questions' && <pre>{action.detail}</pre>}
-      {action.questions?.map((q, index) => (
-        <fieldset className="question" key={q.id} disabled={disabled}>
-          <legend>
-            <small>
-              {q.header || 'Question ' + (index + 1)} · {index + 1}/{action.questions!.length}
-            </small>
-            {q.question}
-          </legend>
-          {!!q.options?.length && (
-            <div className="question-options" role="group" aria-label={'Options for ' + q.question}>
-              {q.options.map((option) => (
-                <button
-                  type="button"
-                  key={option.label}
-                  aria-pressed={answers[q.id] === option.label}
-                  className={answers[q.id] === option.label ? 'selected' : ''}
-                  onClick={() => setAnswers({ ...answers, [q.id]: option.label })}
-                  disabled={disabled}
-                >
-                  {option.label}
-                  {option.description && <small>{option.description}</small>}
-                </button>
-              ))}
-            </div>
-          )}
-          {(!q.options?.length || q.allowOther) && (
-            <input
-              type={q.secret ? 'password' : 'text'}
-              autoComplete="off"
-              aria-label={q.question}
-              value={answers[q.id] ?? ''}
-              maxLength={4000}
-              onChange={(event) => setAnswers({ ...answers, [q.id]: event.target.value })}
-              disabled={disabled}
-              placeholder={q.options?.length ? 'Or write your own answer' : 'Your answer'}
-              onKeyDown={(event) => {
-                if (
-                  event.key === 'Enter' &&
-                  !event.nativeEvent.isComposing &&
-                  action.questions?.every((question) => answers[question.id]?.trim())
-                ) {
-                  event.preventDefault();
-                  void answer({ answers });
-                }
-              }}
-            />
-          )}
-        </fieldset>
-      ))}
-      {error && (
-        <p role="alert" className="error-text">
-          {error}
-        </p>
-      )}
-      <div className="approval-actions">
-        {action.kind === 'questions' ? (
-          <>
-            <button
-              className="primary"
-              disabled={
-                disabled ||
-                !action.questions?.length ||
-                action.questions.some((question) => !answers[question.id]?.trim())
-              }
-              onClick={() => void answer({ answers })}
-            >
-              Submit answer
-            </button>
-            <button
-              className="secondary"
-              disabled={disabled}
-              onClick={() => {
-                setBusy(true);
-                void post('/threads/' + action.threadId + '/interrupt')
-                  .catch((error) => setError(message(error)))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              Cancel task
-            </button>
-          </>
-        ) : (
-          action.decisions.map((decision) => (
-            <button
-              key={decision}
-              className={decision === 'accept' ? 'primary' : 'secondary'}
-              disabled={disabled}
-              onClick={() => void answer({ decision })}
-            >
-              {decision === 'accept'
-                ? 'Approve once'
-                : decision === 'decline'
-                  ? 'Decline'
-                  : 'Cancel task'}
-            </button>
-          ))
-        )}
-        {action.status === 'responding' && <span>Waiting for Codex…</span>}
-      </div>
-    </section>
-  );
-}
 
 function App() {
   const [auth, setAuth] = useState<'loading' | 'login' | 'ready'>('loading');
@@ -330,6 +207,7 @@ function App() {
   const [retry, setRetry] = useState(0);
   const [sidebar, setSidebar] = useState(false);
   const [panel, setPanel] = useState<'files' | 'diff' | null>(null);
+  const [diffTurn, setDiffTurn] = useState('');
   const [adding, setAdding] = useState(false);
   const [newPath, setNewPath] = useState('');
   const [directory, setDirectory] = useState('');
@@ -432,6 +310,7 @@ function App() {
   const select = useCallback((id: string) => {
     setThread((current) => (current?.id === id ? current : undefined));
     setThreadId(id);
+    setDiffTurn('');
     setSidebar(false);
     follow.current = true;
   }, []);
@@ -889,6 +768,33 @@ function App() {
     !!thread?.steering?.length ||
     (!!thread && ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
   const project = projects.find((x) => x.id === projectId);
+  const changeTurns = [
+    ...new Set(
+      thread?.messages.filter((item) => item.kind === 'change').map((item) => item.turnId) ?? [],
+    ),
+  ].reverse();
+  const selectedDiffTurn = diffTurn || thread?.turnId;
+  const changeFiles = new Map<string, FileChange>();
+  for (const message of thread?.messages ?? [])
+    if (message.kind === 'change' && message.turnId === selectedDiffTurn)
+      for (const file of message.files ?? [])
+        changeFiles.set(message.id + ':' + (file.movePath ?? file.path), file);
+  const diffPatch = selectedDiffTurn === thread?.turnId ? thread?.diff : undefined;
+  const changeTruncated = thread?.messages.some(
+    (item) => item.kind === 'change' && item.turnId === selectedDiffTurn && item.truncated,
+  );
+  const unresolvedQuestions =
+    thread?.actions.filter(
+      (action) => action.kind === 'questions' && ['pending', 'responding'].includes(action.status),
+    ) ?? [];
+  const openChangedFile = (path: string) => {
+    const relative = path.startsWith((project?.path ?? '') + '/')
+      ? path.slice(project!.path.length + 1)
+      : path;
+    setPanel('files');
+    setFile(undefined);
+    void openFile(relative);
+  };
   const canSteer =
     !!thread?.turnId &&
     thread.state === 'running' &&
@@ -1416,6 +1322,7 @@ function App() {
                   <MessageView
                     key={m.id}
                     item={m}
+                    onOpenFile={openChangedFile}
                     onReply={thread.archived ? undefined : reply}
                     onFork={
                       !active || m.turnId !== thread.turnId
@@ -1488,6 +1395,26 @@ function App() {
           </div>
         </div>
         <div className="composer-area">
+          {!!unresolvedQuestions.length && (
+            <div className="question-attention" role="status">
+              <span>
+                {unresolvedQuestions.length}{' '}
+                {unresolvedQuestions.length === 1 ? 'request needs' : 'requests need'} your input.
+              </span>
+              <button
+                onClick={() => {
+                  const card = document.getElementById('action-' + unresolvedQuestions[0]!.id);
+                  follow.current = false;
+                  card?.scrollIntoView({ block: 'center' });
+                  card
+                    ?.querySelector<HTMLElement>('input:not(:disabled),button:not(:disabled)')
+                    ?.focus({ preventScroll: true });
+                }}
+              >
+                Answer questions
+              </button>
+            </div>
+          )}
           {steerReceipt && (
             <div className="recovery">
               <span>An immediate follow-up needs confirmation.</span>
@@ -1931,20 +1858,34 @@ function App() {
           </div>
           {panel === 'diff' ? (
             <div className="diff-panel">
-              {thread?.diff ? (
-                <pre>
-                  {thread.diff.split('\n').map((line, i) => (
-                    <span
-                      key={i}
-                      className={
-                        line.startsWith('+') ? 'addition' : line.startsWith('-') ? 'deletion' : ''
-                      }
-                    >
-                      {line}
-                      {'\n'}
-                    </span>
-                  ))}
-                </pre>
+              <label className="diff-scope">
+                Change scope
+                <select
+                  aria-label="Change scope"
+                  value={diffTurn}
+                  onChange={(event) => setDiffTurn(event.target.value)}
+                >
+                  <option value="">Last turn</option>
+                  {changeTurns
+                    .filter((id) => id !== thread?.turnId)
+                    .map((id, i) => (
+                      <option key={id} value={id}>
+                        Earlier turn {i + 1} · {id.slice(0, 8)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              {diffPatch || changeFiles.size ? (
+                <DiffView
+                  key={threadId + ':' + selectedDiffTurn}
+                  patch={diffPatch || undefined}
+                  files={diffPatch ? undefined : [...changeFiles.values()]}
+                  truncated={
+                    !!changeTruncated ||
+                    (selectedDiffTurn === thread?.turnId && thread?.diffTruncated)
+                  }
+                  openFile={openChangedFile}
+                />
               ) : (
                 <div className="panel-empty">
                   <Icon name="review" size={30} />

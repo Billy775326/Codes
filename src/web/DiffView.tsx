@@ -1,0 +1,269 @@
+import { memo, useMemo, useState } from 'react';
+import {
+  diffLimits,
+  parseUnifiedDiff,
+  parseFileDiffs,
+  type DiffFile,
+  type DiffLine,
+} from '../shared/diff';
+import type { FileChange } from '../shared/types';
+import { Icon } from './primitives';
+import './diff.css';
+
+type Layout = 'unified' | 'split';
+interface SplitLine {
+  left?: DiffLine;
+  right?: DiffLine;
+  meta?: string;
+}
+function splitLines(lines: DiffLine[]): SplitLine[] {
+  const result: SplitLine[] = [];
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i]!;
+    if (line.kind === 'meta') {
+      result.push({ meta: line.text });
+      i++;
+    } else if (line.kind === 'context') {
+      result.push({ left: line, right: line });
+      i++;
+    } else {
+      const removed: DiffLine[] = [],
+        added: DiffLine[] = [];
+      while (i < lines.length && ['addition', 'deletion'].includes(lines[i]!.kind)) {
+        const next = lines[i++]!;
+        (next.kind === 'addition' ? added : removed).push(next);
+      }
+      for (let j = 0; j < Math.max(removed.length, added.length); j++)
+        result.push({ left: removed[j], right: added[j] });
+    }
+  }
+  return result;
+}
+
+const FileDiff = memo(function FileDiff({
+  file,
+  layout,
+  expanded,
+  openFile,
+}: {
+  file: DiffFile;
+  layout: Layout;
+  expanded: boolean;
+  openFile?: (path: string) => void;
+}) {
+  const [open, setOpen] = useState(expanded);
+  const [page, setPage] = useState(0);
+  const [viewed, setViewed] = useState('');
+  const revision = useMemo(
+    () => JSON.stringify([file.path, file.previousPath, file.kind, file.truncated, file.lines]),
+    [file],
+  );
+  const rows = useMemo(
+    () => (layout === 'split' && open ? splitLines(file.lines) : []),
+    [file, layout, open],
+  );
+  const count = layout === 'split' ? rows.length : file.lines.length;
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(count / diffLimits.window) - 1));
+  const start = currentPage * diffLimits.window;
+  return (
+    <section
+      className={'diff-file' + (viewed === revision ? ' viewed' : '')}
+      aria-label={'Changes in ' + file.path}
+    >
+      <div className="diff-file-heading">
+        <button className="diff-file-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Icon name={open ? 'review' : 'file'} size={14} />
+          <span className="diff-file-path" title={file.path}>
+            {file.path}
+          </span>
+          <small>
+            {file.previousPath && file.previousPath !== file.path
+              ? 'Renamed'
+              : file.kind === 'add'
+                ? 'Added'
+                : file.kind === 'delete'
+                  ? 'Deleted'
+                  : 'Modified'}
+          </small>
+          <span className="diff-additions">+{file.additions}</span>
+          <span className="diff-deletions">−{file.deletions}</span>
+        </button>
+        <button
+          className="diff-viewed"
+          aria-label={'Mark ' + file.path + ' as viewed'}
+          aria-pressed={viewed === revision}
+          onClick={() => setViewed(viewed === revision ? '' : revision)}
+        >
+          {viewed === revision ? 'Viewed' : 'Mark viewed'}
+        </button>
+      </div>
+      {open && (
+        <>
+          {file.previousPath && file.previousPath !== file.path && (
+            <p className="diff-rename">
+              {file.previousPath} → {file.path}
+            </p>
+          )}
+          <div className="diff-file-tools">
+            <span>{layout === 'split' ? 'Before / After' : 'Before and after line numbers'}</span>
+            {openFile && file.kind !== 'delete' && (
+              <button onClick={() => openFile(file.path)}>Open file</button>
+            )}
+          </div>
+          {file.truncated && (
+            <p className="diff-truncated" role="status">
+              Patch preview is truncated. Counts describe the displayed portion; inspect the
+              workspace for the complete change.
+            </p>
+          )}
+          <div
+            className={'diff-table-scroll ' + layout}
+            tabIndex={0}
+            aria-label={'Patch for ' + file.path}
+          >
+            <table className="diff-table">
+              <tbody>
+                {layout === 'unified'
+                  ? file.lines.slice(start, start + diffLimits.window).map((line, i) => (
+                      <tr key={start + i} className={line.kind}>
+                        <td className="line-number">{line.oldLine ?? ''}</td>
+                        <td className="line-number">{line.newLine ?? ''}</td>
+                        <td className="diff-code">
+                          <code>
+                            <span aria-hidden="true">
+                              {line.kind === 'addition'
+                                ? '+'
+                                : line.kind === 'deletion'
+                                  ? '−'
+                                  : ' '}
+                            </span>
+                            {line.text || ' '}
+                          </code>
+                        </td>
+                      </tr>
+                    ))
+                  : rows.slice(start, start + diffLimits.window).map((row, i) =>
+                      row.meta !== undefined ? (
+                        <tr className="meta" key={start + i}>
+                          <td colSpan={4}>
+                            <code>{row.meta}</code>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={start + i}>
+                          <td className={'line-number ' + (row.left?.kind ?? '')}>
+                            {row.left?.oldLine ?? ''}
+                          </td>
+                          <td className={'diff-code ' + (row.left?.kind ?? 'empty')}>
+                            <code>{row.left?.text || ' '}</code>
+                          </td>
+                          <td className={'line-number ' + (row.right?.kind ?? '')}>
+                            {row.right?.newLine ?? ''}
+                          </td>
+                          <td className={'diff-code ' + (row.right?.kind ?? 'empty')}>
+                            <code>{row.right?.text || ' '}</code>
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                {!count && (
+                  <tr>
+                    <td colSpan={4} className="diff-no-lines">
+                      No patch lines are available in this preview.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {count > diffLimits.window && (
+            <div className="diff-pagination">
+              <button disabled={!currentPage} onClick={() => setPage(currentPage - 1)}>
+                Previous patch lines
+              </button>
+              <span>
+                {start + 1}–{Math.min(start + diffLimits.window, count)} of {count} rows
+              </span>
+              <button
+                disabled={start + diffLimits.window >= count}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next patch lines
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+});
+
+export const DiffView = memo(function DiffView({
+  patch,
+  files,
+  truncated,
+  title = 'File changes',
+  openFile,
+}: {
+  patch?: string;
+  files?: FileChange[];
+  truncated?: boolean;
+  title?: string;
+  openFile?: (path: string) => void;
+}) {
+  const [layout, setLayout] = useState<Layout>('unified');
+  const entries = useMemo(
+    () => (files?.length ? parseFileDiffs(files) : parseUnifiedDiff(patch ?? '')),
+    [patch, files],
+  );
+  const fileCount = new Set(entries.map((file) => file.path)).size;
+  const totals = useMemo(
+    () =>
+      entries.reduce(
+        (sum, file) => ({ add: sum.add + file.additions, del: sum.del + file.deletions }),
+        { add: 0, del: 0 },
+      ),
+    [entries],
+  );
+  return (
+    <section className="diff-view" aria-label={title}>
+      <div className="diff-overview">
+        <strong>
+          {fileCount} {fileCount === 1 ? 'file' : 'files'}
+          {entries.length > fileCount && <> · {entries.length} edits</>}
+        </strong>
+        <span className="diff-additions">+{totals.add}</span>
+        <span className="diff-deletions">−{totals.del}</span>
+        <div role="group" aria-label="Diff layout">
+          <button aria-pressed={layout === 'unified'} onClick={() => setLayout('unified')}>
+            Unified
+          </button>
+          <button aria-pressed={layout === 'split'} onClick={() => setLayout('split')}>
+            Side by side
+          </button>
+        </div>
+      </div>
+      {(truncated || entries.some((file) => file.truncated)) && (
+        <p className="diff-truncated" role="status">
+          This change preview is incomplete. Inspect the workspace for the full patch.
+        </p>
+      )}
+      {entries.length > fileCount && (
+        <p className="diff-rename">
+          Native edit sequence. Each patch is relative to the preceding edit; counts are not a net
+          working-tree diff.
+        </p>
+      )}
+      {entries.map((file, index) => (
+        <FileDiff
+          key={file.path + ':' + index}
+          file={file}
+          layout={layout}
+          expanded={index === 0}
+          openFile={openFile}
+        />
+      ))}
+      {!entries.length && <p className="diff-no-lines">No file changes were reported.</p>}
+    </section>
+  );
+});

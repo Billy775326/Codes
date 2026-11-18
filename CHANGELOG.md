@@ -4,6 +4,9 @@
 
 ### Added
 
+- Let Codex request clarification in Code as well as Plan using an application-local feature setting. Distinguish required questions from optional ones, offer explicit Skip for optional requests, and provide keyboard-accessible choices and a composer shortcut to pending questions.
+- Preview changes per file with addition/deletion counts, before/after line numbers, unified or side-by-side layouts, revision-specific viewed markers, and read-only file navigation. Inspect earlier loaded turns and proposed patches before file approval.
+- Render long patches in 200-row windows and disclose incomplete patches and command output instead of silently presenting clipped previews as complete.
 - Steer a running turn with immediate follow-ups or a waiting queue entry's Send now action, keeping durable receipts and protecting unknown results against duplicate execution.
 - Select native Plan/Code modes and model-advertised reasoning effort; display native plan steps and session status with context/cumulative token usage.
 - Start native Read only code reviews against uncommitted changes, a base branch, a commit or custom instructions, in the current or a separate conversation.
@@ -32,6 +35,7 @@
 
 ### Fixed
 
+- Resume the working status after a native question or approval is resolved, reject stale question callbacks, and ignore diff notifications for another turn.
 - Preserve a newer follow-up draft and its attachments when an earlier send, queue or steer acknowledgement arrives. Carry text typed during new-conversation creation into the selected conversation.
 
 - Preserve the loaded history when reselecting the current conversation, and prevent older list responses from replacing a new task title or a live rename. Seed sidebar metadata from the selected snapshot so a subscription handoff cannot leave a working conversation labeled Untitled.

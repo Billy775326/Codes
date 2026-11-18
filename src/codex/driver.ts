@@ -18,7 +18,12 @@ export class Driver extends EventEmitter {
   state = 'not_started';
   constructor(
     readonly mode: 'codex' | 'mock',
-    private options: { binary?: string; stateFile: string; timeoutMs?: number },
+    private options: {
+      binary?: string;
+      stateFile: string;
+      timeoutMs?: number;
+      codeQuestions?: boolean;
+    },
   ) {
     super();
   }
@@ -27,6 +32,7 @@ export class Driver extends EventEmitter {
       runtime: this.mode,
       state: this.state,
       version: this.mode === 'mock' ? 'simulator' : '0.167.0',
+      codeQuestions: this.options.codeQuestions !== false,
     };
   }
   async start(): Promise<void> {
@@ -70,7 +76,13 @@ export class Driver extends EventEmitter {
         ? existsSync(compiled)
           ? [fileURLToPath(compiled)]
           : ['--import', 'tsx', fileURLToPath(new URL('./simulator.ts', import.meta.url))]
-        : ['app-server', '--listen', 'stdio://'];
+        : [
+            'app-server',
+            '--listen',
+            'stdio://',
+            '-c',
+            'features.default_mode_request_user_input=' + (this.options.codeQuestions !== false),
+          ];
     const child = spawn(binary, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,

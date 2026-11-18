@@ -133,6 +133,89 @@ async function until(predicate: () => boolean) {
     await new Promise((r) => setTimeout(r, 15));
   }
 }
+it('lets optional Code questions be explicitly skipped and resumes the same native task', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[question]', thread.settings);
+  await until(() => thread.actions.length > 0);
+  const action = thread.actions[0]!;
+  expect(action.blocking).toBe(false);
+  const turn = thread.turnId;
+  const receipt = randomUUID();
+  await service.answer(action.id, receipt, { decision: 'skip' });
+  await service.answer(action.id, receipt, { decision: 'skip' });
+  await until(() => thread.state === 'running');
+  await until(() => thread.state === 'completed');
+  expect(thread.turnId).toBe(turn);
+  expect(thread.messages.filter((m) => m.kind === 'user')).toHaveLength(1);
+  expect(thread.actions.every((a) => a.status === 'answered')).toBe(true);
+});
+it('keeps Plan questions required and rejects stale questions without journaling a reply', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[question]', { ...thread.settings, mode: 'plan' });
+  await until(() => thread.actions.length > 0);
+  const action = thread.actions[0]!;
+  expect(action.blocking).toBe(true);
+  const operation = randomUUID();
+  await expect(service.answer(action.id, operation, { decision: 'skip' })).rejects.toMatchObject({
+    code: 'INVALID_ANSWER',
+  });
+  expect(service.store.operation(operation)).toBeUndefined();
+  service.driver.emit('request', {
+    id: 900099,
+    method: 'item/tool/requestUserInput',
+    params: {
+      threadId: thread.id,
+      turnId: 'old-turn',
+      isBlocking: false,
+      questions: [{ id: 'stale', question: 'Old question' }],
+    },
+  });
+  expect(thread.actions).toHaveLength(1);
+  await service.answer(action.id, randomUUID(), { answers: { direction: 'Continue' } });
+  await until(() => thread.state === 'completed');
+});
+it('retains structured file patches in native history and rejects a diff from another turn', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[changes]', thread.settings);
+  await until(() => thread.state === 'completed');
+  expect(thread.messages.find((m) => m.kind === 'change')?.files).toEqual([
+    expect.objectContaining({ path: 'example.ts', kind: 'update' }),
+    expect.objectContaining({ path: 'new-file.txt', kind: 'add' }),
+  ]);
+  const history = await service.history(thread.id);
+  expect(history.messages.find((m) => m.kind === 'change')?.files).toHaveLength(2);
+  const previous = thread.diff;
+  service.driver.emit('notification', {
+    method: 'turn/diff/updated',
+    params: { threadId: thread.id, turnId: 'old-turn', diff: 'stale patch' },
+  });
+  expect(thread.diff).toBe(previous);
+});
+it('exposes truncation for oversized native patches and command output', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[changes] [truncated-patch]', thread.settings);
+  await until(() => thread.state === 'completed');
+  expect(thread.diffTruncated).toBe(true);
+  expect(thread.messages.find((m) => m.kind === 'change')?.truncated).toBe(true);
+  service.driver.emit('notification', {
+    method: 'item/completed',
+    params: {
+      threadId: thread.id,
+      turnId: thread.turnId,
+      item: {
+        id: 'output',
+        type: 'commandExecution',
+        command: 'example',
+        aggregatedOutput: 'x'.repeat(150000),
+        status: 'completed',
+      },
+    },
+  });
+  expect(thread.messages.find((m) => m.id === 'output')).toMatchObject({ truncated: true });
+  expect(thread.messages.find((m) => m.id === 'output')!.text.length).toBeLessThanOrEqual(
+    128 * 1024,
+  );
+});
 it('streams one user message and one response for duplicate sends', async () => {
   const { service, thread } = await fixture();
   const id = randomUUID();

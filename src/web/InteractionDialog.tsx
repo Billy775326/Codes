@@ -257,6 +257,14 @@ export function StatusDialog({
         <dd>{settings.effort || 'Model default'}</dd>
         <dt>Mode</dt>
         <dd>{settings.mode === 'plan' ? 'Plan' : 'Code'}</dd>
+        <dt>Clarification questions</dt>
+        <dd>
+          {system?.codeQuestions === true
+            ? 'Code and Plan, when Codex needs input'
+            : system?.codeQuestions === false
+              ? 'Plan mode only'
+              : 'Not reported'}
+        </dd>
         <dt>Permissions</dt>
         <dd>{settings.permission}</dd>
         <dt>Conversation</dt>

@@ -9,12 +9,12 @@ A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interfa
 - Projects backed by existing directories on the host.
 - Native Codex conversations, streamed assistant text, and command/file activity.
 - Searchable, paginated conversation navigation with native rename, archive, and restore controls.
-- Command, file, and turn-scoped permission approvals; structured user questions with native choices, descriptions, custom answers, and masked secret inputs.
+- Command, file, and turn-scoped permission approvals; proactive native questions in Code and Plan, with choices, custom answers, secret inputs, and explicit skipping for optional questions.
 - Quoted follow-up drafts, durable FIFO queues, immediate native steering, and conversation branches through completed turns.
 - Native Plan/Code modes, model-specific reasoning effort, task-plan steps, inline/separate code reviews, and session/context-token status.
 - Browser interaction preferences for Enter, queue/steer inversion, review delivery, and local slash commands.
 - Read-only file browsing with selection or whole-file attachments and file-change checks.
-- Read-only current-turn diffs and paginated native conversation history.
+- Per-file patch previews with line numbers, change counts, unified/side-by-side layouts, earlier loaded turns, and bounded patch windows; paginated native conversation history.
 - Browser reconnection through snapshots and bounded event replay.
 - Durable operation receipts that block duplicate sends after an uncertain result.
 - A responsive interface, workspace access token, and host-side Codex authentication.
@@ -79,18 +79,21 @@ This is a **single-owner workspace** with that owner's host permissions. It is n
 
 Set environment variables in the process environment; the application does not automatically load `.env` files.
 
-| Variable              | Default                   | Purpose                                           |
-| --------------------- | ------------------------- | ------------------------------------------------- |
-| `CODES_RUNTIME`       | `codex`                   | `codex` or `mock`                                 |
-| `CODES_HOST`          | `127.0.0.1`               | Bind address                                      |
-| `CODES_PORT`          | `6670`                    | Listener port, 1024–65535                         |
-| `CODES_PUBLIC_ORIGIN` | `http://127.0.0.1:<port>` | Exact allowed browser origin                      |
-| `CODES_DATA_DIR`      | `.local`                  | Private database, token, lock, and simulator data |
-| `CODES_PROJECT_ROOT`  | unset                     | Register an existing directory at startup         |
-| `CODES_CODEX_BINARY`  | `codex`                   | CLI executable path                               |
-| `CODES_ACCESS_TOKEN`  | generated token file      | Optional access token, minimum 16 characters      |
+| Variable               | Default                   | Purpose                                                                   |
+| ---------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| `CODES_RUNTIME`        | `codex`                   | `codex` or `mock`                                                         |
+| `CODES_HOST`           | `127.0.0.1`               | Bind address                                                              |
+| `CODES_PORT`           | `6670`                    | Listener port, 1024–65535                                                 |
+| `CODES_PUBLIC_ORIGIN`  | `http://127.0.0.1:<port>` | Exact allowed browser origin                                              |
+| `CODES_DATA_DIR`       | `.local`                  | Private database, token, lock, and simulator data                         |
+| `CODES_PROJECT_ROOT`   | unset                     | Register an existing directory at startup                                 |
+| `CODES_CODEX_BINARY`   | `codex`                   | CLI executable path                                                       |
+| `CODES_CODE_QUESTIONS` | `1`                       | Enable native Code-mode questions; `0` leaves them available in Plan only |
+| `CODES_ACCESS_TOKEN`   | generated token file      | Optional access token, minimum 16 characters                              |
 
 Codex inherits the server user's environment and `CODEX_HOME`. Run codes as the intended user, not as root by default. Keep the same CLI login and filesystem access you would use from the command line.
+
+The Code question setting applies only to the child app-server process, using the pinned CLI's experimental feature. It does not edit global Codex configuration or make every prompt ask questions. Codex chooses when clarification is useful; suggested answers are sent only after you submit. Optional questions can be explicitly skipped, and required Plan questions cannot. See [conversation details](docs/conversation-details.md) for question and patch-preview behavior and limits.
 
 ## Checks
 
@@ -126,6 +129,7 @@ Both pilots are excluded from CI and the default test command. Unexpected approv
 - [Remaining implementation and acceptance](docs/requirements.md)
 - [Conversation management](docs/conversations.md)
 - [Questions, queues, and branches](docs/conversation-workflow.md)
+- [Clarifications and file-change previews](docs/conversation-details.md)
 - [IDE interaction alignment and remaining differences](docs/ide-parity.md)
 - [Operations and recovery](docs/operations.md)
 - [Changelog](CHANGELOG.md)
