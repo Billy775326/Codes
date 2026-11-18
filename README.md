@@ -40,6 +40,17 @@ CODES_PROJECT_ROOT=/absolute/path/to/your/project npm start
 
 Open **http://127.0.0.1:6670**. Sign in using the value in `.local/access-token` (read it on the server with `cat .local/access-token`). That file is generated on first start; keep it private. Projects can also be added through the interface.
 
+To start with a `codes` command from any directory, install the local launcher once using Node 24.x:
+
+```bash
+npm run install:command
+codes
+```
+
+The installer creates `~/.local/bin/codes`; add `~/.local/bin` to your shell's `PATH` if needed. It pins the Node executable used during installation and points to this checkout, so keep both paths in place. It refuses to replace a different existing command. Set `CODES_BIN_DIR` during installation to choose another command directory.
+
+`codes` starts in the foreground, uses this checkout's `.local` directory by default, and keeps the default port 6670. Press Ctrl+C to stop. Existing `CODES_*` configuration still applies; relative paths supplied through the environment resolve from your calling directory. Use `codes --help` for usage. The launcher requires an existing build, does not rebuild or restart a running instance, and uses the same data-directory lock as `npm start`.
+
 For a simulation without Codex or an account:
 
 ```bash
