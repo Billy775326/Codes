@@ -28,6 +28,8 @@ import { Conversations } from './Conversations';
 import { QueuePanel } from './QueuePanel';
 import { Approval } from './Approval';
 import { DiffView } from './DiffView';
+import { PanelMenu } from './PanelMenu';
+import { ChangeSummary } from './ChangeSummary';
 import {
   PreferencesDialog,
   ReviewDialog,
@@ -37,6 +39,7 @@ import {
 import './interactions.css';
 import './workflow.css';
 import './style.css';
+import './ide-panel.css';
 
 const labels: Record<string, string> = {
   idle: 'Ready',
@@ -75,35 +78,55 @@ const MessageView = memo(function MessageView({
   onReply,
   onFork,
   disabled,
-  onOpenFile,
+  onReview,
 }: {
   onReply?: (item: Message) => void;
   onFork?: (item: Message) => void;
   disabled?: boolean;
-  onOpenFile?: (path: string) => void;
+  onReview?: (item: Message, path?: string) => void;
   item: Message;
   streaming: boolean;
 }) {
-  if (item.kind === 'command' || item.kind === 'change')
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState('');
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
+  if (item.kind === 'change' && item.files?.length)
     return (
-      <details className="tool">
+      <ChangeSummary item={item} review={onReview ? (path) => onReview(item, path) : undefined} />
+    );
+  if (item.kind === 'command' || item.kind === 'change') {
+    const firstLine = item.text
+      .slice(0, item.text.indexOf('\n') < 0 ? 120 : item.text.indexOf('\n'))
+      .slice(0, 100);
+    return (
+      <details
+        className="tool"
+        open={expanded}
+        onToggle={(event) => setExpanded(event.currentTarget.open)}
+      >
         <summary>
-          <Icon name={item.kind === 'command' ? 'terminal' : 'review'} />
-          {item.kind === 'command' ? 'Command' : 'File changes'}
-          <span>{item.status}</span>
+          <Icon name={item.status === 'completed' ? 'check' : 'terminal'} size={14} />
+          <span className="activity-label">
+            {item.kind === 'command'
+              ? (item.status === 'inProgress' ? 'Running ' : 'Ran ') + (firstLine || 'command')
+              : 'File changes'}
+          </span>
+          <span className="activity-status">{item.status}</span>
         </summary>
-        {item.kind === 'change' && item.files?.length ? (
-          <DiffView files={item.files} truncated={item.truncated} openFile={onOpenFile} />
-        ) : (
-          <pre>{item.text}</pre>
-        )}
-        {item.truncated && item.kind === 'command' && (
-          <p className="tool-truncated">
-            Output preview is truncated. Inspect the native CLI history for the complete output.
-          </p>
+        {expanded && (
+          <>
+            <pre>{item.text}</pre>
+            {item.truncated && (
+              <p className="tool-truncated">
+                Output preview is truncated. Inspect native history for the complete output.
+              </p>
+            )}
+          </>
         )}
       </details>
     );
+  }
   return (
     <article
       data-message-id={item.id}
@@ -111,10 +134,8 @@ const MessageView = memo(function MessageView({
       className={`message ${item.kind}`}
       data-testid={`message-${item.kind}`}
     >
-      <div className="message-avatar">{item.kind === 'user' ? 'Y' : <span>c›</span>}</div>
       <div className="message-body">
         <div className="message-label">
-          {item.kind === 'user' ? 'You' : 'Codex'}
           {streaming && (
             <span className="thinking">
               Working<span>•••</span>
@@ -133,16 +154,44 @@ const MessageView = memo(function MessageView({
         </div>
         {!streaming && item.turnId && (onReply || onFork) && (
           <div className="message-actions">
+            <button
+              aria-label="Copy message"
+              title="Copy message"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(item.text)
+                  .then(() => {
+                    setCopied('Copied');
+                    clearTimeout(copyTimer.current);
+                    copyTimer.current = setTimeout(() => setCopied(''), 2000);
+                  })
+                  .catch(() => setCopied('Copy unavailable. Select the message text.'));
+                if (!navigator.clipboard) setCopied('Copy unavailable. Select the message text.');
+              }}
+            >
+              <Icon name="copy" size={13} />
+            </button>
+            {copied && <span role="status">{copied}</span>}
             {onReply && (
-              <button disabled={disabled} onClick={() => onReply(item)}>
+              <button
+                aria-label="Reply"
+                title="Reply"
+                disabled={disabled}
+                onClick={() => onReply(item)}
+              >
                 <Icon name="reply" size={13} />
-                Reply
+                <span className="action-label">Reply</span>
               </button>
             )}
             {onFork && (
-              <button disabled={disabled} onClick={() => onFork(item)}>
+              <button
+                aria-label="Branch from here"
+                title="Branch from here"
+                disabled={disabled}
+                onClick={() => onFork(item)}
+              >
                 <Icon name="branch" size={13} />
-                Branch from here
+                <span className="action-label">Branch from here</span>
               </button>
             )}
           </div>
@@ -173,6 +222,7 @@ function App() {
           ? value.enter
           : 'enter',
         review: value.review === 'detached' ? 'detached' : 'inline',
+        theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
       };
     } catch {
       return { followUp: 'queue', enter: 'enter', review: 'inline' };
@@ -205,9 +255,25 @@ function App() {
   const [error, setError] = useState('');
   const [connection, setConnection] = useState('Connecting');
   const [retry, setRetry] = useState(0);
-  const [sidebar, setSidebar] = useState(false);
+  const [sidebar, setSidebar] = useState(
+    window.innerWidth > 1099 && saved('codes.navigation') === 'open',
+  );
+  const modelMenu = useRef<HTMLDetailsElement>(null);
+  const [prefersDark, setPrefersDark] = useState(
+    window.matchMedia('(prefers-color-scheme: dark)').matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => setPrefersDark(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    save('codes.navigation', sidebar ? 'open' : '');
+  }, [sidebar]);
   const [panel, setPanel] = useState<'files' | 'diff' | null>(null);
   const [diffTurn, setDiffTurn] = useState('');
+  const [diffPath, setDiffPath] = useState('');
   const [adding, setAdding] = useState(false);
   const [newPath, setNewPath] = useState('');
   const [directory, setDirectory] = useState('');
@@ -311,7 +377,8 @@ function App() {
     setThread((current) => (current?.id === id ? current : undefined));
     setThreadId(id);
     setDiffTurn('');
-    setSidebar(false);
+    setDiffPath('');
+    if (window.innerWidth <= 1099) setSidebar(false);
     follow.current = true;
   }, []);
   const conversationUpdated = useCallback((value: Summary) => {
@@ -459,6 +526,12 @@ function App() {
       window.removeEventListener('online', focus);
     };
   }, [threadId, retry, auth]);
+  useLayoutEffect(() => {
+    const element = composer.current;
+    if (!element) return;
+    element.style.height = 'auto';
+    element.style.height = Math.min(180, Math.max(66, element.scrollHeight)) + 'px';
+  }, [draft, auth]);
   useLayoutEffect(() => {
     if (historyAnchor.current && transcript.current) {
       transcript.current.scrollTop =
@@ -812,11 +885,21 @@ function App() {
       ? models.find((entry) => entry.isDefault)
       : undefined);
   const commands = [
-    { name: '/model', detail: 'Choose a model', run: () => modelControl.current?.focus() },
+    {
+      name: '/model',
+      detail: 'Choose a model',
+      run: () => {
+        if (modelMenu.current) modelMenu.current.open = true;
+        modelControl.current?.focus();
+      },
+    },
     {
       name: '/reasoning',
       detail: 'Set reasoning effort',
-      run: () => effortControl.current?.focus(),
+      run: () => {
+        if (modelMenu.current) modelMenu.current.open = true;
+        effortControl.current?.focus();
+      },
     },
     {
       name: '/plan',
@@ -997,7 +1080,9 @@ function App() {
         event.key.toLowerCase() === 'n' &&
         !event.shiftKey &&
         !event.altKey &&
-        !document.querySelector('[role="dialog"]') &&
+        !document.querySelector(
+          '[role="dialog"][aria-modal="true"],details[open] [role="dialog"]',
+        ) &&
         !busy
       ) {
         event.preventDefault();
@@ -1063,13 +1148,22 @@ function App() {
       />
     );
   return (
-    <div className={`app ${panel ? 'has-panel' : ''}`}>
+    <div
+      data-theme={
+        preferences.theme === 'system'
+          ? prefersDark
+            ? 'dark'
+            : 'light'
+          : (preferences.theme ?? 'dark')
+      }
+      className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
+    >
       {sidebar && <div className="scrim" onClick={() => setSidebar(false)} />}
       <aside className={`sidebar ${sidebar ? 'open' : ''}`}>
         <div className="sidebar-brand">
           <Brand />
           <button
-            className="icon-button mobile-only"
+            className="icon-button"
             aria-label="Close navigation"
             onClick={() => setSidebar(false)}
           >
@@ -1101,15 +1195,6 @@ function App() {
             ))}
           </select>
         </label>
-        <button
-          className="new-thread"
-          aria-label="New conversation"
-          disabled={busy}
-          onClick={newThread}
-        >
-          <Icon name="plus" />
-          New conversation<span>↵</span>
-        </button>
         <Conversations
           projectId={projectId}
           selectedId={threadId}
@@ -1143,44 +1228,81 @@ function App() {
         </div>
       </aside>
       <div className="main">
+        <div className="panel-caption">
+          <span>codes</span>
+          <button
+            className={`connection ${connection === 'Connected' || connection === 'Ready' ? 'connected' : ''}`}
+            onClick={() => setRetry((n) => n + 1)}
+            title="Reconnect"
+          >
+            <i />
+            {connection}
+          </button>
+          {system?.runtime === 'mock' && <span className="simulation">Simulation</span>}
+        </div>
         <header className="topbar">
           <button
-            className="icon-button mobile-only"
+            className="icon-button"
             aria-label="Open navigation"
+            title="Chat history"
             onClick={() => setSidebar(true)}
           >
-            <Icon name="menu" />
+            <Icon name="history" size={17} />
           </button>
           <div className="breadcrumb">
-            <Icon name="folder" size={16} />
-            <span>{project?.name ?? 'Workspace'}</span>
-            <span className="slash">/</span>
             <strong>{thread?.title ?? 'New conversation'}</strong>
           </div>
           <div className="top-actions">
-            {system?.runtime === 'mock' && <span className="simulation">Simulation</span>}
-            <button
-              className={`connection ${connection === 'Connected' || connection === 'Ready' ? 'connected' : ''}`}
-              onClick={() => setRetry((n) => n + 1)}
-              title="Reconnect"
+            <PanelMenu
+              label="Conversation actions"
+              className="conversation-menu"
+              trigger={<Icon name="more" size={17} />}
             >
-              <i />
-              {connection}
-            </button>
-            <span className="divider" />
+              <button
+                data-close-menu
+                onClick={() => setDialog('review')}
+                disabled={!projectId || busy}
+              >
+                <Icon name="review" size={14} />
+                Review code
+              </button>
+              <button data-close-menu onClick={() => setDialog('status')}>
+                <Icon name="terminal" size={14} />
+                Session status
+              </button>
+            </PanelMenu>
             <button
               aria-label="Browse files"
+              title="Browse files"
               className={`icon-button ${panel === 'files' ? 'selected' : ''}`}
               onClick={() => setPanel(panel === 'files' ? null : 'files')}
             >
-              <Icon name="file" />
+              <Icon name="file" size={16} />
             </button>
             <button
               aria-label="Review changes"
+              title="Review changes"
               className={`icon-button ${panel === 'diff' ? 'selected' : ''}`}
               onClick={() => setPanel(panel === 'diff' ? null : 'diff')}
             >
-              <Icon name="review" />
+              <Icon name="review" size={16} />
+            </button>
+            <button
+              aria-label="Interaction settings"
+              title="Settings"
+              className="icon-button"
+              onClick={() => setDialog('preferences')}
+            >
+              <Icon name="settings" size={16} />
+            </button>
+            <button
+              aria-label="New conversation"
+              title="New conversation"
+              className="icon-button"
+              disabled={busy}
+              onClick={newThread}
+            >
+              <Icon name="newchat" size={16} />
             </button>
           </div>
         </header>
@@ -1252,49 +1374,26 @@ function App() {
           <div className="conversation-inner">
             {!thread?.messages.length && !active ? (
               <section className="welcome">
-                <div className="welcome-mark">
-                  c<span>›</span>
-                  <i />
-                </div>
-                <p className="eyebrow">A PLACE TO BUILD</p>
-                <h1>What are we working on?</h1>
-                <p>
-                  Explore your code, shape an idea, or ship a focused change.
-                  <br />
-                  Your workspace is ready when you are.
-                </p>
+                <h1>Ask Codex</h1>
+                <p>Ask a question, plan a change, or review your code.</p>
                 <div className="suggestions">
                   {[
-                    {
-                      title: 'Explore this project',
-                      text: 'Explain the architecture of this project and its main entry points.',
-                      icon: 'folder',
-                      detail: 'Find your way around the code',
-                    },
-                    {
-                      title: 'Plan a change',
-                      text: 'Review this project and help me plan a small, verifiable improvement.',
-                      icon: 'review',
-                      detail: 'Turn an idea into clear next steps',
-                    },
-                    {
-                      title: system?.runtime === 'mock' ? 'Try an approval' : 'Review the code',
-                      text:
-                        system?.runtime === 'mock'
-                          ? '[approve] Show an example command approval.'
-                          : 'Review the current code for potential bugs and explain your findings.',
-                      icon: 'terminal',
-                      detail:
-                        system?.runtime === 'mock'
-                          ? 'Preview the review workflow'
-                          : 'Look for issues that matter',
-                    },
-                  ].map((s) => (
-                    <button key={s.title} onClick={() => changeDraft(s.text)}>
-                      <Icon name={s.icon} />
-                      <strong>{s.title}</strong>
-                      <span>{s.detail}</span>
-                      <span className="suggestion-arrow">↗</span>
+                    [
+                      'Explore this project',
+                      'Explain the architecture of this project and its main entry points.',
+                    ],
+                    [
+                      'Plan a change',
+                      'Review this project and help me plan a small, verifiable improvement.',
+                    ],
+                    [
+                      'Review the code',
+                      'Review the current code for potential bugs and explain your findings.',
+                    ],
+                  ].map(([title, text]) => (
+                    <button key={title} onClick={() => changeDraft(text!)}>
+                      <Icon name="arrow" size={13} />
+                      {title}
                     </button>
                   ))}
                 </div>
@@ -1322,7 +1421,15 @@ function App() {
                   <MessageView
                     key={m.id}
                     item={m}
-                    onOpenFile={openChangedFile}
+                    onReview={(item, path) => {
+                      setDiffTurn(item.turnId === thread.turnId ? '' : item.turnId);
+                      setDiffPath(
+                        path?.startsWith(project!.path + '/')
+                          ? path.slice(project!.path.length + 1)
+                          : (path ?? ''),
+                      );
+                      setPanel('diff');
+                    }}
                     onReply={thread.archived ? undefined : reply}
                     onFork={
                       !active || m.turnId !== thread.turnId
@@ -1540,8 +1647,8 @@ function App() {
                   : thread?.managementPending
                     ? 'Check conversation status to continue…'
                     : active
-                      ? 'Write your next thought…'
-                      : 'Ask Codex to explore, build, or fix something…'
+                      ? 'Ask for follow-up changes'
+                      : 'Ask Codex anything'
               }
               maxLength={50_000}
               onKeyDown={(e) => {
@@ -1577,32 +1684,25 @@ function App() {
                 onClick={() => setPanel('files')}
                 disabled={!projectId}
               >
-                <Icon name="attach" size={17} />
+                <Icon name="plus" size={17} />
               </button>
+
               <select
-                aria-label="Model"
-                ref={modelControl}
-                value={settings.model ?? ''}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    model: e.target.value || undefined,
-                    effort: undefined,
-                  })
+                aria-label="Mode"
+                value={settings.mode ?? 'default'}
+                disabled={active || busy || !modes.length}
+                onChange={(event) =>
+                  setSettings({ ...settings, mode: event.target.value as Settings['mode'] })
                 }
-                disabled={active || busy}
               >
-                <option value="">Default model</option>
-                {settings.model && !models.some((entry) => entry.id === settings.model) && (
-                  <option value={settings.model}>{settings.model}</option>
-                )}
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.displayName}
-                  </option>
-                ))}
+                {modes
+                  .filter((entry) => entry.mode)
+                  .map((entry) => (
+                    <option key={entry.mode} value={entry.mode}>
+                      {entry.mode === 'plan' ? 'Plan' : 'Code'}
+                    </option>
+                  ))}
               </select>
-              <span className="toolbar-divider" />
               <select
                 aria-label="Permissions"
                 ref={permissionControl}
@@ -1616,6 +1716,76 @@ function App() {
                 <option value="workspace-write">Workspace write</option>
               </select>
               <div className="toolbar-spacer" />
+              <PanelMenu
+                label="Model and reasoning"
+                controller={modelMenu}
+                className="model-menu"
+                trigger={
+                  <>
+                    <span>{selectedModel?.displayName ?? settings.model ?? 'Default model'}</span>
+                    <Icon name="chevron" size={11} />
+                  </>
+                }
+              >
+                <strong>Model and reasoning</strong>
+                <label>
+                  Model
+                  <select
+                    aria-label="Model"
+                    ref={modelControl}
+                    value={settings.model ?? ''}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        model: e.target.value || undefined,
+                        effort: undefined,
+                      })
+                    }
+                    disabled={active || busy}
+                  >
+                    <option value="">Default model</option>
+                    {settings.model && !models.some((entry) => entry.id === settings.model) && (
+                      <option value={settings.model}>{settings.model}</option>
+                    )}
+                    {models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Reasoning effort
+                  <select
+                    ref={effortControl}
+                    aria-label="Reasoning effort"
+                    value={settings.effort ?? ''}
+                    disabled={active || busy || !selectedModel}
+                    onChange={(event) =>
+                      setSettings({ ...settings, effort: event.target.value || undefined })
+                    }
+                  >
+                    <option value="">
+                      Model default
+                      {selectedModel ? ' · ' + selectedModel.defaultReasoningEffort : ''}
+                    </option>
+                    {settings.effort &&
+                      !selectedModel?.supportedReasoningEfforts.some(
+                        (entry) => entry.reasoningEffort === settings.effort,
+                      ) && <option value={settings.effort}>{settings.effort} (unavailable)</option>}
+                    {selectedModel?.supportedReasoningEfforts.map((entry) => (
+                      <option
+                        key={entry.reasoningEffort}
+                        value={entry.reasoningEffort}
+                        title={entry.description}
+                      >
+                        {entry.reasoningEffort}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p>Settings apply to your next turn.</p>
+              </PanelMenu>
               <div className="composer-dispatch-actions">
                 {(active || !!thread?.queue?.items.length) && (
                   <button
@@ -1638,7 +1808,9 @@ function App() {
                     onClick={() => followUp()}
                   >
                     <Icon name="plus" size={14} />
-                    {active && preferences.followUp === 'steer' ? 'Send now' : 'Queue'}
+                    <span className="action-label">
+                      {active && preferences.followUp === 'steer' ? 'Send now' : 'Queue'}
+                    </span>
                   </button>
                 )}
                 {active ? (
@@ -1658,7 +1830,7 @@ function App() {
                     }}
                   >
                     <Icon name="stop" size={16} />
-                    Stop
+                    <span className="action-label">Stop</span>
                   </button>
                 ) : (
                   <button
@@ -1683,65 +1855,26 @@ function App() {
               </div>
             </div>
           </div>
-          <div className="interaction-controls">
-            <select
-              aria-label="Mode"
-              value={settings.mode ?? 'default'}
-              disabled={active || busy || !modes.length}
-              onChange={(event) =>
-                setSettings({ ...settings, mode: event.target.value as Settings['mode'] })
-              }
+          <div className="composer-hint work-location">
+            <button
+              onClick={() => {
+                setSidebar(true);
+                requestAnimationFrame(() =>
+                  document.querySelector<HTMLSelectElement>('[aria-label="Project"]')?.focus(),
+                );
+              }}
+              title="Choose project"
             >
-              {modes
-                .filter((entry) => entry.mode)
-                .map((entry) => (
-                  <option key={entry.mode} value={entry.mode}>
-                    {entry.mode === 'plan' ? 'Plan' : 'Code'}
-                  </option>
-                ))}
-            </select>
-            <select
-              ref={effortControl}
-              aria-label="Reasoning effort"
-              value={settings.effort ?? ''}
-              disabled={active || busy || !selectedModel}
-              onChange={(event) =>
-                setSettings({ ...settings, effort: event.target.value || undefined })
-              }
-            >
-              <option value="">
-                Model default{selectedModel ? ' · ' + selectedModel.defaultReasoningEffort : ''}
-              </option>
-              {settings.effort &&
-                !selectedModel?.supportedReasoningEfforts.some(
-                  (entry) => entry.reasoningEffort === settings.effort,
-                ) && <option value={settings.effort}>{settings.effort} (unavailable)</option>}
-              {selectedModel?.supportedReasoningEfforts.map((entry) => (
-                <option
-                  key={entry.reasoningEffort}
-                  value={entry.reasoningEffort}
-                  title={entry.description}
-                >
-                  {entry.reasoningEffort}
-                </option>
-              ))}
-            </select>
-            <button onClick={() => setDialog('review')} disabled={!projectId || busy}>
-              Review code
+              <Icon name="monitor" size={13} />
+              Work locally<span>· {project?.name ?? 'Choose project'}</span>
+              <Icon name="chevron" size={10} />
             </button>
-            <button onClick={() => setDialog('status')}>Session status</button>
-            <button onClick={() => setDialog('preferences')}>Interaction settings</button>
-          </div>
-          <div className="composer-hint">
             <span>
-              <i />
               {active
-                ? 'Your task continues when this page is closed.'
-                : 'Codex runs in your project on the host.'}
-            </span>
-            <span className="desktop-hint">
-              {preferences.enter === 'enter' ? '↵ Send' : 'Ctrl/Cmd ↵ Send'} <span>·</span> ⇧ ↵ New
-              line
+                ? 'Task continues with this page closed'
+                : preferences.enter === 'enter'
+                  ? 'Enter to send'
+                  : 'Ctrl/Cmd+Enter to send'}
             </span>
           </div>
         </div>
@@ -1863,7 +1996,10 @@ function App() {
                 <select
                   aria-label="Change scope"
                   value={diffTurn}
-                  onChange={(event) => setDiffTurn(event.target.value)}
+                  onChange={(event) => {
+                    setDiffTurn(event.target.value);
+                    setDiffPath('');
+                  }}
                 >
                   <option value="">Last turn</option>
                   {changeTurns
@@ -1885,6 +2021,7 @@ function App() {
                     (selectedDiffTurn === thread?.turnId && thread?.diffTruncated)
                   }
                   openFile={openChangedFile}
+                  focusPath={diffPath}
                 />
               ) : (
                 <div className="panel-empty">

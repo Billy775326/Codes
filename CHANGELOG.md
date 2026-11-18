@@ -30,6 +30,8 @@
 
 ### Changed
 
+- Rework the workspace around the IDE chat-panel layout: compact toolbar, on-demand history, one bottom composer, model/reasoning popup, inline edited-file cards, copy actions, and left-side desktop review. Add persistent dark/light/system themes and full-width mobile previews.
+
 - Set the default workspace port to 6670. Set `CODES_PORT` to use a different listener port.
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 

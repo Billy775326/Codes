@@ -1,6 +1,6 @@
 # Local IDE interaction alignment
 
-codes targets the Codex IDE extension's local conversation workflow in a Linux browser. VS Code host integration and Codex Cloud are explicitly excluded. This is a functional alignment audit, not a claim of pixel-identical UI or complete extension parity.
+codes targets the Codex IDE extension's local conversation workflow in a Linux browser. VS Code host integration and Codex Cloud are explicitly excluded. The chat panel layout and local interaction workflow follow the published IDE reference. This independent Web implementation does not claim pixel-identical UI or complete extension parity.
 
 ## Evidence baseline
 
@@ -30,6 +30,20 @@ Behavior references:
 - Pinned [question handler](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/src/tools/handlers/request_user_input.rs) and [question schema/normalization](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/src/tools/handlers/request_user_input_spec.rs): root-thread availability, Plan blocking semantics, recommended choices and custom answers. The installed schema explicitly supplies `isBlocking` and answer arrays.
 
 Current official docs can describe a newer protocol. The installed version's schema and source determine what this adapter actually sends.
+
+## Panel layout reference
+
+The visual baseline is the official [IDE review screenshot](https://learn.chatgpt.com/images/codex/ide-review.webp), inspected on 2026-11-18, alongside the published extension package above. The [open-source documentation](https://learn.chatgpt.com/docs/open-source) distinguishes the open-source CLI from the proprietary IDE extension. No extension bundle or artwork is shipped with codes.
+
+- Compact panel caption and conversation toolbar, with history opened on demand and a persistent new-conversation action.
+- Neutral editor colors, small activity disclosures, plain assistant messages, right-aligned user messages, and copy/reply/branch icon actions.
+- One rounded bottom composer: attachment, Code/Plan and permissions on the left; a model/reasoning popup and send/queue/stop controls on the right. The project location sits beneath it.
+- Edited-file cards show counts and direct file review. Desktop review places the diff on the left and a 380–460px chat panel on the right. Below 1100px, files/review use a full-width overlay with a close action.
+- Dark, light and system themes are browser preferences; existing drafts and settings remain readable. History visibility is also remembered on desktop.
+
+The Web header retains explicit file and change-preview shortcuts, connection state and simulation labeling. Its source browser is read-only. Unsupported Undo, staging, patch application and editor-host controls are not represented as working actions. File summaries count the native edit entries; they do not invent a net Git working-tree diff.
+
+Browser acceptance covers popup dismissal/focus, slash-command focus, draft retention, review geometry, clipboard copying, saved themes and widths 1440, 820, 390 and 320px. Screenshots use simulator fixtures, not private conversations. This does not establish physical-phone acceptance or pixel equality with every extension release/theme.
 
 ## Implemented local contracts
 

@@ -4,6 +4,8 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1440) > 1099)
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
 }
 async function send(page: Page, text: string) {

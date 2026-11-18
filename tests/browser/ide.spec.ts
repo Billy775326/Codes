@@ -4,6 +4,8 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1440) > 1099)
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
 }
 async function send(page: Page, text: string) {
@@ -19,8 +21,10 @@ test('native model, reasoning and Plan mode survive reconnect and expose real pl
   page,
 }) => {
   await login(page);
+  await page.getByRole('button', { name: 'Model and reasoning', exact: true }).click();
   await page.getByLabel('Model', { exact: true }).selectOption('simulated-model');
   await page.getByLabel('Reasoning effort').selectOption('high');
+  await page.keyboard.press('Escape');
   await page.getByLabel('Mode', { exact: true }).selectOption('plan');
   const request = page.waitForRequest(
     (request) => request.url().endsWith('/send') && request.method() === 'POST',
@@ -33,6 +37,7 @@ test('native model, reasoning and Plan mode survive reconnect and expose real pl
   });
   await expect(page.getByRole('region', { name: 'Task plan' })).toContainText('Propose a change');
   await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
   await page.getByRole('button', { name: 'Session status', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Session status' });
   await expect(dialog).toContainText('1,200 / 128,000 tokens');
@@ -128,6 +133,7 @@ test('review uses native targets inline and in a separate conversation while pre
   await send(page, 'Review source fixture ' + Date.now());
   await expect(page.getByText('Completed', { exact: true })).toBeVisible();
   const source = await page.evaluate(() => localStorage.getItem('codes.thread'));
+  await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
   await page.getByRole('button', { name: 'Review code', exact: true }).click();
   await page.getByLabel('Review target').selectOption('baseBranch');
   await page.getByLabel('Review details').fill('main');
@@ -135,6 +141,7 @@ test('review uses native targets inline and in a separate conversation while pre
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('Simulated review:', { exact: false })).toContainText('baseBranch');
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).toBe(source);
+  await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
   await page.getByRole('button', { name: 'Review code', exact: true }).click();
   await page.getByLabel('Review delivery', { exact: true }).selectOption('detached');
   await page.getByRole('button', { name: 'Start review', exact: true }).click();
@@ -175,6 +182,7 @@ test('new controls, review dialog and phone keyboard fit a mobile viewport', asy
   await expect(page.getByLabel('Message Codex')).toHaveValue('Phone draft\n');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 320, height: 640 });
+  await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
   await page.getByRole('button', { name: 'Review code', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

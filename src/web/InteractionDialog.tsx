@@ -58,6 +58,7 @@ export interface Preferences {
   followUp: 'queue' | 'steer';
   enter: 'enter' | 'cmdIfMultiline' | 'cmdAlways';
   review: 'inline' | 'detached';
+  theme?: 'dark' | 'light' | 'system';
 }
 export function PreferencesDialog({
   value,
@@ -71,6 +72,20 @@ export function PreferencesDialog({
   return (
     <InteractionDialog title="Interaction settings" close={close}>
       <p>Preferences are saved in this browser.</p>
+      <label>
+        Workspace theme
+        <select
+          aria-label="Workspace theme"
+          value={value.theme ?? 'dark'}
+          onChange={(event) =>
+            change({ ...value, theme: event.target.value as Preferences['theme'] })
+          }
+        >
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="system">System</option>
+        </select>
+      </label>
       <label>
         Follow-up behavior
         <select

@@ -5,10 +5,15 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill(token);
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1440) > 1099)
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
 }
 async function create(page: Page, title: string) {
-  if ((page.viewportSize()?.width ?? 1440) <= 700)
-    await page.getByRole('button', { name: 'Open navigation' }).click();
+  if (
+    (page.viewportSize()?.width ?? 1440) <= 1099 &&
+    (await page.getByRole('button', { name: 'Close navigation', exact: true }).isVisible())
+  )
+    await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
   await page.getByLabel('Message Codex').fill(title);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useRef, useMemo, useState } from 'react';
 import {
   diffLimits,
   parseUnifiedDiff,
@@ -45,13 +45,22 @@ const FileDiff = memo(function FileDiff({
   layout,
   expanded,
   openFile,
+  focused,
 }: {
   file: DiffFile;
   layout: Layout;
   expanded: boolean;
   openFile?: (path: string) => void;
+  focused?: boolean;
 }) {
   const [open, setOpen] = useState(expanded);
+  const element = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focused) {
+      setOpen(true);
+      element.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [focused]);
   const [page, setPage] = useState(0);
   const [viewed, setViewed] = useState('');
   const revision = useMemo(
@@ -67,6 +76,7 @@ const FileDiff = memo(function FileDiff({
   const start = currentPage * diffLimits.window;
   return (
     <section
+      ref={element}
       className={'diff-file' + (viewed === revision ? ' viewed' : '')}
       aria-label={'Changes in ' + file.path}
     >
@@ -204,12 +214,14 @@ export const DiffView = memo(function DiffView({
   truncated,
   title = 'File changes',
   openFile,
+  focusPath,
 }: {
   patch?: string;
   files?: FileChange[];
   truncated?: boolean;
   title?: string;
   openFile?: (path: string) => void;
+  focusPath?: string;
 }) {
   const [layout, setLayout] = useState<Layout>('unified');
   const entries = useMemo(
@@ -261,6 +273,7 @@ export const DiffView = memo(function DiffView({
           layout={layout}
           expanded={index === 0}
           openFile={openFile}
+          focused={!!focusPath && (file.path === focusPath || file.path.endsWith('/' + focusPath))}
         />
       ))}
       {!entries.length && <p className="diff-no-lines">No file changes were reported.</p>}

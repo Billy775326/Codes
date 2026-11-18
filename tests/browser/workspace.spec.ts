@@ -5,6 +5,8 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill(token);
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1440) > 1099)
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
 }
 async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
@@ -20,7 +22,7 @@ test('an idle browser receives conversations created on another device without r
     const observer = await second.newPage();
     await login(originator);
     await login(observer);
-    await expect(observer.getByRole('heading', { name: 'What are we working on?' })).toBeVisible();
+    await expect(observer.getByRole('heading', { name: 'Ask Codex' })).toBeVisible();
     const prompt = `[approve] New conversation handoff ${Date.now()}`;
     await send(originator, prompt);
     await observer.locator('.thread-link').filter({ hasText: prompt }).click();
@@ -36,7 +38,7 @@ test('desktop layout, streamed response, reload, and file selection context', as
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await login(page);
-  await expect(page.getByRole('heading', { name: 'What are we working on?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ask Codex' })).toBeVisible();
   await page.screenshot({ path: 'test-results/desktop-workspace.png', fullPage: true });
   await page.getByRole('button', { name: 'Browse files' }).click();
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
@@ -164,6 +166,6 @@ test('bounded long history remains usable while typing and switching conversatio
     contentType: 'application/json',
   });
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'What are we working on?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ask Codex' })).toBeVisible();
   await page.screenshot({ path: 'test-results/desktop-after-history.png' });
 });
