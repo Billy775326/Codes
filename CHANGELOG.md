@@ -45,6 +45,10 @@
 
 ### Fixed
 
+- Show snapshot connection failures immediately during bounded retry, distinguish HTTP/proxy responses, invalid JSON and request deadlines from an unreachable service, and reserve uncertain-execution warnings for writes.
+- Verify stored terminal operation receipts when the selected snapshot reconnects, and refresh the subscription after Check result proves a browser request was not recorded. Preserve unknown receipts and never automatically resend tasks.
+- Release event connections while a tab is hidden and refresh its snapshot on return. Keep sending unavailable until the current subscription is connected; server tasks and queues continue independently.
+
 - Scroll continuously through older and newer native history with automatic bidirectional loading, stable turn anchors, bounded page retention and explicit retry after a failed page read. Keep latest jumping optional and preserve live updates while reading.
 - Make Send, Queue, Add now and Stop labels visible with delivery timing and edit-scope guidance. Lock queue edits once dispatch begins, preserving unsubmitted local text if an entry starts or disappears; explain quoted replies and conversation branches.
 

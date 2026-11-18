@@ -90,7 +90,7 @@ it('recovers from a transient snapshot error using the existing bounded retry', 
     expect(received).toHaveBeenCalledWith(snapshot);
     Source.instances[0]!.dispatchEvent(new Event('ready'));
     expect(status).toHaveBeenLastCalledWith('Connected');
-    expect(failure).not.toHaveBeenCalled();
+    expect(failure).toHaveBeenCalledWith(expect.objectContaining({ status: 503 }));
   } finally {
     feed.close();
   }
@@ -106,7 +106,7 @@ it('reports the final failure after exhausting retries', async () => {
     await vi.advanceTimersByTimeAsync(120_000);
     expect(fetch).toHaveBeenCalledTimes(9);
     expect(status).toHaveBeenLastCalledWith('Disconnected');
-    expect(failure).toHaveBeenCalledTimes(1);
+    expect(failure).toHaveBeenCalledTimes(2);
     expect(failure.mock.calls[0]![0]).toBeInstanceOf(ApiError);
   } finally {
     feed.close();
@@ -138,5 +138,48 @@ it('ignores a closed subscription and its late authentication failure', async ()
     expect(received).not.toHaveBeenCalled();
   } finally {
     unsubscribe();
+  }
+});
+
+it('suspends a background subscription and resumes with a fresh snapshot', async () => {
+  const fetch = vi.fn(async () => response(200));
+  vi.stubGlobal('fetch', fetch);
+  const status = vi.fn(),
+    received = vi.fn(),
+    failure = vi.fn();
+  const feed = new Feed('a', received, vi.fn(), status, 'threads', failure);
+  try {
+    await feed.connect();
+    Source.instances[0]!.dispatchEvent(new Event('ready'));
+    feed.suspend();
+    expect(Source.instances[0]!.closed).toBe(true);
+    expect(status).toHaveBeenLastCalledWith('Background');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await feed.connect();
+    Source.instances[1]!.dispatchEvent(new Event('ready'));
+    expect(status).toHaveBeenLastCalledWith('Connected');
+    expect(received).toHaveBeenCalledTimes(2);
+    expect(failure).not.toHaveBeenCalled();
+  } finally {
+    feed.close();
+  }
+});
+it('rejects a malformed snapshot without looping on Connecting', async () => {
+  const fetch = vi.fn(
+    async () => new Response(JSON.stringify({ unrelated: true }), { status: 200 }),
+  );
+  vi.stubGlobal('fetch', fetch);
+  const status = vi.fn(),
+    failure = vi.fn();
+  const feed = new Feed('a', vi.fn(), vi.fn(), status, 'threads', failure);
+  try {
+    await feed.connect();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(status).toHaveBeenLastCalledWith('Unavailable');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(failure).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_RESPONSE' }));
+  } finally {
+    feed.close();
   }
 });

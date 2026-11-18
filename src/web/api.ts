@@ -21,31 +21,66 @@ export async function request<T>(
   init: RequestInit = {},
   signal?: AbortSignal,
 ): Promise<T> {
+  const writing = !['GET', 'HEAD', 'OPTIONS'].includes((init.method ?? 'GET').toUpperCase());
+  const timeout = AbortSignal.timeout(35_000);
+  const uncertainty = writing ? ' Check the result before sending again.' : '';
   try {
     const response = await fetch(`/api${path}`, {
       ...init,
       headers: { 'content-type': 'application/json', ...init.headers },
-      signal: AbortSignal.any([AbortSignal.timeout(35_000), ...(signal ? [signal] : [])]),
+      signal: AbortSignal.any([timeout, ...(signal ? [signal] : [])]),
     });
-    const data = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch (error) {
+      if (signal?.aborted || timeout.aborted) throw error;
+      const unauthenticated = response.status === 401;
+      const failure = new ApiError(
+        unauthenticated
+          ? 'Sign in to your workspace.'
+          : response.ok
+            ? 'The service returned an invalid response. Check the service address or port forwarding.' +
+              uncertainty
+            : `The service returned HTTP ${response.status} without a valid API response. Check the service or port forwarding.` +
+              (response.status >= 500 ? uncertainty : ''),
+        unauthenticated ? 'AUTH_REQUIRED' : response.ok ? 'INVALID_RESPONSE' : 'HTTP_ERROR',
+        writing && (response.ok || response.status >= 500),
+        response.status,
+      );
+      if (unauthenticated && !signal?.aborted)
+        authenticationListeners.forEach((listener) => listener(failure));
+      throw failure;
+    }
     if (!response.ok) {
       const error = new ApiError(
-        data.error?.message ?? 'The request failed.',
-        data.error?.code ?? 'HTTP_ERROR',
-        data.error?.uncertain === true,
+        typeof data?.error?.message === 'string' ? data.error.message : 'The request failed.',
+        typeof data?.error?.code === 'string' ? data.error.code : 'HTTP_ERROR',
+        data?.error?.uncertain === true,
         response.status,
       );
       if (response.status === 401 && !signal?.aborted)
         authenticationListeners.forEach((listener) => listener(error));
       throw error;
     }
+    if (!data || typeof data !== 'object')
+      throw new ApiError(
+        'The service returned an invalid API response.' + uncertainty,
+        'INVALID_RESPONSE',
+        writing,
+        response.status,
+      );
     return data as T;
   } catch (error) {
     if (error instanceof ApiError || signal?.aborted) throw error;
+    const timedOut = timeout.aborted || (error instanceof Error && error.name === 'TimeoutError');
     throw new ApiError(
-      'The server could not be reached. Check the result before sending again.',
-      'CONNECTION',
-      true,
+      timedOut
+        ? 'The request timed out. Check the connection or port forwarding.' + uncertainty
+        : 'The request could not reach this service address. Check the connection or port forwarding.' +
+            uncertainty,
+      timedOut ? 'TIMEOUT' : 'CONNECTION',
+      writing,
     );
   }
 }

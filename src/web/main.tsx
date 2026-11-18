@@ -300,6 +300,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [connection, setConnection] = useState('Connecting');
+  const [connectionError, setConnectionError] = useState('');
   const [retry, setRetry] = useState(0);
   const [sidebar, setSidebar] = useState(
     window.innerWidth > 1099 && saved('codes.navigation') !== 'closed',
@@ -430,6 +431,18 @@ function App() {
       setAuth('login');
     } else setError(message(e));
   }, []);
+  const connectionStatus = useCallback((status: string) => {
+    setConnection(status);
+    if (status === 'Connected') setConnectionError('');
+  }, []);
+  const connectionFailure = useCallback(
+    (error: unknown) => {
+      if (error instanceof ApiError && (error.status === 401 || error.code === 'AUTH_REQUIRED'))
+        notice(error);
+      else setConnectionError(message(error));
+    },
+    [notice],
+  );
   useEffect(() => {
     if (auth === 'ready') return onAuthenticationRequired(notice);
   }, [auth, notice]);
@@ -506,14 +519,15 @@ function App() {
             );
         } else if (event.kind === 'runtime') setSystem(event.data as System);
       },
-      setConnection,
+      connectionStatus,
       'projects',
-      notice,
+      connectionFailure,
     );
-    void stream.connect();
     const focus = () => {
       if (document.visibilityState === 'visible') void stream.connect();
+      else stream.suspend();
     };
+    focus();
     document.addEventListener('visibilitychange', focus);
     window.addEventListener('online', focus);
     return () => {
@@ -526,6 +540,7 @@ function App() {
     (id: string) => {
       setThread((current) => (current?.id === id ? current : undefined));
       setThreadId(id);
+      setConnectionError('');
       returnToLatest();
       setDiffTurn('');
       setDiffPath('');
@@ -676,15 +691,16 @@ function App() {
         setSettings(snapshot.thread.settings);
       },
       event,
-      setConnection,
+      connectionStatus,
       'threads',
-      notice,
+      connectionFailure,
     );
     feed.current = stream;
-    void stream.connect();
     const focus = () => {
       if (document.visibilityState === 'visible') void stream.connect();
+      else stream.suspend();
     };
+    focus();
     document.addEventListener('visibilitychange', focus);
     window.addEventListener('online', focus);
     return () => {
@@ -694,6 +710,38 @@ function App() {
       window.removeEventListener('online', focus);
     };
   }, [threadId, projectId, retry, auth]);
+  useEffect(() => {
+    if (
+      auth !== 'ready' ||
+      connection !== 'Connected' ||
+      !receipt ||
+      !thread ||
+      thread.id !== threadId ||
+      thread.pending
+    )
+      return;
+    const controller = new AbortController();
+    const id = threadId,
+      operationId = receipt;
+    void request<Operation>('/operations/' + operationId, {}, controller.signal)
+      .then((operation) => {
+        if (
+          controller.signal.aborted ||
+          threadRef.current !== id ||
+          operation.threadId !== id ||
+          !['completed', 'failed'].includes(operation.state)
+        )
+          return;
+        if (saved('codes.operation.' + id) === operationId) save('codes.operation.' + id, '');
+        setReceipt((current) => (current === operationId ? '' : current));
+      })
+      .catch((error) => {
+        if (controller.signal.aborted || (error instanceof ApiError && error.code === 'NOT_FOUND'))
+          return;
+        connectionFailure(error);
+      });
+    return () => controller.abort();
+  }, [auth, connection, receipt, threadId, thread?.id, thread?.pending?.id, thread?.state]);
   useLayoutEffect(() => {
     const element = composer.current;
     if (!element) return;
@@ -913,6 +961,7 @@ function App() {
       !draft.trim() ||
       !projectId ||
       loadingConversation ||
+      connection !== 'Connected' ||
       thread?.archived ||
       thread?.managementPending
     )
@@ -962,37 +1011,51 @@ function App() {
     }
   };
   const reconcile = async () => {
-    if (!threadId) return;
+    const id = threadId;
+    const operationId = receipt;
+    if (!id) return;
     setBusy(true);
     try {
-      if (receipt) {
+      if (operationId) {
         try {
-          await request<Operation>(`/operations/${receipt}`);
-        } catch (e) {
-          if (e instanceof ApiError && e.code === 'NOT_FOUND') {
-            save(`codes.operation.${threadId}`, '');
-            setReceipt('');
-            setError('This request was not recorded. Your draft is safe; you may send it again.');
+          await request<Operation>(`/operations/${operationId}`);
+        } catch (error) {
+          if (error instanceof ApiError && error.code === 'NOT_FOUND') {
+            if (saved(`codes.operation.${id}`) === operationId) save(`codes.operation.${id}`, '');
+            if (threadRef.current === id) {
+              setReceipt((current) => (current === operationId ? '' : current));
+              setError('This request was not recorded. Your draft is safe; you may send it again.');
+              void feed.current?.connect();
+            }
             return;
           }
-          throw e;
+          throw error;
         }
       }
-      const updated = await post<Thread>(`/threads/${threadId}/reconcile`);
+      const updated = await post<Thread>(`/threads/${id}/reconcile`);
+      if (updated.id !== id)
+        throw new ApiError(
+          'The service returned a result for a different conversation.',
+          'INVALID_RESPONSE',
+        );
+      if (!updated.pending && saved(`codes.operation.${id}`) === operationId)
+        save(`codes.operation.${id}`, '');
+      // A slow check belongs to its original conversation, not a newer selection.
+      if (threadRef.current !== id) return;
       setThread(updated);
-      if (!updated.pending) {
-        save(`codes.operation.${threadId}`, '');
-        setReceipt('');
-      } else
+      void feed.current?.connect();
+      if (!updated.pending) setReceipt((current) => (current === operationId ? '' : current));
+      else
         setError(
           'The CLI has not confirmed a terminal result. This conversation remains locked against duplicate sends.',
         );
-    } catch (e) {
-      notice(e);
+    } catch (error) {
+      if (threadRef.current === id) notice(error);
     } finally {
       setBusy(false);
     }
   };
+
   const submitAction = async (
     action: Action,
     resolution: { decision?: string; answers?: Record<string, string> },
@@ -1120,6 +1183,7 @@ function App() {
     !thread.managementPending;
   const deliveryMode = active && preferences.followUp === 'steer' ? 'steer' : 'queue';
   const deliveryBlocked =
+    connection !== 'Connected' ||
     busy ||
     !!steerReceipt ||
     !!queueRequest ||
@@ -1812,14 +1876,15 @@ function App() {
               >
                 <Icon name="history" size={24} />
                 <h2>
-                  {['Unavailable', 'Disconnected'].includes(connection)
+                  {connectionError || ['Unavailable', 'Disconnected'].includes(connection)
                     ? 'Unable to load conversation'
                     : 'Loading conversation…'}
                 </h2>
-                <p>
-                  {['Unavailable', 'Disconnected'].includes(connection)
-                    ? 'Retry, or choose another conversation from the sidebar.'
-                    : 'Retrieving the saved conversation and task status.'}
+                <p role={connectionError ? 'alert' : undefined}>
+                  {connectionError ||
+                    (['Unavailable', 'Disconnected'].includes(connection)
+                      ? 'Retry, or choose another conversation from the sidebar.'
+                      : 'Retrieving the saved conversation and task status.')}
                 </p>
                 <button
                   onClick={() => {
@@ -2080,6 +2145,19 @@ function App() {
             />
           )}
 
+          {connectionError && !loadingConversation && (
+            <div className="error-banner" role="alert">
+              <span>{connectionError}</span>
+              <button
+                onClick={() => {
+                  setConnectionError('');
+                  setRetry((value) => value + 1);
+                }}
+              >
+                Retry connection
+              </button>
+            </div>
+          )}
           {error && (
             <div className="error-banner" role="alert">
               <span>{error}</span>
@@ -2333,6 +2411,7 @@ function App() {
                     title="Send message"
                     onClick={() => void send()}
                     disabled={
+                      connection !== 'Connected' ||
                       busy ||
                       !draft.trim() ||
                       !projectId ||

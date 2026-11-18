@@ -85,7 +85,7 @@ test('a failed session check can reconnect without reloading the page', async ({
     else await route.continue();
   });
   await page.goto('/');
-  await expect(page.getByRole('alert')).toContainText('could not be reached');
+  await expect(page.getByRole('alert')).toContainText('could not reach this service address');
   await expect(page.getByLabel('Workspace access token')).toBeDisabled();
   unavailable = false;
   await page.getByRole('button', { name: 'Retry connection', exact: false }).click();

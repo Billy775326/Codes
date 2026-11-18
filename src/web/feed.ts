@@ -12,6 +12,7 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
   private alive = 0;
   private ready = false;
   private disposed = false;
+  private suspended = false;
   constructor(
     private id: string,
     private snapshot: (snapshot: T) => void,
@@ -22,6 +23,7 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
   ) {}
   async connect() {
     if (this.disposed) return;
+    this.suspended = false;
     this.cleanup();
     const generation = ++this.generation;
     this.status('Connecting');
@@ -34,6 +36,16 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
         this.controller.signal,
       );
       if (generation !== this.generation || this.disposed) return;
+      if (
+        !snapshot ||
+        !snapshot.cursor ||
+        !Number.isSafeInteger(snapshot.cursor.seq) ||
+        typeof snapshot.cursor.epoch !== 'string'
+      )
+        throw new ApiError(
+          'The service returned an invalid snapshot. Check the service address or port forwarding.',
+          'INVALID_RESPONSE',
+        );
       this.snapshot(snapshot);
       let seq = snapshot.cursor.seq;
       const source = new EventSource(
@@ -83,6 +95,7 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
       if (
         error instanceof ApiError &&
         (error.code === 'AUTH_REQUIRED' ||
+          error.code === 'INVALID_RESPONSE' ||
           (!!error.status &&
             error.status >= 400 &&
             error.status < 500 &&
@@ -104,13 +117,18 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
   private retry(error?: unknown) {
     this.cleanup();
     ++this.generation;
-    if (this.disposed) return;
+    if (this.disposed || this.suspended) return;
     this.status('Reconnecting');
+    const failure =
+      error ??
+      new ApiError(
+        'The live connection was interrupted. Reconnecting without restarting the task.',
+        'STREAM_CONNECTION',
+      );
+    if (this.attempts === 0) this.failure?.(failure);
     if (++this.attempts > 8) {
       this.status('Disconnected');
-      this.failure?.(
-        error ?? new Error('The connection was lost. Retry to load the latest conversation.'),
-      );
+      this.failure?.(failure);
       return;
     }
     this.timer = setTimeout(
@@ -126,6 +144,14 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
     this.controller?.abort();
     clearTimeout(this.timer);
     clearInterval(this.health);
+  }
+  /** Hidden tabs release HTTP/1 connections; execution stays on the server. */
+  suspend() {
+    if (this.disposed) return;
+    this.suspended = true;
+    this.cleanup();
+    ++this.generation;
+    this.status('Background');
   }
   close() {
     this.disposed = true;
