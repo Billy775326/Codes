@@ -90,7 +90,7 @@ it('backs up schema 1 before adding archive metadata and preserves pending recei
       state: 'unknown',
     });
     expect(migrated.active('t')).toMatchObject({ id: 'op', state: 'unknown', text: 'saved draft' });
-    expect(migrated.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 3 });
+    expect(migrated.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 4 });
     const backupName = readdirSync(directory).find((name) => name.startsWith('codes.schema-v1-'))!;
     expect(statSync(join(directory, backupName)).mode & 0o777).toBe(0o600);
     const backup = new DatabaseSync(join(directory, backupName), { readOnly: true });
@@ -161,6 +161,36 @@ it('backs up schema 2 before adding queue tables and preserves archived conversa
       });
     } finally {
       old.close();
+    }
+  } finally {
+    upgraded.close();
+  }
+});
+
+it('backs up schema 3 and preserves unknown task and steer receipts while adding the review lease', () => {
+  const { store, directory } = fixture();
+  store.begin('task', 'a', 'send', {}, 'Original task');
+  store.begin('follow-up', 'a', 'steer', {}, 'Additional guidance');
+  store.db.exec(
+    "DROP INDEX active_turn; CREATE UNIQUE INDEX active_turn ON operations(thread_id) WHERE kind='send' AND state IN ('dispatching','acknowledged','unknown'); UPDATE meta SET version=3;",
+  );
+  store.close();
+  const upgraded = new Store(directory);
+  try {
+    expect(upgraded.active('a')).toMatchObject({ id: 'task', state: 'unknown' });
+    expect(upgraded.steers('a')).toMatchObject([
+      { id: 'follow-up', state: 'unknown', text: 'Additional guidance' },
+    ]);
+    expect(() => upgraded.begin('review', 'a', 'review', {})).toThrow(/unfinished/);
+    upgraded.complete('a', 'original-turn');
+    expect(() => upgraded.begin('review', 'a', 'review', {})).not.toThrow();
+    expect(() => upgraded.begin('new-task', 'a', 'send', {})).toThrow(/unfinished/);
+    const name = readdirSync(directory).find((entry) => entry.startsWith('codes.schema-v3-'))!;
+    const backup = new DatabaseSync(join(directory, name), { readOnly: true });
+    try {
+      expect(backup.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 3 });
+    } finally {
+      backup.close();
     }
   } finally {
     upgraded.close();

@@ -68,3 +68,11 @@ Use a disposable Git repository with a harmless text fixture and the intended se
 7. Test the chosen HTTPS proxy, logout, token replacement followed by restart, and a backed-up data-directory restore.
 
 Failures block promotion to a released version. Record the exact CLI version, policy, browser, fixture, outcome, and unresolved limits. Formal release or deployment requires the owner's approval.
+
+## Local IDE interaction acceptance
+
+On 2026-11-18, the isolated CLI 0.167.0 IDE pilot passed real Plan mode with catalog reasoning effort, a transition back to Code, a follow-up appended to the same turn, preserved client identity in native history, native token usage, and a Read only custom code review with review items and a durable terminal receipt. It used the server login/model quota and exposed only a disposable README fixture. No project edits or approval grants were requested. Run it explicitly with `npm run test:live:ide -- --allow-model-requests`.
+
+The first real review attempt exposed a mismatch absent from the initial simulator: native inline review starts an inner runner but completes using the acknowledged outer review ID. Ignoring that completion left the task working and led the pilot's cancellation to time out. The adapter now correlates the exact outer ID and caches bounded terminal evidence for responses arriving after events. The simulator reproduces this ordering, and a delayed-ack regression checks it. The full live IDE pilot passed after the correction; no uncertain model request was automatically retried.
+
+The separate empty-home native smoke now also checks model reasoning metadata, Plan/Code presets and thread settings updates, without model requests. The final local suite passes 76 unit/integration tests and 30 simulator browser tests, plus formatting, type checks and a production build. Simulator/browser evidence covers queue/steer inversion, queue promotion, stale turns, unknown receipts, review targets/delivery, preferences, commands and mobile controls. Native review findings quality, real approval/question policy variants, HTTPS/physical phones and deployment/restore gates remain separate. The [alignment audit](ide-parity.md) records the extension version, inspected sources, supported contracts and remaining local differences.

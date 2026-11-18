@@ -1,0 +1,131 @@
+.interaction-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}
+.interaction-controls select,
+.interaction-controls button {
+  font-size: 11px;
+  padding: 5px 8px;
+  color: var(--muted);
+  border-radius: 5px;
+}
+.interaction-controls select {
+  max-width: 155px;
+}
+.interaction-controls button:hover {
+  background: #ffffff09;
+  color: inherit;
+}
+.interaction-dialog {
+  max-height: 85dvh;
+  overflow: auto;
+}
+.interaction-dialog label {
+  display: block;
+  font-size: 12px;
+  margin: 16px 0 8px;
+}
+.interaction-dialog select,
+.interaction-dialog input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel, #1b1c21);
+  color: inherit;
+  border-radius: 6px;
+}
+.interaction-dialog p {
+  line-height: 1.7;
+  font-size: 12px;
+}
+.interaction-dialog button.primary {
+  margin-top: 20px;
+}
+.session-status {
+  display: grid;
+  grid-template-columns: 125px 1fr;
+  gap: 12px;
+  font-size: 12px;
+}
+.session-status dt {
+  color: var(--muted);
+}
+.session-status dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.slash-commands {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px;
+  margin: 8px 0;
+  max-height: 220px;
+  overflow: auto;
+}
+.slash-commands button {
+  display: flex;
+  text-align: left;
+  gap: 15px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.slash-commands button:hover,
+.slash-commands button:focus {
+  background: #ffffff0c;
+}
+.slash-commands span {
+  color: var(--muted);
+}
+.turn-plan {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 14px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.turn-plan li {
+  margin: 8px 0;
+}
+.turn-plan small {
+  color: var(--muted);
+  padding-right: 8px;
+}
+.steering-receipt {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+@media (max-width: 700px) {
+  .interaction-controls {
+    gap: 5px;
+    padding: 6px;
+  }
+  .interaction-controls button {
+    min-height: 34px;
+  }
+  .interaction-dialog select,
+  .interaction-dialog input {
+    font-size: 16px;
+  }
+  .session-status {
+    grid-template-columns: 95px 1fr;
+  }
+}
+
+.selection-toolbar {
+  flex-wrap: wrap;
+}
+.selection-toolbar > button {
+  font-size: 11px;
+  padding: 8px;
+}

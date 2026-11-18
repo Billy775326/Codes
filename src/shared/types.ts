@@ -14,6 +14,8 @@ export interface Project {
 }
 export interface Settings {
   model?: string;
+  effort?: string;
+  mode?: 'default' | 'plan';
   permission: 'read-only' | 'workspace-write';
 }
 export interface Message {
@@ -62,8 +64,12 @@ export interface Thread extends Summary {
   olderCursor: string | null;
   settings: Settings;
   diff: string;
+  resolvedModel?: string;
+  steering?: (Operation & { text: string })[];
+  usage?: { turnId: string; contextTokens: number; totalTokens: number; contextWindow?: number };
+  plan?: { explanation?: string; steps: { step: string; status: string }[] };
   queue?: QueueState;
-  pending?: { id: string; text: string; state: string };
+  pending?: { id: string; text: string; state: string; kind?: 'send' | 'review'; turnId?: string };
 }
 export interface Operation {
   id: string;
@@ -137,4 +143,28 @@ export interface QueueState {
   items: QueueItem[];
   paused: boolean;
   reason?: string;
+}
+
+export interface Model {
+  id: string;
+  model: string;
+  displayName: string;
+  isDefault: boolean;
+  defaultReasoningEffort: string;
+  supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
+}
+export type ReviewTarget =
+  | { type: 'uncommittedChanges' }
+  | { type: 'baseBranch'; branch: string }
+  | { type: 'commit'; sha: string }
+  | { type: 'custom'; instructions: string };
+
+/** Persisted settings from older builds may omit mode or use a different key order. */
+export function sameSettings(a: Settings, b: Settings): boolean {
+  return (
+    a.permission === b.permission &&
+    (a.model ?? '') === (b.model ?? '') &&
+    (a.effort ?? '') === (b.effort ?? '') &&
+    (a.mode ?? 'default') === (b.mode ?? 'default')
+  );
 }

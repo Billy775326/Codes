@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { QueueState, QueueItem } from '../shared/types';
+import type { QueueState, QueueItem, Settings } from '../shared/types';
+import { sameSettings } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon } from './primitives';
 import './workflow.css';
@@ -8,8 +9,12 @@ export function QueuePanel({
   state,
   onChange,
   onCheck,
+  turnId,
+  settings,
 }: {
   threadId: string;
+  turnId?: string;
+  settings?: Settings;
   state: QueueState;
   onChange: (queue: QueueState) => void;
   onCheck: () => Promise<void>;
@@ -119,6 +124,21 @@ export function QueuePanel({
               )}
               {entry.error && <p className="queue-error">{entry.error}</p>}
               <div className="queue-actions">
+                {entry.state === 'queued' && turnId && (
+                  <button
+                    disabled={busy || !settings || !sameSettings(entry.settings, settings)}
+                    title="Add to the running turn using its current settings"
+                    onClick={() =>
+                      void run(() =>
+                        post<QueueState>('/threads/' + threadId + '/queue/' + entry.id + '/steer', {
+                          expectedTurnId: turnId,
+                        }),
+                      )
+                    }
+                  >
+                    Send now
+                  </button>
+                )}
                 {entry.state === 'queued' && (
                   <button
                     disabled={busy}

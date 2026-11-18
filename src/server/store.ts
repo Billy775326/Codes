@@ -15,7 +15,7 @@ export class Store {
     chmodSync(join(directory, 'codes.sqlite'), 0o600);
     if (
       this.db.prepare("SELECT name FROM sqlite_master WHERE name='meta'").get() &&
-      ![1, 2, 3].includes((this.db.prepare('SELECT version FROM meta').get() as any)?.version)
+      ![1, 2, 3, 4].includes((this.db.prepare('SELECT version FROM meta').get() as any)?.version)
     ) {
       this.db.close();
       throw new AppError(
@@ -26,13 +26,13 @@ export class Store {
     }
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=1000;
       CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL);
-      INSERT INTO meta SELECT 3 WHERE NOT EXISTS (SELECT 1 FROM meta);
+      INSERT INTO meta SELECT 4 WHERE NOT EXISTS (SELECT 1 FROM meta);
       CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT UNIQUE NOT NULL);
       CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), title TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL, settings TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0, forked_from_id TEXT);
       CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id), kind TEXT NOT NULL, digest TEXT NOT NULL, state TEXT NOT NULL, turn_id TEXT, error TEXT, pending_text TEXT, created_at INTEGER NOT NULL, result_id TEXT);
-      CREATE UNIQUE INDEX IF NOT EXISTS active_turn ON operations(thread_id) WHERE kind='send' AND state IN ('dispatching','acknowledged','unknown');`);
+      CREATE UNIQUE INDEX IF NOT EXISTS active_turn ON operations(thread_id) WHERE kind IN ('send','review') AND state IN ('dispatching','acknowledged','unknown');`);
     const version = (this.db.prepare('SELECT version FROM meta').get() as any).version;
-    if (version < 3) {
+    if (version < 4) {
       const backup = join(
         directory,
         'codes.schema-v' + version + '-' + Date.now() + '-' + randomUUID() + '.sqlite',
@@ -48,10 +48,15 @@ export class Store {
       try {
         if (version === 1)
           this.db.exec('ALTER TABLE threads ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;');
+        if (version < 3)
+          this.db.exec(
+            'ALTER TABLE threads ADD COLUMN forked_from_id TEXT; ALTER TABLE operations ADD COLUMN result_id TEXT;',
+          );
         this.db.exec(
-          'ALTER TABLE threads ADD COLUMN forked_from_id TEXT; ALTER TABLE operations ADD COLUMN result_id TEXT;' +
-            queueSchema +
-            'UPDATE meta SET version=3; COMMIT;',
+          queueSchema +
+            `DROP INDEX IF EXISTS active_turn;
+          CREATE UNIQUE INDEX active_turn ON operations(thread_id) WHERE kind IN ('send','review') AND state IN ('dispatching','acknowledged','unknown');
+          UPDATE meta SET version=4; COMMIT;`,
         );
       } catch (error) {
         this.db.exec('ROLLBACK');
@@ -95,7 +100,7 @@ export class Store {
       forkedFromId: row.forked_from_id ?? undefined,
       queueCount: this.queue.count(row.id),
       managementPending: !!this.pendingManagement(row.id),
-      executionPending: !!this.active(row.id),
+      executionPending: !!this.active(row.id) || !!this.steers(row.id).length,
     };
   }
   thread(id: string): (Summary & { settings: Settings }) | undefined {
@@ -153,16 +158,39 @@ export class Store {
   active(threadId: string) {
     const row = this.db
       .prepare(
-        "SELECT id,pending_text,state FROM operations WHERE thread_id=? AND kind='send' AND state IN ('dispatching','acknowledged','unknown') LIMIT 1",
+        "SELECT id,pending_text,state,kind,turn_id FROM operations WHERE thread_id=? AND kind IN ('send','review') AND state IN ('dispatching','acknowledged','unknown') LIMIT 1",
       )
       .get(threadId) as any;
-    return row && { id: row.id, text: row.pending_text, state: row.state };
+    return (
+      row && {
+        id: row.id,
+        text: row.pending_text,
+        state: row.state,
+        kind: row.kind,
+        turnId: row.turn_id ?? undefined,
+      }
+    );
+  }
+  steers(threadId: string): (Operation & { text: string })[] {
+    const rows = this.db
+      .prepare(
+        "SELECT id,substr(pending_text,1,2000) AS pending_text FROM operations WHERE thread_id=? AND kind='steer' AND state IN ('dispatching','acknowledged','unknown') ORDER BY created_at LIMIT 10",
+      )
+      .all(threadId) as any[];
+    return rows.map((row) => ({ ...this.operation(row.id)!, text: row.pending_text ?? '' }));
+  }
+  finishSteers(threadId: string, turnId: string) {
+    this.db
+      .prepare(
+        "UPDATE operations SET state='completed',pending_text=NULL WHERE thread_id=? AND kind='steer' AND turn_id=? AND state IN ('acknowledged','unknown')",
+      )
+      .run(threadId, turnId);
   }
   activeCount() {
     return (
       this.db
         .prepare(
-          "SELECT count(*) AS count FROM operations WHERE kind='send' AND state IN ('dispatching','acknowledged','unknown')",
+          "SELECT count(*) AS count FROM operations WHERE kind IN ('send','review') AND state IN ('dispatching','acknowledged','unknown')",
         )
         .get() as any
     ).count as number;
@@ -222,7 +250,7 @@ export class Store {
   complete(threadId: string, turnId: string) {
     this.db
       .prepare(
-        "UPDATE operations SET state='completed',turn_id=?,pending_text=NULL WHERE thread_id=? AND kind='send' AND (turn_id=? OR turn_id IS NULL) AND state IN ('dispatching','acknowledged','unknown')",
+        "UPDATE operations SET state='completed',turn_id=?,pending_text=NULL WHERE thread_id=? AND kind IN ('send','review') AND (turn_id=? OR turn_id IS NULL) AND state IN ('dispatching','acknowledged','unknown')",
       )
       .run(turnId, threadId, turnId);
   }

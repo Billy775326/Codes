@@ -12,7 +12,7 @@ This document separates proposed implementation work from acceptance of existing
 | R2  | P0       | Scale history, tool output, and file previews      | The browser stops older-history loading at 240 displayed messages, output is clipped, and file lines are all rendered. Add navigable bounded windows or virtualization, explicit truncation notices, and paginated directory entries. Validate responsiveness on the intended host. |
 | R3  | P1       | Package service supervision and health checks      | The current trial is a manually started process. Provide a reviewed service template, explicit runtime/account configuration, bounded restart behavior, and a readiness check. A restart must preserve unknown outcomes and never resend work.                                      |
 | R5  | P1       | Complete project registration management           | The UI currently adds/selects directories. Add registration rename/removal and clear handling of missing/moved paths. Removing a registration must not delete its directory or native conversations.                                                                                |
-| R6  | P1       | Expose useful runtime diagnostics                  | The API reports basic runtime state/version, but the UI lacks a dedicated status view. Show actionable CLI availability/version/authentication and connection errors without exposing credentials or raw sensitive logs.                                                            |
+| R6  | P1       | Expose useful runtime diagnostics                  | The API reports basic runtime state/version, but the UI lacks a dedicated status view. A session status view now shows connection, runtime/version, model/effort, permissions and native token usage. Authentication-specific remediation and richer safe error diagnostics remain. |
 
 **R4 conversation management and in-conversation workflows are implemented.** The sidebar supports case-insensitive title search, native cursor pagination, rename, archive/restore, protected active/unknown tasks, retained drafts, structured question controls, quoted follow-ups, durable FIFO queues, and native per-turn branching. Search scans a bounded portion at a time; permanent deletion, full-text search, and export remain outside this change. See [conversation management](conversations.md) and [acceptance](acceptance.md) for scope and evidence.
 
@@ -30,10 +30,11 @@ These are verification gates, not a request to rewrite the implemented features.
 | V4  | P0       | Backup and restore                     | Restore codes metadata together with the required native Codex history under the intended service account. Preserve permissions and unresolved operation receipts. A procedure is documented; end-to-end restore is unverified.          |
 | V5  | P1       | Representative scale and long sessions | Measure switching, scrolling, input latency, memory, and stream recovery with real repositories and large tool outputs. The synthetic browser threshold is not a production benchmark.                                                   |
 
+Local IDE workflow changes and remaining differences are tracked in the [alignment audit](ide-parity.md). VS Code host integration and Codex Cloud are excluded.
+
 ## Optional follow-ups
 
 - Token rotation and session-management controls; the current method is private configuration plus service restart.
-- Reasoning-effort and model-settings controls, after their supported protocol fields are verified for the pinned CLI.
 - Conversation export and small conveniences such as code-block copy buttons.
 - Additional CLI-version compatibility only after contract and live checks exist for each version.
 

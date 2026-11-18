@@ -4,14 +4,20 @@
 
 ### Added
 
+- Steer a running turn with immediate follow-ups or a waiting queue entry's Send now action, keeping durable receipts and protecting unknown results against duplicate execution.
+- Select native Plan/Code modes and model-advertised reasoning effort; display native plan steps and session status with context/cumulative token usage.
+- Start native Read only code reviews against uncommitted changes, a base branch, a commit or custom instructions, in the current or a separate conversation.
+- Save browser Enter/queue/steer/review preferences, invert follow-up behavior with Ctrl/Cmd+Shift+Enter, create a conversation with Ctrl/Cmd+N, and use supported local slash commands.
+- Attach entire text files as context as well as line selections, retaining snapshot validation and size limits.
+- Back up metadata schemas 1–3 before upgrading to schema 4, preserving projects and receipts while making reviews share the existing task execution lease.
+
 - Install a local `codes` command to start the built workspace from any directory, with a pinned Node executable and the existing checkout data directory.
 - Answer native structured questions with option descriptions, custom text when permitted, masked secret fields, and cross-client resolution. Quote a historical message into an editable follow-up draft.
 - Queue up to ten messages per conversation, edit or remove waiting entries, and pause/resume sequential execution. Persist queues across browser closure; service restarts, stopped/failed tasks, and unknown outcomes hold the queue for review. Bound broadcast previews while preserving full editable messages.
 - Create a native conversation branch through a completed turn, retain source navigation, and start the branch in Read only. Branching preserves later source history, shares current project files, and does not copy queued messages.
-- Back up metadata schema 1 or 2 before upgrading to schema 3 for queue and branch receipts.
 
 - Browse native conversations with title search, date groups, and cursor pagination beyond the local summary window. Rename, archive, and restore conversations from the sidebar; archived conversations retain their history and must be restored before sending.
-- Protect running and uncertain executions from archiving, and retain a protected state when an archive acknowledgement is lost. Back up schema 1 metadata before migrating archive flags to schema 2.
+- Protect running and uncertain executions from archiving, and retain a protected state when an archive acknowledgement is lost.
 
 - Introduce a single-owner Linux web workspace with project conversations, streaming replies, host-side Codex CLI execution, and a responsive desktop/mobile interface.
 - Add explicit per-request approval and question flows, read-only file selections as context, and a current-turn change viewer.

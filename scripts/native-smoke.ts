@@ -21,15 +21,28 @@ const service = new Service(
 );
 try {
   const project = await service.addProject(join(directory, 'project'));
-  const models = await service.driver.call('model/list', { limit: 30 });
-  assert.ok(Array.isArray(models.data));
+  const models = await service.modelSettings.models();
+  assert.ok(models.length > 0);
+  const modes = await service.modelSettings.modes();
+  assert.ok(modes.some((entry) => entry.mode === 'plan'));
+  assert.ok(modes.some((entry) => entry.mode === 'default'));
   const thread = await service.create(project.id, { permission: 'read-only' });
   assert.ok(thread.id);
+  const mode = await service.modelSettings.resolve(
+    { permission: 'read-only', mode: 'plan' },
+    thread.resolvedModel,
+  );
+  assert.equal(mode.mode, 'plan');
+  await service.driver.call('thread/settings/update', {
+    threadId: thread.id,
+    collaborationMode: mode,
+    sandboxPolicy: { type: 'readOnly' },
+  });
   const history = await service.history(thread.id);
   assert.equal(history.messages.length, 0);
   assert.equal(history.state, 'idle');
   console.log(
-    'PASS: CLI 0.167.0 initialization, model metadata, thread creation/read, and lazy empty history. No model requests.',
+    'PASS: CLI 0.167.0 initialization, model/reasoning metadata, Plan/Code presets, thread settings, creation/read, and lazy empty history. No model requests.',
   );
 } finally {
   await service.close();

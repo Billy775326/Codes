@@ -235,3 +235,83 @@ it('returns bounded queue previews and the full owned message for editing', asyn
     ).status,
   ).toBe(200);
 });
+
+it('validates native steering/review inputs and publishes bounded reasoning metadata', async () => {
+  const { randomUUID } = await import('node:crypto');
+  const mutate = async (path: string, value: unknown) =>
+    fetch(origin + '/api' + path, {
+      method: 'POST',
+      headers: { origin, cookie },
+      body: JSON.stringify(value),
+    });
+  const project = (await (await mutate('/projects', { path: directory })).json()) as { id: string };
+  const thread = (await (
+    await mutate('/projects/' + project.id + '/threads', { permission: 'read-only' })
+  ).json()) as { id: string };
+  const path = '/threads/' + thread.id;
+  expect(
+    (await mutate(path + '/steer', { operationId: randomUUID(), text: 'Missing turn' })).status,
+  ).toBe(400);
+  expect(
+    (
+      await mutate(path + '/steer', {
+        operationId: randomUUID(),
+        text: 'Stale turn',
+        expectedTurnId: 'stale',
+      })
+    ).status,
+  ).toBe(409);
+  for (const target of [
+    { type: 'baseBranch', branch: ' ' },
+    { type: 'commit', sha: 'main;command' },
+    { type: 'custom', instructions: '' },
+    { type: 'uncommittedChanges', arbitrary: true },
+  ])
+    expect(
+      (
+        await mutate(path + '/review', {
+          operationId: randomUUID(),
+          target,
+          settings: { permission: 'read-only' },
+        })
+      ).status,
+    ).toBe(400);
+  expect(
+    (
+      await mutate(path + '/review', {
+        operationId: randomUUID(),
+        target: { type: 'uncommittedChanges' },
+        settings: { permission: 'read-only' },
+        delivery: 'detached',
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await mutate(path + '/send', {
+        operationId: randomUUID(),
+        text: 'Invalid mode',
+        settings: { permission: 'read-only', mode: 'invented' },
+      })
+    ).status,
+  ).toBe(400);
+  const models = await (await fetch(origin + '/api/models', { headers: { cookie } })).json();
+  expect(models[0]).toMatchObject({
+    model: 'simulated-model',
+    supportedReasoningEfforts: [
+      { reasoningEffort: 'low' },
+      { reasoningEffort: 'medium' },
+      { reasoningEffort: 'high' },
+    ],
+  });
+  expect(Object.keys(models[0])).toEqual([
+    'id',
+    'model',
+    'displayName',
+    'isDefault',
+    'defaultReasoningEffort',
+    'supportedReasoningEfforts',
+  ]);
+  const modes = await (await fetch(origin + '/api/modes', { headers: { cookie } })).json();
+  expect(modes.map((entry: { mode: string }) => entry.mode)).toEqual(['default', 'plan']);
+});

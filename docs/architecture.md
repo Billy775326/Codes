@@ -77,6 +77,7 @@ Streaming deltas update memory and an event buffer, not a database row per token
 | Slow-client queued output            | 512 KiB before disconnect                              |
 | Unfinished queued messages           | 10 per conversation / 100 workspace-wide               |
 | Queue event/snapshot text preview    | 2,000 characters per message; full payload retained    |
+| Pending steering previews            | 10 entries per conversation / 2,000 characters each    |
 | Completed/failed operation receipts  | 30 days                                                |
 
 History pages automatically use fewer turns when their combined items exceed the display budget. A single oversized turn still produces an explicit limit error. Very large native tool results can exceed the JSONL frame limit and close the runtime; use the CLI to inspect such conversations. The preview is designed around a small working set, not unlimited logs. Limits are implementation constraints, not measured throughput claims.
@@ -84,6 +85,8 @@ History pages automatically use fewer turns when their combined items exceed the
 ## Compatibility and trust
 
 Supported protocol baseline: **Codex CLI 0.167.0**. Protocol behavior was checked against generated schemas and a metadata-only native smoke test, followed by an isolated live read/write/interrupt pilot. The metadata check exposed lazy thread materialization: `thread/turns/list` reports a specific error before the first user message. The adapter treats only that pinned-version error as empty history.
+
+Native Plan/Code and reasoning settings use experimental collaboration fields on the pinned connection. Reviews share the send execution lease; steering uses separate receipts. The [IDE alignment audit](ide-parity.md) records protocol choices and remaining differences.
 
 An independent simulator exercises protocol timing and failure paths, but does not prove that every live Codex tool, account policy, permission request, or model event behaves as expected. Basic live read/write/interrupt acceptance passed; real prompting policies and broader tool variants remain separate gates.
 

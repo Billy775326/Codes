@@ -10,6 +10,8 @@ import { Service } from './service.js';
 const settings = z
   .object({
     model: z.string().min(1).max(150).optional(),
+    effort: z.string().min(1).max(80).optional(),
+    mode: z.enum(['default', 'plan']).optional(),
     permission: z.enum(['read-only', 'workspace-write']),
   })
   .strict();
@@ -153,16 +155,10 @@ export async function application(
         }
         if (url.pathname === '/api/system' && method === 'GET')
           return json(response, service.driver.system());
-        if (url.pathname === '/api/models' && method === 'GET') {
-          const result = await service.driver.call('model/list', { limit: 30 });
-          const parsed = z
-            .array(z.object({ id: z.string(), displayName: z.string() }))
-            .max(100)
-            .safeParse(result?.data);
-          if (!parsed.success)
-            throw new AppError('PROTOCOL_ERROR', 'The CLI returned invalid model metadata.', 502);
-          return json(response, parsed.data);
-        }
+        if (url.pathname === '/api/models' && method === 'GET')
+          return json(response, await service.modelSettings.models());
+        if (url.pathname === '/api/modes' && method === 'GET')
+          return json(response, await service.modelSettings.modes());
         if (url.pathname === '/api/projects' && method === 'GET')
           return json(response, service.store.projects());
         if (url.pathname === '/api/projects' && method === 'POST') {
@@ -266,6 +262,16 @@ export async function application(
                 .parse(await body(request));
               return json(response, service.controlQueue(id, input.paused));
             }
+            if (segments[4] && segments[5] === 'steer' && method === 'POST') {
+              const input = z
+                .object({ expectedTurnId: z.string().min(1).max(200) })
+                .strict()
+                .parse(await body(request));
+              return json(
+                response,
+                await service.steerQueued(id, segments[4], input.expectedTurnId),
+              );
+            }
             if (segments[4] && method === 'GET') {
               service.queueState(id);
               const item = service.store.queue.get(segments[4]);
@@ -328,6 +334,57 @@ export async function application(
             return json(
               response,
               await service.send(id, p.operationId, p.text, p.settings, p.attachments),
+            );
+          }
+          if (segments[3] === 'steer' && method === 'POST') {
+            const input = sendInput
+              .omit({ settings: true })
+              .extend({ expectedTurnId: z.string().min(1).max(200) })
+              .strict()
+              .parse(await body(request));
+            return json(
+              response,
+              await service.steer(
+                id,
+                input.operationId,
+                input.expectedTurnId,
+                input.text,
+                input.attachments,
+              ),
+            );
+          }
+          if (segments[3] === 'review' && method === 'POST') {
+            const input = z
+              .object({
+                operationId: z.uuid(),
+                settings,
+                target: z.discriminatedUnion('type', [
+                  z.object({ type: z.literal('uncommittedChanges') }).strict(),
+                  z
+                    .object({
+                      type: z.literal('baseBranch'),
+                      branch: z.string().trim().min(1).max(200),
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      type: z.literal('commit'),
+                      sha: z.string().regex(/^[a-fA-F0-9]{7,64}$/),
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      type: z.literal('custom'),
+                      instructions: z.string().trim().min(1).max(4000),
+                    })
+                    .strict(),
+                ]),
+              })
+              .strict()
+              .parse(await body(request));
+            return json(
+              response,
+              await service.review(id, input.operationId, input.target, input.settings),
             );
           }
           if (segments[3] === 'interrupt' && method === 'POST')

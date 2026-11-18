@@ -30,7 +30,7 @@ function finish(thread: any, turn: any, status = 'completed') {
   turn.status = status;
   thread.status = { type: 'idle' };
   save();
-  if (!turn.items[0]?.content[0]?.text.includes('[lost-terminal]'))
+  if (!turn.items[0]?.content?.[0]?.text?.includes('[lost-terminal]'))
     note('turn/completed', { threadId: thread.id, turn });
 }
 function respond(thread: any, turn: any, slow = false) {
@@ -102,8 +102,28 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       });
     if (method === 'model/list')
       return result(id, {
-        data: [{ id: 'simulated-model', displayName: 'Demo model', isDefault: true }],
+        data: [
+          {
+            id: 'simulated-model',
+            model: 'simulated-model',
+            displayName: 'Demo model',
+            isDefault: true,
+            defaultReasoningEffort: 'medium',
+            supportedReasoningEfforts: [
+              { reasoningEffort: 'low', description: 'Quick fixture' },
+              { reasoningEffort: 'medium', description: 'Balanced fixture' },
+              { reasoningEffort: 'high', description: 'Careful fixture' },
+            ],
+          },
+        ],
         nextCursor: null,
+      });
+    if (method === 'collaborationMode/list')
+      return result(id, {
+        data: [
+          { name: 'Code', mode: 'default', model: 'simulated-model' },
+          { name: 'Plan', mode: 'plan', model: 'simulated-model' },
+        ],
       });
     if (method === 'account/read')
       return result(id, { account: { type: 'mock' }, requiresOpenaiAuth: false });
@@ -130,7 +150,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     if (method === 'thread/start') {
       const thread = create(p.cwd);
       note('thread/started', { thread: summary(thread) });
-      return result(id, { thread: summary(thread) });
+      return result(id, { thread: summary(thread), model: 'simulated-model' });
     }
     if (method === 'test/seed') {
       const thread: any = create(p.cwd);
@@ -164,7 +184,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           ],
         });
       save();
-      return result(id, { thread: summary(thread) });
+      return result(id, { thread: summary(thread), model: 'simulated-model' });
     }
     const thread: any = threads.get(p.threadId);
     if (!thread) return send({ id, error: { code: -32600, message: 'Thread not found' } });
@@ -185,7 +205,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       return result(id, { thread: summary(child) });
     }
     if (method === 'thread/read' || method === 'thread/resume')
-      return result(id, { thread: summary(thread) });
+      return result(id, { thread: summary(thread), model: 'simulated-model' });
     if (method === 'thread/unsubscribe') return result(id, { status: 'unsubscribed' });
     if (method === 'thread/turns/list') {
       const end = p.cursor ? Number(p.cursor) : thread.turns.length;
@@ -221,6 +241,52 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       note(thread.archived ? 'thread/archived' : 'thread/unarchived', { threadId: thread.id });
       return result(id, thread.archived ? {} : { thread: summary(thread) });
     }
+    if (method === 'thread/settings/update') {
+      thread.settings = p;
+      return result(id, {});
+    }
+    if (method === 'review/start') {
+      if (thread.status.type === 'active' || thread.archived)
+        return send({ id, error: { code: -32600, message: 'Conversation is busy or archived' } });
+      const turn: any = {
+        id: randomUUID(),
+        status: 'inProgress',
+        items: [
+          { id: randomUUID(), type: 'enteredReviewMode', review: 'Reviewing ' + p.target.type },
+        ],
+      };
+      thread.turns.push(turn);
+      thread.status = { type: 'active', activeFlags: [] };
+      result(id, { turn, reviewThreadId: thread.id });
+      note('turn/started', {
+        threadId: thread.id,
+        turn: { id: randomUUID(), status: 'inProgress', items: [] },
+      });
+      const review = {
+        id: randomUUID(),
+        type: 'exitedReviewMode',
+        review: 'Simulated review: no model was called. Target: ' + JSON.stringify(p.target),
+      };
+      turn.items.push(review);
+      note('item/completed', { threadId: thread.id, turnId: turn.id, item: review });
+      finish(thread, turn);
+      return;
+    }
+    if (method === 'turn/steer') {
+      const turn = thread.turns.at(-1);
+      if (thread.status.type !== 'active' || turn?.id !== p.expectedTurnId)
+        return send({ id, error: { code: -32600, message: 'Active turn does not match' } });
+      const item = {
+        id: randomUUID(),
+        type: 'userMessage',
+        clientId: p.clientUserMessageId,
+        content: p.input,
+      };
+      turn.items.push(item);
+      save();
+      note('item/completed', { threadId: thread.id, turnId: turn.id, item });
+      return result(id, { turnId: turn.id });
+    }
     if (method === 'turn/start') {
       if (thread.archived)
         return send({ id, error: { code: -32600, message: 'Restore the conversation first' } });
@@ -249,6 +315,25 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       save();
       note('turn/started', { threadId: thread.id, turn });
       note('item/completed', { threadId: thread.id, turnId: turn.id, item: turn.items[0] });
+      note('thread/tokenUsage/updated', {
+        threadId: thread.id,
+        turnId: turn.id,
+        tokenUsage: {
+          last: { totalTokens: 1200 },
+          total: { totalTokens: 3400 },
+          modelContextWindow: 128000,
+        },
+      });
+      if (p.collaborationMode?.mode === 'plan')
+        note('turn/plan/updated', {
+          threadId: thread.id,
+          turnId: turn.id,
+          explanation: 'Simulation plan',
+          plan: [
+            { step: 'Inspect the project', status: 'completed' },
+            { step: 'Propose a change', status: 'inProgress' },
+          ],
+        });
       if (!text.includes('[lost-ack]')) result(id, { turn });
       if (text.includes('[approve]') || text.includes('[question]')) {
         const questions = text.includes('[question]');

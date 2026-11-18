@@ -93,6 +93,7 @@ export class Driver extends EventEmitter {
     try {
       await rpc.request('initialize', {
         clientInfo: { name: 'codes', title: 'codes', version: '0.0.0' },
+        capabilities: { experimentalApi: true },
       });
       await rpc.notify('initialized');
       this.state = 'ready';

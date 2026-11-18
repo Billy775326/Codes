@@ -33,7 +33,11 @@ describe('CLI JSONL transport', () => {
   it('marks a lost acknowledgement uncertain and never resends', async () => {
     const { rpc, output, sent } = fixture(25);
     const result = rpc.request('turn/start', {});
-    await expect(result).rejects.toMatchObject({ code: 'RESULT_UNKNOWN', uncertain: true });
+    await expect(result).rejects.toMatchObject({
+      code: 'RESULT_UNKNOWN',
+      uncertain: true,
+      message: expect.stringContaining('turn/start'),
+    });
     output.write('{"id":1,"result":{"late":true}}\n');
     expect(sent).toHaveLength(1);
     rpc.fail();

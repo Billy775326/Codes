@@ -58,7 +58,7 @@ export class Rpc extends EventEmitter {
         reject(
           new AppError(
             'RESULT_UNKNOWN',
-            'The CLI did not acknowledge the request. Its outcome must be checked.',
+            `The CLI did not acknowledge ${method}. Its outcome must be checked.`,
             504,
             true,
           ),

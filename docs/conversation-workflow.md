@@ -48,3 +48,7 @@ Metadata schema 3 adds queue state, branch ancestry, and branch result IDs. Sche
 The [official app-server documentation](https://learn.chatgpt.com/docs/app-server) defines structured question callbacks and `thread/fork` with `lastTurnId`. Fields were checked against generated schemas from CLI 0.167.0. Queue order, receipts, limits, and browser recovery are codes behavior, tested separately in the simulator. The opt-in live pilot also verifies native fork history, unchanged source files/history, and two queued model turns. Real prompting policies and HTTPS/physical-phone acceptance remain separate gates.
 
 Queue reordering, steering an in-flight turn, permanent deletion, and file-level branch isolation are outside this implementation.
+
+## Native IDE interaction controls
+
+Immediate steering, queue Send now, Plan/Code, reasoning effort, native reviews, browser preferences and supported slash commands are described in the [IDE alignment audit](ide-parity.md). Steering extends the current turn using its settings; it is separate from queue dispatch. Approvals/questions still need an explicit answer or cancellation. Unknown follow-ups keep the conversation protected until native evidence resolves them.

@@ -31,11 +31,11 @@ An uncertain rename asks for a list refresh to inspect the native title. It does
 
 ## Metadata migration and rollback
 
-On the first startup with schema 1 or 2, codes writes a consistent SQLite snapshot named `codes.schema-v<old-version>-<timestamp>-<uuid>.sqlite` in `CODES_DATA_DIR`, with owner-only permissions, before migrating to schema 3. The migration adds durable queues, native branch ancestry, and branch result receipts; schema 1 also gains the archive column. Existing project registrations, settings, archive flags, and operation receipts are preserved. If backup or migration fails, startup fails; it does not reset the database. Fresh installations start at schema 3. Unsupported versions are rejected.
+On the first startup with schema 1, 2 or 3, codes writes a consistent SQLite snapshot named `codes.schema-v<old-version>-<timestamp>-<uuid>.sqlite` in `CODES_DATA_DIR`, with owner-only permissions, before migrating to schema 4. The migration extends the execution lease to native reviews. Upgrades from schemas 1 and 2 also add durable queues, native branch ancestry and branch result receipts; schema 1 gains the archive column. Existing project registrations, settings, archive flags, and operation receipts are preserved. If backup or migration fails, startup fails; it does not reset the database. Fresh installations start at schema 4. Unsupported versions are rejected.
 
 The backup covers codes metadata only. Native histories, archive locations, and authentication remain in the server account's Codex home. Back up both locations with the service stopped before upgrading. Retain backups privately until the upgrade is accepted.
 
-Older code cannot open schema 3. To roll back, stop the service and preserve the current metadata and Codex home first. Restore a matched pre-upgrade metadata/Codex-home backup under the intended account, preserving permissions, then start the older code. Do not mix a restored database with WAL/SHM files from another database. The automatic metadata snapshot alone does not undo native archive changes or preserve work created after the snapshot. Full deployment backup/restore acceptance remains a separate gate.
+Older code cannot open schema 4. To roll back, stop the service and preserve the current metadata and Codex home first. Restore a matched pre-upgrade metadata/Codex-home backup under the intended account, preserving permissions, then start the older code. Do not mix a restored database with WAL/SHM files from another database. The automatic metadata snapshot alone does not undo native archive changes or preserve work created after the snapshot. Full deployment backup/restore acceptance remains a separate gate.
 
 ## Reference decisions
 

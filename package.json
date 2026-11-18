@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test",
     "test:native": "node --import tsx scripts/native-smoke.ts",
+    "test:live:ide": "node --import tsx scripts/live-ide-pilot.ts",
     "test:live": "node --import tsx scripts/live-pilot.ts",
     "format:check": "prettier --check .",
     "format": "prettier --write ."

@@ -10,8 +10,10 @@ A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interfa
 - Native Codex conversations, streamed assistant text, and command/file activity.
 - Searchable, paginated conversation navigation with native rename, archive, and restore controls.
 - Command, file, and turn-scoped permission approvals; structured user questions with native choices, descriptions, custom answers, and masked secret inputs.
-- Quoted follow-up drafts, durable FIFO message queues with edit/remove/pause controls, and native conversation branches through completed turns.
-- Read-only file browsing and line-range attachments with file-change checks.
+- Quoted follow-up drafts, durable FIFO queues, immediate native steering, and conversation branches through completed turns.
+- Native Plan/Code modes, model-specific reasoning effort, task-plan steps, inline/separate code reviews, and session/context-token status.
+- Browser interaction preferences for Enter, queue/steer inversion, review delivery, and local slash commands.
+- Read-only file browsing with selection or whole-file attachments and file-change checks.
 - Read-only current-turn diffs and paginated native conversation history.
 - Browser reconnection through snapshots and bounded event replay.
 - Durable operation receipts that block duplicate sends after an uncertain result.
@@ -108,7 +110,13 @@ The opt-in live pilot uses the server's existing login and model quota, edits on
 npm run test:live -- --allow-model-requests
 ```
 
-It is excluded from CI and the default test command. Unexpected approvals are refused; use the manual pilot for policy-dependent approval flows.
+For the read-only local IDE pilot (Plan/Code, reasoning, same-turn steering, token usage and native review):
+
+```bash
+npm run test:live:ide -- --allow-model-requests
+```
+
+Both pilots are excluded from CI and the default test command. Unexpected approvals are refused; use the manual pilot for policy-dependent approval flows.
 
 ## Documentation
 
@@ -118,6 +126,7 @@ It is excluded from CI and the default test command. Unexpected approvals are re
 - [Remaining implementation and acceptance](docs/requirements.md)
 - [Conversation management](docs/conversations.md)
 - [Questions, queues, and branches](docs/conversation-workflow.md)
+- [IDE interaction alignment and remaining differences](docs/ide-parity.md)
 - [Operations and recovery](docs/operations.md)
 - [Changelog](CHANGELOG.md)
 - [中文说明](docs/README.zh-CN.md)

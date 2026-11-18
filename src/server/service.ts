@@ -6,9 +6,12 @@ import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
+import { ModelSettings } from './model-settings.js';
+import { z } from 'zod';
 import { AppError, record } from '../shared/errors.js';
 import {
   limits,
+  sameSettings,
   type Thread,
   type Settings,
   type Message,
@@ -18,6 +21,7 @@ import {
   type State,
   type Summary,
   type QueuePayload,
+  type ReviewTarget,
 } from '../shared/types.js';
 
 const text = (value: unknown, maximum: number = limits.item) =>
@@ -65,6 +69,16 @@ function item(raw: any, turnId: string): Message | undefined {
         : '',
       status: text(raw.status),
     };
+  if (raw.type === 'enteredReviewMode' || raw.type === 'exitedReviewMode')
+    return {
+      id: raw.id,
+      turnId,
+      kind: 'notice',
+      text:
+        text(raw.review) ||
+        (raw.type === 'enteredReviewMode' ? 'Code review started.' : 'Code review finished.'),
+    };
+  if (raw.type === 'plan') return { id: raw.id, turnId, kind: 'assistant', text: text(raw.text) };
   return undefined;
 }
 
@@ -76,7 +90,9 @@ export class Service {
   private admission: Promise<void> = Promise.resolve();
   private managing = new Set<string>();
   readonly queue: MessageQueue;
+  readonly modelSettings: ModelSettings;
   private sending = new Map<string, number>();
+  private terminals = new Map<string, State>();
   private metadataRevision = 0;
   private metadataRevisions = new Map<string, number>();
   private actions = new Map<
@@ -87,6 +103,7 @@ export class Service {
     readonly store: Store,
     readonly driver: Driver,
   ) {
+    this.modelSettings = new ModelSettings(driver);
     this.queue = new MessageQueue(
       store.queue,
       async (id, messageId) => {
@@ -98,6 +115,7 @@ export class Service {
           store.activeCount() >= limits.active ||
           this.sending.has(id) ||
           store.active(id) ||
+          store.steers(id).length ||
           this.managing.has(id) ||
           store.pendingManagement(id)
         )
@@ -159,6 +177,7 @@ export class Service {
       store.queue.pauseAll('The runtime stopped. Review outcomes before resuming.');
       for (const id of store.queue.pendingThreads()) this.queue.notify(id);
       for (const thread of this.cache.values()) {
+        for (const steer of store.steers(thread.id)) store.update(steer.id, 'unknown');
         for (const action of thread.actions) action.status = 'expired';
         if (thread.pending) {
           thread.pending.state = 'unknown';
@@ -413,7 +432,12 @@ export class Service {
     this.managing.add(id);
     try {
       const { saved, native } = await this.conversationOwner(id);
-      if (this.store.active(id) || this.store.queue.count(id) || native.status?.type === 'active')
+      if (
+        this.store.active(id) ||
+        this.store.steers(id).length ||
+        this.store.queue.count(id) ||
+        native.status?.type === 'active'
+      )
         throw new AppError(
           'CONVERSATION_ACTIVE',
           'Stop the current task and confirm its result before archiving this conversation.',
@@ -545,6 +569,7 @@ export class Service {
       olderCursor: null,
       settings,
       diff: '',
+      resolvedModel: typeof result.model === 'string' ? result.model : settings.model,
       queue: this.store.queue.state(result.thread.id),
     };
     this.store.saveThread(thread, settings);
@@ -604,6 +629,8 @@ export class Service {
         .map((m) => m.text)
         .join('\n'),
       pending,
+      steering: this.store.steers(id),
+      turnId: page.turns.at(-1)?.id,
       queue: this.store.queue.state(id),
     };
     await this.remember(thread);
@@ -779,6 +806,62 @@ export class Service {
     this.queue.wake(id);
     return this.queueState(id);
   }
+  async steerQueued(id: string, messageId: string, expectedTurnId: string) {
+    const entry = this.store.queue.get(messageId);
+    if (!entry || entry.threadId !== id)
+      throw new AppError('NOT_FOUND', 'Queued message not found.', 404);
+    const operation = this.store.operation(messageId);
+    if (operation?.kind === 'steer') {
+      await this.steer(id, messageId, expectedTurnId, entry.text, entry.attachments);
+      return this.queueState(id);
+    }
+    if (entry.state !== 'queued')
+      throw new AppError('QUEUE_STARTED', 'This message has already started.', 409);
+    const thread = this.cache.get(id);
+    if (!thread || !sameSettings(entry.settings, thread.settings))
+      throw new AppError(
+        'STEER_SETTINGS',
+        'This queued message uses different task settings. Leave it queued for its own turn.',
+        409,
+      );
+    // Claim synchronously before native/file I/O. The queue worker rechecks this state.
+    this.store.queue.set(messageId, 'dispatching');
+    this.queue.notify(id);
+    try {
+      const receipt = await this.steer(
+        id,
+        messageId,
+        expectedTurnId,
+        entry.text,
+        entry.attachments,
+      );
+      const latest = this.store.queue.get(messageId);
+      if (latest?.state === 'dispatching')
+        this.store.queue.set(
+          messageId,
+          receipt.state === 'completed'
+            ? 'completed'
+            : receipt.state === 'unknown'
+              ? 'unknown'
+              : receipt.state === 'failed'
+                ? 'failed'
+                : 'sent',
+          receipt.error,
+        );
+    } catch (error) {
+      const receipt = this.store.operation(messageId);
+      this.store.queue.set(
+        messageId,
+        receipt?.state === 'unknown' ? 'unknown' : 'failed',
+        error instanceof Error ? error.message : 'Follow-up dispatch failed.',
+      );
+      this.store.queue.pause(id, 'A follow-up needs review before continuing.');
+      throw error;
+    } finally {
+      this.queue.notify(id);
+    }
+    return this.queueState(id);
+  }
   controlQueue(id: string, paused: boolean) {
     const state = this.queueState(id);
     if (!paused && state.items.some((row) => ['unknown', 'failed'].includes(row.state)))
@@ -940,50 +1023,10 @@ export class Service {
       this.queue.wake(id);
     }
   }
-  async send(
-    id: string,
-    operationId: string,
-    prompt: string,
-    settings: Settings,
-    attachments: Attachment[] = [],
-    fromQueue = false,
-  ) {
-    const existing = this.store.existing(operationId, id, 'send', {
-      prompt,
-      settings,
-      attachments,
-    });
-    if (!fromQueue && !existing && this.store.queue.count(id))
-      throw new AppError(
-        'QUEUE_PENDING',
-        'Add this message to the queue, or resolve the queued messages first.',
-        409,
-      );
-    this.sending.set(id, (this.sending.get(id) ?? 0) + 1);
-    try {
-      return await this.dispatchSend(id, operationId, prompt, settings, attachments);
-    } finally {
-      const remaining = (this.sending.get(id) ?? 1) - 1;
-      if (remaining) this.sending.set(id, remaining);
-      else this.sending.delete(id);
-      this.queue.wake(id);
-    }
-  }
-  private async dispatchSend(
-    id: string,
-    operationId: string,
-    prompt: string,
-    settings: Settings,
-    attachments: Attachment[] = [],
-  ) {
-    const thread = await this.read(id);
-    const project = this.project(thread.projectId);
-    const input = { prompt, settings, attachments };
-    const receipt = this.store.existing(operationId, id, 'send', input);
-    if (receipt) return receipt;
+  private async input(projectId: string, prompt: string, attachments: Attachment[]) {
     let context = '';
     for (const attachment of attachments) {
-      const file = await this.file(project.id, attachment.path);
+      const file = await this.file(projectId, attachment.path);
       if (file.sha !== attachment.sha)
         throw new AppError(
           'FILE_CHANGED',
@@ -1003,6 +1046,146 @@ export class Service {
     }
     if (Buffer.byteLength(prompt + context) > 100_000)
       throw new AppError('INPUT_LIMIT', 'The prompt and attached context exceed 100 KB.');
+    return [{ type: 'text', text: prompt + context, text_elements: [] }];
+  }
+  async review(id: string, operationId: string, target: ReviewTarget, settings: Settings) {
+    const title =
+      target.type === 'baseBranch'
+        ? 'changes against ' + target.branch
+        : target.type === 'commit'
+          ? 'commit ' + target.sha
+          : target.type === 'custom'
+            ? target.instructions
+            : 'uncommitted changes';
+    return this.send(
+      id,
+      operationId,
+      'Review: ' + title,
+      { ...settings, permission: 'read-only', mode: 'default' },
+      [],
+      false,
+      target,
+    );
+  }
+  async steer(
+    id: string,
+    operationId: string,
+    expectedTurnId: string,
+    prompt: string,
+    attachments: Attachment[] = [],
+  ) {
+    const input = { expectedTurnId, prompt, attachments };
+    const existing = this.store.existing(operationId, id, 'steer', input);
+    if (existing) return existing;
+    const thread = await this.read(id);
+    const nativeInput = await this.input(thread.projectId, prompt, attachments);
+    const active = this.store.active(id);
+    // Check again after file I/O; never promote a stale follow-up into a new task.
+    if (
+      thread.archived ||
+      thread.managementPending ||
+      this.managing.has(id) ||
+      this.store.pendingManagement(id) ||
+      (active && this.store.operation(active.id)?.kind === 'review') ||
+      thread.state !== 'running' ||
+      thread.turnId !== expectedTurnId ||
+      this.store.active(id)?.state === 'unknown'
+    )
+      throw new AppError(
+        'STEER_UNAVAILABLE',
+        'Only a running task can receive an immediate follow-up. Queue this message instead.',
+        409,
+      );
+    if (this.store.steers(id).length >= 10)
+      throw new AppError(
+        'STEER_LIMIT',
+        'Wait for pending follow-ups to finish before adding another.',
+        429,
+      );
+    const receipt = this.store.begin(operationId, id, 'steer', input, prompt);
+    if (receipt.existing) return receipt.existing;
+    this.boundary(thread);
+    try {
+      const response = await this.driver.call('turn/steer', {
+        threadId: id,
+        expectedTurnId,
+        clientUserMessageId: operationId,
+        input: nativeInput,
+      });
+      if (response?.turnId !== expectedTurnId)
+        throw new AppError(
+          'PROTOCOL_ERROR',
+          'The CLI did not confirm the intended turn.',
+          502,
+          true,
+        );
+      if (this.store.operation(operationId)?.state !== 'completed') {
+        this.store.update(operationId, 'acknowledged', expectedTurnId);
+        if (thread.turnId === expectedTurnId && terminal(thread.state))
+          this.store.finishSteers(id, expectedTurnId);
+      }
+      this.boundary(thread);
+      return this.store.operation(operationId)!;
+    } catch (error) {
+      const receipt = this.store.operation(operationId)!;
+      if (receipt.state === 'completed') return receipt;
+      this.store.update(
+        operationId,
+        error instanceof AppError && !error.uncertain ? 'failed' : 'unknown',
+        undefined,
+        error instanceof AppError ? error.message : 'The follow-up result is unknown.',
+      );
+      this.boundary(thread);
+      throw error;
+    }
+  }
+  async send(
+    id: string,
+    operationId: string,
+    prompt: string,
+    settings: Settings,
+    attachments: Attachment[] = [],
+    fromQueue = false,
+    review?: ReviewTarget,
+  ) {
+    const kind = review ? 'review' : 'send';
+    const existing = this.store.existing(operationId, id, kind, {
+      prompt,
+      settings,
+      attachments,
+      ...(review ? { review } : {}),
+    });
+    if (!fromQueue && !existing && this.store.queue.count(id))
+      throw new AppError(
+        'QUEUE_PENDING',
+        'Add this message to the queue, or resolve the queued messages first.',
+        409,
+      );
+    this.sending.set(id, (this.sending.get(id) ?? 0) + 1);
+    try {
+      return await this.dispatchSend(id, operationId, prompt, settings, attachments, review);
+    } finally {
+      const remaining = (this.sending.get(id) ?? 1) - 1;
+      if (remaining) this.sending.set(id, remaining);
+      else this.sending.delete(id);
+      this.queue.wake(id);
+    }
+  }
+  private async dispatchSend(
+    id: string,
+    operationId: string,
+    prompt: string,
+    settings: Settings,
+    attachments: Attachment[] = [],
+    review?: ReviewTarget,
+  ) {
+    const kind = review ? 'review' : 'send';
+    const thread = await this.read(id);
+    const project = this.project(thread.projectId);
+    const input = { prompt, settings, attachments, ...(review ? { review } : {}) };
+    const receipt = this.store.existing(operationId, id, kind, input);
+    if (receipt) return receipt;
+    const nativeInput = await this.input(project.id, prompt, attachments);
     if (this.store.thread(id)?.archived)
       throw new AppError(
         'CONVERSATION_ARCHIVED',
@@ -1015,9 +1198,15 @@ export class Service {
         'The conversation metadata is still being changed. Check its status before sending.',
         409,
       );
-    const { existing } = this.store.begin(operationId, id, 'send', input, prompt);
+    if (this.store.steers(id).length)
+      throw new AppError(
+        'STEER_PENDING',
+        'Check pending follow-ups before starting a new task.',
+        409,
+      );
+    const { existing } = this.store.begin(operationId, id, kind, input, prompt);
     if (existing) return existing;
-    thread.pending = { id: operationId, text: prompt, state: 'dispatching' };
+    thread.pending = { id: operationId, text: prompt, state: 'dispatching', kind };
     let dispatched = false;
     try {
       // A concurrent history read may have evicted this object while it was idle.
@@ -1030,38 +1219,76 @@ export class Service {
           429,
         );
       if (!this.loaded.has(id)) {
-        await this.driver.call('thread/resume', {
+        const resumed = await this.driver.call('thread/resume', {
           threadId: id,
           excludeTurns: true,
           cwd: project.path,
         });
+        thread.resolvedModel = typeof resumed.model === 'string' ? resumed.model : undefined;
         this.loaded.add(id);
       }
+      const collaborationMode = await this.modelSettings.resolve(settings, thread.resolvedModel);
+      const sandboxPolicy =
+        settings.permission === 'read-only'
+          ? { type: 'readOnly' }
+          : { type: 'workspaceWrite', writableRoots: [project.path], networkAccess: false };
+      if (review) {
+        const { native } = await this.conversationOwner(id);
+        if (native.status?.type === 'active')
+          throw new AppError(
+            'CONVERSATION_ACTIVE',
+            'Finish the active native task before reviewing.',
+            409,
+          );
+        await this.driver.call('thread/settings/update', {
+          threadId: id,
+          sandboxPolicy,
+          approvalPolicy: 'on-request',
+          collaborationMode,
+        });
+      }
+      thread.resolvedModel = collaborationMode.settings.model;
       thread.settings = settings;
       thread.title = thread.title === 'Untitled conversation' ? prompt.slice(0, 64) : thread.title;
       thread.state = 'running';
       thread.updatedAt = Date.now();
       this.boundary(thread);
       dispatched = true;
-      const result = await this.driver.call('turn/start', {
-        threadId: id,
-        clientUserMessageId: operationId,
-        input: [{ type: 'text', text: prompt + context, text_elements: [] }],
-        sandboxPolicy:
-          settings.permission === 'read-only'
-            ? { type: 'readOnly' }
-            : { type: 'workspaceWrite', writableRoots: [project.path], networkAccess: false },
-        approvalPolicy: 'on-request',
-        ...(settings.model ? { model: settings.model } : {}),
-      });
+      const result = await this.driver.call(
+        review ? 'review/start' : 'turn/start',
+        review
+          ? {
+              threadId: id,
+              target: review,
+              delivery: 'inline',
+            }
+          : {
+              threadId: id,
+              clientUserMessageId: operationId,
+              input: nativeInput,
+              sandboxPolicy,
+              approvalPolicy: 'on-request',
+              collaborationMode,
+            },
+      );
       if (typeof result.turn?.id !== 'string')
         throw new AppError('PROTOCOL_ERROR', 'The CLI did not return a turn identity.', 502, true);
       const stored = this.store.operation(operationId)!;
       if (stored.state !== 'completed') {
         this.store.update(operationId, 'acknowledged', result.turn.id);
-        if (thread.pending) thread.pending.state = 'acknowledged';
+        if (thread.pending) {
+          thread.pending.state = 'acknowledged';
+          thread.pending.turnId = result.turn.id;
+        }
       }
-      thread.turnId = result.turn.id;
+      const completed = this.terminals.get(id + '/' + result.turn.id);
+      if (completed) {
+        this.store.complete(id, result.turn.id);
+        delete thread.pending;
+        thread.state = completed;
+        thread.turnId = result.turn.id;
+      } else if (!review || !thread.turnId || thread.state !== 'running')
+        thread.turnId = result.turn.id;
       this.boundary(thread);
       return this.store.operation(operationId)!;
     } catch (error) {
@@ -1089,17 +1316,28 @@ export class Service {
   async reconcile(id: string) {
     const thread = await this.read(id);
     const pending = this.store.active(id);
-    if (!pending) {
+    if (!pending && !this.store.steers(id).length) {
       this.syncQueue(thread);
       this.queue.notify(id);
       return thread;
     }
     const history = await this.history(id);
-    const match = history.turns.find((turn: any) =>
-      history.messages.some(
-        (message) => message.turnId === turn.id && message.clientId === pending.id,
-      ),
-    );
+    for (const steer of this.store.steers(id)) {
+      const nativeItem = history.messages.find((entry) => entry.clientId === steer.id);
+      const known = history.turns.find(
+        (turn: any) => turn.id === (nativeItem?.turnId || steer.turnId),
+      );
+      if (known && terminal(known.status)) this.store.update(steer.id, 'completed', known.id);
+    }
+    const match =
+      pending &&
+      history.turns.find(
+        (turn: any) =>
+          turn.id === this.store.operation(pending.id)?.turnId ||
+          history.messages.some(
+            (message) => message.turnId === turn.id && message.clientId === pending.id,
+          ),
+      );
     if (match && terminal(match.status)) {
       this.store.complete(id, match.id);
       thread.state = match.status;
@@ -1112,6 +1350,11 @@ export class Service {
       delete thread.pending;
       this.boundary(thread);
     }
+    if (!pending && !this.store.steers(id).length) {
+      thread.messages = history.messages;
+      thread.state = history.state;
+    }
+    this.boundary(thread);
     return thread;
   }
   async interrupt(id: string) {
@@ -1242,7 +1485,8 @@ export class Service {
       this.metadataChanged(thread.id);
     this.store.saveThread(thread, thread.settings);
     const { id, projectId, title, state, updatedAt } = thread;
-    thread.executionPending = !!thread.pending;
+    thread.steering = this.store.steers(id);
+    thread.executionPending = !!thread.pending || !!thread.steering.length;
     thread.managementPending = !!this.store.pendingManagement(id);
     this.events.publish(
       'summary',
@@ -1269,11 +1513,13 @@ export class Service {
         turnId: thread.turnId,
         pending: thread.pending ?? null,
         settings: thread.settings,
+        steering: thread.steering,
+        resolvedModel: thread.resolvedModel,
       },
       id,
     );
     this.emitActions(id);
-    if (!thread.pending) {
+    if (!thread.pending && !thread.steering?.length) {
       if (['failed', 'interrupted'].includes(thread.state) && this.store.queue.count(id))
         this.store.queue.pause(id, 'A task stopped or failed. Review the queue before resuming.');
       this.queue.wake(id);
@@ -1325,6 +1571,45 @@ export class Service {
     }
     const thread = this.cache.get(p.threadId);
     if (!thread) return;
+    if (event.method === 'thread/tokenUsage/updated') {
+      const usage = z
+        .object({
+          last: z.object({ totalTokens: z.number().int().nonnegative() }),
+          total: z.object({ totalTokens: z.number().int().nonnegative() }),
+          modelContextWindow: z.number().int().positive().nullish(),
+        })
+        .safeParse(p.tokenUsage);
+      if (usage.success && typeof p.turnId === 'string') {
+        thread.usage = {
+          turnId: p.turnId,
+          contextTokens: usage.data.last.totalTokens,
+          totalTokens: usage.data.total.totalTokens,
+          contextWindow: usage.data.modelContextWindow ?? undefined,
+        };
+        this.events.publish('state', { usage: thread.usage }, thread.id);
+      }
+      return;
+    }
+    if (event.method === 'turn/plan/updated') {
+      const plan = z
+        .object({
+          explanation: z.string().max(8000).nullish(),
+          plan: z
+            .array(
+              z.object({
+                step: z.string().max(2000),
+                status: z.enum(['pending', 'inProgress', 'completed']),
+              }),
+            )
+            .max(100),
+        })
+        .safeParse(p);
+      if (plan.success && p.turnId === thread.turnId) {
+        thread.plan = { explanation: plan.data.explanation ?? undefined, steps: plan.data.plan };
+        this.events.publish('state', { plan: thread.plan }, thread.id);
+      }
+      return;
+    }
     if (event.method === 'serverRequest/resolved') {
       for (const entry of this.actions.values())
         if (entry.action.threadId === thread.id && entry.rpcId === p.requestId) {
@@ -1336,6 +1621,7 @@ export class Service {
     }
     if (
       event.method === 'item/agentMessage/delta' ||
+      event.method === 'item/plan/delta' ||
       event.method === 'item/commandExecution/outputDelta'
     ) {
       const message = thread.messages.find((x) => x.id === p.itemId);
@@ -1358,24 +1644,42 @@ export class Service {
     }
     if (event.method === 'turn/started' || event.method === 'turn/completed') {
       if (!record(p.turn) || typeof p.turn.id !== 'string') return;
+      if (event.method === 'turn/completed' && terminal(p.turn.status)) {
+        this.terminals.set(thread.id + '/' + p.turn.id, p.turn.status);
+        while (this.terminals.size > 100)
+          this.terminals.delete(this.terminals.keys().next().value!);
+      }
+      const pendingOperation = this.store.active(thread.id);
+      const review = pendingOperation && this.store.operation(pendingOperation.id);
       for (const raw of Array.isArray(p.turn.items) ? p.turn.items : [])
         this.applyItem(thread, raw, p.turn.id);
       if (event.method === 'turn/started') {
         thread.turnId = p.turn.id;
         thread.state = 'running';
         thread.diff = '';
+        delete thread.plan;
+        this.events.publish('state', { plan: null }, thread.id);
         this.events.publish('diff', '', thread.id);
-      } else if (thread.turnId === p.turn.id || !thread.turnId) {
+      } else if (
+        thread.turnId === p.turn.id ||
+        !thread.turnId ||
+        (review?.kind === 'review' && review.turnId === p.turn.id)
+      ) {
+        // Inline review emits an inner runner's start followed by the acknowledged
+        // outer review turn's completion. Only that exact receipt can close it.
+        thread.turnId = p.turn.id;
         thread.state = terminal(p.turn.status) ? p.turn.status : 'unknown';
         const pending = this.store.active(thread.id);
         if (
           pending &&
+          terminal(p.turn.status) &&
           (this.store.operation(pending.id)?.turnId === p.turn.id ||
             thread.messages.some((m) => m.turnId === p.turn.id && m.clientId === pending.id))
         ) {
           this.store.complete(thread.id, p.turn.id);
           delete thread.pending;
         }
+        if (terminal(p.turn.status)) this.store.finishSteers(thread.id, p.turn.id);
         for (const entry of this.actions.values())
           if (entry.action.turnId === p.turn.id) {
             entry.action.status = 'expired';
@@ -1399,6 +1703,13 @@ export class Service {
       !['completed', 'failed'].includes(this.store.operation(message.clientId)?.state ?? '')
     )
       this.store.update(message.clientId, 'acknowledged', turnId);
+    if (message.clientId && this.store.operation(message.clientId)?.kind === 'steer') {
+      const receipt = this.store.operation(message.clientId)!;
+      if (receipt.threadId === thread.id && !['completed', 'failed'].includes(receipt.state)) {
+        this.store.update(message.clientId, 'acknowledged', turnId);
+        this.boundary(thread);
+      }
+    }
     this.events.publish('item', message, thread.id);
   }
   private request(event: any) {

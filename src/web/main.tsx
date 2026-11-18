@@ -16,6 +16,8 @@ import type {
   Thread,
   QueueState,
   QueuePayload,
+  Model,
+  ReviewTarget,
 } from '../shared/types';
 import { ApiError, message, post, request } from './api';
 import { Feed } from './feed';
@@ -23,6 +25,13 @@ import { Brand, Icon } from './primitives';
 import { Login } from './Login';
 import { Conversations } from './Conversations';
 import { QueuePanel } from './QueuePanel';
+import {
+  PreferencesDialog,
+  ReviewDialog,
+  StatusDialog,
+  type Preferences,
+} from './InteractionDialog';
+import './interactions.css';
 import './workflow.css';
 import './style.css';
 
@@ -84,6 +93,7 @@ const MessageView = memo(function MessageView({
   return (
     <article
       data-message-id={item.id}
+      data-turn-id={item.turnId}
       className={`message ${item.kind}`}
       data-testid={`message-${item.kind}`}
     >
@@ -274,7 +284,29 @@ function App() {
   const [threads, setThreads] = useState<Summary[]>([]);
   const [threadId, setThreadId] = useState(saved('codes.thread'));
   const [thread, setThread] = useState<Thread>();
-  const [models, setModels] = useState<{ id: string; displayName: string }[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
+  const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
+  const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
+  const [preferences, setPreferences] = useState<Preferences>(() => {
+    try {
+      const value = JSON.parse(saved('codes.preferences') || '{}');
+      return {
+        followUp: ['steer', 'interrupt'].includes(value.followUp) ? 'steer' : 'queue',
+        enter: ['enter', 'cmdIfMultiline', 'cmdAlways'].includes(value.enter)
+          ? value.enter
+          : 'enter',
+        review: value.review === 'detached' ? 'detached' : 'inline',
+      };
+    } catch {
+      return { followUp: 'queue', enter: 'enter', review: 'inline' };
+    }
+  });
+  const [steerReceipt, setSteerReceipt] = useState<{ operationId: string; text: string }>();
+  const threadRef = useRef(threadId);
+  threadRef.current = threadId;
+  const modelControl = useRef<HTMLSelectElement>(null);
+  const effortControl = useRef<HTMLSelectElement>(null);
+  const permissionControl = useRef<HTMLSelectElement>(null);
   const [settings, setSettings] = useState<Settings>({ permission: 'read-only' });
   const [draft, setDraft] = useState('');
   const [queueRequest, setQueueRequest] = useState<{
@@ -333,8 +365,15 @@ function App() {
   useEffect(() => {
     if (auth !== 'ready') return;
     const controller = new AbortController();
-    void request<typeof models>('/models', {}, controller.signal)
-      .then(setModels)
+    void Promise.all([
+      request<Model[]>('/models', {}, controller.signal),
+      request<typeof modes>('/modes', {}, controller.signal),
+    ])
+      .then(async ([models, modes]) => {
+        setModels(models);
+        setModes(modes);
+        setSystem(await request<System>('/system', {}, controller.signal));
+      })
       .catch((e) => {
         if (!controller.signal.aborted) notice(e);
       });
@@ -433,6 +472,11 @@ function App() {
       setQueueRequest(undefined);
     }
     setAttachments([]);
+    try {
+      setSteerReceipt(JSON.parse(saved('codes.steer.' + threadId) || 'null') ?? undefined);
+    } catch {
+      setSteerReceipt(undefined);
+    }
     if (!threadId || auth !== 'ready') {
       if (!projectId) setConnection('Ready');
       return;
@@ -677,7 +721,7 @@ function App() {
       conversationUpdated(created);
       setForking(undefined);
       select(created.id);
-      setSettings({ permission: 'read-only', model: settings.model });
+      setSettings({ ...settings, permission: 'read-only' });
     } catch (error) {
       setForkError(message(error));
       if (error instanceof ApiError && !error.uncertain && error.code !== 'FORK_UNKNOWN') {
@@ -690,10 +734,14 @@ function App() {
   };
   const newThread = () => {
     select('');
-    setSettings({ permission: 'read-only', model: settings.model });
+    setSettings({ ...settings, permission: 'read-only' });
     setError('');
   };
   const send = async () => {
+    if (draft.trimStart().startsWith('/')) {
+      runCommand(draft.trim());
+      return;
+    }
     if (
       busy ||
       queueRequest ||
@@ -822,8 +870,225 @@ function App() {
   };
   const active =
     !!thread?.pending ||
+    !!thread?.steering?.length ||
     (!!thread && ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
   const project = projects.find((x) => x.id === projectId);
+  const canSteer =
+    !!thread?.turnId &&
+    thread.state === 'running' &&
+    thread.pending?.state !== 'unknown' &&
+    thread.pending?.kind !== 'review' &&
+    !thread.archived &&
+    !thread.managementPending;
+  const selectedModel =
+    models.find(
+      (entry) =>
+        entry.id === (settings.model || thread?.resolvedModel) ||
+        entry.model === (settings.model || thread?.resolvedModel),
+    ) ??
+    (!settings.model && !thread?.resolvedModel
+      ? models.find((entry) => entry.isDefault)
+      : undefined);
+  const commands = [
+    { name: '/model', detail: 'Choose a model', run: () => modelControl.current?.focus() },
+    {
+      name: '/reasoning',
+      detail: 'Set reasoning effort',
+      run: () => effortControl.current?.focus(),
+    },
+    {
+      name: '/plan',
+      detail: 'Toggle Plan and Code mode',
+      run: () => {
+        if (active) throw new Error('Finish the current task before changing modes.');
+        setSettings({ ...settings, mode: settings.mode === 'plan' ? 'default' : 'plan' });
+      },
+    },
+    { name: '/review', detail: 'Start a native code review', run: () => setDialog('review') },
+    { name: '/status', detail: 'Connection, model and usage', run: () => setDialog('status') },
+    {
+      name: '/approve',
+      detail: 'Choose task permissions',
+      run: () => permissionControl.current?.focus(),
+    },
+    {
+      name: '/ide-context',
+      detail: 'Attach context from Web file browsing',
+      run: () => setPanel('files'),
+    },
+    {
+      name: '/fork',
+      detail: 'Branch from the latest displayed completed reply',
+      run: () => {
+        const last = thread?.messages.findLast(
+          (entry) => entry.kind === 'assistant' && (!active || entry.turnId !== thread.turnId),
+        );
+        if (!last) throw new Error('No completed reply is available to branch from.');
+        setForking(last);
+        setForkError('');
+      },
+    },
+  ];
+  const runCommand = (input: string) => {
+    const [name, ...rest] = input.split(/\s+/);
+    const command = commands.find((entry) => entry.name === name);
+    if (!command) {
+      setError('Unknown command. Choose one of the supported commands below.');
+      return;
+    }
+    try {
+      command.run();
+      changeDraft(rest.join(' '));
+    } catch (error) {
+      notice(error);
+    }
+  };
+  const steer = async () => {
+    if (busy || !canSteer || !draft.trim() || steerReceipt || queueRequest) return;
+    if (draft.trimStart().startsWith('/')) {
+      runCommand(draft.trim());
+      return;
+    }
+    const id = threadId;
+    const text = draft;
+    const record = { operationId: crypto.randomUUID(), text };
+    setBusy(true);
+    setError('');
+    save('codes.steer.' + id, JSON.stringify(record));
+    setSteerReceipt(record);
+    try {
+      const result = await post<Operation>('/threads/' + id + '/steer', {
+        operationId: record.operationId,
+        text,
+        expectedTurnId: thread!.turnId,
+        attachments,
+      });
+      if (result.state === 'unknown' || result.state === 'failed')
+        throw new Error(result.error || 'Check the follow-up result.');
+      save('codes.steer.' + id, '');
+      save('codes.draft.' + id, '');
+      if (threadRef.current === id) {
+        setSteerReceipt(undefined);
+        setDraft('');
+        setAttachments([]);
+      }
+    } catch (error) {
+      notice(error);
+      if (error instanceof ApiError && !error.uncertain) {
+        save('codes.steer.' + id, '');
+        if (threadRef.current === id) setSteerReceipt(undefined);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  const checkSteer = async () => {
+    if (!steerReceipt || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      let result = await request<Operation>('/operations/' + steerReceipt.operationId);
+      if (result.state === 'unknown' || result.state === 'dispatching') {
+        const updated = await post<Thread>('/threads/' + threadId + '/reconcile');
+        setThread(updated);
+        result = await request<Operation>('/operations/' + steerReceipt.operationId);
+        if (result.state === 'unknown' || result.state === 'dispatching')
+          throw new Error('Follow-up acceptance is still unconfirmed. It will not be resent.');
+      }
+      if (result.state !== 'failed' && draft === steerReceipt.text) {
+        changeDraft('');
+        setAttachments([]);
+      }
+      save('codes.steer.' + threadId, '');
+      setSteerReceipt(undefined);
+      if (result.state === 'failed')
+        setError(result.error || 'The follow-up was rejected. Your draft is safe.');
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'NOT_FOUND') {
+        save('codes.steer.' + threadId, '');
+        setSteerReceipt(undefined);
+        setError('The follow-up was not recorded. Your draft is safe.');
+      } else notice(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const followUp = (reverse = false) => {
+    if (draft.trimStart().startsWith('/')) {
+      runCommand(draft.trim());
+      return;
+    }
+    const behavior = reverse
+      ? preferences.followUp === 'queue'
+        ? 'steer'
+        : 'queue'
+      : preferences.followUp;
+    if (active && behavior === 'steer') void steer();
+    else void enqueue();
+  };
+  const startReview = async (target: ReviewTarget, delivery: Preferences['review']) => {
+    if (!projectId || busy) throw new Error('Choose a project and wait for the current request.');
+    let id = threadId;
+    setBusy(true);
+    try {
+      if (delivery === 'detached' || !id) {
+        const created = await post<Thread>(`/projects/${projectId}/threads`, {
+          ...settings,
+          mode: 'default',
+          permission: 'read-only',
+        });
+        id = created.id;
+        conversationUpdated(created);
+        select(id);
+        setThread(created);
+      }
+      const operationId = crypto.randomUUID();
+      save('codes.operation.' + id, operationId);
+      setReceipt(operationId);
+      try {
+        const operation = await post<Operation>('/threads/' + id + '/review', {
+          operationId,
+          target,
+          settings,
+        });
+        if (operation.state === 'failed')
+          throw new ApiError(operation.error || 'Review failed.', 'OPERATION_FAILED');
+        if (operation.state === 'completed') {
+          save('codes.operation.' + id, '');
+          setReceipt('');
+        }
+        if (threadId === id) void feed.current?.connect();
+      } catch (error) {
+        if (error instanceof ApiError && !error.uncertain) {
+          save('codes.operation.' + id, '');
+          setReceipt('');
+          throw error;
+        }
+        notice(error); // Keep the receipt and close the dialog after an uncertain result.
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (auth !== 'ready') return;
+    const shortcut = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'n' &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !document.querySelector('[role="dialog"]') &&
+        !busy
+      ) {
+        event.preventDefault();
+        newThread();
+        composer.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', shortcut);
+    return () => document.removeEventListener('keydown', shortcut);
+  }, [auth, busy, settings]);
   const loadOlder = async () => {
     if (!thread?.olderCursor) return;
     setBusy(true);
@@ -1152,7 +1417,9 @@ function App() {
                     disabled={busy || forkBusy || thread.managementPending}
                     streaming={
                       m.kind === 'assistant' &&
-                      m.turnId === thread.turnId &&
+                      (m.turnId === thread.turnId ||
+                        (thread.pending?.kind === 'review' &&
+                          m.turnId === thread.pending.turnId)) &&
                       ['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
                     }
                   />
@@ -1174,6 +1441,26 @@ function App() {
                   .map((action) => (
                     <Approval key={action.id} action={action} submit={submitAction} />
                   ))}
+                {thread?.plan && (
+                  <section className="turn-plan" aria-label="Task plan">
+                    <strong>Plan</strong>
+                    {thread.plan.explanation && <p>{thread.plan.explanation}</p>}
+                    <ol>
+                      {thread.plan.steps.map((entry, index) => (
+                        <li key={index}>
+                          <small>
+                            {entry.status === 'completed'
+                              ? 'Done'
+                              : entry.status === 'inProgress'
+                                ? 'In progress'
+                                : 'Pending'}
+                          </small>
+                          {entry.step}
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                )}
                 {thread && (
                   <div className={`turn-status ${thread.state}`}>
                     <span className={`status-dot ${thread.state}`} />
@@ -1188,6 +1475,31 @@ function App() {
           </div>
         </div>
         <div className="composer-area">
+          {steerReceipt && (
+            <div className="recovery">
+              <span>An immediate follow-up needs confirmation.</span>
+              <button disabled={busy} onClick={() => void checkSteer()}>
+                Check follow-up receipt
+              </button>
+            </div>
+          )}
+          {!!thread?.steering?.length && (
+            <section className="steering-receipt" aria-label="Immediate follow-ups">
+              {thread.steering.map((entry) => (
+                <p key={entry.id}>
+                  {entry.state === 'unknown'
+                    ? 'Check result'
+                    : entry.state === 'acknowledged'
+                      ? 'Added to current task'
+                      : 'Sending follow-up'}{' '}
+                  · {entry.text.slice(0, 200)}
+                </p>
+              ))}
+              <button disabled={busy} onClick={() => void reconcile()}>
+                Check follow-up results
+              </button>
+            </section>
+          )}
           {queueRequest && (
             <div className="recovery">
               <span>A queue receipt needs confirmation. Check before sending another message.</span>
@@ -1219,6 +1531,8 @@ function App() {
                 )
               }
               onCheck={reconcile}
+              turnId={canSteer ? thread?.turnId : undefined}
+              settings={thread?.settings}
             />
           )}
 
@@ -1240,6 +1554,18 @@ function App() {
               <button disabled={busy} onClick={() => void reconcile()}>
                 Check result
               </button>
+            </div>
+          )}
+          {draft.startsWith('/') && !draft.includes('\n') && (
+            <div className="slash-commands" role="group" aria-label="Commands">
+              {commands
+                .filter((entry) => entry.name.startsWith(draft.split(/\s+/)[0] ?? ''))
+                .map((entry) => (
+                  <button key={entry.name} onClick={() => runCommand(entry.name)}>
+                    <strong>{entry.name}</strong>
+                    <span>{entry.detail}</span>
+                  </button>
+                ))}
             </div>
           )}
           <div className={`composer ${active ? 'is-active' : ''}`}>
@@ -1276,14 +1602,27 @@ function App() {
               }
               maxLength={50_000}
               onKeyDown={(e) => {
-                if (
-                  e.key === 'Enter' &&
-                  !e.shiftKey &&
-                  !e.nativeEvent.isComposing &&
-                  window.innerWidth > 700
-                ) {
+                if (e.key === 'Escape' && draft.startsWith('/')) {
                   e.preventDefault();
-                  if (active || thread?.queue?.items.length) void enqueue();
+                  changeDraft('');
+                  return;
+                }
+                if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.altKey) return;
+                const modifier = e.ctrlKey || e.metaKey;
+                if (modifier && e.shiftKey && active) {
+                  e.preventDefault();
+                  if (!busy && !steerReceipt && !queueRequest) followUp(true);
+                  return;
+                }
+                const sendKey =
+                  modifier ||
+                  (window.innerWidth > 700 &&
+                    preferences.enter !== 'cmdAlways' &&
+                    (preferences.enter !== 'cmdIfMultiline' || !draft.includes('\n')));
+                if (!e.shiftKey && sendKey) {
+                  e.preventDefault();
+                  if (busy || steerReceipt || queueRequest) return;
+                  if (active || thread?.queue?.items.length) followUp();
                   else if (!receipt) void send();
                 }
               }}
@@ -1299,11 +1638,21 @@ function App() {
               </button>
               <select
                 aria-label="Model"
+                ref={modelControl}
                 value={settings.model ?? ''}
-                onChange={(e) => setSettings({ ...settings, model: e.target.value || undefined })}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    model: e.target.value || undefined,
+                    effort: undefined,
+                  })
+                }
                 disabled={active}
               >
                 <option value="">Default model</option>
+                {settings.model && !models.some((entry) => entry.id === settings.model) && (
+                  <option value={settings.model}>{settings.model}</option>
+                )}
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.displayName}
@@ -1313,6 +1662,7 @@ function App() {
               <span className="toolbar-divider" />
               <select
                 aria-label="Permissions"
+                ref={permissionControl}
                 value={settings.permission}
                 onChange={(e) =>
                   setSettings({ ...settings, permission: e.target.value as Settings['permission'] })
@@ -1327,25 +1677,36 @@ function App() {
                 {(active || !!thread?.queue?.items.length) && (
                   <button
                     className="queue-send"
-                    aria-label="Queue message"
+                    aria-label={
+                      active && preferences.followUp === 'steer'
+                        ? 'Send follow-up now'
+                        : 'Queue message'
+                    }
                     disabled={
                       busy ||
+                      !!steerReceipt ||
+                      !!queueRequest ||
+                      (active && preferences.followUp === 'steer' && !canSteer) ||
                       !draft.trim() ||
                       !!thread?.archived ||
                       !!thread?.managementPending ||
                       (!!thread?.queue && thread.queue.items.length >= 10)
                     }
-                    onClick={() => void enqueue()}
+                    onClick={() => followUp()}
                   >
                     <Icon name="plus" size={14} />
-                    Queue
+                    {active && preferences.followUp === 'steer' ? 'Send now' : 'Queue'}
                   </button>
                 )}
                 {active ? (
                   <button
                     className="stop-button"
                     aria-label="Stop task"
-                    disabled={busy || !thread?.turnId || thread?.state === 'unknown'}
+                    disabled={
+                      busy ||
+                      !thread?.turnId ||
+                      !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
+                    }
                     onClick={() => {
                       setBusy(true);
                       void post(`/threads/${threadId}/interrupt`)
@@ -1367,6 +1728,7 @@ function App() {
                       !projectId ||
                       !!receipt ||
                       !!queueRequest ||
+                      !!steerReceipt ||
                       !!thread?.queue?.items.length ||
                       !!thread?.archived ||
                       !!thread?.managementPending
@@ -1378,6 +1740,55 @@ function App() {
               </div>
             </div>
           </div>
+          <div className="interaction-controls">
+            <select
+              aria-label="Mode"
+              value={settings.mode ?? 'default'}
+              disabled={active || !modes.length}
+              onChange={(event) =>
+                setSettings({ ...settings, mode: event.target.value as Settings['mode'] })
+              }
+            >
+              {modes
+                .filter((entry) => entry.mode)
+                .map((entry) => (
+                  <option key={entry.mode} value={entry.mode}>
+                    {entry.mode === 'plan' ? 'Plan' : 'Code'}
+                  </option>
+                ))}
+            </select>
+            <select
+              ref={effortControl}
+              aria-label="Reasoning effort"
+              value={settings.effort ?? ''}
+              disabled={active || !selectedModel}
+              onChange={(event) =>
+                setSettings({ ...settings, effort: event.target.value || undefined })
+              }
+            >
+              <option value="">
+                Model default{selectedModel ? ' · ' + selectedModel.defaultReasoningEffort : ''}
+              </option>
+              {settings.effort &&
+                !selectedModel?.supportedReasoningEfforts.some(
+                  (entry) => entry.reasoningEffort === settings.effort,
+                ) && <option value={settings.effort}>{settings.effort} (unavailable)</option>}
+              {selectedModel?.supportedReasoningEfforts.map((entry) => (
+                <option
+                  key={entry.reasoningEffort}
+                  value={entry.reasoningEffort}
+                  title={entry.description}
+                >
+                  {entry.reasoningEffort}
+                </option>
+              ))}
+            </select>
+            <button onClick={() => setDialog('review')} disabled={!projectId || busy}>
+              Review code
+            </button>
+            <button onClick={() => setDialog('status')}>Session status</button>
+            <button onClick={() => setDialog('preferences')}>Interaction settings</button>
+          </div>
           <div className="composer-hint">
             <span>
               <i />
@@ -1386,11 +1797,46 @@ function App() {
                 : 'Codex runs in your project on the host.'}
             </span>
             <span className="desktop-hint">
-              ↵ Send <span>·</span> ⇧ ↵ New line
+              {preferences.enter === 'enter' ? '↵ Send' : 'Ctrl/Cmd ↵ Send'} <span>·</span> ⇧ ↵ New
+              line
             </span>
           </div>
         </div>
       </div>
+      {dialog === 'preferences' && (
+        <PreferencesDialog
+          value={preferences}
+          close={() => setDialog(undefined)}
+          change={(value) => {
+            setPreferences(value);
+            save('codes.preferences', JSON.stringify(value));
+          }}
+        />
+      )}
+      {dialog === 'review' && (
+        <ReviewDialog
+          close={() => setDialog(undefined)}
+          submit={startReview}
+          delivery={preferences.review}
+          inlineAvailable={
+            !!threadId &&
+            !active &&
+            !thread?.archived &&
+            !thread?.managementPending &&
+            !thread?.queue?.items.length &&
+            !receipt
+          }
+        />
+      )}
+      {dialog === 'status' && (
+        <StatusDialog
+          system={system}
+          thread={thread}
+          settings={settings}
+          connection={connection}
+          close={() => setDialog(undefined)}
+        />
+      )}
       {forking && (
         <div className="modal-backdrop">
           <form
@@ -1562,6 +2008,18 @@ function App() {
                     <span>
                       Lines {Math.min(...range)}–{Math.max(...range)}
                     </span>
+                    <button
+                      onClick={() => {
+                        if (file)
+                          setAttachments((list) => [
+                            ...list.filter((entry) => entry.path !== file.path),
+                            { path: file.path, sha: file.sha, fromLine: 1, toLine: file.lines },
+                          ]);
+                      }}
+                      disabled={attachments.length >= 4}
+                    >
+                      Attach file
+                    </button>
                     <button className="primary" onClick={attach} disabled={attachments.length >= 4}>
                       Attach selection
                     </button>
