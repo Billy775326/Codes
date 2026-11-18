@@ -99,7 +99,7 @@ test('command status and appended entries update without opening a collapsed run
   await expect(group.locator('summary').first()).toContainText('1 failed');
 });
 for (const width of [1440, 320])
-  test(`large display size persists and collapsed activity fits ${width}px in both themes`, async ({
+  test(`larger fixed text ignores legacy display size and collapsed activity fits ${width}px in both themes`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: width === 320 ? 844 : 1000 });
@@ -110,18 +110,23 @@ for (const width of [1440, 320])
       .locator('.prose')
       .evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
     expect(initial).toBeGreaterThanOrEqual(16);
-    await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await page.getByLabel('Display size').selectOption('large');
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.app')).toHaveAttribute('data-display-size', 'large');
-    const larger = await page
+    await page.evaluate(() => {
+      const preferences = JSON.parse(localStorage.getItem('codes.preferences') || '{}');
+      localStorage.setItem(
+        'codes.preferences',
+        JSON.stringify({ ...preferences, displaySize: 'large' }),
+      );
+    });
+    await page.reload();
+    const restored = await page
       .getByTestId('message-assistant')
       .last()
       .locator('.prose')
       .evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
-    expect(larger).toBeGreaterThan(initial);
-    await page.reload();
-    await expect(page.locator('.app')).toHaveAttribute('data-display-size', 'large');
+    expect(restored).toBe(initial);
+    await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    await expect(page.getByLabel('Display size')).toHaveCount(0);
+    await page.keyboard.press('Escape');
     for (const theme of ['dark', 'light']) {
       await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
       await page.getByLabel('Workspace theme').selectOption(theme);

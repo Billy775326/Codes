@@ -32,7 +32,7 @@
 
 ### Changed
 
-- Increase workspace text, line spacing and controls, default to Comfortable display size (110%), and offer saved Standard (100%) and Large (125%) type-size settings. Use softer dark gray surfaces, clearer secondary text and two-row controls for narrow composers.
+- Increase workspace text, line spacing and controls with fixed readable defaults. Use softer dark gray surfaces, clearer secondary text and two-row controls for narrow composers. Retire the preview Display size option and ignore its saved value while preserving other browser preferences.
 
 - Organize the browser workspace around persistent desktop project/conversation navigation, central chat and right-side file/change previews. Keep IDE-style model/reasoning menus, edited-file cards and copy actions, with saved dark/light/system themes. Mobile drawers contain keyboard focus and return to typing after attaching context.
 

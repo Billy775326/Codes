@@ -227,9 +227,6 @@ function App() {
           : 'enter',
         review: value.review === 'detached' ? 'detached' : 'inline',
         theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
-        displaySize: ['standard', 'comfortable', 'large'].includes(value.displaySize)
-          ? value.displaySize
-          : 'comfortable',
       };
     } catch {
       return { followUp: 'queue', enter: 'enter', review: 'inline' };
@@ -1244,7 +1241,6 @@ function App() {
     );
   return (
     <div
-      data-display-size={preferences.displaySize ?? 'comfortable'}
       data-theme={
         preferences.theme === 'system'
           ? prefersDark

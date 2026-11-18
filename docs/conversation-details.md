@@ -8,7 +8,7 @@ Consecutive command records in one native turn appear as a collapsed count summa
 
 Expand the summary to inspect individual commands; expand a command again for its captured output. Collapsed groups do not mount command rows or output text. New records and status updates preserve the group's current open/closed choice. Reloading or switching away defaults back to collapsed. Assistant replies, change cards, approvals and questions remain directly visible. Grouping changes browser presentation only; it does not remove native history or change task execution.
 
-**Interaction settings → Display size** offers Standard (100%), Comfortable (110%, default) and Large (125%). These scale workspace typography without enlarging the page beyond its viewport. Dark mode uses layered dark gray surfaces and subdued light text; light and system themes remain available. Narrow composers use two control rows to keep send/stop available with larger text.
+Workspace text, line spacing and controls use larger fixed defaults. Older saved display-size values are ignored; existing theme and interaction preferences remain compatible. Dark mode uses layered dark gray surfaces and subdued light text; light and system themes remain available. Narrow composers use two control rows to keep send/stop available with larger text.
 
 ## When Codex asks a question
 
