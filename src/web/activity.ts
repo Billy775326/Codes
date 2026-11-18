@@ -1,25 +1,67 @@
-import type { Message } from '../shared/types';
+import type { Message, TurnInfo } from '../shared/types';
 
-export type TranscriptEntry =
-  | { kind: 'message'; key: string; item: Message }
-  | { kind: 'commands'; key: string; items: Message[] };
+export interface TurnActivity {
+  id: string;
+  users: Message[];
+  work: Message[];
+  replies: Message[];
+  changes?: Message;
+  info?: TurnInfo;
+  active: boolean;
+}
 
-/** Preserve native order: prose, file changes and turn boundaries end a command run. */
-export function groupActivity(messages: readonly Message[]): TranscriptEntry[] {
-  const entries: TranscriptEntry[] = [];
-  for (const item of messages) {
-    const previous = entries.at(-1);
-    if (item.kind !== 'command') entries.push({ kind: 'message', key: 'message:' + item.id, item });
-    else if (previous?.kind === 'commands' && previous.items[0]!.turnId === item.turnId)
-      previous.items.push(item);
-    else
-      entries.push({
-        kind: 'commands',
-        key: 'commands:' + item.turnId + ':' + item.id,
-        items: [item],
-      });
+/** Native turn identity owns one disclosure, even when prose separates tool calls. */
+export function groupTurns(
+  messages: readonly Message[],
+  turns: readonly TurnInfo[] = [],
+  activeIds: readonly string[] = [],
+): TurnActivity[] {
+  const grouped = new Map<string, Message[]>();
+  for (const message of messages) {
+    const id = message.turnId || `unscoped:${message.id}`;
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id)!.push(message);
   }
-  return entries;
+  return [...grouped].map(([id, items]) => {
+    const active = activeIds.includes(id);
+    const assistants = items.filter(
+      (item) =>
+        item.kind === 'assistant' || (item.kind === 'notice' && item.phase === 'final_answer'),
+    );
+    const declared = assistants.some((item) => item.phase === 'final_answer');
+    // Legacy providers do not consistently supply phases. Only infer a final reply
+    // after completion, and never promote explicitly marked commentary.
+    const legacy = !active && !declared ? assistants.at(-1) : undefined;
+    const replies = assistants.filter(
+      (item) =>
+        item.phase === 'final_answer' ||
+        item.phase === 'partial_answer' ||
+        (item === legacy && !item.phase),
+    );
+    const replyIds = new Set(replies.map((item) => item.id));
+    const changes = items.filter((item) => item.kind === 'change' && item.files?.length);
+    const files = changes.flatMap((item) => item.files ?? []);
+    return {
+      id,
+      active,
+      info: turns.find((turn) => turn.id === id),
+      users: items.filter((item) => item.kind === 'user'),
+      work: items.filter(
+        (item) => item.kind !== 'user' && !replyIds.has(item.id) && !changes.includes(item),
+      ),
+      replies,
+      changes: files.length
+        ? {
+            id: `turn-changes:${id}`,
+            turnId: id,
+            kind: 'change',
+            text: '',
+            files: files.slice(0, 100),
+            truncated: files.length > 100 || changes.some((item) => item.truncated),
+          }
+        : undefined,
+    };
+  });
 }
 
 export function commandCounts(items: readonly Message[]) {
@@ -34,10 +76,14 @@ export function commandCounts(items: readonly Message[]) {
   return counts;
 }
 
-/** One action row per turn, attached to its last loaded assistant reply. */
-export function replyTargets(messages: readonly Message[]): Set<string> {
-  const last = new Map<string, string>();
-  for (const item of messages)
-    if (item.kind === 'assistant' && item.turnId) last.set(item.turnId, item.id);
-  return new Set(last.values());
+export function workDuration(info?: TurnInfo, now?: number): string | undefined {
+  const elapsed =
+    info?.durationMs ??
+    (info?.startedAtMs !== undefined && (info.completedAtMs ?? now) !== undefined
+      ? (info.completedAtMs ?? now)! - info.startedAtMs
+      : undefined);
+  if (elapsed === undefined || !Number.isFinite(elapsed) || elapsed < 0) return;
+  const seconds = Math.floor(elapsed / 1000);
+  const minutes = Math.floor(seconds / 60);
+  return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
 }

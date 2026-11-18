@@ -4,7 +4,7 @@
 
 ### Added
 
-- Fold consecutive command records into a default-collapsed activity summary with visible running/failure counts. Expand the group and then individual commands for output while keeping replies, file changes and pending requests visible.
+- Group each native turn into one work-history disclosure containing intermediate commentary and tool/integration activity. Completed work collapses by default; final answers, one edited-files card and one action row stay visible. Preserve manual disclosure choices through updates, show failures while collapsed, and display elapsed time only when native timing is available. Legacy turns without phases retain their last completed assistant reply as the answer.
 
 - Let Codex request clarification in Code as well as Plan using an application-local feature setting. Distinguish required questions from optional ones, offer explicit Skip for optional requests, and provide keyboard-accessible choices and a composer shortcut to pending questions.
 - Preview changes per file with addition/deletion counts, before/after line numbers, unified or side-by-side layouts, revision-specific viewed markers, and read-only file navigation. Inspect earlier loaded turns and proposed patches before file approval.

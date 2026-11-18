@@ -84,6 +84,7 @@ const MessageView = memo(function MessageView({
   disabled,
   onReview,
   actions = false,
+  changes,
 }: {
   onReply?: (item: Message) => void;
   onFork?: (item: Message) => void;
@@ -92,6 +93,7 @@ const MessageView = memo(function MessageView({
   item: Message;
   streaming: boolean;
   actions?: boolean;
+  changes?: Message;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState('');
@@ -101,7 +103,7 @@ const MessageView = memo(function MessageView({
     return (
       <ChangeSummary item={item} review={onReview ? (path) => onReview(item, path) : undefined} />
     );
-  if (item.kind === 'command' || item.kind === 'change') {
+  if (item.kind === 'command' || item.kind === 'change' || item.kind === 'tool') {
     const firstLine = item.text
       .slice(0, item.text.indexOf('\n') < 0 ? 120 : item.text.indexOf('\n'))
       .slice(0, 100);
@@ -116,7 +118,9 @@ const MessageView = memo(function MessageView({
           <span className="activity-label">
             {item.kind === 'command'
               ? (item.status === 'inProgress' ? 'Running ' : 'Ran ') + (firstLine || 'command')
-              : 'File changes'}
+              : item.kind === 'tool'
+                ? firstLine
+                : 'File changes'}
           </span>
           <span className="activity-status">{item.status}</span>
         </summary>
@@ -158,6 +162,12 @@ const MessageView = memo(function MessageView({
             <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
           )}
         </div>
+        {changes && (
+          <ChangeSummary
+            item={changes}
+            review={onReview ? (path) => onReview(changes, path) : undefined}
+          />
+        )}
         {actions && !streaming && item.turnId && (onReply || onFork) && (
           <div className="message-actions" role="group" aria-label="Reply actions">
             <button
@@ -1191,9 +1201,11 @@ function App() {
     if (!thread?.olderCursor) return;
     setBusy(true);
     try {
-      const page = await request<{ messages: Message[]; olderCursor: string | null }>(
-        `/threads/${threadId}/history?cursor=${encodeURIComponent(thread.olderCursor)}`,
-      );
+      const page = await request<{
+        messages: Message[];
+        turns?: Thread['turns'];
+        olderCursor: string | null;
+      }>(`/threads/${threadId}/history?cursor=${encodeURIComponent(thread.olderCursor)}`);
       follow.current = false;
       if (transcript.current)
         historyAnchor.current = {
@@ -1205,6 +1217,9 @@ function App() {
           t && {
             ...t,
             olderCursor: page.olderCursor,
+            turns: [...(page.turns ?? []), ...(t.turns ?? [])]
+              .filter((turn, i, all) => all.findIndex((x) => x.id === turn.id) === i)
+              .slice(0, 300),
             messages: [...page.messages, ...t.messages]
               .filter((m, i, all) => all.findIndex((x) => x.id === m.id) === i)
               .slice(0, 240),
@@ -1564,12 +1579,22 @@ function App() {
                 )}
                 {thread && (
                   <Transcript
+                    key={thread.id}
                     messages={thread.messages}
-                    render={(m, finalReply) => (
+                    turns={thread.turns}
+                    activeIds={
+                      ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(
+                        thread.state,
+                      )
+                        ? [thread.turnId ?? '', thread.pending?.turnId ?? '']
+                        : []
+                    }
+                    render={(m, finalReply, changes) => (
                       <MessageView
                         key={m.id}
                         item={m}
                         actions={finalReply}
+                        changes={changes}
                         onReview={(item, path) => {
                           setDiffTurn(item.turnId === thread.turnId ? '' : item.turnId);
                           setDiffPath(
@@ -1593,7 +1618,12 @@ function App() {
                         disabled={busy || forkBusy || thread.managementPending}
                         streaming={
                           m.kind === 'assistant' &&
-                          finalReply &&
+                          m.id ===
+                            thread.messages
+                              .filter(
+                                (item) => item.kind === 'assistant' && item.turnId === m.turnId,
+                              )
+                              .at(-1)?.id &&
                           (m.turnId === thread.turnId ||
                             (thread.pending?.kind === 'review' &&
                               m.turnId === thread.pending.turnId)) &&

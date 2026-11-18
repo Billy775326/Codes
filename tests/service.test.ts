@@ -9,6 +9,28 @@ import { Driver } from '../src/codex/driver';
 import { AppError } from '../src/shared/errors';
 import type { Thread } from '../src/shared/types';
 const cleanup: (() => Promise<void>)[] = [];
+it('retains native turn timing and reply phase through live events and paginated history reload', async () => {
+  const { service, thread } = await fixture();
+  await service.send(
+    thread.id,
+    randomUUID(),
+    'Native transcript metadata fixture',
+    thread.settings,
+  );
+  await until(() => thread.state === 'completed');
+  const live = thread.turns?.find((turn) => turn.id === thread.turnId);
+  expect(live?.startedAtMs).toBeGreaterThan(0);
+  expect(live?.completedAtMs).toBeGreaterThanOrEqual(live!.startedAtMs!);
+  expect(live?.durationMs).toBeGreaterThanOrEqual(0);
+  expect(thread.messages.filter((message) => message.kind === 'assistant').at(-1)?.phase).toBe(
+    'final_answer',
+  );
+  const history = await service.history(thread.id);
+  expect(history.turns.at(-1)).toEqual(live);
+  expect(history.messages.filter((message) => message.kind === 'assistant').at(-1)?.phase).toBe(
+    'final_answer',
+  );
+});
 it('shrinks dense history pages without skipping or duplicating older turns', async () => {
   const { service, project } = await fixture();
   const seeded = await service.driver.call('test/seed', {

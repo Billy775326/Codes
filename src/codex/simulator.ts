@@ -28,13 +28,16 @@ function finish(thread: any, turn: any, status = 'completed') {
       note('serverRequest/resolved', { threadId: thread.id, requestId: id });
     }
   turn.status = status;
+  turn.completedAt = Date.now() / 1000;
+  if (typeof turn.startedAt === 'number')
+    turn.durationMs = Math.max(0, Math.round((turn.completedAt - turn.startedAt) * 1000));
   thread.status = { type: 'idle' };
   save();
   if (!turn.items[0]?.content?.[0]?.text?.includes('[lost-terminal]'))
     note('turn/completed', { threadId: thread.id, turn });
 }
 function respond(thread: any, turn: any, slow = false) {
-  const item = { id: randomUUID(), type: 'agentMessage', text: '' };
+  const item = { id: randomUUID(), type: 'agentMessage', phase: 'final_answer', text: '' };
   turn.items.push(item);
   note('item/started', { threadId: thread.id, turnId: turn.id, item });
   const text =
@@ -251,6 +254,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       const turn: any = {
         id: randomUUID(),
         status: 'inProgress',
+        startedAt: Date.now() / 1000,
         items: [
           { id: randomUUID(), type: 'enteredReviewMode', review: 'Reviewing ' + p.target.type },
         ],
@@ -299,6 +303,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       const turn: any = {
         id: randomUUID(),
         status: 'inProgress',
+        startedAt: Date.now() / 1000,
         items: [
           {
             id: randomUUID(),

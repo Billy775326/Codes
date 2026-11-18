@@ -21,7 +21,8 @@ export interface Settings {
 export interface Message {
   id: string;
   turnId: string;
-  kind: 'user' | 'assistant' | 'command' | 'change' | 'notice';
+  kind: 'user' | 'assistant' | 'command' | 'change' | 'notice' | 'tool';
+  phase?: 'commentary' | 'partial_answer' | 'final_answer';
   text: string;
   status?: string;
   clientId?: string;
@@ -70,7 +71,16 @@ export interface Summary {
   managementPending?: boolean;
   executionPending?: boolean;
 }
+export interface TurnInfo {
+  id: string;
+  status?: string;
+  /** Native Unix timestamps converted from seconds to milliseconds. */
+  startedAtMs?: number;
+  completedAtMs?: number;
+  durationMs?: number;
+}
 export interface Thread extends Summary {
+  turns?: TurnInfo[];
   messages: Message[];
   actions: Action[];
   turnId?: string;

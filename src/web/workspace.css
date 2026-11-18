@@ -1180,71 +1180,61 @@
   color: var(--fg);
 }
 
-.app .command-group {
-  margin: 8px 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: transparent;
+/* One native turn: compact work disclosure, then the answer and file card. */
+.app .turn {
+  margin: 0 0 18px;
 }
-.app .command-group > summary {
+.app .work-history {
+  margin: 4px 0 12px;
+}
+.app .work-history-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  list-style: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   color: var(--muted);
+  padding: 8px 0;
+  font-size: 14px;
   cursor: pointer;
-  min-width: 0;
 }
-.app .command-group > summary::-webkit-details-marker {
-  display: none;
-}
-.app .command-group > summary:hover {
-  background: var(--hover);
-  border-radius: 8px;
-}
-.app .command-group > summary strong {
-  font-size: 14.3px;
-  font-weight: 400;
+.app .work-history-toggle:hover {
   color: var(--fg);
+}
+.app .work-history-toggle > svg {
   flex-shrink: 0;
 }
-.app .command-group > summary > svg {
-  flex-shrink: 0;
-}
-.app .command-group > summary > svg:last-child {
-  margin-left: 2px;
-}
-.app .command-group[open] > summary > svg:last-child {
+.app .work-history-toggle[aria-expanded='true'] > svg {
   transform: rotate(90deg);
 }
-.app .command-group-status {
+.app .work-history-status {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 3px 8px;
   margin-left: auto;
   font-size: 12.1px;
-  min-width: 0;
+  color: var(--muted);
 }
-.app .command-group-failed {
+.app .work-history-failed {
   color: #d88d88;
 }
-.app[data-theme='light'] .command-group-failed {
-  color: #a43e36;
+.app[data-theme='light'] .work-history-failed {
+  color: #a83932;
 }
-.app .command-group-items {
-  border-top: 1px solid var(--line);
-  padding: 4px 12px 8px;
+.app .work-history-items {
+  padding: 12px 0 0;
 }
-@media (max-width: 700px) {
-  .app .command-group > summary {
-    padding: 10px;
-    gap: 6px;
-  }
-  .app .command-group-items {
-    padding: 3px 8px 7px;
-  }
+.app .work-history-items > :last-child {
+  margin-bottom: 0;
+}
+.app .work-history-empty {
+  color: var(--muted);
+  font-size: 14px;
 }
 
 @container (max-width: 460px) {

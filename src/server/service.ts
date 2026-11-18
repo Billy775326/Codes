@@ -7,7 +7,7 @@ import { Store } from './store.js';
 import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
 import { ModelSettings } from './model-settings.js';
-import { fileChanges } from './file-changes.js';
+import { nativeMessage as item, nativeTurn } from './transcript.js';
 import { z } from 'zod';
 import { AppError, record } from '../shared/errors.js';
 import {
@@ -37,56 +37,6 @@ function state(raw: any): State {
         ? 'waitingInput'
         : 'running';
   return raw?.type === 'systemError' ? 'failed' : raw?.type === 'notLoaded' ? 'unknown' : 'idle';
-}
-function item(raw: any, turnId: string): Message | undefined {
-  if (!record(raw) || typeof raw.id !== 'string') return;
-  if (raw.type === 'userMessage')
-    return {
-      id: raw.id,
-      turnId,
-      kind: 'user',
-      text: Array.isArray(raw.content)
-        ? raw.content.map((x: any) => text(x?.text)).join('\n')
-        : text(raw.text),
-      clientId: typeof raw.clientId === 'string' ? raw.clientId : undefined,
-    };
-  if (raw.type === 'agentMessage')
-    return { id: raw.id, turnId, kind: 'assistant', text: text(raw.text) };
-  if (raw.type === 'commandExecution')
-    return {
-      id: raw.id,
-      turnId,
-      kind: 'command',
-      text: text([text(raw.command), text(raw.aggregatedOutput)].filter(Boolean).join('\n\n')),
-      status: text(raw.status),
-      truncated:
-        (typeof raw.aggregatedOutput === 'string' ? raw.aggregatedOutput.length : 0) +
-          (typeof raw.command === 'string' ? raw.command.length : 0) >
-        limits.item,
-    };
-  if (raw.type === 'fileChange') {
-    const changes = fileChanges(raw.changes);
-    return {
-      id: raw.id,
-      turnId,
-      kind: 'change',
-      text: text(changes.files.map((x) => `${x.path}\n${x.diff}`).join('\n\n')),
-      status: text(raw.status),
-      files: changes.files,
-      truncated: changes.truncated,
-    };
-  }
-  if (raw.type === 'enteredReviewMode' || raw.type === 'exitedReviewMode')
-    return {
-      id: raw.id,
-      turnId,
-      kind: 'notice',
-      text:
-        text(raw.review) ||
-        (raw.type === 'enteredReviewMode' ? 'Code review started.' : 'Code review finished.'),
-    };
-  if (raw.type === 'plan') return { id: raw.id, turnId, kind: 'assistant', text: text(raw.text) };
-  return undefined;
 }
 
 export class Service {
@@ -628,6 +578,7 @@ export class Service {
       ...saved,
       state: pending ? 'unknown' : page.state,
       messages: page.messages,
+      turns: page.turns,
       actions: [],
       olderCursor: page.olderCursor,
       settings: saved.settings,
@@ -757,7 +708,7 @@ export class Service {
               : latest?.status === 'inProgress'
                 ? 'unknown'
                 : 'idle') as State,
-          turns,
+          turns: turns.map(nativeTurn),
         };
       }
       if (pageLimit === 1 || turns.length <= 1)
@@ -1349,6 +1300,7 @@ export class Service {
       this.store.complete(id, match.id);
       thread.state = match.status;
       thread.messages = history.messages;
+      thread.turns = history.turns;
       thread.diff = history.messages
         .filter((m) => m.kind === 'change' && m.turnId === match.id)
         .map((m) => m.text)
@@ -1359,6 +1311,7 @@ export class Service {
     }
     if (!pending && !this.store.steers(id).length) {
       thread.messages = history.messages;
+      thread.turns = history.turns;
       thread.state = history.state;
     }
     this.boundary(thread);
@@ -1529,6 +1482,7 @@ export class Service {
         title,
         updatedAt,
         turnId: thread.turnId,
+        turns: thread.turns,
         pending: thread.pending ?? null,
         settings: thread.settings,
         steering: thread.steering,
@@ -1680,6 +1634,12 @@ export class Service {
     }
     if (event.method === 'turn/started' || event.method === 'turn/completed') {
       if (!record(p.turn) || typeof p.turn.id !== 'string') return;
+      const info = nativeTurn(p.turn);
+      const previous = thread.turns?.find((turn) => turn.id === info.id);
+      thread.turns = [
+        ...(thread.turns ?? []).filter((turn) => turn.id !== info.id),
+        { ...previous, ...info },
+      ].slice(-300);
       if (event.method === 'turn/completed' && terminal(p.turn.status)) {
         this.terminals.set(thread.id + '/' + p.turn.id, p.turn.status);
         while (this.terminals.size > 100)

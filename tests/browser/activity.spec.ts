@@ -19,9 +19,16 @@ async function fixture(page: Page, count: number) {
     status: index === 7 ? 'failed' : 'completed',
     text: `printf command-${index}\n\nSynthetic command output ${index}`,
   }));
+  base.thread.turns = [{ id: turn, status: 'completed', durationMs: 125000 }];
   base.thread.messages = [
     base.thread.messages.find((message) => message.kind === 'user')!,
-    { id: 'fixture-progress', turnId: turn, kind: 'assistant', text: 'Inspecting the workspace.' },
+    {
+      id: 'fixture-progress',
+      turnId: turn,
+      kind: 'assistant',
+      phase: 'commentary',
+      text: 'Inspecting the workspace.',
+    },
     ...commands,
     {
       id: 'fixture-change',
@@ -31,41 +38,52 @@ async function fixture(page: Page, count: number) {
       text: 'example.ts',
       files: [{ path: 'example.ts', kind: 'update', diff: '@@ -1 +1 @@\n-old\n+new' }],
     },
-    { id: 'fixture-final', turnId: turn, kind: 'assistant', text: 'Final response stays visible.' },
+    {
+      id: 'fixture-final',
+      turnId: turn,
+      kind: 'assistant',
+      phase: 'final_answer',
+      text: 'Final response stays visible.',
+    },
   ];
   await page.route('**/api/threads/*/snapshot', (route) => route.fulfill({ json: base }));
   await page.reload();
   await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
   return { base, commands };
 }
-test('command runs default to one compact disclosure with visible failure counts and lazy output', async ({
+test('the whole work history defaults collapsed with final answer, edits and one footer outside', async ({
   page,
 }) => {
   await fixture(page, 31);
-  const group = page.locator('.command-group');
+  const group = page.locator('.work-history');
   await expect(group).toHaveCount(1);
-  await expect(group).not.toHaveAttribute('open', '');
-  await expect(group.locator('summary').first()).toContainText('31 commands');
-  await expect(group.locator('summary').first()).toContainText('1 failed');
+  await expect(group.locator('.work-history-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    group.getByRole('button', { name: /Worked for|Working|Work history/ }),
+  ).toContainText('31 activities');
+  await expect(
+    group.getByRole('button', { name: /Worked for|Working|Work history/ }),
+  ).toContainText('1 failed');
   await expect(page.locator('.tool')).toHaveCount(0);
-  await expect(page.getByText('Inspecting the workspace.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Inspecting the workspace.', { exact: true })).toHaveCount(0);
+  await expect(group.locator('.work-history-toggle')).toContainText('Worked for 2m 5s');
   await expect(page.getByRole('region', { name: 'Edited files', exact: true })).toBeVisible();
   await page.getByLabel('Message Codex').fill('Keep the next draft');
-  await group.locator('summary').first().focus();
+  await group.getByRole('button', { name: /Worked for|Working|Work history/ }).focus();
   await page.keyboard.press('Enter');
-  await expect(group).toHaveAttribute('open', '');
+  await expect(group.locator('.work-history-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.tool')).toHaveCount(31);
   await expect(page.locator('.tool pre')).toHaveCount(0);
   await page.locator('.tool > summary').first().click();
   await expect(page.locator('.tool pre')).toHaveText(
     'printf command-0\n\nSynthetic command output 0',
   );
-  await group.locator('summary').first().click();
+  await group.getByRole('button', { name: /Worked for|Working|Work history/ }).click();
   await expect(page.locator('.tool')).toHaveCount(0);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the next draft');
   await page.screenshot({ path: 'test-results/activity-collapsed-desktop.png', fullPage: true });
   await page.reload();
-  await expect(page.locator('.command-group')).not.toHaveAttribute('open', '');
+  await expect(page.locator('.work-history-toggle')).toHaveAttribute('aria-expanded', 'false');
 });
 test('one action row belongs to the last reply and intermediate prose does not reserve toolbar space', async ({
   page,
@@ -84,8 +102,10 @@ test('one action row belongs to the last reply and intermediate prose does not r
   await expect(page.getByRole('group', { name: 'Reply actions', exact: true })).toHaveCount(1);
   await expect(final.getByRole('button', { name: 'Copy message', exact: true })).toBeVisible();
   await expect(final.getByRole('button', { name: 'Reply', exact: true })).toBeVisible();
+  await page.locator('.work-history-toggle').click();
+  await expect(progress).toBeVisible();
   const prose = await progress.locator('.prose').boundingBox();
-  const activity = await page.locator('.command-group').boundingBox();
+  const activity = await page.locator('.tool').first().boundingBox();
   expect(activity!.y - (prose!.y + prose!.height)).toBeLessThanOrEqual(16);
   await final.getByRole('button', { name: 'Reply', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toHaveValue(
@@ -100,9 +120,11 @@ test('command status and appended entries update without opening a collapsed run
   const { base, commands } = await fixture(page, 2);
   commands[1]!.status = 'inProgress';
   await page.locator('.connection').click();
-  const group = page.locator('.command-group');
-  await expect(group.locator('summary').first()).toContainText('1 running');
-  await expect(group).not.toHaveAttribute('open', '');
+  const group = page.locator('.work-history');
+  await expect(
+    group.getByRole('button', { name: /Worked for|Working|Work history/ }),
+  ).toContainText('1 running');
+  await expect(group.locator('.work-history-toggle')).toHaveAttribute('aria-expanded', 'false');
   commands[1]!.status = 'completed';
   const added: Message = {
     id: 'fixture-appended',
@@ -113,18 +135,87 @@ test('command status and appended entries update without opening a collapsed run
   };
   base.thread.messages.splice(4, 0, added);
   await page.locator('.connection').click();
-  await expect(group.locator('summary').first()).toContainText('3 commands');
-  await expect(group.locator('summary').first()).toContainText('Completed');
+  await expect(
+    group.getByRole('button', { name: /Worked for|Working|Work history/ }),
+  ).toContainText('3 activities');
+  await expect(
+    group.getByRole('button', { name: /Worked for|Working|Work history/ }),
+  ).toContainText('Worked for 2m 5s');
   await expect(page.locator('.tool')).toHaveCount(0);
-  await group.locator('summary').first().click();
+  await group.getByRole('button', { name: /Worked for|Working|Work history/ }).click();
   await expect(page.locator('.tool')).toHaveCount(3);
   base.thread.messages.splice(5, 0, { ...added, id: 'fixture-last', status: 'failed' });
   await page.locator('.connection').click();
-  await expect(group.locator('summary').first()).toContainText('4 commands');
-  await expect(group).toHaveAttribute('open', '');
+  await expect(
+    group.getByRole('button', { name: /Worked for|Working|Work history/ }),
+  ).toContainText('4 activities');
+  await expect(group.locator('.work-history-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.tool')).toHaveCount(4);
-  await expect(group.locator('summary').first()).toContainText('1 failed');
+  await expect(
+    group.getByRole('button', { name: /Worked for|Working|Work history/ }),
+  ).toContainText('1 failed');
 });
+test('running work opens, completion collapses untouched history, and manual choices survive updates', async ({
+  page,
+}) => {
+  const { base } = await fixture(page, 2);
+  const final = base.thread.messages.pop()!;
+  base.thread.state = 'running';
+  base.thread.turns = [
+    { id: base.thread.turnId!, status: 'inProgress', startedAtMs: Date.now() - 5000 },
+  ];
+  base.thread.messages.push({
+    id: 'fixture-integration',
+    turnId: base.thread.turnId!,
+    kind: 'tool',
+    text: 'Used GitHub: search',
+    status: 'completed',
+  });
+  await page.locator('.connection').click();
+  const toggle = page.locator('.work-history-toggle');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText('Inspecting the workspace.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Used GitHub: search', { exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Reply actions', exact: true })).toHaveCount(0);
+  base.thread.state = 'completed';
+  base.thread.turns = [{ id: base.thread.turnId!, status: 'completed', durationMs: 8000 }];
+  base.thread.messages.push(final);
+  await page.locator('.connection').click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toContainText('Worked for 8s');
+  await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
+  await toggle.click();
+  await page.locator('.connection').click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  // A deliberate close is also respected while the task is active.
+  await toggle.click();
+  base.thread.state = 'running';
+  await page.locator('.connection').click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('legacy history uses a neutral label and the last unknown-phase reply without inventing elapsed time', async ({
+  page,
+}) => {
+  const { base } = await fixture(page, 2);
+  delete base.thread.turns;
+  for (const message of base.thread.messages) delete message.phase;
+  await page.locator('.connection').click();
+  await expect(page.locator('.work-history-toggle')).toContainText('Work history');
+  await expect(page.locator('.work-history-toggle')).not.toContainText('Worked for');
+  await expect(page.getByText('Inspecting the workspace.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
+  const answer = await page
+    .getByText('Final response stays visible.', { exact: true })
+    .boundingBox();
+  const edits = await page.getByRole('region', { name: 'Edited files', exact: true }).boundingBox();
+  const actions = await page
+    .getByRole('group', { name: 'Reply actions', exact: true })
+    .boundingBox();
+  expect(edits!.y).toBeGreaterThan(answer!.y);
+  expect(actions!.y).toBeGreaterThan(edits!.y + edits!.height);
+});
+
 for (const width of [1440, 320])
   test(`larger fixed text ignores legacy display size and collapsed activity fits ${width}px in both themes`, async ({
     page,
@@ -180,7 +271,7 @@ for (const width of [1440, 320])
         const background = luminance(
           getComputedStyle(document.querySelector('.main')!).backgroundColor,
         );
-        return ['.prose', '.command-group-status'].map((selector) => {
+        return ['.prose', '.work-history-status'].map((selector) => {
           const foreground = luminance(getComputedStyle(document.querySelector(selector)!).color);
           return (
             (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)

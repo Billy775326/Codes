@@ -2,11 +2,15 @@
 
 codes follows the published Codex IDE interaction contracts for native clarifications and local patch inspection. Use a desktop to review changes and a phone to answer a pending question. This is an independent Web implementation; it does not include VS Code editor integration or Git stage/revert actions.
 
-## Read command activity
+## Read a turn's work history
 
-Consecutive command records in one native turn appear as a collapsed count summary. Prose, file changes and turn boundaries end a group, so the original message order stays intact. Running, failed/declined, stopped and unavailable statuses remain visible in the summary. A failed command does not silently become a successful summary.
+Each native turn has one work-history disclosure. Intermediate assistant commentary, command activity, integration/search summaries, and review progress belong inside it. The final answer, one edited-files card, and one Copy/Reply/Branch row stay outside. Multiple native edits in the turn share the card; repeated edits preserve their recorded order rather than claiming a net Git diff. Follow-up user messages remain visible above their turn's work history. Pending approvals and questions remain directly available outside the disclosure.
 
-Expand the summary to inspect individual commands; expand a command again for its captured output. Collapsed groups do not mount command rows or output text. New records and status updates preserve the group's current open/closed choice. Reloading or switching away defaults back to collapsed. Assistant replies, change cards, approvals and questions remain directly visible. Grouping changes browser presentation only; it does not remove native history or change task execution.
+Completed history defaults to collapsed. Running work opens automatically and collapses after completion unless you explicitly opened or closed it. New records, status updates and reconnect snapshots preserve that choice while the turn remains mounted. Reloading or switching conversations resets to the default. Expand the history to inspect intermediate messages and tools, then expand an individual command for its captured output. Closed history does not mount those rows or output text. Failures, stopped tools and unavailable tool statuses remain visible on the header; a failed command does not become a successful summary.
+
+The header uses native turn duration or native start/end timestamps when provided. Active elapsed time updates only when a native start timestamp is known. Legacy history without timing says **Work history**, never an invented zero duration. Native `commentary`, `partial_answer` and `final_answer` phases identify progress and answers. For older providers without phases, only the last assistant message after completion is treated as the final answer; explicitly marked commentary is never promoted to one. Native reasoning records are omitted. Integration summaries do not expose raw arguments or results.
+
+Grouping changes presentation only; it does not change native history, task dispatch or approval handling. The same loaded-history and preview limits apply.
 
 Workspace text, line spacing and controls use larger fixed defaults. Older saved display-size values are ignored; existing theme and interaction preferences remain compatible. Dark mode uses layered dark gray surfaces and subdued light text; light and system themes remain available. Narrow composers use two control rows to keep send/stop available with larger text.
 
@@ -32,7 +36,7 @@ Open **Review changes**, or select **Review** in an **Edited files** card in the
 - **Mark viewed** records that displayed file revision in the mounted preview. Changed patch content resets the marker. Markers are not saved across a page reload.
 - **Change scope** defaults to the last native turn. Earlier turns that contain changes in the loaded history can be selected. This is not an aggregate Git working-tree diff or a complete search of unloaded history.
 
-When a historical turn contains several edits to the same file, the preview preserves their native sequence and labels it explicitly. Each patch is relative to the preceding edit; counts are not a reconstructed net diff. The current turn uses the native aggregate diff when available. Large historical sequences share the same preview budget; individual conversation items can be expanded separately to inspect their own recorded patches.
+When a historical turn contains several edits to the same file, the preview preserves their native sequence and labels it explicitly. Each patch is relative to the preceding edit; counts are not a reconstructed net diff. The current turn uses the native aggregate diff when available. Large historical sequences share the same preview budget; the turn card and Review viewer use bounded previews, and native history retains the individual recorded patches.
 
 Only an expanded file renders patch rows. Each file shows at most 200 rows at a time, with Previous/Next navigation. Parsing is capped at 128 Ki characters, 8,000 rows and 100 files per patch. A native file-change item shares one 128 Ki-character patch budget across its files. Existing history and transport limits still apply. Truncation notices mean the preview and counts cover only the available portion; inspect the workspace/native history for the full result.
 
