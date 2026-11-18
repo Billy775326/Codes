@@ -18,6 +18,18 @@ Restarting the service does not promise that a running CLI tool will finish. Unr
 
 Use your normal process supervisor with a private environment and an explicit working directory. The repository does not install a daemon or change the running host configuration.
 
+### Updating the owner's local preview
+
+The owner authorized the following delivery policy on 2026-11-18: after a verified codes update, build and switch the existing local preview on port 6670 by default. This is the development delivery workflow, not a background update service. The `codes` command remains a foreground launcher; it does not replace an occupied instance automatically.
+
+1. Check the target commit, working-tree changes, relevant validation and CI. Build in an isolated directory so the running frontend and backend keep matching.
+2. Inspect execution receipts, active native work and queued messages. Prepare the build while busy, and wait for work to finish before switching. Never silently interrupt a task or resend an uncertain operation for an update.
+3. Preserve the existing process environment privately, stop that exact service gracefully, and back up SQLite consistently, the access token and previous build. Retain migration backups and the schema rollback restrictions described below.
+4. Install the prepared build and start with the same data directory, origin and listener. Verify schema/integrity, retained records/token, native readiness, authenticated APIs, SSE and the browser flow without sending a model prompt.
+5. Record the target commit, PID, backup location and verification result in the ignored local upgrade receipt. Report the actual running build. Existing browser sessions expire on restart; use the same token to sign in again.
+
+Release tags, GitHub Releases, package publishing and a new public deployment still require their own authorization.
+
 ## HTTPS reverse proxy
 
 The browser and API must share one exact origin. For example, when privately exposing `https://codes.example.com`:

@@ -6,7 +6,7 @@
 - Work on focused task branches and follow the project's established tools and formatting.
 - Keep credentials, local configuration, runtime data, and temporary test artifacts out of commits.
 - Report the checks actually performed and any unresolved failures.
-- Do not create release tags, publish releases, or deploy without explicit authorization.
+- Do not create release tags, publish releases/packages, or deploy to production without explicit authorization. The owner has authorized updating the existing local codes preview as described below.
 
 ## Working on this project
 
@@ -16,3 +16,4 @@
 - Keep task dispatch, native approval callbacks, durable receipts, and browser subscriptions separate. Never automatically resend a task with an uncertain outcome.
 - Update `CHANGELOG.md` under Unreleased for user-facing changes. Distinguish local simulator evidence, native metadata checks, live pilot results, and deployment acceptance.
 - Use English conventional commits such as `feat(workspace): add conversation recovery`.
+- After a verified codes update, build and switch this host's existing preview on port 6670 by default. Preserve its runtime environment, private data and access token. Prepare the build in isolation; wait for active tasks and dispatchable queues to finish before a graceful restart. Back up the database and previous build, then verify the actual schema, runtime, authenticated APIs, event stream and browser. Report the running commit and restart outcome. This delivery policy does not install a background updater or authorize a new public listener.
