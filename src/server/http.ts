@@ -2,6 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, join, extname, relative } from 'node:path';
+import { promisify } from 'node:util';
+import { gzip } from 'node:zlib';
 import { z } from 'zod';
 import { AppError, asError } from '../shared/errors.js';
 import { limits } from '../shared/types.js';
@@ -52,12 +54,43 @@ async function body(request: IncomingMessage) {
     throw new AppError('INVALID_JSON', 'Expected a JSON request.');
   }
 }
-function json(response: ServerResponse, data: unknown, status = 200) {
+const compress = promisify(gzip);
+const compressionThresholdBytes = 16 * 1024;
+function acceptsGzip(header: string | undefined) {
+  const offers = new Map(
+    (header ?? '').split(',').map((offer) => {
+      const [name = '', ...parameters] = offer.split(';').map((part) => part.trim());
+      const quality = parameters.find((part) => /^q=/i.test(part));
+      const q = quality ? Number(quality.slice(2)) : 1;
+      return [name.toLowerCase(), Number.isFinite(q) && q >= 0 && q <= 1 ? q : 0];
+    }),
+  );
+  return (offers.get('gzip') ?? offers.get('*') ?? 0) > 0;
+}
+async function json(response: ServerResponse, data: unknown, status = 200) {
+  let bytes = Buffer.from(JSON.stringify(data));
+  let encoding: string | undefined;
+  if (
+    bytes.length >= compressionThresholdBytes &&
+    acceptsGzip(response.req.headers['accept-encoding'])
+  ) {
+    // Compression runs off the event loop. The event
+    // cursor is captured before compression, so replay still covers this delay.
+    const compressed = await compress(bytes, { level: 4 });
+    if (compressed.length < bytes.length) {
+      bytes = compressed;
+      encoding = 'gzip';
+    }
+  }
+  if (response.destroyed) return;
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
+    'content-length': bytes.length,
+    vary: 'Accept-Encoding',
+    ...(encoding ? { 'content-encoding': encoding } : {}),
   });
-  response.end(JSON.stringify(data));
+  response.end(bytes);
 }
 export async function application(
   service: Service,
@@ -469,7 +502,7 @@ export async function application(
         error instanceof z.ZodError
           ? new AppError('VALIDATION', 'Some request fields are invalid.')
           : asError(error);
-      json(
+      return json(
         response,
         { error: { code: problem.code, message: problem.message, uncertain: problem.uncertain } },
         problem.status,

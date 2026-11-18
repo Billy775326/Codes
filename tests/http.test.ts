@@ -2,19 +2,22 @@ import { request as httpRequest } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { gunzipSync } from 'node:zlib';
+import type { IncomingHttpHeaders } from 'node:http';
 import { Store } from '../src/server/store';
 import { Service } from '../src/server/service';
 import { Driver } from '../src/codex/driver';
 import { application } from '../src/server/http';
 let app: Awaited<ReturnType<typeof application>>;
 let directory: string;
+let service: Service;
 let origin: string;
 let cookie: string;
 const token = 'test-only-access-token-not-a-real-secret';
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'codes-http-'));
-  const service = new Service(
+  service = new Service(
     new Store(directory),
     new Driver('mock', { stateFile: join(directory, 'history.json') }),
   );
@@ -314,4 +317,54 @@ it('validates native steering/review inputs and publishes bounded reasoning meta
   ]);
   const modes = await (await fetch(origin + '/api/modes', { headers: { cookie } })).json();
   expect(modes.map((entry: { mode: string }) => entry.mode)).toEqual(['default', 'plan']);
+});
+
+function rawJson(path: string, acceptEncoding: string) {
+  return new Promise<{ headers: IncomingHttpHeaders; bytes: Buffer }>((yes, no) => {
+    const req = httpRequest(
+      origin + path,
+      { headers: { cookie, 'accept-encoding': acceptEncoding } },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => yes({ headers: response.headers, bytes: Buffer.concat(chunks) }));
+        response.on('error', no);
+      },
+    );
+    req.on('error', no);
+    req.end();
+  });
+}
+it('compresses large JSON without changing history, declares its wire length, and respects encoding refusal', async () => {
+  const project = await service.addProject(directory);
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  const text = 'Synthetic history: 你好🙂 '.repeat(4000);
+  vi.spyOn(service, 'read').mockResolvedValue({
+    ...thread,
+    messages: [{ id: 'fixture', turnId: 'turn', kind: 'assistant', text }],
+  });
+  const path = '/api/threads/' + thread.id + '/snapshot';
+  const plain = await rawJson(path, 'identity');
+  const compressed = await rawJson(path, 'br, gzip;q=0.8');
+  expect(compressed.headers['content-encoding']).toBe('gzip');
+  expect(compressed.headers['content-length']).toBe(String(compressed.bytes.length));
+  expect(compressed.headers['transfer-encoding']).toBeUndefined();
+  expect(compressed.headers.vary).toBe('Accept-Encoding');
+  expect(compressed.headers['cache-control']).toBe('no-store');
+  expect(compressed.bytes.length).toBeLessThan(plain.bytes.length / 2);
+  expect(JSON.parse(gunzipSync(compressed.bytes).toString()).thread.messages[0].text).toBe(text);
+  for (const encoding of ['gzip;q=0, *;q=1', 'identity', 'gzip;q=invalid']) {
+    const declined = await rawJson(path, encoding);
+    expect(declined.headers['content-encoding']).toBeUndefined();
+    expect(declined.headers['content-length']).toBe(String(declined.bytes.length));
+    expect(JSON.parse(declined.bytes.toString()).thread.messages[0].text).toBe(text);
+  }
+  const wildcard = await rawJson(path, '*;q=1');
+  expect(wildcard.headers['content-encoding']).toBe('gzip');
+});
+it('sends small JSON with an exact length without introducing a compressed stream', async () => {
+  const result = await rawJson('/api/system', 'gzip');
+  expect(result.headers['content-encoding']).toBeUndefined();
+  expect(result.headers['content-length']).toBe(String(result.bytes.length));
+  expect(JSON.parse(result.bytes.toString()).runtime).toBe('mock');
 });

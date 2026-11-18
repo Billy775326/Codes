@@ -51,7 +51,7 @@ A 401 response from the snapshot, sidebar or question/approval API returns an al
 
 Permanent snapshot read failures (such as missing history, denied access or a size limit) stop automatic retry and display the cause with **Retry loading**. The composer keeps editable draft text but disables send/model/permission changes until the selected history and task status have loaded. Transient errors and broken streams retain bounded reconnect behavior.
 
-The UI fetches a fresh snapshot, then replays events after its cursor. A server epoch change or replay-buffer overflow requires another snapshot. Read requests and event handshakes have deadlines; reconnect retries stop after eight consecutive failures. Click the connection indicator to try again.
+The UI fetches a fresh snapshot, then replays events after its cursor. A server epoch change or replay-buffer overflow requires another snapshot. Reads allow 35 seconds for response headers, then reset a 35-second inactivity deadline as body chunks arrive, with a two-minute overall bound. Writes retain a fixed 35-second deadline. Event handshakes have their own deadline; reconnect retries stop after eight consecutive failures. Click the connection indicator to try again.
 
 If an execution receipt is lost, **do not submit the task a second time**. Use **Check result**. The server checks the recorded operation and matches its exact client message ID in recent native history. A terminal result releases the conversation. A missing receipt means the server did not journal the request; the UI retains the draft so the owner can explicitly send again.
 
@@ -74,3 +74,13 @@ An unknown result that cannot be proven terminal remains locked. Inspect the tas
 The UI distinguishes timeouts, unreachable requests, invalid API responses and HTTP/proxy failures. A failed snapshot shows its first error while bounded retry continues; Retry loading starts a fresh subscription. Read failures do not imply that a task was submitted. A failed write can still have executed, so Check result verifies its existing operation identity rather than resending it. On reconnect, proven completed or failed receipts can be cleared automatically. Unknown or absent receipts remain protected until checked; an absent receipt found by Check result also refreshes the selected conversation.
 
 Hidden tabs release their event connection and reconnect from a fresh snapshot on return. Native execution and server queues continue while hidden. This reduces HTTP/1 connection occupancy during ordinary tab switching; many simultaneously visible windows can still reach a browser's connection limit. Closing surplus windows or using an HTTPS reverse proxy with HTTP/2 can avoid that separate limit. A private Chrome diagnostic on this host reproduced saturation with six event streams and recovered ordinary requests after releasing one; that diagnostic does not establish the cause of every user connection failure.
+
+### Small API responses work but conversation history stalls
+
+A successful `/api/system` response establishes only that a small request can complete. A conversation snapshot may be much larger because collapsed work history still includes command output. Opening a snapshot directly in a new tab distinguishes an in-page fetch problem from a transfer that also stalls during navigation; do not share its private JSON or session cookies.
+
+Large JSON responses negotiate gzip, retain `Cache-Control: no-store`, and provide `Content-Length` for the actual encoded bytes. Clients that decline gzip receive the same uncompressed JSON. Compression runs asynchronously; it does not modify native history or the event replay cursor. Event streams remain uncompressed.
+
+The browser reports whether a read timed out before any response, stopped making progress while downloading, or exceeded its two-minute total bound. A transport interruption while receiving JSON remains retryable. Switching conversations cancels the old download. These changes do not prove or repair a broken SSH forward, proxy or browser interceptor.
+
+An isolated local Chrome test using an existing 909,611-byte snapshot and a controlled 24 KiB/s download rate reproduced the previous failure at roughly 35 seconds, without model requests. This is evidence for the transfer deadline defect, not a measurement of the owner's desktop network or proof of its sole cause.

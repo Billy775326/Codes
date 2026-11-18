@@ -45,6 +45,8 @@
 
 ### Fixed
 
+- Compress large JSON responses when supported and declare their exact transfer length. Let progressing read downloads finish beyond 35 seconds, with a 35-second inactivity deadline and a two-minute overall bound, instead of repeatedly discarding partial conversation history. Keep write deadlines and duplicate-execution protection unchanged; interrupted downloads remain retryable.
+
 - Show snapshot connection failures immediately during bounded retry, distinguish HTTP/proxy responses, invalid JSON and request deadlines from an unreachable service, and reserve uncertain-execution warnings for writes.
 - Verify stored terminal operation receipts when the selected snapshot reconnects, and refresh the subscription after Check result proves a browser request was not recorded. Preserve unknown receipts and never automatically resend tasks.
 - Release event connections while a tab is hidden and refresh its snapshot on return. Keep sending unavailable until the current subscription is connected; server tasks and queues continue independently.
