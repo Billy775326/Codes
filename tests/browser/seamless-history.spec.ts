@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import type { HistoryPage } from '../../src/web/history';
 async function fixture(page: Page) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
@@ -28,6 +29,18 @@ async function fixture(page: Page) {
   await expect(page.getByRole('heading', { name: 'Reference 99', exact: true })).toHaveCount(1);
 }
 async function edge(page: Page, direction: 'older' | 'newer') {
+  let value: HistoryPage | undefined;
+  // Chromium may evict bodies consumed through a stream reader from its
+  // debugging cache. Capture the actual upstream page once, before delivery.
+  await page.route(
+    '**/api/threads/*/history?cursor=*',
+    async (route) => {
+      const upstream = await route.fetch();
+      value = await upstream.json();
+      await route.fulfill({ status: upstream.status(), json: value });
+    },
+    { times: 1 },
+  );
   const response = page.waitForResponse(
     (response) => response.url().includes('/history?cursor=') && response.status() === 200,
   );
@@ -60,7 +73,8 @@ async function edge(page: Page, direction: 'older' | 'newer') {
           new WheelEvent('wheel', { deltaY: direction === 'older' ? -120 : 120, bubbles: true }),
         );
     }, direction);
-  const value = await (await response).json();
+  await response;
+  if (!value) throw new Error('The scrolled native history page was not captured.');
   const item = direction === 'older' ? value.messages[0] : value.messages.at(-1);
   if (item) await expect(page.locator('[data-message-id="' + item.id + '"]')).toHaveCount(1);
   return value;
