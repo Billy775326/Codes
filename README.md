@@ -53,6 +53,8 @@ The installer creates `~/.local/bin/codes`; add `~/.local/bin` to your shell's `
 
 `codes` starts in the foreground, uses this checkout's `.local` directory by default, and keeps the default port 6670. Press Ctrl+C to stop. Existing `CODES_*` configuration still applies; relative paths supplied through the environment resolve from your calling directory. Use `codes --help` for usage. The launcher requires an existing build, does not rebuild or restart a running instance, and uses the same data-directory lock as `npm start`.
 
+If the data directory is already in use, `codes` prints a concise message with the directory and lock owner PID instead of a JavaScript stack trace, then exits with status 1. Use the existing workspace. It leaves the running process and lock intact, including when a live unrelated process owns that lock; inspect the owner before attempting a manual restart.
+
 For a simulation without Codex or an account:
 
 ```bash

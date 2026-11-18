@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,5 +34,28 @@ Build the application first with npm run build in ${root}`);
   if (process.env.CODES_CODEX_BINARY?.includes('/'))
     process.env.CODES_CODEX_BINARY = resolve(process.env.CODES_CODEX_BINARY);
   process.chdir(root);
-  await import(new URL('../dist/server/main.js', import.meta.url).href);
+  try {
+    await import(new URL('../dist/server/main.js', import.meta.url).href);
+  } catch (error) {
+    // Recognize the lock error from existing builds as well as the current build.
+    // Other startup failures retain their original diagnostic and exit behavior.
+    if (!(error instanceof Error) || error.message !== 'The data directory is already in use.')
+      throw error;
+    const directory = process.env.CODES_DATA_DIR ?? join(root, '.local');
+    let pid;
+    try {
+      const owner = Number(readFileSync(join(directory, 'server.lock'), 'utf8'));
+      if (Number.isSafeInteger(owner) && owner > 0) pid = owner;
+    } catch (readError) {
+      // The existing process may have released the lock after rejecting this start.
+      if (readError.code !== 'ENOENT') throw readError;
+    }
+    console.error('codes did not start: the data directory is already in use.');
+    console.error(`Data directory: ${directory}`);
+    if (pid) console.error(`Lock owner PID: ${pid}`);
+    console.error(
+      'Use the existing workspace. This command does not restart it or remove its lock.',
+    );
+    process.exitCode = 1;
+  }
 }

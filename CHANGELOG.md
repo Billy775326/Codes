@@ -35,6 +35,7 @@
 
 ### Fixed
 
+- Show a concise data-directory/lock-owner message when `codes` is started again, preserving exit status 1 and the existing process instead of printing a startup stack trace.
 - Resume the working status after a native question or approval is resolved, reject stale question callbacks, and ignore diff notifications for another turn.
 - Preserve a newer follow-up draft and its attachments when an earlier send, queue or steer acknowledgement arrives. Carry text typed during new-conversation creation into the selected conversation.
 

@@ -94,9 +94,20 @@ for (const relativeData of [false, true]) {
         const duplicate = spawnSync(command, [], { cwd: caller, env, encoding: 'utf8' });
         expect(duplicate.status).toBe(1);
         expect(duplicate.stderr).toContain('already in use');
+        expect(duplicate.stderr).toContain('Lock owner PID: ' + child.pid);
+        expect(duplicate.stderr).toContain('Data directory: ' + data);
+        expect(duplicate.stderr).not.toContain('file://');
+        expect(duplicate.stderr).not.toContain('at ModuleJob');
+        expect((await client.get('/api/system')).status()).toBe(200);
         await stop(child);
         expect(child.exitCode).toBe(0);
         await expect(readFile(join(data, 'server.lock'))).rejects.toMatchObject({ code: 'ENOENT' });
+        // A lock held by another live process must also remain protected.
+        await writeFile(join(data, 'server.lock'), String(process.pid));
+        const occupied = spawnSync(command, [], { cwd: caller, env, encoding: 'utf8' });
+        expect(occupied.status).toBe(1);
+        expect(occupied.stderr).toContain('Lock owner PID: ' + process.pid);
+        expect(await readFile(join(data, 'server.lock'), 'utf8')).toBe(String(process.pid));
       } finally {
         await client.dispose();
       }
