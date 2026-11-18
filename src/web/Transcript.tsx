@@ -2,8 +2,14 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Message, TurnInfo } from '../shared/types';
 import { groupTurns, commandCounts, workDuration, type TurnActivity } from './activity';
 import { Icon } from './primitives';
+import { MessageTime } from './MessageTime';
 
-type RenderMessage = (item: Message, finalReply: boolean, changes?: Message) => ReactNode;
+type RenderMessage = (
+  item: Message,
+  finalReply: boolean,
+  changes?: Message,
+  timestamp?: number,
+) => ReactNode;
 function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
   const [choice, setChoice] = useState<boolean>();
   const open = choice ?? turn.active;
@@ -27,8 +33,10 @@ function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
   const last = turn.replies.at(-1);
   return (
     <section className="turn" data-turn-id={turn.id}>
-      {turn.users.map((item) => (
-        <Fragment key={item.id}>{render(item, false)}</Fragment>
+      {turn.users.map((item, index) => (
+        <Fragment key={item.id}>
+          {render(item, false, undefined, index === 0 ? turn.info?.startedAtMs : undefined)}
+        </Fragment>
       ))}
       {(turn.work.length > 0 || elapsed !== undefined) && (
         <section className="work-history">
@@ -69,10 +77,20 @@ function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
       )}
       {turn.replies.map((item) => (
         <Fragment key={item.id}>
-          {render(item, item === last && !turn.active, item === last ? turn.changes : undefined)}
+          {render(
+            item,
+            item === last && !turn.active,
+            item === last ? turn.changes : undefined,
+            item === last ? turn.info?.completedAtMs : undefined,
+          )}
         </Fragment>
       ))}
       {!last && turn.changes && render(turn.changes, false)}
+      {!last && turn.info?.completedAtMs !== undefined && (
+        <div className="message-footer">
+          <MessageTime value={turn.info.completedAtMs} kind="finished" />
+        </div>
+      )}
     </section>
   );
 }

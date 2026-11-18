@@ -296,3 +296,61 @@ for (const width of [1440, 320])
     expect(await confirmation.evaluate((element) => Boolean(element.closest('.app')))).toBe(true);
     await page.keyboard.press('Escape');
   });
+
+test.describe('native message timestamps', () => {
+  test.use({ timezoneId: 'Asia/Shanghai', locale: 'en-US' });
+  test('shows local native start and finish times with exact instants and no intermediate timestamps', async ({
+    page,
+  }) => {
+    const { base } = await fixture(page, 2);
+    base.thread.turns = [
+      {
+        id: base.thread.turnId!,
+        status: 'completed',
+        startedAtMs: Date.parse('2026-11-18T03:12:00Z'),
+        completedAtMs: Date.parse('2026-11-18T03:14:05Z'),
+        durationMs: 125000,
+      },
+    ];
+    await page.locator('.connection').click();
+    const userTime = page.getByTestId('message-user').locator('time');
+    const final = page
+      .getByTestId('message-assistant')
+      .filter({ hasText: 'Final response stays visible.' });
+    const finalTime = final.locator('.message-footer time');
+    await expect(userTime).toHaveAttribute('datetime', '2026-11-18T03:12:00.000Z');
+    await expect(userTime).toContainText('11:12');
+    await expect(userTime).toHaveAttribute('title', /Turn started:.*2026.*GMT\+8/);
+    await expect(finalTime).toHaveAttribute('datetime', '2026-11-18T03:14:05.000Z');
+    await expect(finalTime).toContainText('11:14');
+    await expect(finalTime).toHaveAttribute('title', /Turn finished:.*11:14:05.*GMT\+8/);
+    const actions = await final.locator('.message-actions').boundingBox();
+    const timestamp = await finalTime.boundingBox();
+    expect(Math.abs(actions!.y - timestamp!.y)).toBeLessThan(8);
+    await page.locator('.work-history-toggle').click();
+    await expect(page.locator('.work-history time')).toHaveCount(0);
+    await page.screenshot({ path: 'test-results/native-message-times.png', fullPage: true });
+  });
+  test('omits unknown legacy times and does not assign the turn start to same-turn follow-ups', async ({
+    page,
+  }) => {
+    const { base } = await fixture(page, 2);
+    base.thread.turns = [
+      { id: base.thread.turnId!, startedAtMs: Date.parse('2026-11-18T03:12:00Z') },
+    ];
+    base.thread.messages.splice(1, 0, {
+      id: 'fixture-follow-up',
+      turnId: base.thread.turnId!,
+      kind: 'user',
+      text: 'Same-turn follow-up without its own native time',
+    });
+    await page.locator('.connection').click();
+    await expect(page.getByTestId('message-user').first().locator('time')).toHaveCount(1);
+    await expect(page.getByTestId('message-user').last().locator('time')).toHaveCount(0);
+    await expect(page.getByTestId('message-assistant').locator('time')).toHaveCount(0);
+    delete base.thread.turns;
+    await page.locator('.connection').click();
+    await expect(page.locator('.turn time')).toHaveCount(0);
+    await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
+  });
+});

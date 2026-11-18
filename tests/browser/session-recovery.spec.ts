@@ -4,6 +4,7 @@ async function signin(page: Page) {
   await page.getByLabel('Workspace access token').fill(token);
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
+  await expect(page.locator('.connection')).toHaveText('Connected');
 }
 async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
@@ -64,6 +65,7 @@ test('expired authentication while answering a question restores the pending req
 test('an expired sidebar request also returns to sign-in', async ({ page }) => {
   await page.goto('/');
   await signin(page);
+  await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
   await page.getByLabel('Message Codex').fill('A new project draft');
   await expire(page);
   await page.getByRole('button', { name: 'Refresh conversations', exact: true }).click();

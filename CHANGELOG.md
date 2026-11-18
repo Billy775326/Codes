@@ -4,6 +4,8 @@
 
 ### Added
 
+- Show native turn start times below the first user message and finish times beside final-reply actions, with local dates and a full timestamp/timezone tooltip. Leave unavailable historical and intermediate-item times unset.
+
 - Group each native turn into one work-history disclosure containing intermediate commentary and tool/integration activity. Completed work collapses by default; final answers, one edited-files card and one action row stay visible. Preserve manual disclosure choices through updates, show failures while collapsed, and display elapsed time only when native timing is available. Legacy turns without phases retain their last completed assistant reply as the answer.
 
 - Let Codex request clarification in Code as well as Plan using an application-local feature setting. Distinguish required questions from optional ones, offer explicit Skip for optional requests, and provide keyboard-accessible choices and a composer shortcut to pending questions.

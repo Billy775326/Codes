@@ -40,6 +40,7 @@ import { PanelMenu } from './PanelMenu';
 import { usePanelFocus } from './usePanelFocus';
 import { ChangeSummary } from './ChangeSummary';
 import { Transcript } from './Transcript';
+import { MessageTime } from './MessageTime';
 import {
   earlierWindow,
   historyLimit,
@@ -101,6 +102,7 @@ const MessageView = memo(function MessageView({
   onReview,
   actions = false,
   changes,
+  timestamp,
 }: {
   onReply?: (item: Message) => void;
   onFork?: (item: Message) => void;
@@ -110,6 +112,7 @@ const MessageView = memo(function MessageView({
   streaming: boolean;
   actions?: boolean;
   changes?: Message;
+  timestamp?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState('');
@@ -184,51 +187,60 @@ const MessageView = memo(function MessageView({
             review={onReview ? (path) => onReview(changes, path) : undefined}
           />
         )}
-        {actions && !streaming && item.turnId && (onReply || onFork) && (
-          <div className="message-actions" role="group" aria-label="Reply actions">
-            <button
-              aria-label="Copy message"
-              title="Copy message"
-              onClick={() => {
-                void navigator.clipboard
-                  ?.writeText(item.text)
-                  .then(() => {
-                    setCopied('Copied');
-                    clearTimeout(copyTimer.current);
-                    copyTimer.current = setTimeout(() => setCopied(''), 2000);
-                  })
-                  .catch(() => setCopied('Copy unavailable. Select the message text.'));
-                if (!navigator.clipboard) setCopied('Copy unavailable. Select the message text.');
-              }}
-            >
-              <Icon name="copy" size={13} />
-            </button>
-            {copied && <span role="status">{copied}</span>}
-            {onReply && (
-              <button
-                aria-label="Reply"
-                title="Reply"
-                disabled={disabled}
-                onClick={() => onReply(item)}
-              >
-                <Icon name="reply" size={13} />
-                <span className="action-label">Reply</span>
-              </button>
-            )}
-            {onFork && (
-              <button
-                aria-label="Branch from here"
-                title="Branch from here"
-                disabled={disabled}
-                onClick={() => onFork(item)}
-              >
-                <Icon name="branch" size={13} />
-                <span className="action-label">Branch from here</span>
-              </button>
-            )}
-          </div>
-        )}
+        {!streaming &&
+          item.kind !== 'user' &&
+          ((actions && item.turnId && (onReply || onFork)) || timestamp !== undefined) && (
+            <div className="message-footer">
+              {actions && !streaming && item.turnId && (onReply || onFork) && (
+                <div className="message-actions" role="group" aria-label="Reply actions">
+                  <button
+                    aria-label="Copy message"
+                    title="Copy message"
+                    onClick={() => {
+                      void navigator.clipboard
+                        ?.writeText(item.text)
+                        .then(() => {
+                          setCopied('Copied');
+                          clearTimeout(copyTimer.current);
+                          copyTimer.current = setTimeout(() => setCopied(''), 2000);
+                        })
+                        .catch(() => setCopied('Copy unavailable. Select the message text.'));
+                      if (!navigator.clipboard)
+                        setCopied('Copy unavailable. Select the message text.');
+                    }}
+                  >
+                    <Icon name="copy" size={13} />
+                  </button>
+                  {copied && <span role="status">{copied}</span>}
+                  {onReply && (
+                    <button
+                      aria-label="Reply"
+                      title="Reply"
+                      disabled={disabled}
+                      onClick={() => onReply(item)}
+                    >
+                      <Icon name="reply" size={13} />
+                      <span className="action-label">Reply</span>
+                    </button>
+                  )}
+                  {onFork && (
+                    <button
+                      aria-label="Branch from here"
+                      title="Branch from here"
+                      disabled={disabled}
+                      onClick={() => onFork(item)}
+                    >
+                      <Icon name="branch" size={13} />
+                      <span className="action-label">Branch from here</span>
+                    </button>
+                  )}
+                </div>
+              )}
+              <MessageTime value={timestamp} kind="finished" />
+            </div>
+          )}
       </div>
+      {item.kind === 'user' && <MessageTime value={timestamp} kind="started" />}
     </article>
   );
 });
@@ -1664,12 +1676,13 @@ function App() {
                         ? [thread.turnId ?? '', thread.pending?.turnId ?? '']
                         : []
                     }
-                    render={(m, finalReply, changes) => (
+                    render={(m, finalReply, changes, timestamp) => (
                       <MessageView
                         key={m.id}
                         item={m}
                         actions={finalReply}
                         changes={changes}
+                        timestamp={timestamp}
                         onReview={(item, path) => {
                           setDiffTurn(item.turnId === thread.turnId ? '' : item.turnId);
                           setDiffPath(

@@ -14,6 +14,8 @@ Grouping changes presentation only; it does not change native history, task disp
 
 Workspace text, line spacing and controls use larger fixed defaults. Older saved display-size values are ignored; existing theme and interaction preferences remain compatible. Dark mode uses layered dark gray surfaces and subdued light text; light and system themes remain available. Narrow composers use two control rows to keep send/stop available with larger text.
 
+The first user message shows the native turn's start time below its bubble; the final reply's action row shows the native finish time. Dates use the browser's local timezone. Hover for the full date, seconds and timezone; the HTML timestamp also retains its UTC instant. These are turn timestamps, not invented per-item send times. Intermediate activity and same-turn follow-ups have no independent timestamp unless the protocol supplies one. Missing native times leave no placeholder or reserved row.
+
 ## Browse earlier messages and return to live replies
 
 **Load earlier messages** opens a separate reading window. The latest 240 live messages continue receiving event updates in the background; loading history cannot evict them. Each historical window also holds at most 240 messages and avoids cutting a turn at its newer edge. Continue loading earlier pages even when that window reaches its limit.
