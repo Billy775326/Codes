@@ -5,8 +5,6 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill(token);
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
-  if ((page.viewportSize()?.width ?? 1440) > 1099)
-    await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
 }
 async function create(page: Page, title: string) {
   if (
@@ -187,17 +185,23 @@ test('mobile row actions and archive confirmation fit narrow screens', async ({ 
   const row = page.locator('.conversation-row.selected');
   await row.getByRole('button', { name: 'Actions for', exact: false }).click();
   await row.getByRole('button', { name: 'Archive', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(
+    page.getByRole('dialog', { name: 'Archive this conversation?', exact: true }),
+  ).toBeVisible();
   await page.setViewportSize({ width: 320, height: 740 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const bounds = await page.getByRole('dialog').boundingBox();
+  const bounds = await page
+    .getByRole('dialog', { name: 'Archive this conversation?', exact: true })
+    .boundingBox();
   expect(bounds!.width).toBeLessThanOrEqual(320);
   await page.screenshot({
     path: 'test-results/conversation-management-mobile.png',
     fullPage: true,
   });
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(
+    page.getByRole('dialog', { name: 'Archive this conversation?', exact: true }),
+  ).toHaveCount(0);
 });
 
 test('a delayed list response cannot undo a title already received through live events', async ({

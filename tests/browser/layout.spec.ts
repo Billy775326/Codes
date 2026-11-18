@@ -7,16 +7,17 @@ async function login(page: Page) {
   await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
 }
 
-test('panel defaults to chat, retains drafts through history, and dismisses model menus with keyboard or pointer', async ({
+test('workspace defaults to persistent navigation, retains drafts through history, and dismisses model menus with keyboard or pointer', async ({
   page,
 }) => {
   await login(page);
-  await expect(page.getByLabel('Search conversations', { exact: true })).toBeHidden();
+  await expect(page.getByLabel('Search conversations', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Ask Codex' })).toBeVisible();
   await page.getByLabel('Message Codex').fill('Unsent panel draft');
-  await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
-  await expect(page.getByLabel('Search conversations', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
+  await expect(page.getByLabel('Search conversations', { exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Unsent panel draft');
   const menu = page.getByRole('button', { name: 'Model and reasoning', exact: true });
   await menu.click();
@@ -32,7 +33,7 @@ test('panel defaults to chat, retains drafts through history, and dismisses mode
   await expect(page.getByLabel('Model', { exact: true })).toBeHidden();
 });
 
-test('edited-file cards open a focused review to the left of chat and preserve read-only behavior', async ({
+test('edited-file cards open a focused review to the right of chat and preserve read-only behavior', async ({
   page,
   context,
 }) => {
@@ -49,9 +50,10 @@ test('edited-file cards open a focused review to the left of chat and preserve r
   ).toBeVisible();
   const panel = await page.locator('.context-panel').boundingBox();
   const chat = await page.locator('.main').boundingBox();
-  expect(panel!.x + panel!.width).toBeLessThanOrEqual(chat!.x + 1);
-  expect(chat!.width).toBeGreaterThanOrEqual(380);
-  expect(chat!.width).toBeLessThanOrEqual(460);
+  expect(chat!.x + chat!.width).toBeLessThanOrEqual(panel!.x + 1);
+  expect(chat!.width).toBeGreaterThanOrEqual(500);
+  const navigation = await page.locator('.sidebar').boundingBox();
+  expect(navigation!.x + navigation!.width).toBeLessThanOrEqual(chat!.x + 1);
   await expect(
     page.locator('.context-panel').getByRole('button', { name: /Undo|Apply|Stage/ }),
   ).toHaveCount(0);

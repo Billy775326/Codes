@@ -1,6 +1,6 @@
 # Local IDE interaction alignment
 
-codes targets the Codex IDE extension's local conversation workflow in a Linux browser. VS Code host integration and Codex Cloud are explicitly excluded. The chat panel layout and local interaction workflow follow the published IDE reference. This independent Web implementation does not claim pixel-identical UI or complete extension parity.
+codes targets the Codex IDE extension's local conversation workflow in a Linux browser. VS Code host integration and Codex Cloud are explicitly excluded. The local interaction workflow follows the published IDE reference within a browser workspace layout. This independent Web implementation does not claim pixel-identical UI or complete extension parity.
 
 ## Evidence baseline
 
@@ -31,19 +31,23 @@ Behavior references:
 
 Current official docs can describe a newer protocol. The installed version's schema and source determine what this adapter actually sends.
 
-## Panel layout reference
+## Web workspace layout
 
-The visual baseline is the official [IDE review screenshot](https://learn.chatgpt.com/images/codex/ide-review.webp), inspected on 2026-11-18, alongside the published extension package above. The [open-source documentation](https://learn.chatgpt.com/docs/open-source) distinguishes the open-source CLI from the proprietary IDE extension. No extension bundle or artwork is shipped with codes.
+The official [IDE review screenshot](https://learn.chatgpt.com/images/codex/ide-review.webp), inspected on 2026-11-18, is a reference for chat controls and file cards. The browser shell uses a persistent project/conversation sidebar, central chat and right-side contextual previews. Opening a preview keeps navigation and chat in place. The [open-source documentation](https://learn.chatgpt.com/docs/open-source) distinguishes the open-source CLI from the proprietary IDE extension. No extension bundle or artwork is shipped with codes.
 
-- Compact panel caption and conversation toolbar, with history opened on demand and a persistent new-conversation action.
-- Neutral editor colors, small activity disclosures, plain assistant messages, right-aligned user messages, and copy/reply/branch icon actions.
-- One rounded bottom composer: attachment, Code/Plan and permissions on the left; a model/reasoning popup and send/queue/stop controls on the right. The project location sits beneath it.
-- Edited-file cards show counts and direct file review. Desktop review places the diff on the left and a 380–460px chat panel on the right. Below 1100px, files/review use a full-width overlay with a close action.
-- Dark, light and system themes are browser preferences; existing drafts and settings remain readable. History visibility is also remembered on desktop.
+| Area                 | Responsibility                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Left navigation      | Choose the host project, create a conversation, search/page native conversations, rename/archive/restore, and inspect connection state |
+| Central conversation | Read the selected history, answer native questions/approvals, edit drafts, select model/mode/permissions, send/queue/steer/stop        |
+| Right preview        | Browse read-only project files or inspect selected-turn changes without replacing the conversation                                     |
 
-The Web header retains explicit file and change-preview shortcuts, connection state and simulation labeling. Its source browser is read-only. Unsupported Undo, staging, patch application and editor-host controls are not represented as working actions. File summaries count the native edit entries; they do not invent a net Git working-tree diff.
+Desktop navigation opens by default and remembers explicit collapse. Below 1100px navigation and context become focused drawers; file/change previews occupy at most 680px and use the full width on phones. Escape closes a drawer and returns focus to its opener. Mobile attachment actions return to the composer. Neither closing a drawer nor switching a conversation cancels a native task.
 
-Browser acceptance covers popup dismissal/focus, slash-command focus, draft retention, review geometry, clipboard copying, saved themes and widths 1440, 820, 390 and 320px. Screenshots use simulator fixtures, not private conversations. This does not establish physical-phone acceptance or pixel equality with every extension release/theme.
+Browser drafts for new conversations belong to the selected project, while existing per-conversation draft keys remain compatible. Switching projects/conversations closes previews and aborts pending file reads; late file responses cannot become context for another project. The data schema remains 4.
+
+The composer retains one rounded input area, attachment and Code/Plan/permission controls, a model/reasoning popup and explicit send/queue/stop actions. Edited-file cards and copy/reply/branch actions remain available. Dark/light/system themes are browser preferences. Read-only previews provide no Undo, staging or patch-application controls.
+
+Browser acceptance covers pane geometry, menu/drawer focus, per-project drafts and legacy reads, delayed-file cancellation, attachment return, clipboard copying, saved themes and 1440/820/390/320px widths. Synthetic screenshots describe this Web implementation; they do not establish physical-phone acceptance or pixel equality with the extension.
 
 ## Implemented local contracts
 

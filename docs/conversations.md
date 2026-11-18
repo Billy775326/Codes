@@ -4,8 +4,9 @@ For the single workspace owner, the sidebar provides native Codex conversation d
 
 ## Browse and continue work
 
+- Desktop navigation opens by default and remembers explicit collapse/expand choices. On narrower screens it opens as a keyboard-accessible drawer. **New conversation** lives in that navigation; the collapsed header provides the same action.
 - **New conversation** starts an unsent draft. The native conversation is created when its first message is sent.
-- Select a conversation to open its native history. Switching preserves unsent text per conversation in that browser, within the existing 20-draft retention limit. Attachments are not retained when switching.
+- Select a conversation to open its native history. Switching preserves unsent text per conversation in that browser, within the existing 20-draft retention limit. New-conversation drafts are scoped to their project. The previous unscoped new draft is read into the selected project on first use; existing conversation draft keys remain compatible. Attachments are not retained when switching. Changing projects or conversations closes the context preview and cancels its pending file read.
 - **Active** shows conversations that are not archived; it includes completed conversations. **Archived** shows the native archive separately. Date groups use the browser's local calendar.
 - Search matches conversation titles without case sensitivity. It does not search message bodies, files, or other projects.
 - Pages contain up to 30 results from a native page. Sparse search scans at most four native pages, with a 20-second request deadline; an empty portion can still have a **Next** page. Continue until there is no next page to finish searching. This is not a global result count.

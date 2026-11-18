@@ -29,6 +29,7 @@ import { QueuePanel } from './QueuePanel';
 import { Approval } from './Approval';
 import { DiffView } from './DiffView';
 import { PanelMenu } from './PanelMenu';
+import { usePanelFocus } from './usePanelFocus';
 import { ChangeSummary } from './ChangeSummary';
 import {
   PreferencesDialog,
@@ -39,7 +40,7 @@ import {
 import './interactions.css';
 import './workflow.css';
 import './style.css';
-import './ide-panel.css';
+import './workspace.css';
 
 const labels: Record<string, string> = {
   idle: 'Ready',
@@ -72,6 +73,8 @@ const save = (key: string, value: string) => {
     /* Private browsing can disable draft storage. */
   }
 };
+const draftKey = (projectId: string, threadId: string) =>
+  'codes.draft.' + (threadId || 'new.' + projectId);
 const MessageView = memo(function MessageView({
   item,
   streaming,
@@ -256,7 +259,7 @@ function App() {
   const [connection, setConnection] = useState('Connecting');
   const [retry, setRetry] = useState(0);
   const [sidebar, setSidebar] = useState(
-    window.innerWidth > 1099 && saved('codes.navigation') === 'open',
+    window.innerWidth > 1099 && saved('codes.navigation') !== 'closed',
   );
   const modelMenu = useRef<HTMLDetailsElement>(null);
   const [prefersDark, setPrefersDark] = useState(
@@ -269,9 +272,40 @@ function App() {
     return () => media.removeEventListener('change', update);
   }, []);
   useEffect(() => {
-    save('codes.navigation', sidebar ? 'open' : '');
+    if (window.innerWidth > 1099) save('codes.navigation', sidebar ? 'open' : 'closed');
   }, [sidebar]);
   const [panel, setPanel] = useState<'files' | 'diff' | null>(null);
+  const navigationElement = useRef<HTMLElement>(null);
+  const contextElement = useRef<HTMLElement>(null);
+  const [narrow, setNarrow] = useState(window.innerWidth <= 1099);
+  const closeNavigation = useCallback(() => {
+    setSidebar(false);
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')?.focus(),
+    );
+  }, []);
+  const closeContext = useCallback(() => setPanel(null), []);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1099px)');
+    const resize = () => {
+      setNarrow(media.matches);
+      setSidebar(media.matches ? false : saved('codes.navigation') !== 'closed');
+    };
+    media.addEventListener('change', resize);
+    return () => media.removeEventListener('change', resize);
+  }, []);
+  usePanelFocus(
+    navigationElement,
+    narrow && sidebar,
+    closeNavigation,
+    '[aria-label="Open navigation"]',
+  );
+  usePanelFocus(
+    contextElement,
+    narrow && !!panel && !sidebar,
+    closeContext,
+    '[aria-label="Browse files"]',
+  );
   const [diffTurn, setDiffTurn] = useState('');
   const [diffPath, setDiffPath] = useState('');
   const [adding, setAdding] = useState(false);
@@ -279,6 +313,7 @@ function App() {
   const [directory, setDirectory] = useState('');
   const [files, setFiles] = useState<{ path: string; name: string; directory: boolean }[]>([]);
   const [file, setFile] = useState<FileContent>();
+  const fileRead = useRef<AbortController | undefined>(undefined);
   const [range, setRange] = useState<[number, number]>([1, 1]);
   const [receipt, setReceipt] = useState('');
   const feed = useRef<Feed | undefined>(undefined);
@@ -299,7 +334,10 @@ function App() {
       ]);
       setSystem(system);
       setProjects(projects);
-      if (!projects.some((p) => p.id === projectId)) setProjectId(projects[0]?.id ?? '');
+      if (!projects.some((p) => p.id === projectId)) {
+        setProjectId(projects[0]?.id ?? '');
+        setThreadId('');
+      }
       setAuth('ready');
     } catch (e) {
       if (e instanceof ApiError && e.code === 'AUTH_REQUIRED') setAuth('login');
@@ -330,6 +368,9 @@ function App() {
     setThreads([]);
     setThread(undefined);
     setDirectory('');
+    setFiles([]);
+    fileRead.current?.abort();
+    setPanel(null);
     setFile(undefined);
     setAttachments([]);
     save('codes.project', projectId);
@@ -378,6 +419,10 @@ function App() {
     setThreadId(id);
     setDiffTurn('');
     setDiffPath('');
+    if (id !== threadRef.current) {
+      setPanel(null);
+      fileRead.current?.abort();
+    }
     if (window.innerWidth <= 1099) setSidebar(false);
     follow.current = true;
   }, []);
@@ -410,9 +455,18 @@ function App() {
     setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
   }, []);
   useEffect(() => {
+    if (auth !== 'ready') return;
     queueRevision.current++;
     save('codes.thread', threadId);
-    setDraft(saved(`codes.draft.${threadId || 'new'}`).slice(0, 50_000));
+    const key = draftKey(projectId, threadId);
+    // Move the legacy unscoped new draft into the selected project once.
+    const restored = saved(key) || (!threadId ? saved('codes.draft.new') : '');
+    if (!threadId && restored && !saved(key)) {
+      save(key, restored);
+      if (saved(key) === restored) save('codes.draft.new', '');
+    }
+    draftValue.current = restored.slice(0, 50_000);
+    setDraft(draftValue.current);
     setReceipt(threadId ? saved(`codes.operation.${threadId}`) : '');
     try {
       const stored = saved('codes.queue-request.' + threadId);
@@ -525,7 +579,7 @@ function App() {
       document.removeEventListener('visibilitychange', focus);
       window.removeEventListener('online', focus);
     };
-  }, [threadId, retry, auth]);
+  }, [threadId, projectId, retry, auth]);
   useLayoutEffect(() => {
     const element = composer.current;
     if (!element) return;
@@ -561,7 +615,7 @@ function App() {
     draftRevision.current++;
     draftValue.current = value;
     setDraft(value);
-    save(`codes.draft.${threadId || 'new'}`, value.slice(0, 50_000));
+    save(draftKey(projectId, threadId), value.slice(0, 50_000));
   };
   const reply = (item: Message) => {
     const selected = window.getSelection();
@@ -593,7 +647,7 @@ function App() {
     // user has typed since dispatch. Preserve the next draft and its attachments.
     if (version !== draftRevision.current) return;
     save('codes.draft.' + id, '');
-    if (!origin) save('codes.draft.new', '');
+    if (!origin) save(draftKey(projectId, ''), '');
     if (threadRef.current === id || threadRef.current === origin) {
       draftValue.current = '';
       setDraft('');
@@ -702,8 +756,16 @@ function App() {
   };
   const newThread = () => {
     select('');
+    requestAnimationFrame(() => composer.current?.focus());
     setSettings({ ...settings, permission: 'read-only' });
     setError('');
+  };
+  const changeProject = (id: string) => {
+    select('');
+    setProjectId(id);
+    setPanel(null);
+    setError('');
+    setSettings({ ...settings, permission: 'read-only' });
   };
   const send = async () => {
     if (draft.trimStart().startsWith('/')) {
@@ -806,8 +868,7 @@ function App() {
     try {
       const project = await post<Project>('/projects', { path: newPath });
       setProjects((list) => (list.some((x) => x.id === project.id) ? list : [...list, project]));
-      setThreadId('');
-      setProjectId(project.id);
+      changeProject(project.id);
       setAdding(false);
       setNewPath('');
       setError('');
@@ -817,16 +878,32 @@ function App() {
       setBusy(false);
     }
   };
+  useEffect(() => () => fileRead.current?.abort(), [projectId, auth]);
+  useEffect(() => {
+    if (panel !== 'files') fileRead.current?.abort();
+  }, [panel]);
   const openFile = async (path: string) => {
+    fileRead.current?.abort();
+    const controller = new AbortController();
+    fileRead.current = controller;
+    const owner = projectId;
+    setFile(undefined);
     try {
       const file = await request<FileContent>(
-        `/projects/${projectId}/file?path=${encodeURIComponent(path)}`,
+        `/projects/${owner}/file?path=${encodeURIComponent(path)}`,
+        {},
+        controller.signal,
       );
+      if (controller.signal.aborted || owner !== projectRef.current) return;
       setFile(file);
       setRange([1, Math.min(file.lines, 50)]);
     } catch (e) {
-      notice(e);
+      if (!controller.signal.aborted) notice(e);
     }
+  };
+  const returnToComposer = () => {
+    if (window.innerWidth <= 1099) setPanel(null);
+    requestAnimationFrame(() => composer.current?.focus());
   };
   const attach = () => {
     if (!file || attachments.length >= 4) return;
@@ -835,6 +912,7 @@ function App() {
       ...list.filter((x) => x.path !== file.path),
       { path: file.path, sha: file.sha, fromLine: Math.min(...range), toLine: Math.max(...range) },
     ]);
+    returnToComposer();
   };
   const active =
     !!thread?.pending ||
@@ -1158,15 +1236,17 @@ function App() {
       }
       className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
     >
-      {sidebar && <div className="scrim" onClick={() => setSidebar(false)} />}
-      <aside className={`sidebar ${sidebar ? 'open' : ''}`}>
+      {sidebar && <div className="scrim" onClick={closeNavigation} />}
+      <aside
+        ref={navigationElement}
+        className={`sidebar ${sidebar ? 'open' : ''}`}
+        aria-label="Workspace navigation"
+        role={narrow && sidebar ? 'dialog' : undefined}
+        aria-modal={narrow && sidebar ? true : undefined}
+      >
         <div className="sidebar-brand">
           <Brand />
-          <button
-            className="icon-button"
-            aria-label="Close navigation"
-            onClick={() => setSidebar(false)}
-          >
+          <button className="icon-button" aria-label="Close navigation" onClick={closeNavigation}>
             <Icon name="close" />
           </button>
         </div>
@@ -1183,8 +1263,7 @@ function App() {
             disabled={busy}
             value={projectId}
             onChange={(e) => {
-              setThreadId('');
-              setProjectId(e.target.value);
+              changeProject(e.target.value);
             }}
           >
             {!projectId && <option value="">Choose a project</option>}
@@ -1195,6 +1274,15 @@ function App() {
             ))}
           </select>
         </label>
+        <button
+          aria-label="New conversation"
+          className="new-conversation"
+          disabled={busy}
+          onClick={newThread}
+        >
+          <Icon name="plus" size={16} />
+          New conversation<kbd>Ctrl N</kbd>
+        </button>
         <Conversations
           projectId={projectId}
           selectedId={threadId}
@@ -1203,6 +1291,17 @@ function App() {
           onSelect={select}
           onUpdated={conversationUpdated}
         />
+        <div className="workspace-connection">
+          <button
+            className={`connection ${connection === 'Connected' || connection === 'Ready' ? 'connected' : ''}`}
+            onClick={() => setRetry((n) => n + 1)}
+            title="Reconnect"
+          >
+            <i />
+            {connection}
+          </button>
+          {system?.runtime === 'mock' && <span className="simulation">Simulation</span>}
+        </div>
         <div className="sidebar-footer">
           <div className="host-symbol">
             <Icon name="terminal" size={17} />
@@ -1227,32 +1326,32 @@ function App() {
           </button>
         </div>
       </aside>
-      <div className="main">
-        <div className="panel-caption">
-          <span>codes</span>
-          <button
-            className={`connection ${connection === 'Connected' || connection === 'Ready' ? 'connected' : ''}`}
-            onClick={() => setRetry((n) => n + 1)}
-            title="Reconnect"
-          >
-            <i />
-            {connection}
-          </button>
-          {system?.runtime === 'mock' && <span className="simulation">Simulation</span>}
-        </div>
+      <div className="main" inert={narrow && (sidebar || !!panel) ? true : undefined}>
         <header className="topbar">
-          <button
-            className="icon-button"
-            aria-label="Open navigation"
-            title="Chat history"
-            onClick={() => setSidebar(true)}
-          >
-            <Icon name="history" size={17} />
-          </button>
+          {!sidebar && (
+            <button
+              className="icon-button"
+              aria-label="Open navigation"
+              title="Show workspace navigation"
+              onClick={() => setSidebar(true)}
+            >
+              <Icon name="menu" size={17} />
+            </button>
+          )}
           <div className="breadcrumb">
+            <span className="project-breadcrumb">{project?.name ?? 'Workspace'}</span>
             <strong>{thread?.title ?? 'New conversation'}</strong>
           </div>
           <div className="top-actions">
+            {!sidebar && (
+              <span
+                className={`header-connection ${connection === 'Connected' || connection === 'Ready' ? 'connected' : ''}`}
+                aria-label={'Connection: ' + connection}
+                title={connection}
+              >
+                {connection}
+              </span>
+            )}
             <PanelMenu
               label="Conversation actions"
               className="conversation-menu"
@@ -1278,6 +1377,7 @@ function App() {
               onClick={() => setPanel(panel === 'files' ? null : 'files')}
             >
               <Icon name="file" size={16} />
+              <span className="header-action-label">Files</span>
             </button>
             <button
               aria-label="Review changes"
@@ -1286,6 +1386,7 @@ function App() {
               onClick={() => setPanel(panel === 'diff' ? null : 'diff')}
             >
               <Icon name="review" size={16} />
+              <span className="header-action-label">Changes</span>
             </button>
             <button
               aria-label="Interaction settings"
@@ -1295,15 +1396,17 @@ function App() {
             >
               <Icon name="settings" size={16} />
             </button>
-            <button
-              aria-label="New conversation"
-              title="New conversation"
-              className="icon-button"
-              disabled={busy}
-              onClick={newThread}
-            >
-              <Icon name="newchat" size={16} />
-            </button>
+            {!sidebar && (
+              <button
+                aria-label="New conversation"
+                title="New conversation"
+                className="icon-button"
+                disabled={busy}
+                onClick={newThread}
+              >
+                <Icon name="newchat" size={16} />
+              </button>
+            )}
           </div>
         </header>
         {system?.runtime === 'mock' && (
@@ -1817,6 +1920,7 @@ function App() {
                   <button
                     className="stop-button"
                     aria-label="Stop task"
+                    title="Stop task"
                     disabled={
                       busy ||
                       !thread?.turnId ||
@@ -1836,6 +1940,7 @@ function App() {
                   <button
                     className="send-button"
                     aria-label="Send message"
+                    title="Send message"
                     onClick={() => void send()}
                     disabled={
                       busy ||
@@ -1972,7 +2077,14 @@ function App() {
         </div>
       )}
       {panel && (
-        <aside className="context-panel">
+        <aside
+          ref={contextElement}
+          className="context-panel"
+          aria-label="Project context"
+          role={narrow ? 'dialog' : undefined}
+          aria-modal={narrow ? true : undefined}
+          inert={narrow && sidebar ? true : undefined}
+        >
           <div className="panel-heading">
             <div className="panel-tabs">
               <button
@@ -2110,6 +2222,7 @@ function App() {
                             ...list.filter((entry) => entry.path !== file.path),
                             { path: file.path, sha: file.sha, fromLine: 1, toLine: file.lines },
                           ]);
+                          returnToComposer();
                         }
                       }}
                       disabled={attachments.length >= 4}

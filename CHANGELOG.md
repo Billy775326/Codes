@@ -30,12 +30,14 @@
 
 ### Changed
 
-- Rework the workspace around the IDE chat-panel layout: compact toolbar, on-demand history, one bottom composer, model/reasoning popup, inline edited-file cards, copy actions, and left-side desktop review. Add persistent dark/light/system themes and full-width mobile previews.
+- Organize the browser workspace around persistent desktop project/conversation navigation, central chat and right-side file/change previews. Keep IDE-style model/reasoning menus, edited-file cards and copy actions, with saved dark/light/system themes. Mobile drawers contain keyboard focus and return to typing after attaching context.
 
 - Set the default workspace port to 6670. Set `CODES_PORT` to use a different listener port.
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 
 ### Fixed
+
+- Keep unsent new-conversation drafts separate per project, migrate the previous unscoped draft without overwriting existing conversation drafts, and cancel stale file reads when navigating between projects or conversations.
 
 - Show a concise data-directory/lock-owner message when `codes` is started again, preserving exit status 1 and the existing process instead of printing a startup stack trace.
 - Resume the working status after a native question or approval is resolved, reject stale question callbacks, and ignore diff notifications for another turn.

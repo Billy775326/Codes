@@ -1,4 +1,4 @@
-/* Independently implemented from the published IDE layout, using editor-style tokens. */
+/* Web workspace shell; IDE interaction controls stay within their owning pane. */
 .app {
   --fg: #dedede;
   --muted: #969696;
@@ -44,16 +44,16 @@
 .app .sidebar {
   position: fixed;
   inset: 0 auto 0 0;
-  width: 276px;
+  width: 260px;
   z-index: 40;
   transform: translateX(-100%);
   visibility: hidden;
-  background: var(--panel);
+  background: var(--editor);
   border-color: var(--line);
   box-shadow: none;
 }
 .app.history-open {
-  grid-template-columns: 276px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 .app.history-open .sidebar {
   position: relative;
@@ -70,53 +70,90 @@
   display: none;
 }
 .app.has-panel {
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
+  grid-template-columns: minmax(440px, 1fr) minmax(320px, min(44vw, 640px));
 }
 .app.has-panel .main {
-  grid-column: 2;
+  grid-column: 1;
 }
 .app .context-panel {
   position: relative;
-  grid-column: 1;
+  grid-column: 2;
   grid-row: 1;
   width: auto;
   z-index: auto;
   border: 0;
-  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line);
   background: var(--editor);
   box-shadow: none;
 }
 .app.history-open.has-panel {
-  grid-template-columns: 260px minmax(0, 1fr) minmax(380px, 460px);
+  grid-template-columns: 260px minmax(380px, 1fr) minmax(320px, min(38vw, 560px));
 }
 .app.history-open.has-panel .main {
-  grid-column: 3;
-}
-.app.history-open.has-panel .context-panel {
   grid-column: 2;
 }
-.panel-caption {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 13px;
+.app.history-open.has-panel .context-panel {
+  grid-column: 3;
+}
+.workspace-connection {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+.app .connection {
+  color: var(--muted);
+  font-size: 10px;
+  padding: 0;
+}
+.header-connection {
+  font-size: 10px;
+  color: var(--muted);
+  margin-right: 8px;
+}
+.app .new-conversation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 12px 14px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  text-align: left;
+}
+.app .new-conversation:hover {
+  background: var(--hover);
+}
+.new-conversation kbd {
+  margin-left: auto;
+  color: var(--muted);
+  font: 10px inherit;
+  opacity: 0.7;
+}
+.header-action-label {
+  font-size: 11px;
+}
+.app .top-actions .icon-button:has(.header-action-label) {
+  width: auto;
+  padding: 6px 8px;
+  gap: 6px;
+  display: flex;
+  align-items: center;
+}
+.app .topbar {
+  height: 64px;
+  min-height: 64px;
+  padding: 0 24px;
+  gap: 12px;
   border-bottom: 1px solid var(--line);
 }
-.panel-caption > span:first-child {
-  text-transform: uppercase;
+.app .project-breadcrumb {
+  display: block;
   font-size: 10px;
-  letter-spacing: 0.25px;
-  padding: 7px 0 5px;
-  border-bottom: 1px solid var(--fg);
-  align-self: stretch;
-}
-.app .panel-caption .connection {
-  margin-left: auto;
-  font-size: 10px;
-  padding: 1px 0;
   color: var(--muted);
+  margin-bottom: 4px;
 }
 .app .connection i {
   background: #888;
@@ -131,13 +168,7 @@
   font-size: 8px;
   padding: 1px 4px;
 }
-.app .topbar {
-  height: 40px;
-  min-height: 40px;
-  padding: 0 10px;
-  gap: 6px;
-  border-bottom: 0;
-}
+
 .app .top-actions {
   gap: 1px;
 }
@@ -154,6 +185,7 @@
   background: var(--hover);
 }
 .app .breadcrumb {
+  display: block;
   flex: 1;
   min-width: 0;
   gap: 0;
@@ -168,10 +200,13 @@
   white-space: nowrap;
   color: var(--fg);
 }
+.app .sidebar-brand > button {
+  margin-left: auto;
+}
 .app .sidebar-brand {
-  height: 44px;
-  min-height: 44px;
-  padding: 0 12px;
+  height: 64px;
+  min-height: 64px;
+  padding: 0 16px;
 }
 .app .brand {
   font-size: 15px;
@@ -193,6 +228,7 @@
   display: none;
 }
 .app .workspace-label {
+  margin: 4px 0;
   font-size: 9px;
   color: var(--muted);
   padding: 10px 12px 4px;
@@ -207,8 +243,9 @@
   color: var(--fg);
   font-size: 12px;
 }
-.app .conversation-label {
-  padding-top: 14px;
+.app .conversations .conversation-label {
+  margin: 6px 0 4px;
+  padding-top: 6px;
 }
 .app .conversation-search {
   margin: 8px 10px;
@@ -288,7 +325,7 @@
   padding: 20px 24px 24px;
 }
 .app.has-panel .conversation-inner {
-  max-width: none;
+  max-width: 760px;
   padding: 16px 18px 20px;
 }
 .app .message {
@@ -521,6 +558,7 @@
   margin-top: 10px;
 }
 .app .welcome {
+  text-align: left;
   padding: max(5vh, 30px) 0 0;
   max-width: 400px;
   margin: auto;
@@ -573,8 +611,8 @@
   background: transparent;
 }
 .app.has-panel .composer-area {
-  max-width: none;
-  padding: 8px 16px 10px;
+  max-width: 808px;
+  padding: 8px 20px 14px;
 }
 .app .composer {
   position: relative;
@@ -991,13 +1029,51 @@
   }
   .app .context-panel {
     position: fixed;
-    inset: 0;
+    inset: 0 0 0 auto;
     z-index: 40;
-    width: 100%;
+    width: min(680px, 100%);
     max-width: 100%;
+    box-shadow: -15px 0 45px #0005;
+  }
+  .app.has-panel .main::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background: #0006;
   }
 }
 @media (max-width: 700px) {
+  .app .context-panel {
+    width: 100%;
+  }
+  .header-action-label {
+    display: none;
+  }
+  .header-connection {
+    display: block;
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: #be9c63;
+    font-size: 0;
+    margin-right: 4px;
+  }
+  .header-connection.connected {
+    background: #81a888;
+  }
+  .app .top-actions .icon-button:has(.header-action-label) {
+    width: 27px;
+    padding: 5px;
+  }
+  .app .topbar {
+    height: 58px;
+    min-height: 58px;
+  }
+  .app .breadcrumb strong {
+    font-size: 11px;
+  }
   .app .topbar {
     padding: 0 7px;
     gap: 3px;
