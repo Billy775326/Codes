@@ -23,8 +23,22 @@ export function nativeMessage(
   raw: any,
   turnId: string,
   imageReference?: (path: string) => ImageAttachment | undefined,
+  lifecycle?: 'inProgress' | 'completed',
 ): Message | undefined {
   if (!record(raw) || typeof raw.id !== 'string') return;
+  if (raw.type === 'contextCompaction')
+    return {
+      id: raw.id,
+      turnId,
+      kind: 'compaction',
+      text:
+        lifecycle === 'inProgress'
+          ? 'Compacting context…'
+          : lifecycle === 'completed'
+            ? 'Context compacted.'
+            : 'Context compaction',
+      ...(lifecycle ? { status: lifecycle } : {}),
+    };
   if (raw.type === 'userMessage') {
     const content = Array.isArray(raw.content) ? raw.content : [];
     const nativeImages = content.filter(

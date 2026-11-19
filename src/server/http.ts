@@ -202,6 +202,8 @@ export async function application(
           return json(response, service.driver.system());
         if (url.pathname === '/api/models' && method === 'GET')
           return json(response, await service.modelSettings.models());
+        if (url.pathname === '/api/permissions' && method === 'GET')
+          return json(response, await service.modelSettings.permissions());
         if (url.pathname === '/api/modes' && method === 'GET')
           return json(response, await service.modelSettings.modes());
         if (url.pathname === '/api/settings/defaults' && method === 'GET')

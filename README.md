@@ -12,11 +12,22 @@ Use Codex through a browser, without operating a terminal for everyday work. Con
 
 Keep the interface, architecture, and implementation simple. Let layout and explicit state explain the workflow, preserve native behavior, and make operations clear to people and agents. See the [design philosophy](docs/brand.md) ([中文](docs/zh-CN/brand.md)).
 
+## Identity
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/brand/codes-lockup-dark.svg">
+  <img alt="Codes V3 identity" src="public/brand/codes-lockup-light.svg" width="280" height="96">
+</picture>
+
+The owner-provided V3 SVG identity is active in navigation, sign-in, and the favicon. The interface selects the original light/dark wordmarks by theme. See [identity assets and attribution](docs/brand.md#identity-assets).
+
 ## What is implemented
 
 - Projects backed by existing directories on the host.
 - Native Codex conversations, streamed assistant text, and turn-level work history with intermediate commentary and tool activity collapsed after completion, visible failure counts, and the final answer and edited-files card outside.
 - Searchable, paginated conversation navigation with task/approval/question status, queue conditions, local update times, and native rename, archive, and restore controls. See [sidebar behavior](docs/conversation-sidebar.md).
+- Native **Approve for me** permissions with workspace sandboxing, separate from Full access; live reviewer outcomes and rationale when supplied by Codex.
+- Context-compaction progress, completion, and interruption within the existing task lifecycle.
 - Command, file, and turn-scoped permission approvals; proactive native questions in Code and Plan, with choices, custom answers, secret inputs, and explicit skipping for optional questions.
 - Quoted follow-up drafts, compact durable FIFO queue cards, immediate native steering, and conversation branches through completed turns. Confirmed deliveries leave the queue immediately while task status stays in the conversation. Edit waiting text in the composer area without replacing a separate unsent draft; editing pauses the queue until you resume it.
 - Server-backed per-conversation permissions and model/reasoning preferences, saved immediately, with separate new-conversation defaults in the settings modal. See [settings behavior](docs/conversation-settings.md).
@@ -87,7 +98,7 @@ ssh -L 6670:127.0.0.1:6670 you@your-linux-host
 
 Then open `http://127.0.0.1:6670` on your computer. Phone access requires a private HTTPS reverse proxy or private network with HTTPS. Set `CODES_PUBLIC_ORIGIN` to the exact browser origin and preserve its `Host` header when proxying. See [operations](docs/operations.md).
 
-This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Ask for approval** to edit workspace files with approval for external access. **Full access** removes file/network sandbox restrictions and approval prompts on the server. The composer permission menu saves independently for each conversation and applies to its future tasks. It preserves the current task and existing queue entries, and does not modify global CLI configuration. Use the model/reasoning popup to choose Execution or Plan and toggle Fast; the input bar shows the model and effective reasoning effort. Fast uses a supported native speed tier with higher usage, independently of reasoning effort. It defaults off; Standard is explicitly selected for new tasks instead of inheriting the host tier. Conversation choices save immediately; each dispatched or queued message captures its settings. Interaction settings → New conversation defaults defines the starting configuration for later conversations without changing existing ones. Model changes reset Fast and reasoning overrides. This does not change global CLI configuration or an active task. Use `/plan` to toggle native Plan mode; its visible Plan marker exits back to Code.
+This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Ask for approval** to edit workspace files with approval for external access. **Approve for me** keeps the workspace sandbox and routes eligible requests to native Auto-review, which may use additional quota; native policy/account restrictions still apply. **Full access** removes file/network sandbox restrictions and approval prompts on the server. The composer permission menu saves independently for each conversation and applies to its future tasks. It preserves the current task and existing queue entries, and does not modify global CLI configuration. Use the model/reasoning popup to choose Execution or Plan and toggle Fast; the input bar shows the model and effective reasoning effort. Fast uses a supported native speed tier with higher usage, independently of reasoning effort. It defaults off; Standard is explicitly selected for new tasks instead of inheriting the host tier. Conversation choices save immediately; each dispatched or queued message captures its settings. Interaction settings → New conversation defaults defines the starting configuration for later conversations without changing existing ones. Model changes reset Fast and reasoning overrides. This does not change global CLI configuration or an active task. Use `/plan` to toggle native Plan mode; its visible Plan marker exits back to Code.
 
 The preview's extra global directory restriction has been removed. `CODES_TASK_WRITE_ROOT` and `CODES_DATA_DIR/task-policy.json` are no longer read. Projects can use existing directories independently of the codes installation directory; each conversation retains its selected native permission preset. This does not automatically select Full access or change the host's Codex configuration. The right-side Files / Changes viewers retain their existing project scope.
 
@@ -140,6 +151,7 @@ Both pilots are excluded from CI and the default test command. Unexpected approv
 ## Documentation
 
 - [Architecture and decisions](docs/architecture.md)
+- [Conversation-first navigation proposal and audit](docs/session-navigation-proposal.md) (proposal; not implemented)
 - [Interface structure and UX/DX/AX criteria](docs/interface-design.md)
 - [Small-scale acceptance and current evidence](docs/acceptance.md)
 - [Development milestones](docs/roadmap.md)

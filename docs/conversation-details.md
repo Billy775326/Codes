@@ -24,6 +24,14 @@ The browser retains three whole native pages and a separate bounded live cache. 
 
 New activity does not force the reader to the bottom. At the live end, replies follow automatically; the optional jump also returns there while retaining the draft. Sending a new message returns to the live view. Reconnect preserves the reading window. Switching conversations/projects or jumping to latest cancels pending history reads, and late responses cannot enter another conversation. Failed page reads show an explicit retry instead of a retry loop.
 
+## Context compaction
+
+Codes follows the native `contextCompaction` item lifecycle. During `item/started`, the selected conversation displays **Compacting context…**. `item/completed` removes that live indicator and records **Context compacted.** in work history. The turn and its receipt remain running until the native turn completes; pending messages do not dispatch merely because compaction finished. Stop interrupts the actual native turn.
+
+Browser reload/reconnection reads the existing snapshot, including current compaction progress. Terminal turn events and runtime loss clear the live indicator. Duplicate events are idempotent; late events from another turn cannot alter the current progress. Historical item timestamps establish started/completed state when supplied. Timestamp-free historical records show **Context compaction**, without inventing success or an ongoing spinner. Runtime loss retains existing uncertain-outcome protection.
+
+This is progress display, not browser-side context summarization, transcript deletion, or a `/compact` command. Native token notifications remain the source of usage; Codes does not estimate recovered tokens. See the [official App Server lifecycle](https://learn.chatgpt.com/docs/app-server).
+
 ## When Codex asks a question
 
 The native agent decides whether to call `request_user_input`. codes does not manufacture a question for every prompt or treat ordinary assistant prose as a structured request. Code-mode availability is enabled by default for the codes child process with the pinned CLI's `features.default_mode_request_user_input` setting. Set `CODES_CODE_QUESTIONS=0` before starting to retain Plan-only availability. Global Codex configuration is unchanged.

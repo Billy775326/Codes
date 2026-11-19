@@ -108,6 +108,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         platformFamily: 'unix',
         platformOs: 'linux',
       });
+    if (method === 'configRequirements/read') return result(id, { requirements: null });
     if (method === 'model/list')
       return result(id, {
         data: [
@@ -359,6 +360,22 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           ],
         });
       if (!text.includes('[lost-ack]')) result(id, { turn });
+      if (text.includes('[compact]')) {
+        const compact = { id: randomUUID(), type: 'contextCompaction' };
+        turn.items.push(compact);
+        save();
+        note('item/started', { threadId: thread.id, turnId: turn.id, item: compact });
+        timers.set(
+          turn.id,
+          setTimeout(() => {
+            if (turn.status !== 'inProgress') return;
+            note('item/completed', { threadId: thread.id, turnId: turn.id, item: compact });
+            save();
+            respond(thread, turn, text.includes('[slow]'));
+          }, 5000),
+        );
+        return;
+      }
       if (text.includes('[changes]') || text.includes('[file-approve]')) {
         const diff =
           '@@ -1,3 +1,3 @@\n export function hello(name: string) {\n-  return `Hello, ${name}`;\n+  return `Welcome, ${name}`;\n }\n';

@@ -20,4 +20,6 @@ codes 的理念是让用户通过自托管的 Web 工作区使用 Codex，日常
 
 ## 标识状态
 
-上一版 C/S Logo 已撤回。界面暂时恢复原有标识，新方案由项目所有者选择后再应用；候选图不代表已采纳的品牌标识。
+当前已采用项目所有者提供的 **Codes V3** 标识。导航与登录页使用原始轮廓字标，随主题选择深色或浅色版本；浏览器 favicon 使用独立图标。此前候选图仅为评审归档。
+
+运行资产位于 `public/brand/`：`codes-lockup-dark.svg`、`codes-lockup-light.svg` 和 `codes-icon.svg`。保留这些原始文件，不重新绘制、不请求外部字体。轮廓字标来源于 Inter，字体许可证保存在 `LICENSES/OFL-Inter.txt`；该许可证不等于应用源码许可证。

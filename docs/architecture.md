@@ -69,7 +69,7 @@ Streaming deltas update memory and an event buffer, not a database row per token
 | Combined prompt and selected context | 100 KB                                                 |
 | Single displayed item                | 128 Ki characters                                      |
 | History page                         | 12 turns, at most 240 mapped items / 2 MiB mapped text |
-| Browser message window               | 240 messages                                           |
+| Browser live message cache           | 240 messages                                           |
 | Cached conversations                 | 20, evicting idle conversations                        |
 | Concurrent unfinished conversations  | 4, including unknown operations                        |
 | Event replay                         | 512 events / 1 MiB                                     |
@@ -81,6 +81,8 @@ Streaming deltas update memory and an event buffer, not a database row per token
 | Completed/failed operation receipts  | 30 days                                                |
 
 Native turn lists omit item bodies; item hydration requests one item at a time so large results do not accumulate into a single RPC response. The JSONL decoder accumulates fragments within its 16 MiB frame budget and concatenates once per complete frame. These transport limits are separate from the bounded browser representation.
+
+The historical display retains three native pages independently of the live cache; the 240-item budget is not a lifetime history limit. Pages evicted at either edge remain reachable through native cursors.
 
 History pages automatically use fewer turns when their combined items exceed the display budget. A single oversized turn still produces an explicit limit error. Very large native tool results can exceed the JSONL frame limit and close the runtime; use the CLI to inspect such conversations. The preview is designed around a small working set, not unlimited logs. Limits are implementation constraints, not measured throughput claims.
 

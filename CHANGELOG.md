@@ -8,6 +8,9 @@
 
 ### Added
 
+- Add Approve for me to conversation permissions and new-conversation defaults using native Auto-review within the workspace sandbox. Explicitly restore manual review for other presets, honor managed restrictions, and display native review outcomes when supplied.
+- Show native context-compaction progress and completion without ending the current task or dispatching queued work. Restore progress on browser reconnect and clear it on terminal outcomes/runtime loss.
+
 - Save permissions, model, reasoning effort, Fast, and mode independently for each conversation as soon as they change. Add server-backed New conversation defaults to the settings modal, with serialized saves, revision conflict recovery, and persistent choices across switching, reload, and restart. Running tasks and existing queue entries keep their captured settings.
 
 - Paste or choose image attachments in the composer, with previews, removal, image-only messages, queue previews, and native immediate additions. Keep image bytes outside conversation snapshots, validate supported model input, and block dispatch until uploads finish. PNG, JPEG, and WebP are supported, with four combined attachments and 8 MiB per image; see [image limits and retention](docs/image-attachments.md).
@@ -49,8 +52,6 @@
 - Organize navigation around project context, a conversation-view dropdown, compact status-aware rows, and workspace controls. Preserve archive and recovery actions without duplicate controls.
 - Apply the owner-provided Codes V3 logo to navigation, sign-in and the browser favicon using the original light/dark SVG assets.
 
-- Withdraw the C/S logo, restore the previous temporary interface mark, and clear the rejected browser icon while the owner selects a new identity.
-
 - Reorganize conversation navigation into Chats / Archived and readable title/status/time rows. Show approvals, questions, uncertain results and queue pause/failure conditions; retain saved states during disconnection and refresh the current list page when live updates resume. Reconcile validated native status metadata without treating idle/unloaded as completion or clearing uncertain receipts.
 
 - Expand chat text sizes to 12–24px and code text sizes to 10–20px in 1px steps. Preview immediately and retain new choices after reload, alongside existing choices and Default.
@@ -77,6 +78,8 @@
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 
 ### Fixed
+
+- Reconcile English/Chinese feature documentation, schema 4 migration notes, bounded history behavior, and owner-approved V3 logo status; keep proposed conversation-first navigation separate from implemented behavior.
 
 - Restore cold-loading conversations containing multi-megabyte native tool results. Read turn metadata without eager items, fetch one history item per response, and decode native frames up to 16 MiB with one concatenation per frame. Browser history and snapshot limits remain bounded.
 

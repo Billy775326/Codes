@@ -6,7 +6,7 @@ export const settingsSchema = z
     effort: z.string().min(1).max(80).optional(),
     fast: z.boolean().optional(),
     mode: z.enum(['default', 'plan']).optional(),
-    permission: z.enum(['read-only', 'workspace-write', 'danger-full-access']),
+    permission: z.enum(['read-only', 'workspace-write', 'auto-review', 'danger-full-access']),
   })
   .strict();
 export const settingsProfileInput = z

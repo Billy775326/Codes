@@ -45,13 +45,15 @@ try {
     sandboxPolicy: { type: 'readOnly' },
   });
   for (const serviceTier of ['priority', 'default']) {
+    const approvalsReviewer = serviceTier === 'priority' ? 'auto_review' : 'user';
     let cancel!: () => void;
     const changed = new Promise<any>((resolve, reject) => {
       const onNotification = (event: any) => {
         if (
           event.method !== 'thread/settings/updated' ||
           event.params.threadId !== thread.id ||
-          event.params.threadSettings?.serviceTier !== serviceTier
+          event.params.threadSettings?.serviceTier !== serviceTier ||
+          event.params.threadSettings?.approvalsReviewer !== approvalsReviewer
         )
           return;
         cancel();
@@ -71,10 +73,12 @@ try {
       const result = await service.driver.call('thread/settings/update', {
         threadId: thread.id,
         serviceTier,
+        approvalsReviewer,
       });
       assert.deepEqual(result, {});
       const notification = await changed;
       assert.equal(notification.threadSettings.serviceTier, serviceTier);
+      assert.equal(notification.threadSettings.approvalsReviewer, approvalsReviewer);
       assert.equal(notification.threadSettings.collaborationMode.mode, 'plan');
     } finally {
       cancel();
@@ -82,6 +86,8 @@ try {
   }
   const afterSpeedChange = await service.driver.call('config/read', { includeLayers: false });
   assert.equal(afterSpeedChange.config.service_tier, configuration.config.service_tier);
+  assert.equal(afterSpeedChange.config.approvals_reviewer, configuration.config.approvals_reviewer);
+  assert.equal((await service.modelSettings.permissions()).autoReview, true);
   for (const preset of permissionPresets) {
     const configured = await service.create(project.id, { permission: preset.id });
     await service.driver.call('thread/settings/update', {
@@ -97,7 +103,7 @@ try {
   assert.equal(history.messages.length, 0);
   assert.equal(history.state, 'idle');
   console.log(
-    'PASS: CLI 0.167.0 initialization, model/reasoning/image-input metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all three sandbox/approval presets with read-only restoration, and lazy empty history. No model requests.',
+    'PASS: CLI 0.167.0 initialization, model/reasoning/image-input metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all four sandbox/approval/reviewer presets with manual read-only restoration, and lazy empty history. No model requests.',
   );
 } finally {
   await service.close();

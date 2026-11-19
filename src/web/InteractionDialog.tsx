@@ -108,6 +108,7 @@ export function PreferencesDialog({
     change: (value: Settings) => void;
     retry: () => void;
     models: Model[];
+    autoReviewReady: boolean;
     modesReady: boolean;
     planReady: boolean;
   };
@@ -212,7 +213,11 @@ export function PreferencesDialog({
                   }
                 >
                   {permissionPresets.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
+                    <option
+                      key={preset.id}
+                      value={preset.id}
+                      disabled={preset.id === 'auto-review' && !defaults.autoReviewReady}
+                    >
                       {preset.label}
                     </option>
                   ))}

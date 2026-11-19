@@ -151,6 +151,7 @@ export class Service {
       store.queue.pauseAll('The runtime stopped. Review outcomes before resuming.');
       for (const id of store.queue.pendingThreads()) this.queue.notify(id);
       for (const thread of this.cache.values()) {
+        this.clearCompaction(thread, 'unknown');
         for (const steer of store.steers(thread.id)) store.update(steer.id, 'unknown');
         for (const action of thread.actions) action.status = 'expired';
         if (thread.pending) {
@@ -543,9 +544,11 @@ export class Service {
   }
   async create(projectId: string, settings: Settings = this.store.settingsProfile().settings) {
     const project = this.project(projectId);
+    await this.modelSettings.checkPermissions(settings);
     const result = await this.driver.call('thread/start', {
       cwd: project.path,
-      sandbox: settings.permission,
+      sandbox: settings.permission === 'auto-review' ? 'workspace-write' : settings.permission,
+      approvalsReviewer: nativePermissions(settings.permission, project.path).approvalsReviewer,
       approvalPolicy: nativePermissions(settings.permission, project.path).approvalPolicy,
       ...(settings.model ? { model: settings.model } : {}),
     });
@@ -654,6 +657,14 @@ export class Service {
       turnId: page.turns.at(-1)?.id,
       queue: this.store.queue.state(id),
     };
+    const compact = thread.messages.findLast(
+      (message) =>
+        message.kind === 'compaction' &&
+        message.turnId === thread.turnId &&
+        message.status === 'inProgress',
+    );
+    if (compact && thread.state === 'running')
+      thread.compaction = { id: compact.id, turnId: compact.turnId };
     await this.remember(thread);
     // A history read can establish an imported conversation's terminal state.
     // Retain concurrent title/archive changes and publish only its small summary.
@@ -715,8 +726,17 @@ export class Service {
           if (!Array.isArray(items.data))
             throw new AppError('PROTOCOL_ERROR', 'Invalid item history.', 502);
           for (const entry of items.data) {
-            const mapped = item(entry.item, turn.id, (path) =>
-              this.images.reference(saved.projectId, path),
+            const mapped = item(
+              entry.item,
+              turn.id,
+              (path) => this.images.reference(saved.projectId, path),
+              Number.isFinite(entry.completedAtMs) && entry.completedAtMs >= 0
+                ? 'completed'
+                : Number.isFinite(entry.startedAtMs) &&
+                    entry.startedAtMs >= 0 &&
+                    turn.status === 'inProgress'
+                  ? 'inProgress'
+                  : undefined,
             );
             if (!mapped) continue;
             messageBytes += Buffer.byteLength(mapped.text);
@@ -1031,6 +1051,7 @@ export class Service {
         cwd: this.project(saved.projectId).path,
         sandbox: 'read-only',
         approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
         ...(saved.settings.model ? { model: saved.settings.model } : {}),
       });
       if (
@@ -1302,7 +1323,8 @@ export class Service {
         thread.resolvedModel,
         nativeInput.some((entry) => entry.type === 'localImage'),
       );
-      const { sandboxPolicy, approvalPolicy } = nativePermissions(
+      await this.modelSettings.checkPermissions(settings);
+      const { sandboxPolicy, approvalPolicy, approvalsReviewer } = nativePermissions(
         settings.permission,
         project.path,
       );
@@ -1318,6 +1340,7 @@ export class Service {
           threadId: id,
           sandboxPolicy,
           approvalPolicy,
+          approvalsReviewer,
           collaborationMode,
           serviceTier: settings.fast ? 'priority' : 'default',
         });
@@ -1348,6 +1371,7 @@ export class Service {
               input: nativeInput,
               sandboxPolicy,
               approvalPolicy,
+              approvalsReviewer,
               collaborationMode,
               serviceTierForTurn: settings.fast ? 'priority' : 'default',
             },
@@ -1647,6 +1671,7 @@ export class Service {
     if (event.method === 'thread/closed') {
       this.loaded.delete(p.threadId);
       const closed = this.cache.get(p.threadId);
+      if (closed) this.clearCompaction(closed, 'unknown');
       if (closed?.pending) {
         this.store.update(closed.pending.id, 'unknown');
         closed.pending.state = 'unknown';
@@ -1660,6 +1685,51 @@ export class Service {
     }
     const thread = this.cache.get(p.threadId);
     if (!thread) return;
+    if (
+      event.method === 'item/autoApprovalReview/started' ||
+      event.method === 'item/autoApprovalReview/completed'
+    ) {
+      const parsed = z
+        .object({
+          turnId: z.string(),
+          reviewId: z.string().max(200),
+          review: z.object({
+            status: z.enum(['inProgress', 'approved', 'denied', 'timedOut', 'aborted']),
+            rationale: z.string().nullable(),
+          }),
+        })
+        .safeParse(p);
+      if (
+        !parsed.success ||
+        p.turnId !== thread.turnId ||
+        !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
+      )
+        return;
+      const labels = {
+        inProgress: 'Reviewing',
+        approved: 'Approved',
+        denied: 'Denied',
+        timedOut: 'Timed out',
+        aborted: 'Aborted',
+      };
+      const review = parsed.data.review;
+      const message: Message = {
+        id: 'auto-review:' + parsed.data.reviewId,
+        turnId: p.turnId,
+        kind: 'notice',
+        status: review.status,
+        text:
+          'Auto-review · ' +
+          labels[review.status] +
+          (review.rationale ? '\n' + text(review.rationale, 2000) : ''),
+      };
+      const index = thread.messages.findIndex((entry) => entry.id === message.id);
+      if (index >= 0) thread.messages[index] = message;
+      else thread.messages.push(message);
+      thread.messages = thread.messages.slice(-300);
+      this.events.publish('item', message, thread.id);
+      return;
+    }
     if (event.method === 'thread/tokenUsage/updated') {
       const usage = z
         .object({
@@ -1738,7 +1808,12 @@ export class Service {
       return;
     }
     if (event.method === 'item/started' || event.method === 'item/completed') {
-      this.applyItem(thread, p.item, p.turnId);
+      this.applyItem(
+        thread,
+        p.item,
+        p.turnId,
+        event.method === 'item/started' ? 'inProgress' : 'completed',
+      );
       return;
     }
     if (event.method === 'turn/diff/updated') {
@@ -1767,6 +1842,7 @@ export class Service {
       for (const raw of Array.isArray(p.turn.items) ? p.turn.items : [])
         this.applyItem(thread, raw, p.turn.id);
       if (event.method === 'turn/started') {
+        this.clearCompaction(thread, 'unknown');
         thread.turnId = p.turn.id;
         thread.state = 'running';
         thread.diff = '';
@@ -1800,14 +1876,72 @@ export class Service {
             this.actions.delete(entry.action.id);
           }
       }
+      if (terminal(p.turn.status) && thread.turnId === p.turn.id) {
+        this.clearCompaction(
+          thread,
+          p.turn.status === 'interrupted'
+            ? 'interrupted'
+            : p.turn.status === 'failed'
+              ? 'failed'
+              : 'unknown',
+        );
+      }
       thread.updatedAt = Date.now();
       this.boundary(thread);
     }
   }
-  private applyItem(thread: Thread, raw: any, turnId: string) {
-    const message = item(raw, turnId, (path) => this.images.reference(thread.projectId, path));
+  private clearCompaction(thread: Thread, status: 'interrupted' | 'failed' | 'unknown') {
+    if (!thread.compaction) return;
+    const message = thread.messages.find((entry) => entry.id === thread.compaction!.id);
+    if (message?.kind === 'compaction' && message.status === 'inProgress') {
+      message.status = status;
+      message.text =
+        status === 'interrupted'
+          ? 'Context compaction interrupted.'
+          : status === 'failed'
+            ? 'Context compaction did not finish.'
+            : 'Context compaction outcome unknown.';
+      this.events.publish('item', message, thread.id);
+    }
+    delete thread.compaction;
+    this.events.publish('state', { compaction: null }, thread.id);
+  }
+  private applyItem(
+    thread: Thread,
+    raw: any,
+    turnId: string,
+    lifecycle?: 'inProgress' | 'completed',
+  ) {
+    if (raw?.type === 'contextCompaction') {
+      if (
+        lifecycle === 'inProgress' &&
+        thread.messages.some(
+          (entry) =>
+            entry.id === raw.id && entry.kind === 'compaction' && entry.status === 'completed',
+        )
+      )
+        return;
+      // A delayed item from an earlier turn cannot change the current task's progress.
+      if (
+        turnId !== thread.turnId ||
+        !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
+      )
+        return;
+      if (lifecycle === 'inProgress' && typeof raw.id === 'string')
+        thread.compaction = { id: raw.id, turnId };
+      else if (lifecycle === 'completed' && thread.compaction?.id === raw.id)
+        delete thread.compaction;
+      this.events.publish('state', { compaction: thread.compaction ?? null }, thread.id);
+    }
+    const message = item(
+      raw,
+      turnId,
+      (path) => this.images.reference(thread.projectId, path),
+      lifecycle,
+    );
     if (!message) return;
     const index = thread.messages.findIndex((x) => x.id === message.id);
+    if (message.kind === 'compaction' && !lifecycle && index >= 0) return;
     if (index >= 0) thread.messages[index] = message;
     else thread.messages.push(message);
     if (thread.messages.length > 300) thread.messages.splice(0, thread.messages.length - 300);

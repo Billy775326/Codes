@@ -184,6 +184,12 @@ const MessageView = memo(function MessageView({
       </details>
     );
   }
+  if (item.kind === 'compaction')
+    return (
+      <p className="message compaction" data-message-id={item.id} data-turn-id={item.turnId}>
+        {item.text}
+      </p>
+    );
   return (
     <article
       data-message-id={item.id}
@@ -299,6 +305,7 @@ function App() {
   const [threadId, setThreadId] = useState(saved('codes.thread'));
   const [thread, setThread] = useState<Thread>();
   const [models, setModels] = useState<Model[]>([]);
+  const [autoReviewReady, setAutoReviewReady] = useState(false);
   const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
   const [preferences, setPreferences] = useState<Preferences>(() => {
@@ -587,6 +594,14 @@ function App() {
       })
       .catch((e) => {
         if (!controller.signal.aborted) notice(e);
+      });
+    void request<{ autoReview: boolean }>('/permissions', {}, controller.signal)
+      .then((permissions) => setAutoReviewReady(permissions.autoReview))
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setAutoReviewReady(false);
+          notice(error);
+        }
       });
     return () => controller.abort();
   }, [auth]);
@@ -2134,7 +2149,9 @@ function App() {
                 {thread && (
                   <div className={`turn-status ${thread.state}`}>
                     <span className={`status-dot ${thread.state}`} />
-                    {labels[thread.state]}
+                    {thread.state === 'running' && thread.compaction
+                      ? 'Compacting context…'
+                      : labels[thread.state]}
                     {thread.state === 'unknown' && (
                       <span> · Execution outcome needs confirmation.</span>
                     )}
@@ -2442,6 +2459,7 @@ function App() {
               <ComposerControls
                 ref={composerControls}
                 settings={settings}
+                autoReviewReady={autoReviewReady}
                 change={changeSettings}
                 models={models}
                 resolvedModel={thread?.resolvedModel}
@@ -2560,6 +2578,7 @@ function App() {
             change: defaultSettings.change,
             retry: () => void defaultSettings.retry(),
             models,
+            autoReviewReady,
             modesReady: modes.some((entry) => entry.mode === 'default'),
             planReady: modes.some((entry) => entry.mode === 'plan'),
           }}

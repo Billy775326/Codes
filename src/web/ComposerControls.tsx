@@ -13,6 +13,7 @@ export interface ComposerControlsHandle {
 /** Presentation and popup focus only. Task dispatch and durable receipts stay with the workspace. */
 export function ComposerControls({
   settings,
+  autoReviewReady,
   change,
   models,
   resolvedModel,
@@ -22,6 +23,7 @@ export function ComposerControls({
   ref,
 }: {
   settings: Settings;
+  autoReviewReady?: boolean;
   change: (settings: Settings) => void;
   models: Model[];
   resolvedModel?: string;
@@ -86,7 +88,7 @@ export function ComposerControls({
               key={preset.id}
               type="button"
               aria-pressed={settings.permission === preset.id}
-              disabled={disabled}
+              disabled={disabled || (preset.id === 'auto-review' && !autoReviewReady)}
               data-close-menu
               onClick={() => change({ ...settings, permission: preset.id })}
             >

@@ -43,6 +43,41 @@ const modesSchema = z
 /** Public metadata only; config/read and authentication documents never reach the browser. */
 export class ModelSettings {
   constructor(private driver: Driver) {}
+  async permissions() {
+    const response = await this.driver.call('configRequirements/read', {});
+    const parsed = z
+      .object({
+        requirements: z
+          .object({
+            allowedApprovalsReviewers: z.array(z.enum(['user', 'auto_review'])).nullish(),
+            allowedApprovalPolicies: z.array(z.unknown()).nullish(),
+            allowedSandboxModes: z.array(z.string()).nullish(),
+          })
+          .nullable(),
+      })
+      .safeParse(response);
+    if (!parsed.success)
+      throw new AppError(
+        'PROTOCOL_ERROR',
+        'The CLI returned invalid permission requirements.',
+        502,
+      );
+    const requirements = parsed.data.requirements;
+    return {
+      autoReview:
+        (requirements?.allowedApprovalsReviewers?.includes('auto_review') ?? true) &&
+        (requirements?.allowedApprovalPolicies?.includes('on-request') ?? true) &&
+        (requirements?.allowedSandboxModes?.includes('workspace-write') ?? true),
+    };
+  }
+  async checkPermissions(settings: Settings) {
+    if (settings.permission === 'auto-review' && !(await this.permissions()).autoReview)
+      throw new AppError(
+        'AUTO_REVIEW_UNAVAILABLE',
+        'Approve for me is restricted by the native Codex policy. Choose an allowed permission preset.',
+        412,
+      );
+  }
   async models() {
     const response = await this.driver.call('model/list', { limit: 100 });
     const parsed = z.array(modelSchema).max(100).safeParse(response?.data);

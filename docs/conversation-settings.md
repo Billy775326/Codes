@@ -6,6 +6,16 @@ Use **Interaction settings → New conversation defaults** for the starting perm
 
 The New conversation action starts with the current saved defaults. Before a conversation has been created, its text and customized settings are browser-only, project-scoped drafts; up to 20 new-draft setting records are retained. Reload restores that draft choice. Once created, conversation settings are server-backed. Branches retain their existing Read only starting policy, and reviews retain their native read-only execution policy.
 
+## Approve for me
+
+The permission menu and New conversation defaults include **Approve for me** (`permission: "auto-review"`). It maps to native workspace-write sandboxing, on-request approval, and `approvalsReviewer: "auto_review"`. Read only, Ask for approval, and Full access explicitly select the native human reviewer (`"user"`); Full access also disables approval prompts. No global CLI configuration is edited and no Codes code automatically accepts a callback.
+
+Native managed requirements can disable this choice. Authenticated `GET /api/permissions` returns only `{ autoReview: boolean }`, derived from native reviewer, approval-policy, and sandbox allowlists. This reflects policy permission, not guaranteed account/quota availability. A native rejection stays visible; Codes never falls back to Full access. The native reviewer may use extra quota. When emitted, review status and bounded rationale appear in work history; these transient notifications are not a separate durable reviewer journal.
+
+The saved preset is additive to schema 4. Older Codes builds cannot validate the new `auto-review` value. Before an application downgrade, choose an older supported preset for affected profiles and queue entries, or restore a coordinated backup; never silently reinterpret it as another permission.
+
+See [official Auto-review behavior](https://learn.chatgpt.com/docs/sandboxing/auto-review).
+
 ## Running and queued work
 
 Conversation preferences are separate from the configuration captured for an executing task. Editing the preferences does not reconfigure an active task or rewrite already queued messages. New queued entries capture the current conversation settings. When those entries later execute, they do not overwrite newer conversation preferences.

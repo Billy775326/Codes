@@ -8,8 +8,8 @@ test('native permission presets, approval callbacks and Files / Changes remain a
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Codex permissions', exact: true }).click();
   const presets = page.getByRole('group', { name: 'Permission presets', exact: true });
-  await expect(presets.getByRole('button')).toHaveCount(3);
-  for (const name of ['Read only', 'Ask for approval', 'Full access'])
+  await expect(presets.getByRole('button')).toHaveCount(4);
+  for (const name of ['Read only', 'Ask for approval', 'Approve for me', 'Full access'])
     await expect(presets.getByRole('button', { name: new RegExp('^' + name) })).toBeEnabled();
   await expect(page.getByLabel('Task write root', { exact: true })).toHaveCount(0);
   await presets.getByRole('button', { name: /^Ask for approval/ }).click();

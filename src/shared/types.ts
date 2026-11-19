@@ -18,7 +18,7 @@ export interface Settings {
   /** Standard when absent; independent of reasoning effort. */
   fast?: boolean;
   mode?: 'default' | 'plan';
-  permission: 'read-only' | 'workspace-write' | 'danger-full-access';
+  permission: 'read-only' | 'workspace-write' | 'auto-review' | 'danger-full-access';
 }
 export interface SettingsProfile {
   revision: number;
@@ -27,7 +27,7 @@ export interface SettingsProfile {
 export interface Message {
   id: string;
   turnId: string;
-  kind: 'user' | 'assistant' | 'command' | 'change' | 'notice' | 'tool';
+  kind: 'user' | 'assistant' | 'command' | 'change' | 'notice' | 'tool' | 'compaction';
   phase?: 'commentary' | 'partial_answer' | 'final_answer';
   text: string;
   status?: string;
@@ -103,6 +103,8 @@ export interface Thread extends Summary {
   diffTruncated?: boolean;
   resolvedModel?: string;
   steering?: (Operation & { text: string })[];
+  /** Native progress only; does not end the turn or release its execution lease. */
+  compaction?: { id: string; turnId: string };
   usage?: { turnId: string; contextTokens: number; totalTokens: number; contextWindow?: number };
   plan?: { explanation?: string; steps: { step: string; status: string }[] };
   queue?: QueueState;

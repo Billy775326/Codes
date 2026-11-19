@@ -12,6 +12,12 @@ export const permissionPresets = [
     description: 'Edit workspace files. Ask before external file or network access.',
   },
   {
+    id: 'auto-review',
+    label: 'Approve for me',
+    description:
+      'Keep the workspace sandbox. Codex reviews eligible requests; may use additional quota.',
+  },
+  {
     id: 'danger-full-access',
     label: 'Full access',
     description: 'Unrestricted files and network on this server, without approval prompts.',
@@ -25,6 +31,7 @@ export function permissionLabel(permission: Settings['permission']) {
 /** Each preset fixes both controls, so lowering access also restores approval prompts. */
 export function nativePermissions(permission: Settings['permission'], projectPath: string) {
   return {
+    approvalsReviewer: permission === 'auto-review' ? 'auto_review' : 'user',
     approvalPolicy: permission === 'danger-full-access' ? 'never' : 'on-request',
     sandboxPolicy:
       permission === 'read-only'
