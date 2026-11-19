@@ -1,4 +1,4 @@
-# <img src="public/brand/codes-mark.png" width="36" height="36" alt="" /> codes
+# codes
 
 A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interface. Use a desktop browser to work with conversations and file context, and a phone to check progress and approve requests.
 
@@ -10,7 +10,7 @@ A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interfa
 
 Use Codex through a browser, without operating a terminal for everyday work. Conversations, approvals, planning, queues, and change review should form one clear Web workflow. Codex CLI and its App Server remain the execution engine; “no cli” describes the user experience.
 
-Keep the interface, architecture, and implementation simple. Let layout and explicit state explain the workflow, preserve native behavior, and make operations clear to people and agents. See the [design philosophy and logo](docs/brand.md) ([中文](docs/zh-CN/brand.md)).
+Keep the interface, architecture, and implementation simple. Let layout and explicit state explain the workflow, preserve native behavior, and make operations clear to people and agents. See the [design philosophy](docs/brand.md) ([中文](docs/zh-CN/brand.md)).
 
 ## What is implemented
 

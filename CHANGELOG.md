@@ -4,7 +4,7 @@
 
 ### Added
 
-- Document the project philosophy, “codex no cli = codes”, and introduce a C/S logo shared by the README, sign-in, navigation, and browser icon. Provide the transparent source and lightweight web assets.
+- Document the project philosophy, “codex no cli = codes”, with English and Chinese explanations.
 
 - Add Fast and Execution / Plan controls to the model/reasoning popup, with the selected model and effective reasoning effort visible in its trigger. Fast uses native service-tier overrides independently of reasoning, persists with task/queue settings, and is unavailable when the selected model does not advertise support. Standard explicitly overrides inherited Fast for new tasks.
 
@@ -37,6 +37,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Withdraw the C/S logo, restore the previous temporary interface mark, and clear the rejected browser icon while the owner selects a new identity.
 
 - Reorganize conversation navigation into Chats / Archived and readable title/status/time rows. Show approvals, questions, uncertain results and queue pause/failure conditions; retain saved states during disconnection and refresh the current list page when live updates resume. Reconcile validated native status metadata without treating idle/unloaded as completion or clearing uncertain receipts.
 

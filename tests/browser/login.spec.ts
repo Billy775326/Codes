@@ -10,15 +10,6 @@ for (const viewport of [
   test(`sign-in remains readable and usable at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto('/');
-    await expect
-      .poll(() =>
-        page.locator('.brand-mark').evaluate((image: HTMLImageElement) => image.naturalWidth),
-      )
-      .toBeGreaterThan(0);
-    const faviconPath = await page.locator('link[rel="icon"]').getAttribute('href');
-    expect(faviconPath).toBeTruthy();
-    const favicon = await page.request.get(new URL(faviconPath!, page.url()).href);
-    expect(favicon.headers()['content-type']).toBe('image/png');
     const input = page.getByLabel('Workspace access token');
     await expect(input).toBeEnabled();
     await expect(input).toHaveAttribute('type', 'password');
