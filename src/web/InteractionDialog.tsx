@@ -1,3 +1,4 @@
+import { permissionLabel } from '../shared/permissions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
 import { message } from './api';
@@ -6,11 +7,13 @@ export function InteractionDialog({
   close,
   children,
   busy = false,
+  className = '',
 }: {
   title: string;
   close: () => void;
   children: ReactNode;
   busy?: boolean;
+  className?: string;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -19,21 +22,24 @@ export function InteractionDialog({
     return () => previous?.focus();
   }, []);
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop interaction-backdrop">
       <div
-        className="modal interaction-dialog"
+        className={`modal interaction-dialog ${className}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         ref={dialog}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' && !busy) close();
+          if (event.key === 'Escape' && !busy) {
+            event.stopPropagation();
+            close();
+          }
           if (event.key !== 'Tab') return;
           const controls = [
             ...event.currentTarget.querySelectorAll<HTMLElement>(
-              'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)',
+              'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,a[href]',
             ),
-          ];
+          ].filter((element) => element.checkVisibility());
           if (event.shiftKey && document.activeElement === controls[0]) {
             event.preventDefault();
             controls.at(-1)?.focus();
@@ -59,79 +65,170 @@ export interface Preferences {
   enter: 'enter' | 'cmdIfMultiline' | 'cmdAlways';
   review: 'inline' | 'detached';
   theme?: 'dark' | 'light' | 'system';
+  chatFontSize?: number;
+  codeFontSize?: number;
 }
 export function PreferencesDialog({
   value,
   change,
   close,
+  saveError,
 }: {
   value: Preferences;
   change: (value: Preferences) => void;
   close: () => void;
+  saveError?: string;
 }) {
   return (
-    <InteractionDialog title="Interaction settings" close={close}>
-      <p>Preferences are saved in this browser.</p>
-      <label>
-        Workspace theme
-        <select
-          aria-label="Workspace theme"
-          value={value.theme ?? 'dark'}
-          onChange={(event) =>
-            change({ ...value, theme: event.target.value as Preferences['theme'] })
-          }
-        >
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="system">System</option>
-        </select>
-      </label>
-      <label>
-        Follow-up behavior
-        <select
-          aria-label="Follow-up behavior"
-          value={value.followUp}
-          onChange={(e) =>
-            change({ ...value, followUp: e.target.value as Preferences['followUp'] })
-          }
-        >
-          <option value="queue">Queue after the current task</option>
-          <option value="steer">Add to the current task</option>
-        </select>
-      </label>
-      <p>
-        Ctrl/Cmd+Shift+Enter reverses queue and steer for one follow-up. Steering keeps the running
-        task's settings. Accepted additions cannot be edited or recalled.
-      </p>
-      <p>
-        Drafts and waiting queued text are editable. Once sending starts, the message is locked.
-        Reply quotes an existing response; Branch from here creates a separate conversation through
-        that turn and shares current project files. Sent history is not edited in place.
-      </p>
-      <label>
-        Enter behavior
-        <select
-          aria-label="Enter behavior"
-          value={value.enter}
-          onChange={(e) => change({ ...value, enter: e.target.value as Preferences['enter'] })}
-        >
-          <option value="enter">Enter sends</option>
-          <option value="cmdIfMultiline">Ctrl/Cmd+Enter for multiline drafts</option>
-          <option value="cmdAlways">Always Ctrl/Cmd+Enter</option>
-        </select>
-      </label>
-      <p>Shift+Enter adds a line. On phones, Enter always adds a line; use the send button.</p>
-      <label>
-        Review delivery
-        <select
-          aria-label="Review delivery preference"
-          value={value.review}
-          onChange={(e) => change({ ...value, review: e.target.value as Preferences['review'] })}
-        >
-          <option value="inline">Current conversation</option>
-          <option value="detached">Separate conversation</option>
-        </select>
-      </label>
+    <InteractionDialog title="Interaction settings" close={close} className="preferences-dialog">
+      <div className="preferences-content">
+        <section className="preferences-section" aria-labelledby="preferences-appearance">
+          <h3 id="preferences-appearance">Appearance</h3>
+          <label className="preference-row">
+            <span className="preference-description">Workspace theme</span>
+            <select
+              aria-label="Workspace theme"
+              value={value.theme ?? 'dark'}
+              onChange={(event) =>
+                change({ ...value, theme: event.target.value as Preferences['theme'] })
+              }
+            >
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="system">System</option>
+            </select>
+          </label>
+          <div className="preferences-fonts">
+            <label>
+              Chat text size
+              <select
+                aria-label="Chat text size"
+                value={value.chatFontSize ?? ''}
+                onChange={(event) =>
+                  change({
+                    ...value,
+                    chatFontSize: event.target.value ? Number(event.target.value) : undefined,
+                  })
+                }
+              >
+                <option value="">Default</option>
+                {[16, 18, 20].map((size) => (
+                  <option key={size} value={size}>
+                    {size} px
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Code text size
+              <select
+                aria-label="Code text size"
+                value={value.codeFontSize ?? ''}
+                onChange={(event) =>
+                  change({
+                    ...value,
+                    codeFontSize: event.target.value ? Number(event.target.value) : undefined,
+                  })
+                }
+              >
+                <option value="">Default</option>
+                {[12, 14, 16].map((size) => (
+                  <option key={size} value={size}>
+                    {size} px
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="preferences-preview" role="region" aria-label="Text preview">
+            <div className="prose">
+              <p>
+                Readable conversations, clear code.
+                <br />
+                清晰阅读，专注交流。
+              </p>
+              <pre>
+                <code>const message = "Hello, Codex";</code>
+              </pre>
+            </div>
+          </div>
+        </section>
+        <section className="preferences-section" aria-labelledby="preferences-interaction">
+          <h3 id="preferences-interaction">Interaction</h3>
+          <label className="preference-row">
+            <span className="preference-description">
+              Follow-up behavior
+              <span className="preference-help">Default action while a task is running.</span>
+            </span>
+            <select
+              aria-label="Follow-up behavior"
+              value={value.followUp}
+              onChange={(event) =>
+                change({ ...value, followUp: event.target.value as Preferences['followUp'] })
+              }
+            >
+              <option value="queue">Queue for the next turn</option>
+              <option value="steer">Add to the current task</option>
+            </select>
+          </label>
+          <label className="preference-row">
+            <span className="preference-description">
+              Enter behavior
+              <span className="preference-help">
+                Shift+Enter adds a line. Phone keyboards always add a line.
+              </span>
+            </span>
+            <select
+              aria-label="Enter behavior"
+              value={value.enter}
+              onChange={(event) =>
+                change({ ...value, enter: event.target.value as Preferences['enter'] })
+              }
+            >
+              <option value="enter">Enter sends</option>
+              <option value="cmdIfMultiline">Multiline: Ctrl/Cmd+Enter</option>
+              <option value="cmdAlways">Always Ctrl/Cmd+Enter</option>
+            </select>
+          </label>
+          <label className="preference-row">
+            <span className="preference-description">Review delivery</span>
+            <select
+              aria-label="Review delivery preference"
+              value={value.review}
+              onChange={(event) =>
+                change({ ...value, review: event.target.value as Preferences['review'] })
+              }
+            >
+              <option value="inline">Current conversation</option>
+              <option value="detached">Separate conversation</option>
+            </select>
+          </label>
+          <details className="preferences-help">
+            <summary>Editing and shortcuts</summary>
+            <p>
+              Ctrl/Cmd+Shift+Enter reverses queue and steer for one follow-up. Steering uses the
+              running task's settings; accepted additions cannot be edited or recalled.
+            </p>
+            <p>
+              Drafts and waiting queued text are editable. Sent history is not edited in place.
+              Reply quotes a response; Branch from here creates a separate conversation and shares
+              the current project files.
+            </p>
+          </details>
+        </section>
+      </div>
+      <div className="preferences-footer">
+        {saveError ? (
+          <span className="preferences-save-error" role="alert">
+            {saveError}
+          </span>
+        ) : (
+          <span className="preferences-scope">Saves automatically in this browser</span>
+        )}
+        <button className="preferences-done" type="button" onClick={close}>
+          Done
+        </button>
+      </div>
     </InteractionDialog>
   );
 }
@@ -286,7 +383,7 @@ export function StatusDialog({
               : 'Not reported'}
         </dd>
         <dt>Permissions</dt>
-        <dd>{settings.permission}</dd>
+        <dd>{permissionLabel(settings.permission)}</dd>
         <dt>Conversation</dt>
         <dd>{thread?.id ?? 'Not created'}</dd>
         <dt>Turn</dt>

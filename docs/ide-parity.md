@@ -45,9 +45,13 @@ Desktop navigation opens by default and remembers explicit collapse. Below 1100p
 
 Browser drafts for new conversations belong to the selected project, while existing per-conversation draft keys remain compatible. Switching projects/conversations closes previews and aborts pending file reads; late file responses cannot become context for another project. The data schema remains 4.
 
-The composer retains one rounded input area, attachment and Code/Plan/permission controls, a model/reasoning popup and explicit send/queue/stop actions. Edited-file cards and copy/reply/branch actions remain available. Dark/light/system themes are browser preferences. Read-only previews provide no Undo, staging or patch-application controls.
+The composer uses one outer focus border with an unclipped model popup and one compact idle footer for project, delivery scope and the current send shortcut. Active or queued work retains its full delivery guidance and alternate action. It retains one rounded input area, attachment and Codex permission controls, a `/plan` toggle with a visible exit marker, a model/reasoning popup and explicit send/queue/stop actions. Edited-file cards and copy/reply/branch actions remain available. Dark/light/system themes are browser preferences. Read-only previews provide no Undo, staging or patch-application controls.
+
+The permission menu fixes both native sandbox and approval policy: Read only uses `read-only` with `on-request`; Ask for approval uses `workspace-write` with `on-request` and sandbox network access disabled; Full access uses `danger-full-access` with `never`. Selection applies to subsequent tasks, retains existing queued settings, and does not write global Codex configuration. Automatic approval review and custom permission profiles are not exposed by this menu. The metadata-only smoke checks all three presets against CLI 0.167.0 without executing model prompts.
 
 Browser acceptance covers pane geometry, menu/drawer focus, per-project drafts and legacy reads, delayed-file cancellation, attachment return, clipboard copying, saved themes and 1440/820/390/320px widths. Synthetic screenshots describe this Web implementation; they do not establish physical-phone acceptance or pixel equality with the extension.
+
+The settings remain in a modal dialog with Appearance and Interaction groups, a scrollable content area and persistent close controls. Optional chat and message-code font sizes apply immediately and stay in this browser; Default preserves the existing responsive typography. Theme, follow-up, Enter and review preferences retain their existing values and behavior. Editing/shortcut details are collapsed initially. A failed browser-storage write is shown explicitly; current-session changes still apply. Opening or closing settings keeps the current conversation subscription and draft.
 
 ## Implemented local contracts
 

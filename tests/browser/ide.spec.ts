@@ -4,7 +4,7 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
-  await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
 }
 async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
@@ -23,7 +23,8 @@ test('native model, reasoning and Plan mode survive reconnect and expose real pl
   await page.getByLabel('Model', { exact: true }).selectOption('simulated-model');
   await page.getByLabel('Reasoning effort').selectOption('high');
   await page.keyboard.press('Escape');
-  await page.getByLabel('Mode', { exact: true }).selectOption('plan');
+  await page.getByLabel('Message Codex').fill('/plan');
+  await page.getByLabel('Message Codex').press('Enter');
   const request = page.waitForRequest(
     (request) => request.url().endsWith('/send') && request.method() === 'POST',
   );
@@ -42,9 +43,9 @@ test('native model, reasoning and Plan mode survive reconnect and expose real pl
   await expect(dialog).toContainText('3,400 tokens');
   await page.keyboard.press('Escape');
   await page.reload();
-  await expect(page.getByLabel('Mode', { exact: true })).toHaveValue('plan');
+  await expect(page.getByRole('button', { name: 'Exit Plan mode', exact: true })).toBeVisible();
   await expect(page.getByLabel('Reasoning effort')).toHaveValue('high');
-  await page.getByLabel('Mode', { exact: true }).selectOption('default');
+  await page.getByRole('button', { name: 'Exit Plan mode', exact: true }).click();
   await send(page, 'Return to Code mode');
   await expect(page.getByRole('region', { name: 'Task plan' })).toHaveCount(0);
 });
@@ -153,7 +154,9 @@ test('review uses native targets inline and in a separate conversation while pre
   );
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).not.toBe(source);
   await expect(page.getByTestId('message-user')).toHaveCount(0);
-  await expect(page.getByLabel('Permissions')).toHaveValue('read-only');
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toHaveText(
+    'Read only',
+  );
 });
 
 test('slash commands perform local actions and unknown commands never reach the model', async ({
@@ -165,7 +168,7 @@ test('slash commands perform local actions and unknown commands never reach the 
     .getByRole('group', { name: 'Commands', exact: true })
     .getByRole('button', { name: '/plan' })
     .click();
-  await expect(page.getByLabel('Mode', { exact: true })).toHaveValue('plan');
+  await expect(page.getByRole('button', { name: 'Exit Plan mode', exact: true })).toBeVisible();
   await page.getByLabel('Message Codex').fill('/status');
   await page.getByLabel('Message Codex').press('Enter');
   await expect(page.getByRole('dialog', { name: 'Session status' })).toBeVisible();

@@ -4,7 +4,7 @@ async function login(page: Page) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
-  await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
 }
 async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
@@ -47,7 +47,9 @@ for (const width of [1440, 320])
     await page.getByRole('button', { name: 'Queue instead', exact: true }).click();
     const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
     await expect(queue).toContainText('Waiting · Editable');
-    await expect(queue.getByRole('button', { name: 'Edit text', exact: true })).toBeVisible();
+    await expect(
+      queue.getByRole('button', { name: 'Queued message actions', exact: true }),
+    ).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -78,12 +80,13 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
   await page.getByLabel('Message Codex').fill('Original waiting text');
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
-  await queue.getByRole('button', { name: 'Edit text', exact: true }).click();
+  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).first().click();
+  await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
   await expect(queue).toContainText(
     'Queue position, model, permissions and attachments stay unchanged',
   );
   await queue.getByLabel('Edit queued message').fill('Keep this unsubmitted local correction');
-  await queue.getByRole('button', { name: 'Pause queue', exact: true }).click();
+  await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeVisible();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue(
     'Keep this unsubmitted local correction',
   );

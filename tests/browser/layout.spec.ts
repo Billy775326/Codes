@@ -4,7 +4,7 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
-  await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
 }
 
 test('workspace defaults to persistent navigation, retains drafts through history, and dismisses model menus with keyboard or pointer', async ({
@@ -99,6 +99,20 @@ for (const width of [1440, 820, 390, 320]) {
       .boundingBox();
     expect(popup!.x).toBeGreaterThanOrEqual(0);
     expect(popup!.x + popup!.width).toBeLessThanOrEqual(width);
+    // Geometric visibility alone misses clipping by the composer's overflow.
+    for (const label of ['Model', 'Reasoning effort']) {
+      const select = page.getByLabel(label, { exact: true });
+      expect(
+        await select.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height / 2,
+          );
+          return hit === element || element.contains(hit);
+        }),
+      ).toBe(true);
+    }
     await page.keyboard.press('Escape');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,

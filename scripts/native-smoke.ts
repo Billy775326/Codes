@@ -1,3 +1,4 @@
+import { nativePermissions, permissionPresets } from '../src/shared/permissions.js';
 /** Metadata-only compatibility check. No account, prompt, command, or model execution. */
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
@@ -40,11 +41,22 @@ try {
     collaborationMode: mode,
     sandboxPolicy: { type: 'readOnly' },
   });
+  for (const preset of permissionPresets) {
+    const configured = await service.create(project.id, { permission: preset.id });
+    await service.driver.call('thread/settings/update', {
+      threadId: configured.id,
+      ...nativePermissions(preset.id, join(directory, 'project')),
+    });
+    await service.driver.call('thread/settings/update', {
+      threadId: configured.id,
+      ...nativePermissions('read-only', join(directory, 'project')),
+    });
+  }
   const history = await service.history(thread.id);
   assert.equal(history.messages.length, 0);
   assert.equal(history.state, 'idle');
   console.log(
-    'PASS: CLI 0.167.0 initialization, model/reasoning metadata, Plan/Code presets, thread settings, creation/read, and lazy empty history. No model requests.',
+    'PASS: CLI 0.167.0 initialization, model/reasoning metadata, Plan/Code presets, thread settings, creation/read, all three sandbox/approval presets with read-only restoration, and lazy empty history. No model requests.',
   );
 } finally {
   await service.close();

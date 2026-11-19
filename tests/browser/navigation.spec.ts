@@ -4,7 +4,7 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
-  await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
 }
 async function projects(page: Page) {
   return page.evaluate(async () => {

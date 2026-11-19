@@ -124,7 +124,8 @@ test('queue controls retain full long messages, recover lost receipts, and pause
   const queue = page.getByRole('region', { name: 'Queued messages' });
   await expect(queue.locator('li')).toHaveCount(1);
   await queue.getByRole('button', { name: 'Pause queue', exact: true }).click();
-  await queue.getByRole('button', { name: 'Edit text', exact: true }).click();
+  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).first().click();
+  await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue(long);
   await queue.getByLabel('Edit queued message').fill(long + ' edited');
   await queue.getByRole('button', { name: 'Save queued message', exact: true }).click();
@@ -188,7 +189,9 @@ test('branching from a completed turn copies only earlier context and preserves 
     page.getByRole('button', { name: 'Open source conversation', exact: true }),
   ).toBeVisible();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
-  await expect(page.getByLabel('Permissions')).toHaveValue('read-only');
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toHaveText(
+    'Read only',
+  );
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).not.toBe(source);
   await page.reload();
   await expect(
@@ -197,4 +200,35 @@ test('branching from a completed turn copies only earlier context and preserves 
   await page.getByRole('button', { name: 'Open source conversation', exact: true }).click();
   await expect(page.getByTestId('message-user')).toHaveCount(2);
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).toBe(source);
+});
+
+test('editing a queued card uses the composer area, pauses dispatch, and restores a separate unsent draft', async ({
+  page,
+}) => {
+  await login(page);
+  await send(page, '[approve] Compact queue draft isolation ' + Date.now());
+  await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
+  await page.getByLabel('Message Codex').fill('Queued content to revise');
+  await page.getByRole('button', { name: 'Queue message', exact: true }).click();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('');
+  await page.getByLabel('Message Codex').fill('My separate unsent draft');
+  const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
+  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).click();
+  await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
+  await expect(page.getByLabel('Message Codex')).toBeHidden();
+  await expect(queue.getByLabel('Edit queued message')).toHaveValue('Queued content to revise');
+  await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeDisabled();
+  await queue.getByLabel('Edit queued message').fill('Discard this local edit');
+  await queue.getByRole('button', { name: 'Cancel edit', exact: true }).click();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('My separate unsent draft');
+  await expect(queue).toContainText('Queued content to revise');
+  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).click();
+  await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
+  await queue.getByLabel('Edit queued message').fill('Saved queued correction');
+  await queue.getByRole('button', { name: 'Save queued message', exact: true }).click();
+  await expect(queue).toContainText('Saved queued correction');
+  await expect(page.getByLabel('Message Codex')).toHaveValue('My separate unsent draft');
+  await expect(page.getByTestId('message-user')).toHaveCount(1);
+  await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Decline', exact: true }).click();
 });

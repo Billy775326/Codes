@@ -16,7 +16,7 @@ export interface Settings {
   model?: string;
   effort?: string;
   mode?: 'default' | 'plan';
-  permission: 'read-only' | 'workspace-write';
+  permission: 'read-only' | 'workspace-write' | 'danger-full-access';
 }
 export interface Message {
   id: string;

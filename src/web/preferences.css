@@ -1,0 +1,198 @@
+.interaction-backdrop {
+  z-index: 80;
+}
+.app .preferences-dialog {
+  width: 660px;
+  max-height: min(800px, calc(100dvh - 40px));
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: var(--panel);
+}
+.preferences-dialog > .modal-heading {
+  flex: 0 0 auto;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+.preferences-dialog > .modal-heading button {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  font-size: 24px;
+  color: var(--muted);
+}
+.preferences-dialog > .modal-heading button:hover {
+  color: var(--fg);
+  background: var(--hover);
+}
+.preferences-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+  scrollbar-gutter: stable;
+}
+.preferences-section + .preferences-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.preferences-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 14px;
+  color: var(--fg);
+}
+.app .preferences-dialog label {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg);
+  min-width: 0;
+}
+.app .preferences-dialog .preference-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 240px);
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 16px;
+}
+.preference-help {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.app .preferences-dialog select {
+  margin: 0;
+  min-height: 40px;
+  font-size: 14px;
+  width: 100%;
+  min-width: 0;
+  background: var(--field);
+}
+.preferences-fonts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.app .preferences-fonts select {
+  margin-top: 8px;
+}
+.preferences-preview {
+  background: var(--editor);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.app .preferences-preview .prose p {
+  font-size: inherit;
+  line-height: inherit;
+  margin: 0 0 8px;
+}
+.app .preferences-preview pre {
+  margin: 0;
+  padding: 8px 10px;
+}
+.preferences-help {
+  padding-top: 8px;
+}
+.preferences-help summary {
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 0;
+}
+.app .preferences-help p {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 8px 0;
+}
+.preferences-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 16px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+}
+.preferences-scope,
+.preferences-save-error {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.preferences-save-error {
+  color: #d19292;
+}
+.app[data-theme='light'] .preferences-save-error {
+  color: #a13535;
+}
+.preferences-done {
+  min-height: 40px;
+  padding: 8px 20px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: var(--field);
+  font-size: 14px;
+}
+.preferences-done:hover {
+  background: var(--hover);
+}
+.app[data-chat-font-size] .prose {
+  font-size: var(--chat-font-size);
+}
+.app[data-chat-font-size] .prose h1 {
+  font-size: 1.35em;
+}
+.app[data-chat-font-size] .prose h2 {
+  font-size: 1.15em;
+}
+.app[data-chat-font-size] .prose h3 {
+  font-size: 1em;
+}
+.app[data-code-font-size] .prose code,
+.app[data-code-font-size] .prose pre,
+.app[data-code-font-size] .tool pre {
+  font-size: var(--code-font-size);
+}
+@media (max-width: 560px) {
+  .app .preferences-dialog {
+    max-height: calc(100dvh - 24px);
+  }
+  .interaction-backdrop:has(.preferences-dialog) {
+    padding: 12px;
+  }
+  .preferences-dialog > .modal-heading,
+  .preferences-footer {
+    padding: 12px 16px;
+  }
+  .preferences-content {
+    padding: 16px;
+  }
+  .app .preferences-dialog .preference-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .app .preferences-dialog select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .preferences-done,
+  .preferences-dialog > .modal-heading button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .preferences-fonts {
+    gap: 12px;
+  }
+  .preferences-preview {
+    padding: 12px;
+  }
+}

@@ -647,9 +647,6 @@
   padding: 3px 0;
   max-width: 110px;
 }
-.app .composer-toolbar select[aria-label='Mode'] {
-  max-width: 70px;
-}
 .app .toolbar-spacer {
   display: none;
 }
@@ -1113,9 +1110,6 @@
   .app .composer-toolbar select {
     max-width: 77px;
   }
-  .app .composer-toolbar select[aria-label='Mode'] {
-    max-width: 53px;
-  }
   .app .message-actions {
     opacity: 1;
   }
@@ -1246,19 +1240,6 @@
   .app .composer-toolbar > .icon-button {
     grid-column: 1;
     grid-row: 1;
-  }
-  .app .composer-toolbar > select[aria-label='Mode'] {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: start;
-    max-width: 100%;
-    min-height: 30px;
-  }
-  .app .composer-toolbar > select[aria-label='Permissions'] {
-    grid-column: 3;
-    grid-row: 1;
-    max-width: 150px;
-    min-height: 30px;
   }
   .app .composer-toolbar .model-menu {
     position: static;

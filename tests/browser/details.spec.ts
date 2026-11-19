@@ -4,7 +4,7 @@ async function login(page: Page) {
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
-  await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
 }
 async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
@@ -40,7 +40,8 @@ test('Plan questions remain required, and custom text equal to an option stays v
   page,
 }) => {
   await login(page);
-  await page.getByLabel('Mode', { exact: true }).selectOption('plan');
+  await page.getByLabel('Message Codex').fill('/plan');
+  await page.getByLabel('Message Codex').press('Enter');
   await send(page, '[question] Required clarification ' + Date.now());
   const card = page.getByRole('region', { name: 'Your input is needed', exact: true });
   await expect(card).toContainText('ANSWER REQUIRED');

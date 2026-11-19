@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { permissionLabel } from '../shared/permissions';
+import { useEffect, useState } from 'react';
 import type { QueueState, QueueItem, Settings } from '../shared/types';
 import { sameSettings } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon } from './primitives';
+import { PanelMenu } from './PanelMenu';
 import './workflow.css';
 export function QueuePanel({
   threadId,
@@ -11,16 +13,24 @@ export function QueuePanel({
   onCheck,
   turnId,
   settings,
+  onEditingChange,
+  onStop,
 }: {
   threadId: string;
   turnId?: string;
   settings?: Settings;
+  onEditingChange: (editing: boolean) => void;
+  onStop?: () => void;
   state: QueueState;
   onChange: (queue: QueueState) => void;
   onCheck: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState('');
   const [text, setText] = useState('');
+  useEffect(() => {
+    onEditingChange(!!editing);
+    return () => onEditingChange(false);
+  }, [editing, onEditingChange]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const run = async (work: () => Promise<QueueState | void>, finishEdit = false) => {
@@ -42,7 +52,8 @@ export function QueuePanel({
   const editable = entryBeingEdited?.state === 'queued';
   const editor = editing ? (
     <form
-      className="queued-text-editor"
+      className="composer queued-text-editor"
+      aria-label="Queued message editor"
       onSubmit={(event) => {
         event.preventDefault();
         if (!editable) return;
@@ -58,7 +69,7 @@ export function QueuePanel({
     >
       <p>
         {editable
-          ? 'Edit text only. Queue position, model, permissions and attachments stay unchanged.'
+          ? 'Queue paused for editing. Queue position, model, permissions and attachments stay unchanged.'
           : 'This message is no longer waiting. Your local edit was not submitted; copy it before closing.'}
       </p>
       <textarea
@@ -70,25 +81,36 @@ export function QueuePanel({
         readOnly={!editable}
         autoFocus
       />
-      <div className="queue-actions">
+      <div className="composer-toolbar queue-editor-actions">
+        {onStop && (
+          <button type="button" aria-label="Stop task" disabled={busy} onClick={onStop}>
+            <Icon name="stop" size={16} />
+            Stop
+          </button>
+        )}
         <button type="button" disabled={busy} onClick={() => setEditing('')}>
           {editable ? 'Cancel edit' : 'Close edit'}
         </button>
-        <button disabled={busy || !editable || !text.trim()}>Save queued message</button>
+        <button className="send-button" disabled={busy || !editable || !text.trim()}>
+          Save queued message
+        </button>
       </div>
     </form>
   ) : null;
   if (!state.items.length && !editing) return null;
   return (
-    <section className="message-queue" aria-label="Queued messages">
+    <section
+      className={`message-queue compact-queue ${editing ? 'is-editing' : ''}`}
+      aria-label="Queued messages"
+    >
       <div className="queue-heading">
         <strong>
-          {state.items.length ? 'Message queue' : 'Unsubmitted edit'}{' '}
+          {state.items.length ? 'Queued' : 'Unsubmitted edit'}{' '}
           {state.items.length > 0 && <span>{state.items.length}/10</span>}
         </strong>
         {state.items.length > 0 && (
           <button
-            disabled={busy}
+            disabled={busy || !!editing}
             onClick={() =>
               void run(() =>
                 post<QueueState>('/threads/' + threadId + '/queue/control', {
@@ -101,11 +123,7 @@ export function QueuePanel({
           </button>
         )}
       </div>
-      <p>
-        {state.paused
-          ? (state.reason ?? 'Queue paused.')
-          : 'Waiting messages run in order after the current task completes.'}
-      </p>
+      <p>{state.paused && (state.reason ?? 'Queue paused. Resume when ready.')}</p>
       <ol>
         {state.items.map((entry, index) => (
           <li key={entry.id}>
@@ -124,22 +142,16 @@ export function QueuePanel({
                           : 'Needs review · Text locked'}
                 </span>
                 <small>
-                  {entry.settings.permission === 'workspace-write'
-                    ? 'Workspace write'
-                    : 'Read only'}
+                  {permissionLabel(entry.settings.permission)}
                   {entry.attachments.length
                     ? ' · ' + entry.attachments.length + ' attachment(s)'
                     : ''}
                 </small>
               </div>
-              {editing === entry.id ? (
-                editor
-              ) : (
-                <p className="queue-preview">
-                  {entry.text.slice(0, 500)}
-                  {entry.text.length > 500 ? '…' : ''}
-                </p>
-              )}
+              <p className="queue-preview">
+                {entry.text.slice(0, 500)}
+                {entry.text.length > 500 ? '…' : ''}
+              </p>
               {entry.error && <p className="queue-error">{entry.error}</p>}
               {editing !== entry.id && (
                 <div className="queue-actions">
@@ -159,34 +171,44 @@ export function QueuePanel({
                         )
                       }
                     >
-                      Add now
+                      <Icon name="reply" size={14} />
+                      Guide now
                     </button>
                   )}
                   {entry.state === 'queued' && (
-                    <button
-                      disabled={busy || !!editing}
-                      title={
-                        editing
-                          ? 'Finish or close the current edit first'
-                          : 'Edit this waiting message text before sending starts'
-                      }
-                      onClick={() =>
-                        void run(async () => {
-                          const full = entry.textTruncated
-                            ? await request<QueueItem>(
-                                '/threads/' + threadId + '/queue/' + entry.id,
-                              )
-                            : entry;
-                          if (full.state !== 'queued')
-                            throw new Error('This message has already started.');
-                          setEditing(entry.id);
-                          setText(full.text);
-                          return undefined;
-                        })
-                      }
+                    <PanelMenu
+                      label="Queued message actions"
+                      trigger={<Icon name="more" size={16} />}
+                      className="queue-entry-menu"
                     >
-                      Edit text
-                    </button>
+                      <button
+                        disabled={busy || !!editing}
+                        data-close-menu
+                        onClick={() =>
+                          void run(async () => {
+                            // Pausing first prevents this client from dispatching the message during editing.
+                            // Another client may still resume it; the server's queued-state check remains authoritative.
+                            if (!state.paused) {
+                              const paused = await post<QueueState>(
+                                '/threads/' + threadId + '/queue/control',
+                                { paused: true },
+                              );
+                              onChange(paused);
+                            }
+                            const full = await request<QueueItem>(
+                              '/threads/' + threadId + '/queue/' + entry.id,
+                            );
+                            if (full.state !== 'queued')
+                              throw new Error('This message has already started.');
+                            setEditing(entry.id);
+                            setText(full.text);
+                          })
+                        }
+                      >
+                        <Icon name="edit" size={14} />
+                        Edit message
+                      </button>
+                    </PanelMenu>
                   )}
                   {['queued', 'failed'].includes(entry.state) && (
                     <button
@@ -199,6 +221,7 @@ export function QueuePanel({
                         )
                       }
                     >
+                      <Icon name="close" size={14} />
                       Remove
                     </button>
                   )}
@@ -222,7 +245,7 @@ export function QueuePanel({
           </li>
         ))}
       </ol>
-      {editing && !entryBeingEdited && <div className="queue-orphan-edit">{editor}</div>}
+      {editor}
       {error && (
         <p role="alert" className="queue-error">
           {error}

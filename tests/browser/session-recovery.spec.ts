@@ -65,7 +65,7 @@ test('expired authentication while answering a question restores the pending req
 test('an expired sidebar request also returns to sign-in', async ({ page }) => {
   await page.goto('/');
   await signin(page);
-  await expect(page.getByLabel('Mode', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
   await page.getByLabel('Message Codex').fill('A new project draft');
   await expire(page);
   await page.getByRole('button', { name: 'Refresh conversations', exact: true }).click();

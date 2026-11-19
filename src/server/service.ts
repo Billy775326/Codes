@@ -1,3 +1,4 @@
+import { nativePermissions } from '../shared/permissions.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { realpath, readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, basename, isAbsolute } from 'node:path';
@@ -506,7 +507,7 @@ export class Service {
     const result = await this.driver.call('thread/start', {
       cwd: project.path,
       sandbox: settings.permission,
-      approvalPolicy: 'on-request',
+      approvalPolicy: nativePermissions(settings.permission, project.path).approvalPolicy,
       ...(settings.model ? { model: settings.model } : {}),
     });
     if (
@@ -1211,10 +1212,10 @@ export class Service {
         this.loaded.add(id);
       }
       const collaborationMode = await this.modelSettings.resolve(settings, thread.resolvedModel);
-      const sandboxPolicy =
-        settings.permission === 'read-only'
-          ? { type: 'readOnly' }
-          : { type: 'workspaceWrite', writableRoots: [project.path], networkAccess: false };
+      const { sandboxPolicy, approvalPolicy } = nativePermissions(
+        settings.permission,
+        project.path,
+      );
       if (review) {
         const { native } = await this.conversationOwner(id);
         if (native.status?.type === 'active')
@@ -1226,7 +1227,7 @@ export class Service {
         await this.driver.call('thread/settings/update', {
           threadId: id,
           sandboxPolicy,
-          approvalPolicy: 'on-request',
+          approvalPolicy,
           collaborationMode,
         });
       }
@@ -1250,7 +1251,7 @@ export class Service {
               clientUserMessageId: operationId,
               input: nativeInput,
               sandboxPolicy,
-              approvalPolicy: 'on-request',
+              approvalPolicy,
               collaborationMode,
             },
       );

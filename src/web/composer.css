@@ -1,0 +1,361 @@
+/* The composer owns focus and menu overflow; inner controls keep their own focus cues. */
+.app .composer-area {
+  container-type: inline-size;
+}
+.app .composer {
+  overflow: visible;
+  border-radius: 14px;
+}
+.app .composer:focus-within {
+  border-color: var(--muted);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.app .composer textarea {
+  padding: 14px 16px 6px;
+  border: 0;
+  border-radius: 14px 14px 0 0;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 24px;
+}
+.app .composer textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.app .composer-toolbar {
+  position: relative;
+  gap: 6px;
+  padding: 6px 10px 10px;
+  border: 0;
+}
+.app .composer-toolbar > .icon-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 8px;
+  border-radius: 7px;
+}
+.app .permission-menu {
+  position: relative;
+}
+.app .permission-menu summary {
+  min-height: 36px;
+  padding: 6px 8px;
+  gap: 6px;
+  font-size: 14px;
+}
+.app .permission-menu summary[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+.app .permission-menu .panel-menu-content {
+  left: 0;
+  right: auto;
+  width: 310px;
+  max-width: calc(100vw - 48px);
+}
+.app .permission-menu [role='group'] {
+  display: grid;
+  gap: 4px;
+}
+.app .permission-menu button {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px;
+  white-space: normal;
+}
+.app .permission-menu button[aria-pressed='true'] {
+  background: var(--hover);
+  box-shadow: inset 2px 0 var(--muted);
+}
+.app .permission-menu small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.app .plan-mode {
+  padding: 6px;
+  font-size: 12px;
+}
+.app .model-menu {
+  max-width: 200px;
+}
+.app .model-menu summary {
+  min-height: 36px;
+  padding: 6px 8px;
+  gap: 6px;
+  font-size: 14px;
+}
+.app .model-menu summary > span {
+  max-width: 160px;
+}
+.app .composer-toolbar .panel-menu-content {
+  max-height: min(300px, calc(100dvh - 220px));
+  overflow-y: auto;
+}
+.app .composer-dispatch-actions > button {
+  min-height: 36px;
+  height: 36px;
+  padding: 7px 10px;
+  border-radius: 8px;
+}
+.composer-footer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 8px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.composer-location {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.composer-location > svg {
+  flex-shrink: 0;
+}
+.composer-location > svg:last-child {
+  transform: rotate(90deg);
+}
+.composer-project {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-project::before {
+  content: '· ';
+}
+.app .composer-footer .composer-delivery-help {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.composer-keyboard-hint {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.composer-mobile-label {
+  display: none;
+}
+.composer-scope-detail {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.app .composer-footer.has-delivery-status .composer-delivery-help {
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-items: center;
+  text-align: left;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+}
+.composer-footer.has-delivery-status .composer-location {
+  grid-column: 1;
+  grid-row: 2;
+}
+.composer-footer.has-delivery-status .composer-keyboard-hint {
+  grid-column: 3;
+  grid-row: 2;
+}
+@container (max-width: 460px) {
+  .app .composer-toolbar {
+    gap: 6px;
+    padding: 6px 8px 8px;
+  }
+  .app .composer-toolbar .permission-menu {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+    position: static;
+  }
+  .app .composer-toolbar .permission-menu .panel-menu-content {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+  }
+  .app .composer-toolbar .plan-mode {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .app .composer-toolbar .model-menu {
+    max-width: 100%;
+  }
+  .app .composer-toolbar .model-menu summary > span {
+    max-width: 100%;
+  }
+  .app .composer-toolbar .model-menu .panel-menu-content {
+    left: 8px;
+    right: 8px;
+  }
+  .composer-footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+  .composer-keyboard-hint {
+    display: none;
+  }
+  .composer-idle-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .composer-mobile-label {
+    display: inline;
+  }
+  .app .composer-footer .composer-delivery-help {
+    text-align: right;
+  }
+  .composer-project {
+    max-width: 105px;
+  }
+}
+@media (max-width: 700px) {
+  .app .composer-toolbar > .icon-button,
+  .app .composer-toolbar > select,
+  .app .model-menu summary,
+  .app .permission-menu summary,
+  .app .composer-dispatch-actions > button {
+    min-height: 40px;
+  }
+  .app .composer-toolbar > .icon-button,
+  .app .composer-dispatch-actions > button {
+    height: 40px;
+  }
+}
+
+/* Waiting messages sit directly above the composer; editing occupies the same input area. */
+.app .compact-queue {
+  padding: 8px 10px;
+  max-height: none;
+  overflow: visible;
+  border-radius: 14px;
+}
+.app .compact-queue > p:empty {
+  display: none;
+}
+.app .compact-queue ol {
+  max-height: 150px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.app .compact-queue li {
+  align-items: center;
+  padding: 7px 0;
+}
+.app .compact-queue .queue-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+}
+.app .compact-queue .queue-entry-label {
+  grid-column: 1 / -1;
+  font-size: 11px;
+}
+.app .compact-queue .queue-preview {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 4px 0;
+  max-height: 40px;
+}
+.app .compact-queue .queue-actions {
+  align-items: center;
+  grid-column: 2;
+  grid-row: 2;
+  gap: 2px;
+}
+.app .compact-queue .queue-actions > button,
+.app .queue-entry-menu summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  min-height: 32px;
+  padding: 5px;
+  font-size: 12px;
+}
+.app .compact-queue .queue-error,
+.app .compact-queue .queue-edit-scope {
+  grid-column: 1 / -1;
+}
+.app .compact-queue .queue-entry-menu {
+  position: static;
+}
+.app .compact-queue {
+  position: relative;
+}
+.app .queue-entry-menu .panel-menu-content {
+  bottom: 100%;
+  right: 0;
+  width: 190px;
+}
+.app .queue-entry-menu .panel-menu-content button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.app .compact-queue.is-editing {
+  padding-bottom: 0;
+}
+.app .compact-queue .queued-text-editor {
+  margin: 8px -10px 0;
+  overflow: hidden;
+}
+.app .queued-text-editor > p {
+  margin: 10px 14px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app .queued-text-editor textarea {
+  width: 100%;
+  min-height: 90px;
+  max-height: 180px;
+  margin: 0;
+}
+.app .queued-text-editor .queue-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.app .queue-editor-actions button {
+  min-height: 36px;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .app .compact-queue .queue-entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app .compact-queue .queue-actions {
+    grid-column: 1;
+    grid-row: 3;
+    justify-content: flex-end;
+  }
+  .app .compact-queue .queue-actions > button,
+  .app .queue-entry-menu summary {
+    min-height: 40px;
+  }
+  .app .compact-queue ol {
+    max-height: 120px;
+  }
+}

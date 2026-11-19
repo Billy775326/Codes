@@ -34,6 +34,14 @@
 
 ### Changed
 
+- Keep queued follow-ups in a compact card above the composer, group editing under message actions, and edit waiting text in the input area while preserving the original draft. Editing pauses the queue; saving does not send it or alter its model, permissions, or attachments.
+
+- Replace the composer Code dropdown with an explicit Codex permissions menu for Read only, Ask for approval, and Full access. Apply both sandbox and approval policies to subsequent tasks; keep Plan available through `/plan` and a visible exit marker.
+
+- Unify the composer focus border and control alignment, keep the model picker outside clipping bounds, and place idle project/delivery/keyboard hints on one footer row. Preserve full task-delivery guidance during active or queued work.
+
+- Organize the settings dialog into appearance and interaction groups with a fixed header/footer, scrollable phone layout, optional shortcut details, and immediate chat/code font previews. Preserve existing defaults and preferences, and report browser storage failures.
+
 - Show Copy, Reply and Branch once per turn below its last loaded assistant reply, remove empty toolbar space from progress messages, and tighten spacing around command summaries.
 
 - Increase workspace text, line spacing and controls with fixed readable defaults. Use softer dark gray surfaces, clearer secondary text and two-row controls for narrow composers. Retire the preview Display size option and ignore its saved value while preserving other browser preferences.

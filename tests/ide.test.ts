@@ -360,3 +360,35 @@ it('streams native plan text but uses the final completed item as canonical cont
     'Canonical revised plan',
   );
 });
+
+for (const [permission, sandboxPolicy, approvalPolicy] of [
+  ['read-only', { type: 'readOnly' }, 'on-request'],
+  ['workspace-write', { type: 'workspaceWrite', networkAccess: false }, 'on-request'],
+  ['danger-full-access', { type: 'dangerFullAccess' }, 'never'],
+] as const) {
+  it(`applies ${permission} to native creation and subsequent turns, then restores read-only`, async () => {
+    const { service, project } = await fixture();
+    const spy = vi.spyOn(service.driver, 'call');
+    const thread = await service.create(project.id, { permission });
+    expect(spy.mock.calls.find(([method]) => method === 'thread/start')![1]).toMatchObject({
+      sandbox: permission,
+      approvalPolicy,
+    });
+    await service.send(thread.id, randomUUID(), 'Permission fixture', { permission });
+    await until(() => thread.state === 'completed');
+    expect(spy.mock.calls.find(([method]) => method === 'turn/start')![1]).toMatchObject({
+      sandboxPolicy: {
+        ...sandboxPolicy,
+        ...(permission === 'workspace-write' ? { writableRoots: [project.path] } : {}),
+      },
+      approvalPolicy,
+    });
+    await service.send(thread.id, randomUUID(), 'Restore sandbox', { permission: 'read-only' });
+    await until(() => thread.state === 'completed');
+    expect(spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)![1]).toMatchObject({
+      sandboxPolicy: { type: 'readOnly' },
+      approvalPolicy: 'on-request',
+    });
+    expect(thread.settings.permission).toBe('read-only');
+  });
+}

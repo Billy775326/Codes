@@ -10,7 +10,7 @@ A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interfa
 - Native Codex conversations, streamed assistant text, and turn-level work history with intermediate commentary and tool activity collapsed after completion, visible failure counts, and the final answer and edited-files card outside.
 - Searchable, paginated conversation navigation with native rename, archive, and restore controls.
 - Command, file, and turn-scoped permission approvals; proactive native questions in Code and Plan, with choices, custom answers, secret inputs, and explicit skipping for optional questions.
-- Quoted follow-up drafts, durable FIFO queues, immediate native steering, and conversation branches through completed turns.
+- Quoted follow-up drafts, compact durable FIFO queue cards, immediate native steering, and conversation branches through completed turns. Edit waiting text in the composer area without replacing a separate unsent draft; editing pauses the queue until you resume it.
 - Native Plan/Code modes, model-specific reasoning effort, task-plan steps, inline/separate code reviews, and session/context-token status.
 - A browser workspace with persistent desktop project/conversation navigation, central chat, right-side file/change previews, larger text and controls, and dark/light/system themes.
 - IDE-style model/reasoning controls, edited-file cards, questions, approvals and follow-up actions within that Web layout.
@@ -77,7 +77,7 @@ ssh -L 6670:127.0.0.1:6670 you@your-linux-host
 
 Then open `http://127.0.0.1:6670` on your computer. Phone access requires a private HTTPS reverse proxy or private network with HTTPS. Set `CODES_PUBLIC_ORIGIN` to the exact browser origin and preserve its `Host` header when proxying. See [operations](docs/operations.md).
 
-This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Workspace write** explicitly when a task should edit files.
+This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Ask for approval** to edit workspace files with approval for external access. **Full access** removes file/network sandbox restrictions and approval prompts on the server. The composer permission menu applies to the next task, preserves the current task and existing queues, and does not modify global CLI configuration. Use `/plan` to toggle native Plan mode; its visible Plan marker exits back to Code.
 
 ## Configuration
 

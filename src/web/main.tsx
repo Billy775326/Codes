@@ -1,3 +1,4 @@
+import { permissionLabel, permissionPresets } from '../shared/permissions';
 import React, {
   memo,
   useCallback,
@@ -61,6 +62,8 @@ import './interactions.css';
 import './workflow.css';
 import './style.css';
 import './workspace.css';
+import './preferences.css';
+import './composer.css';
 
 const labels: Record<string, string> = {
   idle: 'Ready',
@@ -89,8 +92,10 @@ const save = (key: string, value: string) => {
     }
     if (value) localStorage.setItem(key, value);
     else localStorage.removeItem(key);
+    return true;
   } catch {
-    /* Private browsing can disable draft storage. */
+    // Storage may be unavailable; preference callers surface the failed save.
+    return false;
   }
 };
 const draftKey = (projectId: string, threadId: string) =>
@@ -269,19 +274,23 @@ function App() {
           : 'enter',
         review: value.review === 'detached' ? 'detached' : 'inline',
         theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
+        chatFontSize: [16, 18, 20].includes(value.chatFontSize) ? value.chatFontSize : undefined,
+        codeFontSize: [12, 14, 16].includes(value.codeFontSize) ? value.codeFontSize : undefined,
       };
     } catch {
       return { followUp: 'queue', enter: 'enter', review: 'inline' };
     }
   });
+  const [preferencesError, setPreferencesError] = useState('');
   const [steerReceipt, setSteerReceipt] = useState<{ operationId: string; text: string }>();
   const threadRef = useRef(threadId);
   threadRef.current = threadId;
   const modelControl = useRef<HTMLSelectElement>(null);
   const effortControl = useRef<HTMLSelectElement>(null);
-  const permissionControl = useRef<HTMLSelectElement>(null);
+  const permissionControl = useRef<HTMLDetailsElement>(null);
   const [settings, setSettings] = useState<Settings>({ permission: 'read-only' });
   const [draft, setDraft] = useState('');
+  const [queueEditing, setQueueEditing] = useState(false);
   const draftRevision = useRef(0);
   const draftValue = useRef(draft);
   draftValue.current = draft;
@@ -1246,7 +1255,12 @@ function App() {
     {
       name: '/approve',
       detail: 'Choose task permissions',
-      run: () => permissionControl.current?.focus(),
+      run: () => {
+        if (permissionControl.current && !active && !busy && !loadingConversation) {
+          permissionControl.current.open = true;
+          permissionControl.current.querySelector('summary')?.focus();
+        }
+      },
     },
     {
       name: '/ide-context',
@@ -1541,6 +1555,18 @@ function App() {
             ? 'dark'
             : 'light'
           : (preferences.theme ?? 'dark')
+      }
+      data-chat-font-size={preferences.chatFontSize}
+      data-code-font-size={preferences.codeFontSize}
+      style={
+        {
+          '--chat-font-size': preferences.chatFontSize
+            ? `${preferences.chatFontSize}px`
+            : undefined,
+          '--code-font-size': preferences.codeFontSize
+            ? `${preferences.codeFontSize}px`
+            : undefined,
+        } as React.CSSProperties
       }
       className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
     >
@@ -2142,6 +2168,17 @@ function App() {
               onCheck={reconcile}
               turnId={canSteer ? thread?.turnId : undefined}
               settings={thread?.settings}
+              onEditingChange={setQueueEditing}
+              onStop={
+                active && thread?.turnId
+                  ? () => {
+                      setBusy(true);
+                      void post(`/threads/${threadId}/interrupt`)
+                        .catch(notice)
+                        .finally(() => setBusy(false));
+                    }
+                  : undefined
+              }
             />
           )}
 
@@ -2178,7 +2215,7 @@ function App() {
               </button>
             </div>
           )}
-          {draft.startsWith('/') && !draft.includes('\n') && (
+          {!queueEditing && draft.startsWith('/') && !draft.includes('\n') && (
             <div className="slash-commands" role="group" aria-label="Commands">
               {commands
                 .filter((entry) => entry.name.startsWith(draft.split(/\s+/)[0] ?? ''))
@@ -2190,7 +2227,10 @@ function App() {
                 ))}
             </div>
           )}
-          <div className={`composer ${active ? 'is-active' : ''}`}>
+          <div
+            className={`composer ${active ? 'is-active' : ''}`}
+            style={{ display: queueEditing ? 'none' : undefined }}
+          >
             {attachments.length > 0 && (
               <div className="attachments">
                 {attachments.map((a) => (
@@ -2265,34 +2305,48 @@ function App() {
                 <Icon name="plus" size={17} />
               </button>
 
-              <select
-                aria-label="Mode"
-                value={settings.mode ?? 'default'}
+              <PanelMenu
+                label="Codex permissions"
+                controller={permissionControl}
+                className="permission-menu"
                 disabled={active || busy || loadingConversation || !modes.length}
-                onChange={(event) =>
-                  setSettings({ ...settings, mode: event.target.value as Settings['mode'] })
+                trigger={
+                  <>
+                    <span>{permissionLabel(settings.permission)}</span>
+                    <Icon name="chevron" size={11} />
+                  </>
                 }
               >
-                {modes
-                  .filter((entry) => entry.mode)
-                  .map((entry) => (
-                    <option key={entry.mode} value={entry.mode}>
-                      {entry.mode === 'plan' ? 'Plan' : 'Code'}
-                    </option>
+                <strong>Codex permissions</strong>
+                <p>
+                  Applies to the next task in this conversation. Server configuration is unchanged.
+                </p>
+                <div role="group" aria-label="Permission presets">
+                  {permissionPresets.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      aria-pressed={settings.permission === preset.id}
+                      disabled={active || busy || loadingConversation}
+                      data-close-menu
+                      onClick={() => setSettings({ ...settings, permission: preset.id })}
+                    >
+                      <span>{preset.label}</span>
+                      <small>{preset.description}</small>
+                    </button>
                   ))}
-              </select>
-              <select
-                aria-label="Permissions"
-                ref={permissionControl}
-                value={settings.permission}
-                onChange={(e) =>
-                  setSettings({ ...settings, permission: e.target.value as Settings['permission'] })
-                }
-                disabled={active || busy || loadingConversation}
-              >
-                <option value="read-only">Read only</option>
-                <option value="workspace-write">Workspace write</option>
-              </select>
+                </div>
+              </PanelMenu>
+              {settings.mode === 'plan' && (
+                <button
+                  className="plan-mode"
+                  aria-label="Exit Plan mode"
+                  disabled={active || busy || loadingConversation}
+                  onClick={() => setSettings({ ...settings, mode: 'default' })}
+                >
+                  Plan ×
+                </button>
+              )}
               <div className="toolbar-spacer" />
               <PanelMenu
                 label="Model and reasoning"
@@ -2408,7 +2462,7 @@ function App() {
                   <button
                     className="send-button"
                     aria-label="Send message"
-                    title="Send message"
+                    title={deliveryHelp}
                     onClick={() => void send()}
                     disabled={
                       connection !== 'Connected' ||
@@ -2431,25 +2485,12 @@ function App() {
               </div>
             </div>
           </div>
-          <div className="composer-delivery-help" id="message-delivery-help">
-            <span>{deliveryHelp}</span>
-            {active && (
-              <button
-                type="button"
-                disabled={deliveryMode === 'queue' ? addBlocked : queueBlocked}
-                title={
-                  deliveryMode === 'queue'
-                    ? 'Apply this draft to the running task; accepted additions cannot be edited'
-                    : 'Wait for a new turn; waiting text remains editable'
-                }
-                onClick={() => followUp(true)}
-              >
-                {deliveryMode === 'queue' ? 'Add now instead' : 'Queue instead'}
-              </button>
-            )}
-          </div>
-          <div className="composer-hint work-location">
+          <div
+            className={`composer-footer ${active || thread?.queue?.items.length ? 'has-delivery-status' : ''}`}
+            style={{ display: queueEditing ? 'none' : undefined }}
+          >
             <button
+              className="composer-location"
               onClick={() => {
                 setSidebar(true);
                 requestAnimationFrame(() =>
@@ -2459,15 +2500,47 @@ function App() {
               title="Choose project"
             >
               <Icon name="monitor" size={13} />
-              Work locally<span>· {project?.name ?? 'Choose project'}</span>
+              <span className="composer-location-label">Work locally</span>
+              <span className="composer-project">{project?.name ?? 'Choose project'}</span>
               <Icon name="chevron" size={10} />
             </button>
-            <span>
+            <div className="composer-delivery-help" id="message-delivery-help">
+              {active || thread?.queue?.items.length ? (
+                <span>{deliveryHelp}</span>
+              ) : (
+                <span>
+                  <span className="composer-idle-label">Send starts a new turn.</span>
+                  <span className="composer-mobile-label" aria-hidden="true">
+                    New turn
+                  </span>
+                  <span className="composer-scope-detail">
+                    {' '}
+                    Edit this draft before sending; sent history stays unchanged.
+                  </span>
+                </span>
+              )}
+              {active && (
+                <button
+                  type="button"
+                  disabled={deliveryMode === 'queue' ? addBlocked : queueBlocked}
+                  title={
+                    deliveryMode === 'queue'
+                      ? 'Apply this draft to the running task; accepted additions cannot be edited'
+                      : 'Wait for a new turn; waiting text remains editable'
+                  }
+                  onClick={() => followUp(true)}
+                >
+                  {deliveryMode === 'queue' ? 'Add now instead' : 'Queue instead'}
+                </button>
+              )}
+            </div>
+            <span className="composer-keyboard-hint">
               {active
                 ? 'Task continues with this page closed'
-                : preferences.enter === 'enter'
-                  ? 'Enter to send'
-                  : 'Ctrl/Cmd+Enter to send'}
+                : preferences.enter === 'cmdAlways' ||
+                    (preferences.enter === 'cmdIfMultiline' && draft.includes('\n'))
+                  ? `Ctrl/Cmd+Enter to ${thread?.queue?.items.length ? 'queue' : 'send'}`
+                  : `Enter to ${thread?.queue?.items.length ? 'queue' : 'send'}`}
             </span>
           </div>
         </div>
@@ -2475,10 +2548,14 @@ function App() {
       {dialog === 'preferences' && (
         <PreferencesDialog
           value={preferences}
+          saveError={preferencesError}
           close={() => setDialog(undefined)}
           change={(value) => {
             setPreferences(value);
-            save('codes.preferences', JSON.stringify(value));
+            const stored = save('codes.preferences', JSON.stringify(value));
+            setPreferencesError(
+              stored ? '' : 'Changes apply now, but this browser could not save them.',
+            );
           }}
         />
       )}
