@@ -100,7 +100,8 @@ export class Driver extends EventEmitter {
     const child = spawn(binary, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
-      ...(this.writeBoundary ? { cwd: this.writeBoundary.root } : {}),
+      // Native cwd grants workspace access; the source simulator must resolve its loader in the checkout.
+      ...(this.mode === 'codex' && this.writeBoundary ? { cwd: this.writeBoundary.root } : {}),
       env: { ...process.env, CODES_MOCK_STATE_FILE: this.options.stateFile },
     });
     this.child = child;
