@@ -40,6 +40,13 @@ function state(raw: any): State {
   return raw?.type === 'systemError' ? 'failed' : raw?.type === 'notLoaded' ? 'unknown' : 'idle';
 }
 
+const nativeStatus = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('notLoaded') }),
+  z.object({ type: z.literal('idle') }),
+  z.object({ type: z.literal('systemError') }),
+  z.object({ type: z.literal('active'), activeFlags: z.array(z.string()) }),
+]);
+
 export class Service {
   readonly events = new Events();
   private cache = new Map<string, Thread>();
@@ -125,7 +132,10 @@ export class Service {
         if (thread) thread.queue = state;
         this.events.publish('queue', state, id);
         const summary = store.thread(id);
-        if (summary) this.events.publish('summary', summary, id);
+        if (summary) {
+          if (thread) Object.assign(thread, summary);
+          this.events.publish('summary', summary, id);
+        }
       },
     );
     driver.on('notification', (event) => this.notification(event));
@@ -203,6 +213,27 @@ export class Service {
     this.events.publish('summary', updated, id);
     this.events.publish('state', { ...change, managementPending: updated.managementPending }, id);
     return updated;
+  }
+  private observeStatus(id: string, raw: unknown) {
+    const status = nativeStatus.safeParse(raw);
+    const saved = this.store.thread(id);
+    if (!status.success || !saved || saved.executionPending) return;
+    const cached = this.cache.get(id);
+    if (cached?.actions.some((a) => ['pending', 'responding'].includes(a.status))) return;
+    const next =
+      status.data.type === 'notLoaded'
+        ? ['running', 'waitingInput', 'waitingApproval'].includes(saved.state)
+          ? 'unknown'
+          : saved.state
+        : status.data.type === 'idle' && terminal(saved.state)
+          ? saved.state
+          : state(status.data);
+    if (next === saved.state) return;
+    this.metadataChanged(id);
+    this.store.saveThread({ ...saved, state: next }, saved.settings);
+    if (cached) cached.state = next;
+    this.events.publish('summary', this.store.thread(id), id);
+    this.events.publish('state', { state: next }, id);
   }
   async list(projectId: string) {
     await this.conversations(projectId, { limit: 30 });
@@ -293,8 +324,10 @@ export class Service {
               'The conversation belongs to another project.',
               403,
             );
-          if ((this.metadataRevisions.get(raw.id) ?? 0) <= readRevision)
+          if ((this.metadataRevisions.get(raw.id) ?? 0) <= readRevision) {
             this.observeConversation(raw.id, { title, archived });
+            this.observeStatus(raw.id, raw.status);
+          }
         }
         const summary = this.store.thread(raw.id)!;
         if (
@@ -575,9 +608,10 @@ export class Service {
     this.project(saved.projectId);
     const page = await this.history(id);
     const pending = this.store.active(id);
+    const metadata = this.store.thread(id)!;
     const thread: Thread = {
-      ...saved,
-      state: pending ? 'unknown' : page.state,
+      ...metadata,
+      state: metadata.executionPending ? 'unknown' : page.state,
       messages: page.messages,
       turns: page.turns,
       actions: [],
@@ -594,6 +628,13 @@ export class Service {
       queue: this.store.queue.state(id),
     };
     await this.remember(thread);
+    // A history read can establish an imported conversation's terminal state.
+    // Retain concurrent title/archive changes and publish only its small summary.
+    const latest = this.store.thread(id)!;
+    this.metadataChanged(id);
+    this.store.saveThread({ ...latest, state: thread.state }, latest.settings);
+    Object.assign(thread, this.store.thread(id));
+    this.events.publish('summary', this.store.thread(id), id);
     return thread;
   }
   async history(id: string, continuation?: string) {
@@ -1482,31 +1523,14 @@ export class Service {
   }
   private boundary(thread: Thread) {
     this.syncQueue(thread);
-    const previous = this.store.thread(thread.id);
-    // The first prompt also supplies a title. Protect it from older thread/list replies.
-    if (previous && (previous.title !== thread.title || !!previous.archived !== !!thread.archived))
-      this.metadataChanged(thread.id);
+    // Protect lifecycle state and first-prompt titles from older thread/list replies.
+    this.metadataChanged(thread.id);
     this.store.saveThread(thread, thread.settings);
-    const { id, projectId, title, state, updatedAt } = thread;
+    const { id, title, state, updatedAt } = thread;
     thread.steering = this.store.steers(id);
-    thread.executionPending = !!thread.pending || !!thread.steering.length;
-    thread.managementPending = !!this.store.pendingManagement(id);
-    this.events.publish(
-      'summary',
-      {
-        id,
-        projectId,
-        title,
-        state,
-        updatedAt,
-        archived: thread.archived ?? false,
-        forkedFromId: thread.forkedFromId,
-        queueCount: this.store.queue.count(id),
-        executionPending: thread.executionPending,
-        managementPending: thread.managementPending,
-      },
-      id,
-    );
+    const summary = this.store.thread(id)!;
+    Object.assign(thread, summary);
+    this.events.publish('summary', summary, id);
     this.events.publish(
       'state',
       {
@@ -1545,6 +1569,10 @@ export class Service {
   private notification(event: any) {
     if (!record(event.params)) return;
     const p = event.params;
+    if (event.method === 'thread/status/changed' && typeof p.threadId === 'string') {
+      this.observeStatus(p.threadId, p.status);
+      return;
+    }
     if (
       event.method === 'thread/name/updated' &&
       typeof p.threadId === 'string' &&
@@ -1856,7 +1884,9 @@ export class Service {
       (a) => a.status === 'pending' || a.status === 'responding',
     );
     thread.actions.push(action);
-    thread.state = kind === 'questions' ? 'waitingInput' : 'waitingApproval';
+    thread.state = thread.actions.some((a) => a.kind !== 'questions')
+      ? 'waitingApproval'
+      : 'waitingInput';
     this.boundary(thread);
   }
   async file(projectId: string, path: string): Promise<FileContent> {

@@ -67,32 +67,6 @@
   overflow: auto;
   flex: 1;
 }
-.thread-link {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 11px 12px;
-  border-radius: 6px;
-  text-align: left;
-  color: #93949e;
-  font-size: 12px;
-  min-height: 39px;
-  margin: 2px 0;
-}
-.thread-link > span:nth-child(2) {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.thread-link:hover {
-  background: #ffffff03;
-  color: #ccc;
-}
-.thread-link.active {
-  background: #ffffff06;
-  color: #ded9eb;
-}
 .status-dot {
   width: 5px;
   height: 5px;

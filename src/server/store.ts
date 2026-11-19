@@ -90,6 +90,15 @@ export class Store {
     ).map((row) => this.summary(row));
   }
   summary(row: any): Summary {
+    const execution = this.db
+      .prepare(
+        `
+      SELECT count(*) AS count, coalesce(max(state='unknown'),0) AS unknown_result
+      FROM operations WHERE thread_id=? AND kind IN ('send','review','steer')
+        AND state IN ('dispatching','acknowledged','unknown')
+    `,
+      )
+      .get(row.id) as { count: number; unknown_result: number };
     return {
       id: row.id,
       projectId: row.project_id,
@@ -98,9 +107,10 @@ export class Store {
       updatedAt: row.updated_at,
       archived: !!row.archived,
       forkedFromId: row.forked_from_id ?? undefined,
-      queueCount: this.queue.count(row.id),
+      ...this.queue.summary(row.id),
+      executionUnknown: !!execution.unknown_result,
       managementPending: !!this.pendingManagement(row.id),
-      executionPending: !!this.active(row.id) || !!this.steers(row.id).length,
+      executionPending: execution.count > 0,
     };
   }
   thread(id: string): (Summary & { settings: Settings }) | undefined {

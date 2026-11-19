@@ -852,3 +852,96 @@ it('holds additional conversation queues when all four native execution slots ar
   expect(service.store.activeCount()).toBeLessThanOrEqual(4);
   expect(service.store.queue.get(ids[4]!)?.state).not.toBe('failed');
 });
+
+it('observes native sidebar status without treating idle or unloaded as a terminal receipt', async () => {
+  const { service, thread } = await fixture();
+  const notify = (status: unknown) =>
+    service.driver.emit('notification', {
+      method: 'thread/status/changed',
+      params: { threadId: thread.id, status },
+    });
+  const updatedAt = service.store.thread(thread.id)!.updatedAt;
+  notify({ type: 'active', activeFlags: ['waitingOnApproval'] });
+  expect(service.store.thread(thread.id)?.state).toBe('waitingApproval');
+  notify({ type: 'active', activeFlags: ['waitingOnUserInput'] });
+  expect(service.store.thread(thread.id)?.state).toBe('waitingInput');
+  notify({ type: 'idle' });
+  expect(service.store.thread(thread.id)?.state).toBe('idle');
+  expect(service.store.thread(thread.id)?.updatedAt).toBe(updatedAt);
+  notify({ type: 'active', activeFlags: 'malformed' });
+  expect(service.store.thread(thread.id)?.state).toBe('idle');
+  await service.send(thread.id, randomUUID(), '[hold] Sidebar status fixture', thread.settings);
+  notify({ type: 'idle' });
+  expect(service.store.thread(thread.id)).toMatchObject({
+    state: 'running',
+    executionPending: true,
+  });
+  await service.interrupt(thread.id);
+  await until(() => thread.state === 'interrupted');
+  notify({ type: 'notLoaded' });
+  expect(service.store.thread(thread.id)?.state).toBe('interrupted');
+  notify({ type: 'idle' });
+  expect(service.store.thread(thread.id)?.state).toBe('interrupted');
+  service.store.begin('uncertain', thread.id, 'send', {});
+  service.store.update('uncertain', 'unknown');
+  notify({ type: 'active', activeFlags: [] });
+  expect(service.store.thread(thread.id)).toMatchObject({
+    state: 'interrupted',
+    executionUnknown: true,
+  });
+});
+
+it('does not let delayed native list status overwrite a newer completion event', async () => {
+  const { service, project, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  let captured!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>((resolve) => {
+    captured = resolve;
+  });
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
+    const value = await call(method, params, timeout);
+    if (method === 'thread/list') {
+      for (const entry of value.data)
+        if (entry.id === thread.id) entry.status = { type: 'active', activeFlags: [] };
+      captured();
+      await held;
+    }
+    return value;
+  });
+  const listing = service.conversations(project.id);
+  await started;
+  await service.send(thread.id, randomUUID(), 'Finish while listing', thread.settings);
+  await until(() => thread.state === 'completed');
+  release();
+  const result = await listing;
+  expect(result.data.find((row) => row.id === thread.id)?.state).toBe('completed');
+  expect(service.store.thread(thread.id)?.state).toBe('completed');
+});
+
+it('retains history-established imported outcomes through list refresh without clearing unknown receipts', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', { cwd: project.path, count: 2 });
+  await service.conversations(project.id);
+  const thread = await service.read(seeded.thread.id);
+  expect(thread.state).toBe('completed');
+  expect(service.store.thread(thread.id)?.state).toBe('completed');
+  expect(
+    (await service.conversations(project.id)).data.find((row) => row.id === thread.id)?.state,
+  ).toBe('completed');
+  const next = await service.driver.call('test/seed', { cwd: project.path, count: 2 });
+  await service.conversations(project.id);
+  service.store.begin('unknown-imported-task', next.thread.id, 'send', {});
+  service.store.update('unknown-imported-task', 'unknown');
+  expect((await service.read(next.thread.id)).state).toBe('unknown');
+  expect(service.store.thread(next.thread.id)).toMatchObject({
+    state: 'unknown',
+    executionUnknown: true,
+  });
+  expect(
+    (await service.conversations(project.id)).data.find((row) => row.id === next.thread.id)?.state,
+  ).toBe('unknown');
+});

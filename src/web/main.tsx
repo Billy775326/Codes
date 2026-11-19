@@ -585,6 +585,9 @@ function App() {
       executionPending,
       forkedFromId,
       queueCount,
+      queuePaused,
+      queueIssue,
+      executionUnknown,
     } = value;
     const summary: Summary = {
       id,
@@ -597,6 +600,9 @@ function App() {
       executionPending,
       forkedFromId,
       queueCount,
+      queuePaused,
+      queueIssue,
+      executionUnknown,
     };
     setThreads((list) => [summary, ...list.filter((row) => row.id !== summary.id)].slice(0, 200));
     setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
@@ -1625,6 +1631,8 @@ function App() {
           projectId={projectId}
           selectedId={threadId}
           updates={threads}
+          connection={connection}
+          onReconnect={() => setRetry((n) => n + 1)}
           disabled={busy}
           onSelect={select}
           onUpdated={conversationUpdated}

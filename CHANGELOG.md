@@ -36,6 +36,8 @@
 
 ### Changed
 
+- Reorganize conversation navigation into Chats / Archived and readable title/status/time rows. Show approvals, questions, uncertain results and queue pause/failure conditions; retain saved states during disconnection and refresh the current list page when live updates resume. Reconcile validated native status metadata without treating idle/unloaded as completion or clearing uncertain receipts.
+
 - Expand chat text sizes to 12–24px and code text sizes to 10–20px in 1px steps. Preview immediately and retain new choices after reload, alongside existing choices and Default.
 
 - Reduce default conversation text to 15px, workspace text to 14px, and desktop composer text to 15px. Retain 16px phone input text and existing explicit chat/code size preferences.
@@ -60,6 +62,8 @@
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 
 ### Fixed
+
+- Retain history-confirmed outcomes for imported conversations when refreshing the sidebar, preserving uncertain execution receipts and concurrent title/archive updates.
 
 - Compress large JSON responses when supported and declare their exact transfer length. Let progressing read downloads finish beyond 35 seconds, with a 35-second inactivity deadline and a two-minute overall bound, instead of repeatedly discarding partial conversation history. Keep write deadlines and duplicate-execution protection unchanged; interrupted downloads remain retryable.
 
