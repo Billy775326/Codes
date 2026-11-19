@@ -17,10 +17,7 @@ import { application } from './http.js';
 
 const directory = resolve(process.env.CODES_DATA_DIR ?? '.local');
 mkdirSync(directory, { recursive: true, mode: 0o700 });
-const writeBoundary = taskWriteBoundary(
-  resolve(import.meta.dirname, '../..'),
-  process.env.CODES_TASK_WRITE_ROOT,
-);
+const writeBoundary = taskWriteBoundary(directory, process.env.CODES_TASK_WRITE_ROOT);
 const lock = join(directory, 'server.lock');
 if (existsSync(lock)) {
   const pid = Number(readFileSync(lock, 'utf8'));
