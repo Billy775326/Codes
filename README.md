@@ -23,7 +23,7 @@ The owner-provided V3 SVG identity is active in navigation, sign-in, and the fav
 
 ## What is implemented
 
-- Projects backed by existing directories on the host.
+- Projects backed by existing server directories, with lightweight single/multiple-project navigation, per-project last-conversation views, and server-verified conversation/file ownership. Missing directories retain history and offer explicit recovery. See [project and conversation navigation](docs/session-navigation-proposal.md).
 - Native Codex conversations, streamed assistant text, and turn-level work history with intermediate commentary and tool activity collapsed after completion, visible failure counts, and the final answer and edited-files card outside.
 - Searchable, paginated conversation navigation with task/approval/question status, queue conditions, local update times, and native rename, archive, and restore controls. See [sidebar behavior](docs/conversation-sidebar.md).
 - Native **Approve for me** permissions with workspace sandboxing, separate from Full access; live reviewer outcomes and rationale when supplied by Codex.
@@ -151,7 +151,7 @@ Both pilots are excluded from CI and the default test command. Unexpected approv
 ## Documentation
 
 - [Architecture and decisions](docs/architecture.md)
-- [Conversation-first navigation proposal and audit](docs/session-navigation-proposal.md) (proposal; not implemented)
+- [Project and conversation navigation](docs/session-navigation-proposal.md)
 - [Interface structure and UX/DX/AX criteria](docs/interface-design.md)
 - [Small-scale acceptance and current evidence](docs/acceptance.md)
 - [Development milestones](docs/roadmap.md)

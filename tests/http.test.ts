@@ -495,8 +495,19 @@ it('uploads images separately from JSON, protects reads and dispatches image-onl
   ]);
   const json = JSON.stringify(snapshot);
   expect(json).not.toContain('data:image');
-  expect(json).not.toContain(directory);
+  expect(snapshot.context.project.path).toBe(project.path);
+  expect(json).not.toContain(join(directory, 'images'));
   expect(json.length).toBeLessThan(100_000);
+  await service.driver.stop();
+  const offline = await fetch(origin + '/api/threads/' + thread.id + '/snapshot', {
+    headers: { cookie },
+  });
+  expect(offline.status).toBe(200);
+  const retained = await offline.json();
+  expect(retained.context.project.id).toBe(project.id);
+  expect(retained.thread.messages.find((row: any) => row.kind === 'user').images).toEqual(
+    snapshot.thread.messages.find((row: any) => row.kind === 'user').images,
+  );
 });
 
 it('rejects fake image uploads, invalid names and oversized uploads without dispatching work', async () => {

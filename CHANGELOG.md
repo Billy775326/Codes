@@ -49,6 +49,8 @@
 
 ### Changed
 
+- Retain lightweight project + conversation navigation: show a directory label for one project, a selector for multiple projects, and one empty-state Add project action. Remember each project's last conversation/new-draft view while retaining independent text drafts, settings and background execution.
+
 - Organize navigation around project context, a conversation-view dropdown, compact status-aware rows, and workspace controls. Preserve archive and recovery actions without duplicate controls.
 - Apply the owner-provided Codes V3 logo to navigation, sign-in and the browser favicon using the original light/dark SVG assets.
 
@@ -78,6 +80,8 @@
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 
 ### Fixed
+
+- Bind conversation file previews and task working directories to server-verified project ownership, repairing stale browser project selections. Preserve history when a registered directory is missing, including after service restart; expose directory/file errors and explicit recovery, and pause queued work before claiming it.
 
 - Reconcile English/Chinese feature documentation, schema 4 migration notes, bounded history behavior, and owner-approved V3 logo status; keep proposed conversation-first navigation separate from implemented behavior.
 

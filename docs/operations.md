@@ -10,6 +10,14 @@ Native task transcripts and CLI authentication remain in the server user's Codex
 
 Completed/failed operation receipts are retained for 30 days. Completed/cancelled queue entries are also retained for 30 days. Failed and unknown queue entries remain available for review; remove a failed entry after correcting its cause. Unknown operations are retained until resolved. Treat the data directory and native Codex home as private user data. To back up, stop codes and back up both locations, preserving permissions. Schemas 1–3 are automatically backed up and migrated to schema 4 on startup, retaining queues and branch receipts while adding the review execution lease. See [migration and rollback](conversations.md#metadata-migration-and-rollback). There is no automatic restore tool; unsupported database versions are rejected rather than reset.
 
+## Project directory recovery
+
+The selected conversation's server-verified project supplies its working directory and file context. If it is missing or inaccessible, the UI keeps history and saved settings visible, disables new execution/filesystem actions, and offers **Retry directory**. Restore the registered canonical directory or its search permissions, then retry. Choosing another project starts or restores that project's own conversation; Codes does not move an existing transcript or silently substitute a directory.
+
+Waiting queues retain their entries and pause before dispatch when the directory is unavailable. After recovery, explicitly resume the queue. Stop remains available for an existing task. A configured `CODES_PROJECT_ROOT` that exactly matches an existing canonical registration can be absent during startup; history still opens. A new invalid startup path or registration reports an error instead of replacing the saved project.
+
+Filesystem errors distinguish `DIRECTORY_UNAVAILABLE` (409), `DIRECTORY_ACCESS` (403), `FILE_NOT_FOUND` (404), and `FILE_ACCESS` (403). Native ownership disagreements use `PROJECT_OWNERSHIP` (403). Native tool sandbox/approval policy remains separate. See [project and conversation navigation](session-navigation-proposal.md).
+
 ## Process lifecycle
 
 `SIGTERM` and `SIGINT` close the event streams, stop the child CLI, close SQLite, and remove the lock. A PID lock prevents two instances from using the same data directory. A stale lock is removed only when its process no longer exists. If a PID has been reused, inspect the lock and process manually rather than deleting an in-use lock.

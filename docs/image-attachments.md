@@ -36,3 +36,5 @@ Images have no automatic expiry, because queued tasks and native history can con
 ## Verification boundary
 
 Regression coverage uses synthetic images and the isolated simulator to check uploads, permissions, image-only dispatch, queue/steer payloads, history references, clipboard interaction, failure recovery, and responsive layout. The separate native smoke check reads image-input model metadata without sending a model prompt. These checks do not establish that a live model interpreted an image correctly; that requires a separately authorized model request.
+
+Conversation snapshots can include the registered project directory as ordinary workspace metadata. Private image-storage paths, image bytes and data URLs remain excluded; browser image references stay project-scoped after conversation navigation.

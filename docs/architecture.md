@@ -29,6 +29,8 @@ flowchart LR
 - `src/codex/driver.ts`: exact CLI version check, initialization, one child process, shutdown, and runtime epoch.
 - `src/server/service.ts`: project ownership, bounded native reads, execution leases, approvals, and reconciliation.
 - `src/server/store.ts`: SQLite metadata and durable operation receipts. Native conversation text remains in Codex history; a pending prompt is temporarily retained for recovery.
+- `src/server/project-context.ts`: asynchronous registered-directory health checks, separate from native history and permissions.
+- `src/web/project-navigation.ts`: bounded browser project-view memory; execution/settings remain server-owned.
 - `src/server/events.ts`: bounded replay ring and slow-client disconnection.
 - `src/server/http.ts`: authenticated same-origin API, SSE, and static assets.
 - `src/web/feed.ts`: snapshot/replay handshake, finite reconnect backoff, and stale-navigation cancellation.
@@ -85,6 +87,12 @@ Native turn lists omit item bodies; item hydration requests one item at a time s
 The historical display retains three native pages independently of the live cache; the 240-item budget is not a lifetime history limit. Pages evicted at either edge remain reachable through native cursors.
 
 History pages automatically use fewer turns when their combined items exceed the display budget. A single oversized turn still produces an explicit limit error. Very large native tool results can exceed the JSONL frame limit and close the runtime; use the CLI to inspect such conversations. The preview is designed around a small working set, not unlimited logs. Limits are implementation constraints, not measured throughput claims.
+
+## Project and conversation context
+
+SQLite schema 4 retains project registrations and conversation associations. Browser navigation stores at most 20 recent project views, separately from conversation drafts and server-backed settings. The native conversation header validates ownership; selected snapshots add bounded project/directory metadata, and conversation file APIs derive their directory from the thread ID. Project-level file APIs remain compatible for uncreated drafts and older callers.
+
+Directory health uses asynchronous filesystem checks. Missing or inaccessible directories do not erase history; new execution and filesystem access fail explicitly. Queues pause before claiming their next item. Existing configured registrations survive service startup with a missing path. These checks preserve directory context and native permissions rather than adding another tool authorization engine. See [project/conversation behavior](session-navigation-proposal.md).
 
 ## Compatibility and trust
 

@@ -1,7 +1,7 @@
 import { nativePermissions, permissionPresets } from '../src/shared/permissions.js';
 /** Metadata-only compatibility check. No account, prompt, command, or model execution. */
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Driver } from '../src/codex/driver.js';
@@ -41,6 +41,7 @@ try {
   assert.equal(mode.mode, 'plan');
   await service.driver.call('thread/settings/update', {
     threadId: thread.id,
+    cwd: project.path,
     collaborationMode: mode,
     sandboxPolicy: { type: 'readOnly' },
   });
@@ -102,8 +103,13 @@ try {
   const history = await service.history(thread.id);
   assert.equal(history.messages.length, 0);
   assert.equal(history.state, 'idle');
+  await rename(join(directory, 'project'), join(directory, 'project-moved'));
+  assert.equal((await service.conversationContext(thread.id)).directory.available, false);
+  assert.equal((await service.history(thread.id)).messages.length, 0);
+  await assert.rejects(service.create(project.id), { code: 'DIRECTORY_UNAVAILABLE' });
+  await rename(join(directory, 'project-moved'), join(directory, 'project'));
   console.log(
-    'PASS: CLI 0.167.0 initialization, model/reasoning/image-input metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all four sandbox/approval/reviewer presets with manual read-only restoration, and lazy empty history. No model requests.',
+    'PASS: CLI 0.167.0 initialization, model/reasoning/image-input metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all four sandbox/approval/reviewer presets with manual read-only restoration, lazy empty history, and missing-directory metadata/history recovery. No model requests.',
   );
 } finally {
   await service.close();

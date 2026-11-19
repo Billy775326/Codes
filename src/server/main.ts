@@ -58,7 +58,12 @@ const service = new Service(
     codeQuestions: process.env.CODES_CODE_QUESTIONS !== '0',
   }),
 );
-if (process.env.CODES_PROJECT_ROOT) await service.addProject(process.env.CODES_PROJECT_ROOT);
+if (process.env.CODES_PROJECT_ROOT) {
+  const configured = resolve(process.env.CODES_PROJECT_ROOT);
+  // Existing registrations must stay readable when a directory is temporarily absent.
+  if (!service.store.projects().some((project) => project.path === configured))
+    await service.addProject(configured);
+}
 const app = await application(service, {
   host,
   port,

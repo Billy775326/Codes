@@ -1,13 +1,13 @@
 # Conversation sidebar
 
-The sidebar manages native conversations for the selected project. It uses the existing task state, durable execution receipts and FIFO queue, with a lightweight metadata projection. It does not introduce a second execution state machine.
+The sidebar manages native conversations for the selected project. Each project remembers its last conversation or explicit new-draft view in this browser; switching retains independent conversation text drafts and server-backed settings. See [directory ownership and recovery](session-navigation-proposal.md). It uses the existing task state, durable execution receipts and FIFO queue, with a lightweight metadata projection. It does not introduce a second execution state machine.
 
 ## Layout
 
-1. Project context and New conversation.
+1. Project directory label for a single project, or a compact Project selector for multiple directories, followed by New conversation. Add project stays in Workspace actions; an empty installation has one direct Add project entry.
 2. A conversation-view dropdown (Chats / Archived) with Refresh, followed by title search.
 3. Date groups with title and update time on one row. Running, approval, question, failure, interrupted and uncertain states have a second line. Routine Ready / Done states stay in the accessible description. Queue conditions remain visible. Secondary operations live in each conversation's actions menu.
-4. Native Previous / Next pagination when needed. The footer contains connection status, Settings, and Workspace actions. Workspace actions holds Add project, Reconnect updates and Sign out; an empty workspace offers Add project directly. An interrupted connection exposes one direct reconnect button.
+4. Native Previous / Next pagination when needed. The footer contains connection status, Settings, and Workspace actions. Workspace actions holds Add project, Reconnect updates and Sign out; the empty conversation area offers the single Add project entry when no project is registered. An interrupted connection exposes one direct reconnect button.
 
 Settings appears in the footer when navigation is open, and in the conversation header when it is closed. The layout removes duplicate connection controls and routine state labels without removing recovery actions or archived conversations.
 

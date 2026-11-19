@@ -18,7 +18,11 @@ for (const width of [1440, 320]) {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('New conversation');
     if (width === 320)
       await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
-    await expect(page.getByLabel('Project', { exact: true })).toHaveCount(1);
+    await expect(
+      page
+        .getByLabel('Project', { exact: true })
+        .or(page.getByLabel('Current project', { exact: true })),
+    ).toHaveCount(1);
     await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
     await page.getByRole('button', { name: 'Add project', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });

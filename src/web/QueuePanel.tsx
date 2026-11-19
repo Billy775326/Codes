@@ -17,6 +17,7 @@ export function QueuePanel({
   settings,
   onEditingChange,
   onStop,
+  dispatchDisabled = false,
 }: {
   threadId: string;
   projectId: string;
@@ -24,6 +25,7 @@ export function QueuePanel({
   settings?: Settings;
   onEditingChange: (editing: boolean) => void;
   onStop?: () => void;
+  dispatchDisabled?: boolean;
   state: QueueState;
   onChange: (queue: QueueState) => void;
   onCheck: () => Promise<void>;
@@ -178,7 +180,12 @@ export function QueuePanel({
                 <div className="queue-actions">
                   {entry.state === 'queued' && turnId && (
                     <button
-                      disabled={busy || !settings || !sameSettings(entry.settings, settings)}
+                      disabled={
+                        busy ||
+                        dispatchDisabled ||
+                        !settings ||
+                        !sameSettings(entry.settings, settings)
+                      }
                       aria-label="Add queued message to current task"
                       title="Apply this waiting message to the running task; it stops being editable after acceptance"
                       onClick={() =>

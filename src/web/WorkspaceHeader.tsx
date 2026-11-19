@@ -86,6 +86,7 @@ export function WorkspaceHeader(props: Props) {
         </PanelMenu>
         <button
           aria-label="Browse files"
+          disabled={!props.hasProject || props.busy}
           aria-pressed={props.panel === 'files'}
           title="Browse files"
           className={'icon-button ' + (props.panel === 'files' ? 'selected' : '')}

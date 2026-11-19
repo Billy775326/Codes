@@ -12,6 +12,15 @@ export interface Project {
   name: string;
   path: string;
 }
+export interface DirectoryStatus {
+  available: boolean;
+  code?: 'DIRECTORY_UNAVAILABLE' | 'DIRECTORY_ACCESS';
+  message?: string;
+}
+export interface ProjectContext {
+  project: Project;
+  directory: DirectoryStatus;
+}
 export interface Settings {
   model?: string;
   effort?: string;
@@ -154,6 +163,7 @@ export interface Envelope {
 }
 export interface Snapshot {
   thread: Thread;
+  context?: ProjectContext;
   cursor: { seq: number; epoch: string };
 }
 export const limits = {

@@ -22,4 +22,6 @@ codes 是面向单用户的 Linux 自托管 Codex 网页工作台，电脑浏览
 
 当前标识为项目所有者提供的 V3 Logo，导航、登录与 favicon 已使用原始 SVG；详见[品牌说明](zh-CN/brand.md)。
 
+项目＋会话的双层结构继续保留：单项目显示目录名，多项目使用选择器；每个项目记住本浏览器最近会话或新建草稿视图。文件、附件和执行依据服务端确认的会话归属，切换不取消后台任务。目录失效时保留历史与配置，阻止新的文件访问和执行，恢复后使用 Retry directory；已登记目录失效也不妨碍服务重启查看历史。详见[项目与会话说明](session-navigation-proposal.md)。
+
 更多说明：[架构](architecture.md)、[验收标准](acceptance.md)、[开发里程碑](roadmap.md)、[待实现与待验收清单](requirements.md)、[运行与恢复](operations.md)。正式发版、发布标签和部署须由项目所有者另行确认。

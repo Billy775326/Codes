@@ -1,3 +1,4 @@
+import { projectViews, rememberProject } from './project-navigation';
 import { sameSettings } from '../shared/types';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
@@ -26,6 +27,7 @@ import type {
   Message,
   Operation,
   Project,
+  ProjectContext,
   Settings,
   Summary,
   System,
@@ -300,10 +302,30 @@ function App() {
   const [token, setToken] = useState('');
   const [system, setSystem] = useState<System>();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState(saved('codes.project'));
+  const views = useRef<Record<string, string>>({});
+  const recentProject = useRef<string | undefined>(undefined);
+  const [selection, setSelection] = useState(() => {
+    // Streaming renders must not repeatedly read browser storage.
+    views.current = projectViews(saved('codes.project-views'));
+    const projectId = saved('codes.project'),
+      explicitThread = saved('codes.thread');
+    const threadId = explicitThread || views.current[projectId] || '';
+    recentProject.current = !explicitThread && threadId ? projectId : undefined;
+    return { projectId, threadId };
+  });
+  const { projectId, threadId } = selection;
   const [threads, setThreads] = useState<Summary[]>([]);
-  const [threadId, setThreadId] = useState(saved('codes.thread'));
+  const [context, setContext] = useState<ProjectContext>();
   const [thread, setThread] = useState<Thread>();
+  const contextProjectId = threadId ? (thread?.id === threadId ? thread.projectId : '') : projectId;
+  const contextBase = threadId ? '/threads/' + threadId : '/projects/' + projectId;
+  const contextReady = !!contextProjectId && context?.project.id === contextProjectId;
+  const directoryBlocked = contextReady && !context.directory.available;
+  const remember = (owner: string, id: string) => {
+    if (!owner) return;
+    views.current = rememberProject(views.current, owner, id);
+    save('codes.project-views', JSON.stringify(views.current));
+  };
   const [models, setModels] = useState<Model[]>([]);
   const [autoReviewReady, setAutoReviewReady] = useState(false);
   const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
@@ -526,13 +548,33 @@ function App() {
       );
       setBusy(false);
       setAuth('login');
-    } else setError(message(e));
+    } else {
+      if (e instanceof ApiError && ['DIRECTORY_UNAVAILABLE', 'DIRECTORY_ACCESS'].includes(e.code))
+        setContext((current) =>
+          current?.project.id === projectRef.current
+            ? {
+                ...current,
+                directory: {
+                  available: false,
+                  code: e.code as 'DIRECTORY_UNAVAILABLE' | 'DIRECTORY_ACCESS',
+                  message: e.message,
+                },
+              }
+            : current,
+        );
+      setError(message(e));
+    }
   }, []);
   const images = useImageAttachments({
-    projectId,
+    projectId: contextProjectId,
     scope: auth + ':' + projectId + ':' + threadId,
     count: attachments.length,
-    disabled: auth !== 'ready' || !projectId || !!thread?.archived || !!thread?.managementPending,
+    disabled:
+      auth !== 'ready' ||
+      !contextReady ||
+      directoryBlocked ||
+      !!thread?.archived ||
+      !!thread?.managementPending,
     attach: (image: ImageAttachment) => {
       draftRevision.current++;
       setAttachments((list) =>
@@ -568,8 +610,7 @@ function App() {
       setSystem(system);
       setProjects(projects);
       if (!projects.some((p) => p.id === projectId)) {
-        setProjectId(projects[0]?.id ?? '');
-        setThreadId('');
+        setSelection((current) => ({ ...current, projectId: projects[0]?.id ?? '' }));
       }
       setAuth('ready');
     } catch (e) {
@@ -607,7 +648,9 @@ function App() {
   }, [auth]);
   useEffect(() => {
     setThreads([]);
-    setThread(undefined);
+    setThread((current) =>
+      current?.projectId === projectId && current.id === threadId ? current : undefined,
+    );
     setDirectory('');
     setFiles([]);
     fileRead.current?.abort();
@@ -626,6 +669,18 @@ function App() {
       });
     return () => controller.abort();
   }, [projectId, auth]);
+  useEffect(() => {
+    if (!projectId || threadId || auth !== 'ready') return;
+    const controller = new AbortController();
+    void request<ProjectContext>('/projects/' + projectId + '/context', {}, controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) setContext(value);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) notice(error);
+      });
+    return () => controller.abort();
+  }, [projectId, threadId, auth, retry]);
   useEffect(() => {
     if (!projectId || threadId || auth !== 'ready') return;
     const stream = new Feed<{ threads: Summary[]; cursor: { seq: number; epoch: string } }>(
@@ -659,14 +714,26 @@ function App() {
     };
   }, [projectId, threadId, auth, retry]);
   const select = useCallback(
-    (id: string) => {
-      setThread((current) => (current?.id === id ? current : undefined));
-      setThreadId(id);
+    (id: string, owner = projectRef.current, restore = false) => {
+      const changed = id !== threadRef.current || owner !== projectRef.current;
+      setThread((current) =>
+        current?.id === id && current.projectId === owner ? current : undefined,
+      );
+      recentProject.current = restore && id ? owner : undefined;
+      setSelection({ projectId: owner, threadId: id });
+      if (!id) remember(owner, '');
+      if (changed) {
+        setContext(undefined);
+        setFile(undefined);
+        setFiles([]);
+        setDirectory('');
+        setAttachments([]);
+      }
       setConnectionError('');
       returnToLatest();
       setDiffTurn('');
       setDiffPath('');
-      if (id !== threadRef.current) {
+      if (changed) {
         setPanel(null);
         fileRead.current?.abort();
       }
@@ -816,6 +883,27 @@ function App() {
     const stream = new Feed(
       threadId,
       (snapshot) => {
+        if (threadRef.current !== threadId) return;
+        if (recentProject.current && snapshot.thread.projectId !== recentProject.current) {
+          remember(recentProject.current, '');
+          recentProject.current = undefined;
+          setSelection((current) => ({ ...current, threadId: '' }));
+          setThread(undefined);
+          setContext(undefined);
+          setError('The saved conversation belongs to another project. Choose a conversation.');
+          return;
+        }
+        recentProject.current = undefined;
+        if (snapshot.thread.projectId !== projectId)
+          setSelection({ projectId: snapshot.thread.projectId, threadId });
+        if (snapshot.context) {
+          setContext(snapshot.context);
+          if (!snapshot.context.directory.available) {
+            setFile(undefined);
+            setFiles([]);
+          }
+        }
+        remember(snapshot.thread.projectId, snapshot.thread.id);
         deltas.clear();
         queueRevision.current++;
         setThread({ ...snapshot.thread, messages: snapshot.thread.messages.slice(-historyLimit) });
@@ -910,19 +998,33 @@ function App() {
       transcript.current.scrollTop = transcript.current.scrollHeight;
   }, [visibleMessages, thread?.actions, thread?.state, timelineLatest]);
   useEffect(() => {
-    if (!projectId || panel !== 'files') return;
+    if (!contextReady || directoryBlocked || panel !== 'files') return;
     const controller = new AbortController();
+    const owner = contextProjectId,
+      conversation = threadId;
     void request<typeof files>(
-      `/projects/${projectId}/files?path=${encodeURIComponent(directory)}`,
+      `${contextBase}/files?path=${encodeURIComponent(directory)}`,
       {},
       controller.signal,
     )
-      .then(setFiles)
+      .then((list) => {
+        if (
+          !controller.signal.aborted &&
+          owner === projectRef.current &&
+          conversation === threadRef.current
+        )
+          setFiles(list);
+      })
       .catch((e) => {
-        if (!controller.signal.aborted) notice(e);
+        if (
+          !controller.signal.aborted &&
+          owner === projectRef.current &&
+          conversation === threadRef.current
+        )
+          notice(e);
       });
     return () => controller.abort();
-  }, [projectId, directory, panel]);
+  }, [contextBase, contextReady, directoryBlocked, directory, panel]);
   const changeDraft = useCallback(
     (value: string) => {
       draftRevision.current++;
@@ -1086,8 +1188,8 @@ function App() {
     setError('');
   };
   const changeProject = (id: string) => {
-    select('');
-    setProjectId(id);
+    if (!threadId || thread?.projectId === projectId) remember(projectId, threadId);
+    select(views.current[id] || '', id, true);
     setPanel(null);
     setError('');
   };
@@ -1102,7 +1204,8 @@ function App() {
       settingsBlocked ||
       queueRequest ||
       !hasInput ||
-      !projectId ||
+      !contextReady ||
+      directoryBlocked ||
       loadingConversation ||
       connection !== 'Connected' ||
       thread?.archived ||
@@ -1235,19 +1338,31 @@ function App() {
     fileRead.current?.abort();
     const controller = new AbortController();
     fileRead.current = controller;
-    const owner = projectId;
+    if (!contextReady || directoryBlocked) return;
+    const owner = contextProjectId;
+    const conversation = threadId;
     setFile(undefined);
     try {
       const file = await request<FileContent>(
-        `/projects/${owner}/file?path=${encodeURIComponent(path)}`,
+        `${contextBase}/file?path=${encodeURIComponent(path)}`,
         {},
         controller.signal,
       );
-      if (controller.signal.aborted || owner !== projectRef.current) return;
+      if (
+        controller.signal.aborted ||
+        owner !== projectRef.current ||
+        conversation !== threadRef.current
+      )
+        return;
       setFile(file);
       setRange([1, Math.min(file.lines, 50)]);
     } catch (e) {
-      if (!controller.signal.aborted) notice(e);
+      if (
+        !controller.signal.aborted &&
+        owner === projectRef.current &&
+        conversation === threadRef.current
+      )
+        notice(e);
     }
   };
   const returnToComposer = () => {
@@ -1255,7 +1370,7 @@ function App() {
     requestAnimationFrame(() => composer.current?.focus());
   };
   const attach = () => {
-    if (!file || attachments.length >= 4) return;
+    if (!file || !contextReady || directoryBlocked || attachments.length >= 4) return;
     draftRevision.current++;
     setAttachments((list) => [
       ...list.filter((x) => x.kind === 'image' || x.path !== file.path),
@@ -1268,7 +1383,10 @@ function App() {
     !!thread?.pending ||
     !!thread?.steering?.length ||
     (!!thread && ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
-  const project = projects.find((x) => x.id === projectId);
+  const project =
+    context?.project.id === contextProjectId
+      ? context.project
+      : projects.find((x) => x.id === contextProjectId);
   const reviewMessage = useCallback(
     (item: Message, path?: string) => {
       setDiffTurn(item.turnId === thread?.turnId ? '' : item.turnId);
@@ -1342,7 +1460,8 @@ function App() {
     !!steerReceipt ||
     !!queueRequest ||
     !hasInput ||
-    !projectId ||
+    !contextReady ||
+    directoryBlocked ||
     loadingConversation ||
     !!thread?.archived ||
     !!thread?.managementPending;
@@ -1725,35 +1844,41 @@ function App() {
             <Icon name="close" />
           </button>
         </div>
-        <section className="workspace-project" aria-label="Project context">
-          <label className="project-select">
-            <Icon name="folder" />
-            <select
-              aria-label="Project"
-              disabled={busy}
-              value={projectId}
-              onChange={(e) => {
-                changeProject(e.target.value);
-              }}
-            >
-              {!projectId && <option value="">Choose a project</option>}
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {!projects.length && (
-            <button
-              className="add-project-empty"
-              aria-label="Add project"
-              onClick={() => setAdding(true)}
-            >
-              <Icon name="plus" size={16} /> Add project
-            </button>
-          )}
-        </section>
+        {!!projects.length && (
+          <section className="workspace-project" aria-label="Project context">
+            {projects.length === 1 ? (
+              <div
+                className="project-current"
+                role="group"
+                aria-label="Current project"
+                title={projects[0]!.path}
+              >
+                <Icon name="folder" />
+                <span>{projects[0]!.name}</span>
+              </div>
+            ) : (
+              <label
+                className="project-select"
+                title={projects.find((entry) => entry.id === projectId)?.path}
+              >
+                <Icon name="folder" />
+                <select
+                  aria-label="Project"
+                  disabled={busy}
+                  value={projectId}
+                  onChange={(event) => changeProject(event.target.value)}
+                >
+                  {!projectId && <option value="">Choose a project</option>}
+                  {projects.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </section>
+        )}
         <button
           aria-label="New conversation"
           className="new-conversation"
@@ -1848,18 +1973,35 @@ function App() {
           connection={connection}
           panel={panel}
           busy={busy}
-          hasProject={!!projectId}
+          hasProject={contextReady && !directoryBlocked}
           onNavigation={() => setSidebar(true)}
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
           onReview={() => setDialog('review')}
           onStatus={() => setDialog('status')}
-          onPanel={(kind) => setPanel(panel === kind ? null : kind)}
+          onPanel={(kind) => {
+            if (kind === 'diff' || (contextReady && !directoryBlocked))
+              setPanel(panel === kind ? null : kind);
+          }}
           onDraft={changeDraft}
           showStarters={!thread?.messages.length && !active}
         />
         {system?.runtime === 'mock' && (
           <div className="simulation-strip">Simulation · No model or command execution</div>
+        )}
+        {directoryBlocked && (
+          <div className="conversation-lock-banner directory-unavailable" role="alert">
+            <span>{context.directory.message}</span>
+            <button
+              disabled={busy}
+              onClick={() => {
+                setError('');
+                setRetry((value) => value + 1);
+              }}
+            >
+              Retry directory
+            </button>
+          </div>
         )}
         {thread?.forkedFromId && (
           <div className="branch-origin">
@@ -2062,7 +2204,7 @@ function App() {
                     activeIds={activeTurnIds}
                     render={(m, finalReply, changes, timestamp) => (
                       <MessageView
-                        projectId={projectId}
+                        projectId={contextProjectId}
                         key={m.id}
                         item={m}
                         actions={finalReply}
@@ -2111,7 +2253,7 @@ function App() {
                 {thread?.pending &&
                   !thread.messages.some((m) => m.clientId === thread.pending?.id) && (
                     <MessageView
-                      projectId={projectId}
+                      projectId={contextProjectId}
                       item={{
                         id: thread.pending.id,
                         turnId: '',
@@ -2241,7 +2383,8 @@ function App() {
           )}
           {thread?.queue && (
             <QueuePanel
-              projectId={projectId}
+              dispatchDisabled={!contextReady || directoryBlocked}
+              projectId={contextProjectId}
               key={threadId}
               threadId={threadId}
               state={thread.queue}
@@ -2330,7 +2473,7 @@ function App() {
                     <ImageAttachmentView
                       key={a.id}
                       image={a}
-                      projectId={projectId}
+                      projectId={contextProjectId}
                       remove={() => {
                         draftRevision.current++;
                         setAttachments((list) => list.filter((entry) => entry !== a));
@@ -2425,7 +2568,7 @@ function App() {
                   className="icon-button"
                   aria-label="Attach file context"
                   onClick={() => setPanel('files')}
-                  disabled={!projectId}
+                  disabled={!contextReady || directoryBlocked}
                 >
                   <Icon name="plus" size={17} />
                 </button>
@@ -2436,7 +2579,8 @@ function App() {
                   aria-label="Attach image"
                   title="Attach image"
                   disabled={
-                    !projectId ||
+                    !contextReady ||
+                    directoryBlocked ||
                     !!thread?.archived ||
                     !!thread?.managementPending ||
                     !!images.pending ||
@@ -2520,21 +2664,7 @@ function App() {
                     aria-label="Send message"
                     title={deliveryHelp + ' ' + deliveryShortcut}
                     onClick={() => void send()}
-                    disabled={
-                      connection !== 'Connected' ||
-                      busy ||
-                      !!images.pending ||
-                      settingsBlocked ||
-                      !hasInput ||
-                      !projectId ||
-                      loadingConversation ||
-                      !!receipt ||
-                      !!queueRequest ||
-                      !!steerReceipt ||
-                      !!thread?.queue?.items.length ||
-                      !!thread?.archived ||
-                      !!thread?.managementPending
-                    }
+                    disabled={deliveryBlocked || !!receipt || !!thread?.queue?.items.length}
                   >
                     <Icon name="arrow" size={18} />
                     <span className="action-label">Send</span>
@@ -2752,24 +2882,30 @@ function App() {
                   </>
                 )}
               </div>
-              <div className="file-list">
-                {files.map((f) => (
-                  <button
-                    className={file?.path === f.path ? 'active' : ''}
-                    key={f.path}
-                    onClick={() =>
-                      f.directory
-                        ? (setDirectory(f.path), setFile(undefined))
-                        : void openFile(f.path)
-                    }
-                  >
-                    <Icon name={f.directory ? 'folder' : 'file'} size={15} />
-                    {f.name}
-                    {f.directory && <Icon name="chevron" size={12} />}
-                  </button>
-                ))}
-                {!files.length && <p className="muted">No visible files.</p>}
-              </div>
+              {directoryBlocked ? (
+                <div className="panel-empty">
+                  <p>{context.directory.message}</p>
+                </div>
+              ) : (
+                <div className="file-list">
+                  {files.map((f) => (
+                    <button
+                      className={file?.path === f.path ? 'active' : ''}
+                      key={f.path}
+                      onClick={() =>
+                        f.directory
+                          ? (setDirectory(f.path), setFile(undefined))
+                          : void openFile(f.path)
+                      }
+                    >
+                      <Icon name={f.directory ? 'folder' : 'file'} size={15} />
+                      {f.name}
+                      {f.directory && <Icon name="chevron" size={12} />}
+                    </button>
+                  ))}
+                  {!files.length && <p className="muted">No visible files.</p>}
+                </div>
+              )}
               {file ? (
                 <div className="file-preview">
                   <div className="file-title">
@@ -2810,11 +2946,15 @@ function App() {
                           returnToComposer();
                         }
                       }}
-                      disabled={attachments.length >= 4}
+                      disabled={!contextReady || directoryBlocked || attachments.length >= 4}
                     >
                       Attach file
                     </button>
-                    <button className="primary" onClick={attach} disabled={attachments.length >= 4}>
+                    <button
+                      className="primary"
+                      onClick={attach}
+                      disabled={!contextReady || directoryBlocked || attachments.length >= 4}
+                    >
                       Attach selection
                     </button>
                   </div>

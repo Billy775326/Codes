@@ -227,9 +227,17 @@ export async function application(
         const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
         if (segments[1] === 'projects' && segments[2]) {
           const projectId = segments[2];
+          if (segments[3] === 'context' && method === 'GET')
+            return json(response, await service.projectContext(projectId));
           if (segments[3] === 'images') {
             service.project(projectId);
             if (method === 'POST' && !segments[4]) {
+              try {
+                await service.requireProject(projectId);
+              } catch (error) {
+                request.resume();
+                throw error;
+              }
               const contentType = request.headers['content-type'] ?? '';
               if (!imageTypes.includes(contentType as (typeof imageTypes)[number]))
                 throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP image.', 415);
@@ -365,6 +373,18 @@ export async function application(
         }
         if (segments[1] === 'threads' && segments[2]) {
           const id = segments[2];
+          if (segments[3] === 'context' && method === 'GET')
+            return json(response, await service.conversationContext(id));
+          if (segments[3] === 'files' && method === 'GET')
+            return json(
+              response,
+              await service.conversationFiles(id, url.searchParams.get('path') ?? ''),
+            );
+          if (segments[3] === 'file' && method === 'GET')
+            return json(
+              response,
+              await service.conversationFile(id, url.searchParams.get('path') ?? ''),
+            );
           if (segments[3] === 'settings' && !segments[4]) {
             if (method === 'GET') return json(response, service.store.settingsProfile(id));
             if (method === 'PUT') {
@@ -451,6 +471,8 @@ export async function application(
             const thread = await service.read(id);
             return json(response, {
               thread,
+              // Cached history stays readable while native execution is offline.
+              context: await service.projectContext(thread.projectId),
               cursor: { seq: service.events.seq, epoch: service.events.epoch },
             });
           }

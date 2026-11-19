@@ -1,3 +1,4 @@
+import { directoryStatus, directoryError } from './project-context.js';
 import { nativePermissions } from '../shared/permissions.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { realpath, readFile, readdir, stat } from 'node:fs/promises';
@@ -98,6 +99,12 @@ export class Service {
           return false;
         }
         const { native } = await this.conversationOwner(id);
+        const directory = await this.projectContext(thread.projectId);
+        if (!directory.directory.available) {
+          store.queue.pause(id, directory.directory.message!);
+          this.queue.notify(id);
+          return false;
+        }
         if (native.status?.type === 'active') {
           store.queue.pause(
             id,
@@ -171,11 +178,38 @@ export class Service {
     if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Project not found.', 404);
     return project;
   }
+  async projectContext(id: string) {
+    const project = this.project(id);
+    return { project, directory: await directoryStatus(project) };
+  }
+  async requireProject(id: string) {
+    const context = await this.projectContext(id);
+    if (!context.directory.available) throw directoryError(context.directory);
+    return context.project;
+  }
+  async conversationContext(id: string) {
+    const { saved } = await this.conversationOwner(id);
+    return this.projectContext(saved.projectId);
+  }
+  async conversationFile(id: string, path: string) {
+    const { saved } = await this.conversationOwner(id);
+    return this.file(saved.projectId, path);
+  }
+  async conversationFiles(id: string, path: string) {
+    const { saved } = await this.conversationOwner(id);
+    return this.files(saved.projectId, path);
+  }
   async addProject(path: string, name?: string) {
-    const canonical = await realpath(path);
-    if (!(await stat(canonical)).isDirectory())
-      throw new AppError('INVALID_DIRECTORY', 'Choose an existing directory.');
-    return this.store.addProject(name || basename(canonical), canonical);
+    try {
+      const canonical = await realpath(path);
+      if (!(await stat(canonical)).isDirectory())
+        throw new AppError('INVALID_DIRECTORY', 'Choose an existing directory.');
+      return this.store.addProject(name || basename(canonical), canonical);
+    } catch (error) {
+      if (record(error) && ['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP'].includes(error.code))
+        throw new AppError('INVALID_DIRECTORY', 'Choose an existing, accessible directory.');
+      throw error;
+    }
   }
   private metadataChanged(id: string) {
     this.metadataRevisions.delete(id);
@@ -543,7 +577,7 @@ export class Service {
     );
   }
   async create(projectId: string, settings: Settings = this.store.settingsProfile().settings) {
-    const project = this.project(projectId);
+    const project = await this.requireProject(projectId);
     await this.modelSettings.checkPermissions(settings);
     const result = await this.driver.call('thread/start', {
       cwd: project.path,
@@ -901,7 +935,11 @@ export class Service {
         'This queued message uses different task settings. Leave it queued for its own turn.',
         409,
       );
-    // Claim synchronously before native/file I/O. The queue worker rechecks this state.
+    await this.conversationOwner(id);
+    await this.requireProject(thread.projectId);
+    // Readiness awaits I/O; a completed turn may already have dispatched this entry.
+    if (this.store.queue.get(messageId)?.state !== 'queued')
+      throw new AppError('QUEUE_STARTED', 'This message has already started.', 409);
     this.store.queue.set(messageId, 'dispatching');
     this.queue.notify(id);
     try {
@@ -1043,6 +1081,7 @@ export class Service {
     this.managing.add(id);
     try {
       const { saved } = await this.conversationOwner(id);
+      await this.requireProject(saved.projectId);
       this.store.begin(operationId, id, 'fork', input);
       const response = await this.driver.call('thread/fork', {
         threadId: id,
@@ -1167,6 +1206,8 @@ export class Service {
     const existing = this.store.existing(operationId, id, 'steer', input);
     if (existing) return existing;
     const thread = await this.read(id);
+    await this.conversationOwner(id);
+    await this.requireProject(thread.projectId);
     const nativeInput = await this.input(thread.projectId, prompt, attachments);
     if (nativeInput.some((entry) => entry.type === 'localImage'))
       await this.modelSettings.resolve(thread.settings, thread.resolvedModel, true);
@@ -1276,7 +1317,6 @@ export class Service {
     const input = { prompt, settings, attachments, ...(review ? { review } : {}) };
     const receipt = this.store.existing(operationId, id, kind, input);
     if (receipt) return receipt;
-    const nativeInput = await this.input(project.id, prompt, attachments);
     if (this.store.thread(id)?.archived)
       throw new AppError(
         'CONVERSATION_ARCHIVED',
@@ -1295,6 +1335,15 @@ export class Service {
         'Check pending follow-ups before starting a new task.',
         409,
       );
+    if (this.store.active(id))
+      throw new AppError(
+        'EXECUTION_UNKNOWN',
+        'This conversation already has an unfinished operation. Check its result first.',
+        409,
+      );
+    await this.conversationOwner(id);
+    await this.requireProject(project.id);
+    const nativeInput = await this.input(project.id, prompt, attachments);
     const { existing } = this.store.begin(operationId, id, kind, input, prompt);
     if (existing) return existing;
     thread.pending = { id: operationId, text: prompt, state: 'dispatching', kind };
@@ -1338,6 +1387,7 @@ export class Service {
           );
         await this.driver.call('thread/settings/update', {
           threadId: id,
+          cwd: project.path,
           sandboxPolicy,
           approvalPolicy,
           approvalsReviewer,
@@ -1368,6 +1418,7 @@ export class Service {
           : {
               threadId: id,
               clientUserMessageId: operationId,
+              cwd: project.path,
               input: nativeInput,
               sandboxPolicy,
               approvalPolicy,
@@ -2080,10 +2131,10 @@ export class Service {
   }
   async file(projectId: string, path: string): Promise<FileContent> {
     const absolute = await this.safePath(projectId, path);
-    const info = await stat(absolute);
+    const info = await stat(absolute).catch((error) => this.fileError(projectId, error));
     if (!info.isFile() || info.size > limits.file)
       throw new AppError('FILE_LIMIT', 'Choose a text file smaller than 256 KB.');
-    const bytes = await readFile(absolute);
+    const bytes = await readFile(absolute).catch((error) => this.fileError(projectId, error));
     if (bytes.length > limits.file)
       throw new AppError('FILE_LIMIT', 'This file grew beyond the 256 KB limit.');
     let content: string;
@@ -2102,7 +2153,11 @@ export class Service {
   }
   async files(projectId: string, path = '') {
     const absolute = await this.safePath(projectId, path);
-    return (await readdir(absolute, { withFileTypes: true }))
+    return (
+      await readdir(absolute, { withFileTypes: true }).catch((error) =>
+        this.fileError(projectId, error),
+      )
+    )
       .filter((x) => !x.name.startsWith('.'))
       .slice(0, 200)
       .map((x) => ({
@@ -2112,14 +2167,28 @@ export class Service {
       }))
       .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
   }
+  private async fileError(projectId: string, error: unknown): Promise<never> {
+    await this.requireProject(projectId);
+    if (record(error) && ['ENOENT', 'ENOTDIR'].includes(error.code))
+      throw new AppError(
+        'FILE_NOT_FOUND',
+        'The selected file or directory no longer exists. Refresh Files.',
+        404,
+      );
+    if (record(error) && ['EACCES', 'EPERM'].includes(error.code))
+      throw new AppError('FILE_ACCESS', 'The selected file or directory cannot be accessed.', 403);
+    throw error;
+  }
   private async safePath(projectId: string, path: string) {
     if (
       isAbsolute(path) ||
       path.split(/[\\/]/).some((part) => part === '..' || part.startsWith('.'))
     )
       throw new AppError('PATH_DENIED', 'This path is outside the file browser scope.', 403);
-    const project = this.project(projectId);
-    const canonical = await realpath(resolve(project.path, path));
+    const project = await this.requireProject(projectId);
+    const canonical = await realpath(resolve(project.path, path)).catch((error) =>
+      this.fileError(projectId, error),
+    );
     const rel = relative(project.path, canonical);
     if (rel.startsWith('..') || isAbsolute(rel))
       throw new AppError('PATH_DENIED', 'This path is outside the project.', 403);

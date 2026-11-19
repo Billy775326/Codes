@@ -1,7 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -22,7 +31,7 @@ for (const relativeData of [false, true]) {
   test(`installed command starts outside checkout with ${relativeData ? 'relative' : 'default'} data and stops cleanly`, async ({
     playwright,
   }) => {
-    const directory = await mkdtemp(join(tmpdir(), 'codes-command-'));
+    const directory = await realpath(await mkdtemp(join(tmpdir(), 'codes-command-')));
     const checkout = join(directory, "checkout 'with spaces'");
     const caller = join(directory, 'caller');
     const commandDir = join(directory, 'commands');
