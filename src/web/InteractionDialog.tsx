@@ -1,4 +1,7 @@
 import { chatFontSizes, codeFontSizes } from './font-sizes';
+import { ModelSettingsFields } from './ComposerControls';
+import { permissionPresets } from '../shared/permissions';
+import type { Model } from '../shared/types';
 import { permissionLabel } from '../shared/permissions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
@@ -90,11 +93,24 @@ export function PreferencesDialog({
   change,
   close,
   saveError,
+  defaults,
 }: {
   value: Preferences;
   change: (value: Preferences) => void;
   close: () => void;
   saveError?: string;
+  defaults: {
+    settings?: Settings;
+    saving: boolean;
+    loading: boolean;
+    error: string;
+    conflict: boolean;
+    change: (value: Settings) => void;
+    retry: () => void;
+    models: Model[];
+    modesReady: boolean;
+    planReady: boolean;
+  };
 }) {
   return (
     <InteractionDialog title="Interaction settings" close={close} className="preferences-dialog">
@@ -169,6 +185,68 @@ export function PreferencesDialog({
               </pre>
             </div>
           </div>
+        </section>
+        <section
+          className="preferences-section"
+          aria-labelledby="preferences-defaults"
+          role="region"
+          aria-label="New conversation defaults"
+        >
+          <h3 id="preferences-defaults">New conversation defaults</h3>
+          <p className="preference-help">
+            Applies to new conversations. Existing conversations keep their settings.
+          </p>
+          {defaults.settings && (
+            <>
+              <label className="preference-row">
+                <span className="preference-description">Permissions</span>
+                <select
+                  aria-label="Default permissions"
+                  value={defaults.settings.permission}
+                  disabled={defaults.loading}
+                  onChange={(event) =>
+                    defaults.change({
+                      ...defaults.settings!,
+                      permission: event.target.value as Settings['permission'],
+                    })
+                  }
+                >
+                  {permissionPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="preference-help">
+                {
+                  permissionPresets.find((preset) => preset.id === defaults.settings!.permission)
+                    ?.description
+                }
+              </p>
+              <div className="default-model-settings">
+                <ModelSettingsFields
+                  defaults
+                  settings={defaults.settings}
+                  change={defaults.change}
+                  models={defaults.models}
+                  modesReady={defaults.modesReady}
+                  planReady={defaults.planReady}
+                  disabled={defaults.loading}
+                />
+              </div>
+            </>
+          )}
+          {defaults.loading && <p role="status">Loading defaults…</p>}
+          {defaults.saving && <p role="status">Saving defaults…</p>}
+          {defaults.error && (
+            <p role="alert">
+              {defaults.error}{' '}
+              <button onClick={defaults.retry}>
+                {defaults.conflict ? 'Reload default settings' : 'Retry default settings'}
+              </button>
+            </p>
+          )}
         </section>
         <section className="preferences-section" aria-labelledby="preferences-interaction">
           <h3 id="preferences-interaction">Interaction</h3>

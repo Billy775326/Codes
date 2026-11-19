@@ -2,7 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, chmodSync, openSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Operation, Project, Settings, Summary } from '../shared/types.js';
+import type { Operation, Project, Settings, SettingsProfile, Summary } from '../shared/types.js';
+import { sameSettings } from '../shared/types.js';
+import { settingsSchema, settingsProfileSchema } from '../shared/settings.js';
 import { AppError } from '../shared/errors.js';
 import { QueueStore, queueSchema } from './queue-store.js';
 
@@ -64,6 +66,9 @@ export class Store {
         throw error;
       }
     } else this.db.exec(queueSchema);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS setting_profiles (
+      scope TEXT PRIMARY KEY, revision INTEGER NOT NULL, settings TEXT NOT NULL);
+      INSERT OR IGNORE INTO setting_profiles SELECT 'thread:'||id,0,settings FROM threads;`);
     this.queue = new QueueStore(this.db);
     this.queue.recover();
     this.db.exec(
@@ -72,6 +77,60 @@ export class Store {
   }
   projects(): Project[] {
     return this.db.prepare('SELECT * FROM projects ORDER BY name').all() as unknown as Project[];
+  }
+  settingsProfile(id?: string): SettingsProfile {
+    if (id && !this.thread(id))
+      throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+    const row = this.db
+      .prepare('SELECT revision,settings FROM setting_profiles WHERE scope=?')
+      .get(id ? 'thread:' + id : 'defaults') as { revision: number; settings: string } | undefined;
+    if (!row)
+      return {
+        revision: 0,
+        settings: id ? this.thread(id)!.settings : { permission: 'read-only' },
+      };
+    try {
+      return settingsProfileSchema.parse({
+        revision: row.revision,
+        settings: JSON.parse(row.settings),
+      });
+    } catch {
+      throw new AppError(
+        'SETTINGS_STORAGE',
+        'Saved settings are invalid. Restore the configuration before changing it.',
+        500,
+      );
+    }
+  }
+  saveSettingsProfile(
+    id: string | undefined,
+    revision: number,
+    settings: Settings,
+  ): SettingsProfile {
+    const next = settingsSchema.parse(settings);
+    const current = this.settingsProfile(id);
+    if (sameSettings(current.settings, next)) return current;
+    if (revision !== current.revision)
+      throw new AppError(
+        'SETTINGS_CONFLICT',
+        'Settings changed in another window. Reload them before saving again.',
+        409,
+      );
+    const row = this.db
+      .prepare(
+        `INSERT INTO setting_profiles VALUES(?,?,?)
+      ON CONFLICT(scope) DO UPDATE SET revision=setting_profiles.revision+1,settings=excluded.settings
+      WHERE setting_profiles.revision=? RETURNING revision`,
+      )
+      .get(id ? 'thread:' + id : 'defaults', revision + 1, JSON.stringify(next), revision) as
+      { revision: number } | undefined;
+    if (!row)
+      throw new AppError(
+        'SETTINGS_CONFLICT',
+        'Settings changed in another window. Reload them before saving again.',
+        409,
+      );
+    return { revision: row.revision, settings: next };
   }
   addProject(name: string, path: string): Project {
     const existing = this.projects().find((p) => p.path === path);
@@ -132,6 +191,9 @@ export class Store {
         Number(thread.archived ?? false),
         thread.forkedFromId ?? null,
       );
+    this.db
+      .prepare('INSERT OR IGNORE INTO setting_profiles VALUES(?,0,?)')
+      .run('thread:' + thread.id, JSON.stringify(settings));
   }
   pendingManagement(
     threadId: string,

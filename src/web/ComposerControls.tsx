@@ -68,6 +68,7 @@ export function ComposerControls({
     <>
       <PanelMenu
         label="Codex permissions"
+        description="Applies to future tasks in this conversation. Running tasks and queued messages keep their settings."
         controller={permissionControl}
         className="permission-menu"
         disabled={disabled || !modesReady}
@@ -78,7 +79,7 @@ export function ComposerControls({
           </>
         }
       >
-        <strong>Next task permissions</strong>
+        <strong>Conversation permissions</strong>
         <div role="group" aria-label="Permission presets">
           {permissionPresets.map((preset) => (
             <button
@@ -108,7 +109,7 @@ export function ComposerControls({
       <div className="toolbar-spacer" />
       <PanelMenu
         label="Model and reasoning"
-        description={`${modelLabel} · ${effortLabel}${!settings.effort ? ' (model default)' : ''}${settings.fast ? ' · Fast' : ''} · ${settings.mode === 'plan' ? 'Plan' : 'Execution'}`}
+        description={`${modelLabel} · ${effortLabel}${!settings.effort ? ' (model default)' : ''}${settings.fast ? ' · Fast' : ''} · ${settings.mode === 'plan' ? 'Plan' : 'Execution'} · Future tasks in this conversation`}
         controller={modelMenu}
         className="model-menu"
         trigger={
@@ -125,94 +126,141 @@ export function ComposerControls({
         }
       >
         <strong>Model and reasoning</strong>
-        <label>
-          Model
-          <select
-            aria-label="Model"
-            ref={modelControl}
-            value={settings.model ?? ''}
-            onChange={(e) =>
-              change({
-                ...settings,
-                model: e.target.value || undefined,
-                effort: undefined,
-                fast: false,
-              })
-            }
-            disabled={disabled}
-          >
-            <option value="">Default model</option>
-            {settings.model && !models.some((entry) => entry.id === settings.model) && (
-              <option value={settings.model}>{settings.model}</option>
-            )}
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Reasoning effort
-          <select
-            ref={effortControl}
-            aria-label="Reasoning effort"
-            value={settings.effort ?? ''}
-            disabled={disabled || !selectedModel}
-            onChange={(event) => change({ ...settings, effort: event.target.value || undefined })}
-          >
-            <option value="">
-              Model default
-              {selectedModel ? ' · ' + selectedModel.defaultReasoningEffort : ''}
-            </option>
-            {settings.effort &&
-              !selectedModel?.supportedReasoningEfforts.some(
-                (entry) => entry.reasoningEffort === settings.effort,
-              ) && <option value={settings.effort}>{settings.effort} (unavailable)</option>}
-            {selectedModel?.supportedReasoningEfforts.map((entry) => (
-              <option
-                key={entry.reasoningEffort}
-                value={entry.reasoningEffort}
-                title={entry.description}
-              >
-                {entry.reasoningEffort}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Mode
-          <select
-            aria-label="Task mode"
-            value={settings.mode ?? 'default'}
-            disabled={disabled || !modesReady}
-            onChange={(event) =>
-              change({ ...settings, mode: event.target.value as Settings['mode'] })
-            }
-          >
-            <option value="default">Execution</option>
-            <option value="plan" disabled={!planReady}>
-              Plan
-            </option>
-          </select>
-        </label>
-        <label className="fast-option">
-          <span>
-            Fast
-            <small>
-              {selectedModel?.supportsFast ? 'Higher usage' : 'Unavailable for this model'}
-            </small>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            aria-label="Fast mode"
-            checked={!!settings.fast}
-            disabled={disabled || (!selectedModel?.supportsFast && !settings.fast)}
-            onChange={(event) => change({ ...settings, fast: event.target.checked })}
-          />
-        </label>
+        <ModelSettingsFields
+          settings={settings}
+          change={change}
+          models={models}
+          resolvedModel={resolvedModel}
+          modesReady={modesReady}
+          planReady={planReady}
+          disabled={disabled}
+          modelControl={modelControl}
+          effortControl={effortControl}
+        />
       </PanelMenu>
+    </>
+  );
+}
+
+export function ModelSettingsFields({
+  settings,
+  change,
+  models,
+  resolvedModel,
+  modesReady,
+  planReady,
+  disabled,
+  modelControl,
+  effortControl,
+  defaults = false,
+}: {
+  settings: Settings;
+  change: (value: Settings) => void;
+  models: Model[];
+  resolvedModel?: string;
+  modesReady: boolean;
+  planReady: boolean;
+  disabled: boolean;
+  modelControl?: Ref<HTMLSelectElement>;
+  effortControl?: Ref<HTMLSelectElement>;
+  defaults?: boolean;
+}) {
+  const selectedModel =
+    models.find(
+      (entry) =>
+        entry.id === (settings.model || resolvedModel) ||
+        entry.model === (settings.model || resolvedModel),
+    ) ?? (!settings.model && !resolvedModel ? models.find((entry) => entry.isDefault) : undefined);
+  return (
+    <>
+      {' '}
+      <label>
+        Model
+        <select
+          aria-label={defaults ? 'Default model' : 'Model'}
+          ref={modelControl}
+          value={settings.model ?? ''}
+          onChange={(e) =>
+            change({
+              ...settings,
+              model: e.target.value || undefined,
+              effort: undefined,
+              fast: false,
+            })
+          }
+          disabled={disabled}
+        >
+          <option value="">Default model</option>
+          {settings.model && !models.some((entry) => entry.id === settings.model) && (
+            <option value={settings.model}>{settings.model}</option>
+          )}
+          {models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.displayName}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Reasoning effort
+        <select
+          ref={effortControl}
+          aria-label={defaults ? 'Default reasoning effort' : 'Reasoning effort'}
+          value={settings.effort ?? ''}
+          disabled={disabled || !selectedModel}
+          onChange={(event) => change({ ...settings, effort: event.target.value || undefined })}
+        >
+          <option value="">
+            Model default
+            {selectedModel ? ' · ' + selectedModel.defaultReasoningEffort : ''}
+          </option>
+          {settings.effort &&
+            !selectedModel?.supportedReasoningEfforts.some(
+              (entry) => entry.reasoningEffort === settings.effort,
+            ) && <option value={settings.effort}>{settings.effort} (unavailable)</option>}
+          {selectedModel?.supportedReasoningEfforts.map((entry) => (
+            <option
+              key={entry.reasoningEffort}
+              value={entry.reasoningEffort}
+              title={entry.description}
+            >
+              {entry.reasoningEffort}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Mode
+        <select
+          aria-label={defaults ? 'Default task mode' : 'Task mode'}
+          value={settings.mode ?? 'default'}
+          disabled={disabled || !modesReady}
+          onChange={(event) =>
+            change({ ...settings, mode: event.target.value as Settings['mode'] })
+          }
+        >
+          <option value="default">Execution</option>
+          <option value="plan" disabled={!planReady}>
+            Plan
+          </option>
+        </select>
+      </label>
+      <label className="fast-option">
+        <span>
+          Fast
+          <small>
+            {selectedModel?.supportsFast ? 'Higher usage' : 'Unavailable for this model'}
+          </small>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          aria-label={defaults ? 'Default fast mode' : 'Fast mode'}
+          checked={!!settings.fast}
+          disabled={disabled || (!selectedModel?.supportsFast && !settings.fast)}
+          onChange={(event) => change({ ...settings, fast: event.target.checked })}
+        />
+      </label>
     </>
   );
 }

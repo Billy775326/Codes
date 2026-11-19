@@ -1,3 +1,6 @@
+import { sameSettings } from '../shared/types';
+import { useSettingsProfile } from './useSettingsProfile';
+import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
 import { useImageAttachments } from './useImageAttachments';
 import { chatFontSizes, codeFontSizes } from './font-sizes';
@@ -17,6 +20,7 @@ import type {
   Action,
   Attachment,
   ImageAttachment,
+  SettingsProfile,
   Envelope,
   FileContent,
   Message,
@@ -91,9 +95,12 @@ const saved = (key: string) => {
 };
 const save = (key: string, value: string) => {
   try {
-    if (key.startsWith('codes.draft.') && value) {
+    if ((key.startsWith('codes.draft.') || key.startsWith('codes.new-settings.')) && value) {
       const drafts = Object.keys(localStorage).filter(
-        (entry) => entry.startsWith('codes.draft.') && entry !== key,
+        (entry) =>
+          entry.startsWith(
+            key.startsWith('codes.new-settings.') ? 'codes.new-settings.' : 'codes.draft.',
+          ) && entry !== key,
       );
       while (drafts.length >= 20) localStorage.removeItem(drafts.shift()!);
     }
@@ -107,6 +114,11 @@ const save = (key: string, value: string) => {
 };
 const draftKey = (projectId: string, threadId: string) =>
   'codes.draft.' + (threadId || 'new.' + projectId);
+const sameQueueDraft = (a: QueuePayload, b: QueuePayload) =>
+  a.text === b.text &&
+  sameSettings(a.settings, b.settings) &&
+  JSON.stringify(a.attachments) === JSON.stringify(b.attachments);
+
 const MessageView = memo(function MessageView({
   projectId,
   item,
@@ -315,7 +327,40 @@ function App() {
   const threadRef = useRef(threadId);
   threadRef.current = threadId;
   const composerControls = useRef<ComposerControlsHandle>(null);
-  const [settings, setSettings] = useState<Settings>({ permission: 'read-only' });
+  const [newSettings, setNewSettings] = useState<Settings>({ permission: 'read-only' });
+  const defaultSettings = useSettingsProfile(auth === 'ready' ? '/settings/defaults' : undefined);
+  const conversationSettings = useSettingsProfile(
+    auth === 'ready' && threadId ? '/threads/' + threadId + '/settings' : undefined,
+  );
+  const settings = threadId
+    ? (conversationSettings.value?.settings ??
+      (thread?.id === threadId
+        ? (thread.composerSettings?.settings ?? thread.settings)
+        : { permission: 'read-only' as const }))
+    : newSettings;
+  const profile = threadId ? conversationSettings : defaultSettings;
+  const settingsBlocked = profile.loading || profile.saving || !!profile.error || !profile.saved;
+  const changeSettings = (next: Settings) => {
+    if (threadId) conversationSettings.change(next);
+    else {
+      setNewSettings(next);
+      if (!save('codes.new-settings.' + projectId, JSON.stringify(next)))
+        setError('Draft settings apply now, but this browser could not save them.');
+    }
+  };
+  useEffect(() => {
+    if (threadId || !defaultSettings.saved) return;
+    let restored: Settings | undefined;
+    try {
+      const parsed = settingsSchema.safeParse(
+        JSON.parse(saved('codes.new-settings.' + projectId) || 'null'),
+      );
+      if (parsed.success) restored = parsed.data;
+    } catch {
+      /* An invalid browser-only draft falls back to the server defaults. */
+    }
+    setNewSettings(restored ?? defaultSettings.saved.settings);
+  }, [projectId, threadId, defaultSettings.saved]);
   const [draft, setDraft] = useState('');
   const [queueEditing, setQueueEditing] = useState(false);
   const draftRevision = useRef(0);
@@ -578,7 +623,8 @@ function App() {
             setThreads((list) =>
               [summary, ...list.filter((x) => x.id !== summary.id)].slice(0, 200),
             );
-        } else if (event.kind === 'runtime') setSystem(event.data as System);
+        } else if (event.kind === 'defaults') defaultSettings.sync(event.data as SettingsProfile);
+        else if (event.kind === 'runtime') setSystem(event.data as System);
       },
       connectionStatus,
       'projects',
@@ -697,6 +743,12 @@ function App() {
       );
     };
     const event = (e: Envelope) => {
+      if (e.kind === 'defaults') {
+        defaultSettings.sync(e.data as SettingsProfile);
+        return;
+      }
+      if (e.kind === 'settings' && e.threadId === threadId)
+        conversationSettings.sync(e.data as SettingsProfile);
       if (e.kind === 'runtime') {
         setSystem(e.data as System);
         return;
@@ -755,7 +807,8 @@ function App() {
         // Project summaries may arrive while subscriptions switch. The selected
         // snapshot is also the authoritative summary for the navigation list.
         conversationUpdated(snapshot.thread);
-        setSettings(snapshot.thread.settings);
+        conversationSettings.sync(snapshot.thread.composerSettings);
+        void defaultSettings.refresh();
       },
       event,
       connectionStatus,
@@ -909,6 +962,7 @@ function App() {
       !threadId ||
       busy ||
       images.pending ||
+      settingsBlocked ||
       !hasInput ||
       thread?.archived ||
       thread?.managementPending
@@ -918,15 +972,16 @@ function App() {
     setError('');
     const version = draftRevision.current;
     const key = 'codes.queue-request.' + threadId;
-    const payload = { text: draft, settings, attachments };
+    let payload = { text: draft, settings, attachments };
     let operationId = crypto.randomUUID();
     try {
       const previous = queueRequest ?? (saved(key) ? JSON.parse(saved(key)) : undefined);
       if (previous) {
         const record = previous;
-        if (JSON.stringify(record.payload) !== JSON.stringify(payload))
+        if (!sameQueueDraft(record.payload, payload))
           throw new Error('Check the pending queue receipt before changing this draft.');
         operationId = record.operationId;
+        payload = record.payload;
       }
       save(key, JSON.stringify({ operationId, payload }));
       setQueueRequest({ operationId, payload });
@@ -961,10 +1016,7 @@ function App() {
       await request('/threads/' + threadId + '/queue/' + queueRequest.operationId);
       const before = queueRevision.current;
       const queue = await request<QueueState>('/threads/' + threadId + '/queue');
-      if (
-        JSON.stringify({ text: draft, settings, attachments }) ===
-        JSON.stringify(queueRequest.payload)
-      ) {
+      if (sameQueueDraft({ text: draft, settings, attachments }, queueRequest.payload)) {
         save('codes.draft.' + threadId, '');
         setDraft('');
         setAttachments([]);
@@ -1001,7 +1053,6 @@ function App() {
       conversationUpdated(created);
       setForking(undefined);
       select(created.id);
-      setSettings({ ...settings, permission: 'read-only' });
     } catch (error) {
       setForkError(message(error));
       if (error instanceof ApiError && !error.uncertain && error.code !== 'FORK_UNKNOWN') {
@@ -1015,7 +1066,8 @@ function App() {
   const newThread = () => {
     select('');
     requestAnimationFrame(() => composer.current?.focus());
-    setSettings({ ...settings, permission: 'read-only' });
+    save('codes.new-settings.' + projectId, '');
+    setNewSettings(defaultSettings.saved?.settings ?? { permission: 'read-only' });
     setError('');
   };
   const changeProject = (id: string) => {
@@ -1023,7 +1075,6 @@ function App() {
     setProjectId(id);
     setPanel(null);
     setError('');
-    setSettings({ ...settings, permission: 'read-only' });
   };
   const send = async () => {
     if (draft.trimStart().startsWith('/')) {
@@ -1033,6 +1084,7 @@ function App() {
     if (
       busy ||
       images.pending ||
+      settingsBlocked ||
       queueRequest ||
       !hasInput ||
       !projectId ||
@@ -1053,6 +1105,7 @@ function App() {
       if (!id) {
         const created = await post<Thread>(`/projects/${projectId}/threads`, settings);
         id = created.id;
+        save('codes.new-settings.' + projectId, '');
         save(`codes.draft.${id}`, threadRef.current === origin ? draftValue.current : draft);
         setThreads((list) => [created, ...list]);
         select(id);
@@ -1262,10 +1315,14 @@ function App() {
     thread.pending?.kind !== 'review' &&
     !thread.archived &&
     !thread.managementPending;
-  const deliveryMode = active && preferences.followUp === 'steer' ? 'steer' : 'queue';
+  const deliveryMode =
+    active && preferences.followUp === 'steer' && thread && sameSettings(settings, thread.settings)
+      ? 'steer'
+      : 'queue';
   const deliveryBlocked =
     connection !== 'Connected' ||
     busy ||
+    settingsBlocked ||
     !!images.pending ||
     !!steerReceipt ||
     !!queueRequest ||
@@ -1275,7 +1332,7 @@ function App() {
     !!thread?.archived ||
     !!thread?.managementPending;
   const queueBlocked = deliveryBlocked || (thread?.queue?.items.length ?? 0) >= 10;
-  const addBlocked = deliveryBlocked || !canSteer;
+  const addBlocked = deliveryBlocked || !canSteer || !sameSettings(settings, thread!.settings);
   const deliveryHelp =
     active || !!thread?.queue?.items.length
       ? deliveryMode === 'queue'
@@ -1283,7 +1340,11 @@ function App() {
           ? 'Queue is full (10 messages). Edit or remove a waiting entry, or use Add now if available.'
           : active
             ? 'Queue runs after this task completes. Waiting text can be edited or removed.' +
-              (!canSteer ? ' Add now waits until the pending request or result is resolved.' : '')
+              (!canSteer
+                ? ' Add now waits until the pending request or result is resolved.'
+                : !sameSettings(settings, thread!.settings)
+                  ? ' Queue to use the updated conversation settings.'
+                  : '')
             : 'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.'
         : canSteer
           ? 'Add now updates this running task using its current settings. Accepted additions cannot be edited.'
@@ -1314,8 +1375,7 @@ function App() {
       name: '/plan',
       detail: 'Toggle Plan and Code mode',
       run: () => {
-        if (active) throw new Error('Finish the current task before changing modes.');
-        setSettings({ ...settings, mode: settings.mode === 'plan' ? 'default' : 'plan' });
+        changeSettings({ ...settings, mode: settings.mode === 'plan' ? 'default' : 'plan' });
       },
     },
     { name: '/review', detail: 'Start a native code review', run: () => setDialog('review') },
@@ -1358,7 +1418,7 @@ function App() {
     }
   };
   const steer = async () => {
-    if (busy || images.pending || !canSteer || !hasInput || steerReceipt || queueRequest) return;
+    if (addBlocked || !hasInput || steerReceipt || queueRequest) return;
     if (draft.trimStart().startsWith('/')) {
       runCommand(draft.trim());
       return;
@@ -2116,7 +2176,7 @@ function App() {
                 disabled={busy}
                 onClick={() => {
                   changeDraft(queueRequest.payload.text);
-                  setSettings(queueRequest.payload.settings);
+                  changeSettings(queueRequest.payload.settings);
                   setAttachments(queueRequest.payload.attachments);
                 }}
               >
@@ -2244,6 +2304,19 @@ function App() {
                 Uploading {images.pending} image(s)…
               </p>
             )}
+            {threadId && conversationSettings.saving && (
+              <p role="status" className="settings-save-status">
+                Saving conversation settings…
+              </p>
+            )}
+            {settingsBlocked && profile.error && (
+              <p role="alert" className="settings-save-status">
+                {profile.error}{' '}
+                <button onClick={() => void profile.retry()}>
+                  {profile.conflict ? 'Reload settings' : 'Retry settings'}
+                </button>
+              </p>
+            )}
             <textarea
               onPaste={images.paste}
               aria-label="Message Codex"
@@ -2331,12 +2404,19 @@ function App() {
               <ComposerControls
                 ref={composerControls}
                 settings={settings}
-                change={setSettings}
+                change={changeSettings}
                 models={models}
                 resolvedModel={thread?.resolvedModel}
                 modesReady={modes.some((entry) => entry.mode === 'default')}
                 planReady={modes.some((entry) => entry.mode === 'plan')}
-                disabled={active || busy || loadingConversation}
+                disabled={
+                  busy ||
+                  loadingConversation ||
+                  profile.loading ||
+                  !profile.saved ||
+                  !!thread?.archived ||
+                  !!thread?.managementPending
+                }
               />
               <div className="composer-dispatch-actions">
                 {(active || !!thread?.queue?.items.length) && (
@@ -2388,6 +2468,7 @@ function App() {
                       connection !== 'Connected' ||
                       busy ||
                       !!images.pending ||
+                      settingsBlocked ||
                       !hasInput ||
                       !projectId ||
                       loadingConversation ||
@@ -2416,7 +2497,9 @@ function App() {
                 disabled={deliveryMode === 'queue' ? addBlocked : queueBlocked}
                 title={
                   deliveryMode === 'queue'
-                    ? 'Apply this draft to the running task; accepted additions cannot be edited'
+                    ? thread && !sameSettings(settings, thread.settings)
+                      ? 'Queue this message to use the updated conversation settings'
+                      : 'Apply this draft to the running task; accepted additions cannot be edited'
                     : 'Wait for a new turn; waiting text remains editable'
                 }
                 onClick={() => followUp(true)}
@@ -2430,6 +2513,18 @@ function App() {
       {dialog === 'preferences' && (
         <PreferencesDialog
           value={preferences}
+          defaults={{
+            settings: defaultSettings.value?.settings,
+            saving: defaultSettings.saving,
+            loading: defaultSettings.loading,
+            error: defaultSettings.error,
+            conflict: defaultSettings.conflict,
+            change: defaultSettings.change,
+            retry: () => void defaultSettings.retry(),
+            models,
+            modesReady: modes.some((entry) => entry.mode === 'default'),
+            planReady: modes.some((entry) => entry.mode === 'plan'),
+          }}
           saveError={preferencesError}
           close={() => setDialog(undefined)}
           change={(value) => {
@@ -2461,7 +2556,7 @@ function App() {
         <StatusDialog
           system={system}
           thread={thread}
-          settings={settings}
+          settings={thread?.settings ?? settings}
           connection={connection}
           close={() => setDialog(undefined)}
         />

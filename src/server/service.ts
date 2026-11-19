@@ -541,7 +541,7 @@ export class Service {
       409,
     );
   }
-  async create(projectId: string, settings: Settings) {
+  async create(projectId: string, settings: Settings = this.store.settingsProfile().settings) {
     const project = this.project(projectId);
     const result = await this.driver.call('thread/start', {
       cwd: project.path,
@@ -608,6 +608,26 @@ export class Service {
       this.reads.delete(id);
     }
   }
+  saveConversationSettings(id: string, revision: number, settings: Settings) {
+    const saved = this.store.thread(id);
+    if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+    if (saved.archived || saved.managementPending || this.managing.has(id))
+      throw new AppError(
+        'MANAGEMENT_BUSY',
+        'Restore or finish managing this conversation before changing its settings.',
+        409,
+      );
+    const profile = this.store.saveSettingsProfile(id, revision, settings);
+    const cached = this.cache.get(id);
+    if (cached) cached.composerSettings = profile;
+    this.events.publish('settings', profile, id);
+    return profile;
+  }
+  saveDefaultSettings(revision: number, settings: Settings) {
+    const profile = this.store.saveSettingsProfile(undefined, revision, settings);
+    this.events.publish('defaults', profile);
+    return profile;
+  }
   private async load(id: string) {
     const saved = this.store.thread(id);
     if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
@@ -624,6 +644,7 @@ export class Service {
       olderCursor: page.olderCursor,
       newerCursor: page.newerCursor,
       settings: saved.settings,
+      composerSettings: this.store.settingsProfile(id),
       diff: page.messages
         .filter((m) => m.kind === 'change' && m.turnId === page.turns.at(-1)?.id)
         .map((m) => m.text)
@@ -1556,6 +1577,7 @@ export class Service {
   }
   private boundary(thread: Thread) {
     this.syncQueue(thread);
+    thread.composerSettings = this.store.settingsProfile(thread.id);
     // Protect lifecycle state and first-prompt titles from older thread/list replies.
     this.metadataChanged(thread.id);
     this.store.saveThread(thread, thread.settings);

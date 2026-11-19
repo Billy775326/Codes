@@ -4,6 +4,8 @@
 
 ### Added
 
+- Save permissions, model, reasoning effort, Fast, and mode independently for each conversation as soon as they change. Add server-backed New conversation defaults to the settings modal, with serialized saves, revision conflict recovery, and persistent choices across switching, reload, and restart. Running tasks and existing queue entries keep their captured settings.
+
 - Paste or choose image attachments in the composer, with previews, removal, image-only messages, queue previews, and native immediate additions. Keep image bytes outside conversation snapshots, validate supported model input, and block dispatch until uploads finish. PNG, JPEG, and WebP are supported, with four combined attachments and 8 MiB per image; see [image limits and retention](docs/image-attachments.md).
 
 - Document the project philosophy, “codex no cli = codes”, with English and Chinese explanations.

@@ -6,6 +6,62 @@ import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../src/server/store';
 
 const cleanups: (() => void)[] = [];
+it('persists independent settings and defaults without changing execution snapshots or schema 4', () => {
+  const { store, directory } = fixture();
+  const original = store.thread('a')!.settings;
+  const selected = {
+    permission: 'workspace-write' as const,
+    model: 'chosen-model',
+    effort: 'high',
+    fast: true,
+    mode: 'plan' as const,
+  };
+  const profile = store.saveSettingsProfile('a', 0, selected);
+  const defaults = store.saveSettingsProfile(undefined, 0, {
+    permission: 'danger-full-access',
+    effort: 'low',
+  });
+  expect(store.settingsProfile('b').settings).toEqual(original);
+  expect(store.thread('a')!.settings).toEqual(original);
+  store.saveThread(store.thread('a')!, { permission: 'read-only', effort: 'medium' });
+  expect(store.settingsProfile('a')).toEqual(profile);
+  expect(() => store.saveSettingsProfile('a', 0, { permission: 'read-only' })).toThrow(
+    /another window/,
+  );
+  expect(store.saveSettingsProfile('a', 0, selected)).toEqual(profile);
+  store.close();
+  const reopened = new Store(directory);
+  try {
+    expect(reopened.settingsProfile('a')).toEqual(profile);
+    expect(reopened.settingsProfile()).toEqual(defaults);
+    expect(reopened.settingsProfile('b').settings).toEqual(original);
+    expect(reopened.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 4 });
+    expect(() => reopened.settingsProfile('missing')).toThrow(/not found/);
+  } finally {
+    reopened.close();
+  }
+});
+it('seeds existing conversation settings once and rejects corrupt preference values', () => {
+  const { store, directory } = fixture();
+  store.db
+    .prepare("UPDATE threads SET settings=? WHERE id='a'")
+    .run(JSON.stringify({ permission: 'workspace-write', effort: 'high' }));
+  store.db.exec('DROP TABLE setting_profiles');
+  store.close();
+  const reopened = new Store(directory);
+  try {
+    expect(reopened.settingsProfile('a').settings).toMatchObject({
+      permission: 'workspace-write',
+      effort: 'high',
+    });
+    reopened.db
+      .prepare("UPDATE setting_profiles SET settings='not json' WHERE scope='thread:a'")
+      .run();
+    expect(() => reopened.settingsProfile('a')).toThrow(/Saved settings are invalid/);
+  } finally {
+    reopened.close();
+  }
+});
 afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) cleanup();
 });

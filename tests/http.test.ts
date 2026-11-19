@@ -16,6 +16,82 @@ let service: Service;
 let origin: string;
 let cookie: string;
 const token = 'test-only-access-token-not-a-real-secret';
+it('authenticates settings writes, applies defaults and prevents stale conversation updates', async () => {
+  const project = await service.addProject(directory);
+  const existing = await service.create(project.id, { permission: 'read-only' });
+  const read = async (path: string) =>
+    (await fetch(origin + '/api' + path, { headers: { cookie } })).json();
+  const put = (path: string, value: unknown, session = cookie) =>
+    fetch(origin + '/api' + path, {
+      method: 'PUT',
+      headers: { origin, cookie: session, 'content-type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+  expect(
+    (
+      await put(
+        '/settings/defaults',
+        { revision: 0, settings: { permission: 'workspace-write' } },
+        '',
+      )
+    ).status,
+  ).toBe(401);
+  const defaults = {
+    permission: 'workspace-write',
+    model: 'simulated-model',
+    effort: 'high',
+    fast: true,
+    mode: 'plan',
+  };
+  expect((await put('/settings/defaults', { revision: 0, settings: defaults })).status).toBe(200);
+  const created = await (
+    await fetch(origin + '/api/projects/' + project.id + '/threads', {
+      method: 'POST',
+      headers: { origin, cookie, 'content-type': 'application/json' },
+      body: '{}',
+    })
+  ).json();
+  expect(created.composerSettings.settings).toEqual(defaults);
+  expect((await read('/threads/' + existing.id + '/settings')).settings).toEqual({
+    permission: 'read-only',
+  });
+  const path = '/threads/' + existing.id + '/settings';
+  expect((await put(path, { revision: 0, settings: defaults })).status).toBe(200);
+  expect(
+    (await put(path, { revision: 0, settings: { permission: 'danger-full-access' } })).status,
+  ).toBe(409);
+  expect((await read(path)).settings).toEqual(defaults);
+  expect(service.store.db.prepare('SELECT count(*) AS count FROM operations').get()).toMatchObject({
+    count: 0,
+  });
+});
+it('rejects malformed settings and settings changes on archived conversations', async () => {
+  const project = await service.addProject(directory);
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  const put = (path: string, value: unknown) =>
+    fetch(origin + '/api' + path, {
+      method: 'PUT',
+      headers: { origin, cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+  for (const value of [
+    { revision: -1, settings: { permission: 'read-only' } },
+    { revision: 0, settings: { permission: 'invalid' } },
+    { revision: 0, settings: { permission: 'read-only', effort: 3 } },
+    { revision: 0, settings: { permission: 'read-only' }, unknown: true },
+  ])
+    expect((await put('/settings/defaults', value)).status).toBe(400);
+  await service.archive(thread.id, randomUUID(), true);
+  expect(
+    (
+      await put('/threads/' + thread.id + '/settings', {
+        revision: 0,
+        settings: { permission: 'workspace-write' },
+      })
+    ).status,
+  ).toBe(409);
+  expect(service.store.settingsProfile(thread.id).settings.permission).toBe('read-only');
+});
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'codes-http-'));
   service = new Service(

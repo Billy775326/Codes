@@ -9,6 +9,51 @@ import { Driver } from '../src/codex/driver';
 import { AppError } from '../src/shared/errors';
 import type { Thread } from '../src/shared/types';
 const cleanup: (() => Promise<void>)[] = [];
+it('keeps future conversation choices independent of an active task and captured queue settings', async () => {
+  const { service, thread } = await fixture();
+  const before = { ...thread.settings };
+  await service.send(thread.id, randomUUID(), '[hold] Settings execution fixture', before);
+  const first = randomUUID();
+  await service.enqueue(thread.id, first, {
+    text: 'Captured before settings change',
+    settings: before,
+    attachments: [],
+  });
+  const spy = vi.spyOn(service.driver, 'call');
+  const next = {
+    permission: 'workspace-write' as const,
+    effort: 'high',
+    fast: true,
+    mode: 'plan' as const,
+  };
+  service.saveConversationSettings(thread.id, 0, next);
+  expect(spy).not.toHaveBeenCalled();
+  expect(thread.settings).toEqual(before);
+  expect(thread.composerSettings?.settings).toEqual(next);
+  expect(service.store.queue.get(first)?.settings).toEqual(before);
+  await service.interrupt(thread.id);
+  service.controlQueue(thread.id, false);
+  await until(() => service.store.queue.get(first)?.state === 'completed');
+  expect(thread.settings).toEqual(before);
+  expect(service.store.settingsProfile(thread.id).settings).toEqual(next);
+});
+it('applies saved defaults only to subsequently created conversations', async () => {
+  const { service, project, thread } = await fixture();
+  const initial = service.store.settingsProfile(thread.id);
+  const next = {
+    permission: 'workspace-write' as const,
+    model: 'simulated-model',
+    effort: 'high',
+    mode: 'plan' as const,
+    fast: true,
+  };
+  service.saveDefaultSettings(0, next);
+  expect(service.store.settingsProfile(thread.id)).toEqual(initial);
+  const created = await service.create(project.id);
+  expect(created.composerSettings?.settings).toEqual(next);
+  expect(created.settings).toEqual(next);
+  expect(service.store.activeCount()).toBe(0);
+});
 it('hydrates history without eager turn items and keeps large tool payloads outside snapshots', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), 'Bounded native history fixture', thread.settings);

@@ -11,16 +11,8 @@ import { AppError, asError } from '../shared/errors.js';
 import { imageId, imageLimits, imageTypes } from '../shared/images.js';
 import { limits } from '../shared/types.js';
 import { Service } from './service.js';
+import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
 
-const settings = z
-  .object({
-    model: z.string().min(1).max(150).optional(),
-    effort: z.string().min(1).max(80).optional(),
-    fast: z.boolean().optional(),
-    mode: z.enum(['default', 'plan']).optional(),
-    permission: z.enum(['read-only', 'workspace-write', 'danger-full-access']),
-  })
-  .strict();
 const fileAttachment = z
   .object({
     kind: z.literal('file').optional(),
@@ -212,6 +204,12 @@ export async function application(
           return json(response, await service.modelSettings.models());
         if (url.pathname === '/api/modes' && method === 'GET')
           return json(response, await service.modelSettings.modes());
+        if (url.pathname === '/api/settings/defaults' && method === 'GET')
+          return json(response, service.store.settingsProfile());
+        if (url.pathname === '/api/settings/defaults' && method === 'PUT') {
+          const input = settingsProfileInput.parse(await body(request));
+          return json(response, service.saveDefaultSettings(input.revision, input.settings));
+        }
         if (url.pathname === '/api/projects' && method === 'GET')
           return json(response, service.store.projects());
         if (url.pathname === '/api/projects' && method === 'POST') {
@@ -313,7 +311,17 @@ export async function application(
           if (segments[3] === 'threads' && method === 'POST')
             return json(
               response,
-              await service.create(projectId, settings.parse(await body(request))),
+              await service.create(
+                projectId,
+                settings
+                  .or(
+                    z
+                      .object({})
+                      .strict()
+                      .transform(() => service.store.settingsProfile().settings),
+                  )
+                  .parse(await body(request)),
+              ),
             );
           if (segments[3] === 'files' && method === 'GET')
             return json(
@@ -355,6 +363,16 @@ export async function application(
         }
         if (segments[1] === 'threads' && segments[2]) {
           const id = segments[2];
+          if (segments[3] === 'settings' && !segments[4]) {
+            if (method === 'GET') return json(response, service.store.settingsProfile(id));
+            if (method === 'PUT') {
+              const input = settingsProfileInput.parse(await body(request));
+              return json(
+                response,
+                service.saveConversationSettings(id, input.revision, input.settings),
+              );
+            }
+          }
           if (segments[3] === 'source' && method === 'GET')
             return json(response, await service.source(id));
           if (segments[3] === 'fork' && method === 'POST') {

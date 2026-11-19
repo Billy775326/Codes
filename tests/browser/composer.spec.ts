@@ -166,11 +166,13 @@ for (const viewport of [
       await page.getByLabel('Message Codex').fill('[slow] Permissions ' + label + Date.now());
       await page.getByRole('button', { name: 'Send message', exact: true }).click();
       expect((await request).postDataJSON().settings.permission).toBe(value);
-      await expect(picker).toHaveAttribute('aria-disabled', 'true');
-      await picker.click({ force: true });
+      await expect(picker).toBeEnabled();
+      await picker.click();
       await expect(
         page.getByRole('dialog', { name: 'Codex permissions', exact: true }),
-      ).toBeHidden();
+      ).toBeVisible();
+      await expect(page.getByText('Conversation permissions', { exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Stop task', exact: true }).click();
       await expect(picker).toBeEnabled();
     }

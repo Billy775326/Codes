@@ -20,6 +20,10 @@ export interface Settings {
   mode?: 'default' | 'plan';
   permission: 'read-only' | 'workspace-write' | 'danger-full-access';
 }
+export interface SettingsProfile {
+  revision: number;
+  settings: Settings;
+}
 export interface Message {
   id: string;
   turnId: string;
@@ -94,6 +98,7 @@ export interface Thread extends Summary {
   olderCursor: string | null;
   newerCursor?: string | null;
   settings: Settings;
+  composerSettings?: SettingsProfile;
   diff: string;
   diffTruncated?: boolean;
   resolvedModel?: string;

@@ -80,6 +80,42 @@
   gap: 16px;
   margin-bottom: 16px;
 }
+.default-model-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.app .preferences-dialog .default-model-settings select {
+  margin-top: 8px;
+}
+.default-model-settings .fast-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.default-model-settings .fast-option small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+  font-size: 12px;
+}
+.default-model-settings .fast-option input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.preferences-section > .preference-help {
+  margin: 0 0 14px;
+}
+.settings-save-status {
+  margin: 8px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.settings-save-status button {
+  text-decoration: underline;
+}
 .app .preferences-fonts select {
   margin-top: 8px;
 }
@@ -191,6 +227,10 @@
     min-width: 44px;
   }
   .preferences-fonts {
+    gap: 12px;
+  }
+  .default-model-settings {
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
   .preferences-preview {
