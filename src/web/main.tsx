@@ -2224,6 +2224,7 @@ function App() {
           )}
           {thread?.queue && (
             <QueuePanel
+              taskWriteRoot={system?.taskWriteRoot}
               projectId={projectId}
               key={threadId}
               threadId={threadId}

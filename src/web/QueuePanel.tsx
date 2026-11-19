@@ -15,6 +15,7 @@ export function QueuePanel({
   onCheck,
   turnId,
   settings,
+  taskWriteRoot,
   onEditingChange,
   onStop,
 }: {
@@ -22,6 +23,7 @@ export function QueuePanel({
   projectId: string;
   turnId?: string;
   settings?: Settings;
+  taskWriteRoot?: string;
   onEditingChange: (editing: boolean) => void;
   onStop?: () => void;
   state: QueueState;
@@ -150,7 +152,7 @@ export function QueuePanel({
                         : 'Needs review · Text locked'}
                 </span>
                 <small>
-                  {permissionLabel(entry.settings.permission)}
+                  {permissionLabel(entry.settings.permission, taskWriteRoot)}
                   {entry.attachments.length
                     ? ' · ' + entry.attachments.length + ' attachment(s)'
                     : ''}

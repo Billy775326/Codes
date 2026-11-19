@@ -480,7 +480,7 @@ export function StatusDialog({
               : 'Not reported'}
         </dd>
         <dt>Permissions</dt>
-        <dd>{permissionLabel(settings.permission)}</dd>
+        <dd>{permissionLabel(settings.permission, system?.taskWriteRoot)}</dd>
         <dt>Conversation</dt>
         <dd>{thread?.id ?? 'Not created'}</dd>
         <dt>Turn</dt>
