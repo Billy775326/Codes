@@ -139,6 +139,8 @@ export class QueueStore {
     const entry = this.get(id);
     if (!entry || entry.threadId !== threadId)
       throw new AppError('NOT_FOUND', 'Queued message not found.', 404);
+    if (!text.trim() && !entry.attachments.some((item) => item.kind === 'image'))
+      throw new AppError('INPUT_REQUIRED', 'Enter a message or attach an image.');
     if (entry.state !== 'queued')
       throw new AppError('QUEUE_STARTED', 'Only a waiting message can be edited.', 409);
     this.db

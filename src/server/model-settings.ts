@@ -8,6 +8,7 @@ const modelSchema = z.object({
   model: z.string().min(1).max(150),
   displayName: z.string().max(200),
   isDefault: z.boolean(),
+  inputModalities: z.array(z.string().max(80)).max(10).optional(),
   serviceTiers: z
     .array(
       z.object({
@@ -47,8 +48,9 @@ export class ModelSettings {
     const parsed = z.array(modelSchema).max(100).safeParse(response?.data);
     if (!parsed.success)
       throw new AppError('PROTOCOL_ERROR', 'The CLI returned invalid model metadata.', 502);
-    return parsed.data.map(({ serviceTiers, additionalSpeedTiers, ...model }) => ({
+    return parsed.data.map(({ serviceTiers, additionalSpeedTiers, inputModalities, ...model }) => ({
       ...model,
+      supportsImages: inputModalities?.includes('image') ?? false,
       supportsFast:
         serviceTiers?.some((tier) => tier.id === 'priority' || tier.id === 'fast') ??
         additionalSpeedTiers?.includes('fast') ??
@@ -62,7 +64,7 @@ export class ModelSettings {
       throw new AppError('PROTOCOL_ERROR', 'The CLI returned invalid mode metadata.', 502);
     return parsed.data;
   }
-  async resolve(settings: Settings, resolvedModel?: string) {
+  async resolve(settings: Settings, resolvedModel?: string, hasImages = false) {
     const modes = await this.modes();
     const mode = settings.mode ?? 'default';
     const preset = modes.find((entry) => entry.mode === mode);
@@ -71,10 +73,16 @@ export class ModelSettings {
     const model = settings.model || resolvedModel || preset.model;
     if (!model)
       throw new AppError('MODEL_UNKNOWN', 'Choose a model before starting this task.', 409);
-    if (settings.effort || settings.fast) {
+    if (settings.effort || settings.fast || hasImages) {
       const metadata = (await this.models()).find(
         (entry) => entry.id === model || entry.model === model,
       );
+      if (hasImages && !metadata?.supportsImages)
+        throw new AppError(
+          'IMAGES_UNAVAILABLE',
+          'The selected model does not advertise image input. Choose an image-capable model.',
+          409,
+        );
       if (settings.fast && !metadata?.supportsFast)
         throw new AppError(
           'FAST_UNAVAILABLE',

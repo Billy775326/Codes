@@ -9,7 +9,7 @@ import { QueueStore, queueSchema } from './queue-store.js';
 export class Store {
   readonly db: DatabaseSync;
   readonly queue: QueueStore;
-  constructor(directory: string) {
+  constructor(readonly directory: string) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(join(directory, 'codes.sqlite'));
     chmodSync(join(directory, 'codes.sqlite'), 0o600);

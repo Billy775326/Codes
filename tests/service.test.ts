@@ -945,3 +945,69 @@ it('retains history-established imported outcomes through list refresh without c
     (await service.conversations(project.id)).data.find((row) => row.id === next.thread.id)?.state,
   ).toBe('unknown');
 });
+
+it('maps image-only sends to native localImage, preserves history references and keeps a usable title', async () => {
+  const { imagePng } = await import('./fixtures/image');
+  const { service, thread, project } = await fixture();
+  const image = await service.images.save(project.id, imagePng, 'screenshot.png', 'image/png');
+  const spy = vi.spyOn(service.driver, 'call');
+  await service.send(thread.id, randomUUID(), '', thread.settings, [image]);
+  await until(() => thread.state === 'completed');
+  const input = (spy.mock.calls.find(([method]) => method === 'turn/start')![1] as any).input;
+  expect(input).toEqual([
+    { type: 'localImage', path: (await service.images.read(project.id, image.id)).path },
+  ]);
+  const history = await service.history(thread.id);
+  expect(history.messages.find((row) => row.kind === 'user')?.images?.[0]?.id).toBe(image.id);
+  expect(thread.title).toBe('screenshot.png');
+  expect(
+    (await service.conversations(project.id)).data.find((row) => row.id === thread.id)?.title,
+  ).toBe('screenshot.png');
+  expect(JSON.stringify(history)).not.toContain('data:image');
+  expect(JSON.stringify(history)).not.toContain(service.store.directory);
+});
+
+it('retains image attachments through immediate steering and durable queued dispatch', async () => {
+  const { imagePng } = await import('./fixtures/image');
+  const { service, thread, project } = await fixture();
+  const image = await service.images.save(project.id, imagePng, 'queued.png', 'image/png');
+  const spy = vi.spyOn(service.driver, 'call');
+  await service.send(thread.id, randomUUID(), '[hold] Image follow-up fixture', thread.settings);
+  await service.steer(thread.id, randomUUID(), thread.turnId!, '', [image]);
+  const steering = (spy.mock.calls.find(([method]) => method === 'turn/steer')![1] as any).input;
+  expect(steering[0]).toMatchObject({ type: 'localImage' });
+  const queued = randomUUID();
+  await service.enqueue(thread.id, queued, {
+    text: '',
+    attachments: [image],
+    settings: thread.settings,
+  });
+  expect(service.store.queue.get(queued)?.attachments).toEqual([image]);
+  await service.interrupt(thread.id);
+  service.controlQueue(thread.id, false);
+  await until(() => service.store.queue.get(queued)?.state === 'completed');
+  const last = (spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)![1] as any)
+    .input;
+  expect(last).toEqual(steering);
+  expect(thread.messages.filter((row) => row.kind === 'user' && row.images?.length)).toHaveLength(
+    2,
+  );
+});
+
+it('rejects image-incapable models before native task execution', async () => {
+  const { imagePng } = await import('./fixtures/image');
+  const { service, thread, project } = await fixture();
+  const image = await service.images.save(project.id, imagePng, 'capture.png', 'image/png');
+  const call = service.driver.call.bind(service.driver);
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation(async (method, params, timeout) => {
+      const response = await call(method, params, timeout);
+      if (method === 'model/list') response.data[0].inputModalities = ['text'];
+      return response;
+    });
+  await expect(
+    service.send(thread.id, randomUUID(), '', thread.settings, [image]),
+  ).rejects.toMatchObject({ code: 'IMAGES_UNAVAILABLE' });
+  expect(spy.mock.calls.filter(([method]) => method === 'turn/start')).toHaveLength(0);
+});

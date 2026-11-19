@@ -77,6 +77,13 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
       </>
     ),
     close: <path d="m6 6 12 12M6 18 18 6" />,
+    image: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <circle cx="8" cy="9" r="1.5" />
+        <path d="m4 18 5-5 3 3 4-6 5 8" />
+      </>
+    ),
     attach: <path d="m8 12 6-6a4 4 0 0 1 6 6l-8 8a6 6 0 0 1-8-8l8-8m-5 11 8-8" />,
     stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
     terminal: (

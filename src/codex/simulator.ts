@@ -116,6 +116,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
             model: 'simulated-model',
             displayName: 'Demo model',
             isDefault: true,
+            inputModalities: ['text', 'image'],
             defaultReasoningEffort: 'medium',
             serviceTiers: [
               { id: 'default', name: 'Standard', description: 'Standard speed' },
@@ -327,7 +328,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
             id: randomUUID(),
             type: 'userMessage',
             clientId: p.clientUserMessageId,
-            content: [{ type: 'text', text }],
+            content: p.input,
           },
         ],
       };

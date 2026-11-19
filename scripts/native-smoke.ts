@@ -27,6 +27,8 @@ try {
   assert.equal(configuration.config.features.fast_mode, true);
   const models = await service.modelSettings.models();
   assert.ok(models.length > 0);
+  assert.ok(models.every((model) => typeof model.supportsImages === 'boolean'));
+  assert.ok(models.some((model) => model.supportsImages));
   const modes = await service.modelSettings.modes();
   assert.ok(modes.some((entry) => entry.mode === 'plan'));
   assert.ok(modes.some((entry) => entry.mode === 'default'));
@@ -95,7 +97,7 @@ try {
   assert.equal(history.messages.length, 0);
   assert.equal(history.state, 'idle');
   console.log(
-    'PASS: CLI 0.167.0 initialization, model/reasoning metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all three sandbox/approval presets with read-only restoration, and lazy empty history. No model requests.',
+    'PASS: CLI 0.167.0 initialization, model/reasoning/image-input metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all three sandbox/approval presets with read-only restoration, and lazy empty history. No model requests.',
   );
 } finally {
   await service.close();

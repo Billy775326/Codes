@@ -7,6 +7,7 @@ import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
+import { Images } from './images.js';
 import { ModelSettings } from './model-settings.js';
 import { nativeMessage as item, nativeTurn } from './transcript.js';
 import { z } from 'zod';
@@ -49,6 +50,7 @@ const nativeStatus = z.discriminatedUnion('type', [
 
 export class Service {
   readonly events = new Events();
+  readonly images: Images;
   private cache = new Map<string, Thread>();
   private loaded = new Set<string>();
   private reads = new Map<string, Promise<Thread>>();
@@ -68,6 +70,7 @@ export class Service {
     readonly store: Store,
     readonly driver: Driver,
   ) {
+    this.images = new Images(store.directory);
     this.modelSettings = new ModelSettings(driver);
     this.queue = new MessageQueue(
       store.queue,
@@ -303,7 +306,7 @@ export class Service {
         scanned++;
         if (!record(raw) || typeof raw.id !== 'string' || raw.cwd !== project.path) continue;
         const saved = this.store.thread(raw.id);
-        const title = text(raw.name || raw.preview, 80) || 'Untitled conversation';
+        const title = text(raw.name || raw.preview, 80) || saved?.title || 'Untitled conversation';
         if (!saved)
           this.store.saveThread(
             {
@@ -688,7 +691,9 @@ export class Service {
           if (!Array.isArray(items.data))
             throw new AppError('PROTOCOL_ERROR', 'Invalid item history.', 502);
           for (const entry of items.data) {
-            const mapped = item(entry.item, turn.id);
+            const mapped = item(entry.item, turn.id, (path) =>
+              this.images.reference(saved.projectId, path),
+            );
             if (!mapped) continue;
             messageBytes += Buffer.byteLength(mapped.text);
             // A smaller turn page may fit. Discard this attempted page rather than
@@ -1050,7 +1055,13 @@ export class Service {
   }
   private async input(projectId: string, prompt: string, attachments: Attachment[]) {
     let context = '';
+    const images: { type: 'localImage'; path: string }[] = [];
     for (const attachment of attachments) {
+      if (attachment.kind === 'image') {
+        const image = await this.images.read(projectId, attachment.id);
+        images.push({ type: 'localImage', path: image.path });
+        continue;
+      }
       const file = await this.file(projectId, attachment.path);
       if (file.sha !== attachment.sha)
         throw new AppError(
@@ -1071,7 +1082,12 @@ export class Service {
     }
     if (Buffer.byteLength(prompt + context) > 100_000)
       throw new AppError('INPUT_LIMIT', 'The prompt and attached context exceed 100 KB.');
-    return [{ type: 'text', text: prompt + context, text_elements: [] }];
+    if (!prompt.trim() && !context && !images.length)
+      throw new AppError('INPUT_REQUIRED', 'Enter a message or attach an image.');
+    return [
+      ...(prompt || context ? [{ type: 'text', text: prompt + context, text_elements: [] }] : []),
+      ...images,
+    ];
   }
   async review(id: string, operationId: string, target: ReviewTarget, settings: Settings) {
     const title =
@@ -1104,6 +1120,8 @@ export class Service {
     if (existing) return existing;
     const thread = await this.read(id);
     const nativeInput = await this.input(thread.projectId, prompt, attachments);
+    if (nativeInput.some((entry) => entry.type === 'localImage'))
+      await this.modelSettings.resolve(thread.settings, thread.resolvedModel, true);
     const active = this.store.active(id);
     // Check again after file I/O; never promote a stale follow-up into a new task.
     if (
@@ -1252,7 +1270,11 @@ export class Service {
         thread.resolvedModel = typeof resumed.model === 'string' ? resumed.model : undefined;
         this.loaded.add(id);
       }
-      const collaborationMode = await this.modelSettings.resolve(settings, thread.resolvedModel);
+      const collaborationMode = await this.modelSettings.resolve(
+        settings,
+        thread.resolvedModel,
+        nativeInput.some((entry) => entry.type === 'localImage'),
+      );
       const { sandboxPolicy, approvalPolicy } = nativePermissions(
         settings.permission,
         project.path,
@@ -1275,7 +1297,12 @@ export class Service {
       }
       thread.resolvedModel = collaborationMode.settings.model;
       thread.settings = settings;
-      thread.title = thread.title === 'Untitled conversation' ? prompt.slice(0, 64) : thread.title;
+      thread.title =
+        thread.title === 'Untitled conversation'
+          ? prompt.trim().slice(0, 64) ||
+            attachments.find((entry) => entry.kind === 'image')?.name ||
+            'Image conversation'
+          : thread.title;
       thread.state = 'running';
       thread.updatedAt = Date.now();
       this.boundary(thread);
@@ -1750,7 +1777,7 @@ export class Service {
     }
   }
   private applyItem(thread: Thread, raw: any, turnId: string) {
-    const message = item(raw, turnId);
+    const message = item(raw, turnId, (path) => this.images.reference(thread.projectId, path));
     if (!message) return;
     const index = thread.messages.findIndex((x) => x.id === message.id);
     if (index >= 0) thread.messages[index] = message;

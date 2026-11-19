@@ -1,3 +1,4 @@
+import { ImageAttachmentView } from './ImageAttachments';
 import { permissionLabel } from '../shared/permissions';
 import { useEffect, useState } from 'react';
 import type { QueueState, QueueItem, Settings } from '../shared/types';
@@ -8,6 +9,7 @@ import { PanelMenu } from './PanelMenu';
 import './workflow.css';
 export function QueuePanel({
   threadId,
+  projectId,
   state,
   onChange,
   onCheck,
@@ -17,6 +19,7 @@ export function QueuePanel({
   onStop,
 }: {
   threadId: string;
+  projectId: string;
   turnId?: string;
   settings?: Settings;
   onEditingChange: (editing: boolean) => void;
@@ -91,7 +94,14 @@ export function QueuePanel({
         <button type="button" disabled={busy} onClick={() => setEditing('')}>
           {editable ? 'Cancel edit' : 'Close edit'}
         </button>
-        <button className="send-button" disabled={busy || !editable || !text.trim()}>
+        <button
+          className="send-button"
+          disabled={
+            busy ||
+            !editable ||
+            (!text.trim() && !entryBeingEdited?.attachments.some((item) => item.kind === 'image'))
+          }
+        >
           Save queued message
         </button>
       </div>
@@ -152,6 +162,19 @@ export function QueuePanel({
                 {entry.text.slice(0, 500)}
                 {entry.text.length > 500 ? '…' : ''}
               </p>
+              {entry.attachments.some((item) => item.kind === 'image') && (
+                <div className="queued-images">
+                  {entry.attachments.map((item, index) =>
+                    item.kind === 'image' ? (
+                      <ImageAttachmentView
+                        key={item.id + ':' + index}
+                        image={item}
+                        projectId={projectId}
+                      />
+                    ) : null,
+                  )}
+                </div>
+              )}
               {entry.error && <p className="queue-error">{entry.error}</p>}
               {editing !== entry.id && (
                 <div className="queue-actions">

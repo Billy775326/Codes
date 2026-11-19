@@ -2,10 +2,13 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, join, extname, relative } from 'node:path';
+import { createReadStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import { gzip } from 'node:zlib';
 import { z } from 'zod';
 import { AppError, asError } from '../shared/errors.js';
+import { imageId, imageLimits, imageTypes } from '../shared/images.js';
 import { limits } from '../shared/types.js';
 import { Service } from './service.js';
 
@@ -18,22 +21,37 @@ const settings = z
     permission: z.enum(['read-only', 'workspace-write', 'danger-full-access']),
   })
   .strict();
-const attachment = z
+const fileAttachment = z
   .object({
+    kind: z.literal('file').optional(),
     path: z.string().min(1).max(1024),
     sha: z.string().regex(/^[a-f0-9]{64}$/),
     fromLine: z.number().int().positive(),
     toLine: z.number().int().positive(),
   })
   .strict();
-const sendInput = z
+const attachment = z.union([
+  fileAttachment,
+  z
+    .object({
+      kind: z.literal('image'),
+      id: z.string().regex(imageId),
+      name: z.string().min(1).max(160),
+    })
+    .strict(),
+]);
+const messageInput = z
   .object({
     operationId: z.uuid(),
-    text: z.string().trim().min(1).max(50_000),
-    settings,
-    attachments: z.array(attachment).max(4).default([]),
+    text: z.string().trim().max(50_000),
+    attachments: z.array(attachment).max(imageLimits.attachments).default([]),
   })
   .strict();
+const nonemptyMessage = (value: z.infer<typeof messageInput>) =>
+  !!value.text || value.attachments.some((item) => item.kind === 'image');
+const sendInput = messageInput
+  .extend({ settings })
+  .refine(nonemptyMessage, 'Enter a message or attach an image.');
 const answerInput = z
   .object({
     operationId: z.uuid(),
@@ -125,6 +143,7 @@ export async function application(
     const expiry = cookie ? sessions.get(cookie) : undefined;
     return !!expiry && expiry > Date.now();
   };
+  let imageUploads = 0;
   server.on('request', (request, response) => {
     response.setHeader('x-content-type-options', 'nosniff');
     response.setHeader('referrer-policy', 'no-referrer');
@@ -208,6 +227,64 @@ export async function application(
         const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
         if (segments[1] === 'projects' && segments[2]) {
           const projectId = segments[2];
+          if (segments[3] === 'images') {
+            service.project(projectId);
+            if (method === 'POST' && !segments[4]) {
+              const contentType = request.headers['content-type'] ?? '';
+              if (!imageTypes.includes(contentType as (typeof imageTypes)[number]))
+                throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP image.', 415);
+              if (Number(request.headers['content-length'] ?? 0) > imageLimits.bytes) {
+                request.resume();
+                throw new AppError('IMAGE_LIMIT', 'Images must be at most 8 MiB.', 413);
+              }
+              if (imageUploads >= 4) {
+                request.resume();
+                throw new AppError(
+                  'IMAGE_UPLOAD_BUSY',
+                  'Image uploads are busy. Try again shortly.',
+                  429,
+                );
+              }
+              imageUploads++;
+              try {
+                const chunks: Buffer[] = [];
+                let bytes = 0;
+                for await (const chunk of request) {
+                  bytes += chunk.length;
+                  if (bytes > imageLimits.bytes)
+                    throw new AppError('IMAGE_LIMIT', 'Images must be at most 8 MiB.', 413);
+                  chunks.push(chunk);
+                }
+                const encodedName = z
+                  .string()
+                  .max(1500)
+                  .parse(request.headers['x-image-name'] ?? 'Image');
+                let name: string;
+                try {
+                  name = decodeURIComponent(encodedName);
+                } catch {
+                  throw new AppError('IMAGE_NAME', 'Invalid image filename.');
+                }
+                return json(
+                  response,
+                  await service.images.save(projectId, Buffer.concat(chunks), name, contentType),
+                );
+              } finally {
+                imageUploads--;
+              }
+            }
+            if (method === 'GET' && segments[4] && !segments[5]) {
+              const image = await service.images.file(projectId, segments[4]);
+              response.writeHead(200, {
+                'content-type': image.contentType,
+                'cache-control': 'private,no-store',
+                'content-length': image.size,
+              });
+              await pipeline(createReadStream(image.path), response);
+              return;
+            }
+            throw new AppError('NOT_FOUND', 'Image endpoint not found.', 404);
+          }
           if (segments[3] === 'snapshot' && method === 'GET') {
             await service.list(projectId);
             return json(response, {
@@ -315,7 +392,7 @@ export async function application(
             }
             if (segments[4] && method === 'PATCH') {
               const input = z
-                .object({ text: z.string().trim().min(1).max(50_000) })
+                .object({ text: z.string().trim().max(50_000) })
                 .strict()
                 .parse(await body(request));
               return json(response, service.editQueued(id, segments[4], input.text));
@@ -371,10 +448,10 @@ export async function application(
             );
           }
           if (segments[3] === 'steer' && method === 'POST') {
-            const input = sendInput
-              .omit({ settings: true })
+            const input = messageInput
               .extend({ expectedTurnId: z.string().min(1).max(200) })
               .strict()
+              .refine(nonemptyMessage, 'Enter a message or attach an image.')
               .parse(await body(request));
             return json(
               response,

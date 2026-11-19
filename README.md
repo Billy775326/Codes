@@ -24,6 +24,7 @@ Keep the interface, architecture, and implementation simple. Let layout and expl
 - IDE-style model/reasoning controls, edited-file cards, questions, approvals and follow-up actions within that Web layout.
 - Browser interaction preferences for Enter, queue/steer inversion, review delivery, and local slash commands.
 - Read-only file browsing with selection or whole-file attachments and file-change checks.
+- Paste or choose PNG, JPEG, and WebP images in the composer, preview/remove them, and send image-only or mixed messages, including queued messages and immediate additions. See [image attachments and limits](docs/image-attachments.md).
 - Per-file patch previews with line numbers, change counts, unified/side-by-side layouts, earlier loaded turns, and bounded patch windows; paginated native conversation history.
 - Browser reconnection through snapshots and bounded event replay.
 - Durable operation receipts that block duplicate sends after an uncertain result.

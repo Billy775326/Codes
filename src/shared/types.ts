@@ -28,6 +28,8 @@ export interface Message {
   text: string;
   status?: string;
   clientId?: string;
+  images?: ImageAttachment[];
+  unavailableImages?: number;
   files?: FileChange[];
   truncated?: boolean;
 }
@@ -110,12 +112,19 @@ export interface Operation {
   turnId?: string;
   error?: string;
 }
-export interface Attachment {
+export interface FileAttachment {
+  kind?: 'file';
   path: string;
   sha: string;
   fromLine: number;
   toLine: number;
 }
+export interface ImageAttachment {
+  kind: 'image';
+  id: string;
+  name: string;
+}
+export type Attachment = FileAttachment | ImageAttachment;
 export interface FileContent {
   path: string;
   text: string;
@@ -183,6 +192,7 @@ export interface Model {
   isDefault: boolean;
   defaultReasoningEffort: string;
   supportsFast?: boolean;
+  supportsImages?: boolean;
   supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
 }
 export type ReviewTarget =

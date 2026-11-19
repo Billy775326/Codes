@@ -28,12 +28,17 @@
   padding: 6px 10px 10px;
   border: 0;
 }
-.app .composer-toolbar > .icon-button {
+.app .composer-attachment-controls > .icon-button {
   width: 36px;
   height: 36px;
   min-width: 36px;
   padding: 8px;
   border-radius: 7px;
+}
+.composer-attachment-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 .app .permission-menu {
   position: relative;
@@ -161,6 +166,10 @@
   border-radius: 8px;
 }
 @container (max-width: 460px) {
+  .composer-attachment-controls {
+    grid-column: 1;
+    grid-row: 1;
+  }
   .app .composer-toolbar {
     gap: 6px;
     padding: 6px 8px 8px;
@@ -196,14 +205,14 @@
   .app .composer textarea {
     font-size: 16px;
   }
-  .app .composer-toolbar > .icon-button,
+  .app .composer-attachment-controls > .icon-button,
   .app .composer-toolbar > select,
   .app .model-menu summary,
   .app .permission-menu summary,
   .app .composer-dispatch-actions > button {
     min-height: 40px;
   }
-  .app .composer-toolbar > .icon-button,
+  .app .composer-attachment-controls > .icon-button,
   .app .composer-dispatch-actions > button {
     height: 40px;
   }
@@ -339,4 +348,78 @@
   color: var(--muted);
   font-size: 12px;
   padding: 6px 2px;
+}
+
+/* Image bodies load separately; the composer keeps a bounded horizontal preview strip. */
+.attachments.has-images {
+  flex-wrap: nowrap;
+  max-height: 94px;
+  overflow-x: auto;
+}
+.image-attachment {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.attachments > .image-attachment {
+  padding: 0;
+  border-radius: 7px;
+  background: var(--editor);
+}
+.image-attachment a {
+  display: block;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.image-attachment img {
+  display: block;
+  width: 80px;
+  height: 64px;
+  object-fit: contain;
+  background: var(--editor);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.image-attachment > button {
+  position: absolute;
+  right: 0;
+  top: 0;
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 50%;
+  background: var(--popup);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+.image-upload-status {
+  margin: 6px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.image-unavailable {
+  display: block;
+  max-width: 140px;
+  padding: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .image-attachment > button {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
+.queued-images {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  grid-column: 1 / -1;
+  margin-bottom: 4px;
 }

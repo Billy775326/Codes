@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -314,6 +315,7 @@ it('validates native steering/review inputs and publishes bounded reasoning meta
     'isDefault',
     'defaultReasoningEffort',
     'supportedReasoningEfforts',
+    'supportsImages',
     'supportsFast',
   ]);
   const modes = await (await fetch(origin + '/api/modes', { headers: { cookie } })).json();
@@ -368,4 +370,71 @@ it('sends small JSON with an exact length without introducing a compressed strea
   expect(result.headers['content-encoding']).toBeUndefined();
   expect(result.headers['content-length']).toBe(String(result.bytes.length));
   expect(JSON.parse(result.bytes.toString()).runtime).toBe('mock');
+});
+
+it('uploads images separately from JSON, protects reads and dispatches image-only input by small references', async () => {
+  const { imagePng } = await import('./fixtures/image');
+  const project = service.store.addProject('Images', directory);
+  const bytes = Buffer.concat([imagePng, Buffer.alloc(300_000)]);
+  const upload = await fetch(origin + '/api/projects/' + project.id + '/images', {
+    method: 'POST',
+    headers: { cookie, origin, 'content-type': 'image/png', 'x-image-name': 'screenshot.png' },
+    body: bytes,
+  });
+  expect(upload.status).toBe(200);
+  const image = await upload.json();
+  expect(image).toMatchObject({ kind: 'image', name: 'screenshot.png' });
+  expect(JSON.stringify(image).length).toBeLessThan(250);
+  const path = '/api/projects/' + project.id + '/images/' + image.id;
+  expect((await fetch(origin + path)).status).toBe(401);
+  const read = await fetch(origin + path, { headers: { cookie } });
+  expect(read.headers.get('content-type')).toBe('image/png');
+  expect(read.headers.get('cache-control')).toContain('private');
+  expect(Buffer.from(await read.arrayBuffer())).toEqual(bytes);
+  const other = service.store.addProject('Other images', directory + '-other');
+  expect(
+    (
+      await fetch(origin + '/api/projects/' + other.id + '/images/' + image.id, {
+        headers: { cookie },
+      })
+    ).status,
+  ).toBe(404);
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  const sent = await fetch(origin + '/api/threads/' + thread.id + '/send', {
+    method: 'POST',
+    headers: { cookie, origin, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      operationId: randomUUID(),
+      text: '',
+      settings: thread.settings,
+      attachments: [image],
+    }),
+  });
+  expect(sent.status).toBe(200);
+  const snapshot = await (
+    await fetch(origin + '/api/threads/' + thread.id + '/snapshot', { headers: { cookie } })
+  ).json();
+  expect(snapshot.thread.messages.find((row: any) => row.kind === 'user').images).toEqual([
+    { kind: 'image', id: image.id, name: 'Attached image' },
+  ]);
+  const json = JSON.stringify(snapshot);
+  expect(json).not.toContain('data:image');
+  expect(json).not.toContain(directory);
+  expect(json.length).toBeLessThan(100_000);
+});
+
+it('rejects fake image uploads, invalid names and oversized uploads without dispatching work', async () => {
+  const { imagePng } = await import('./fixtures/image');
+  const project = service.store.addProject('Images', directory);
+  const path = origin + '/api/projects/' + project.id + '/images';
+  const upload = (body: Buffer, type = 'image/png', name = 'capture.png') =>
+    fetch(path, {
+      method: 'POST',
+      headers: { cookie, origin, 'content-type': type, 'x-image-name': name },
+      body: new Uint8Array(body),
+    });
+  expect((await upload(Buffer.from('<svg/>'))).status).toBe(400);
+  expect((await upload(imagePng, 'text/plain')).status).toBe(415);
+  expect((await upload(imagePng, 'image/png', '%invalid')).status).toBe(400);
+  expect((await upload(Buffer.alloc(8 * 1024 * 1024 + 1))).status).toBe(413);
 });

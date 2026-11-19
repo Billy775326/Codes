@@ -1,3 +1,5 @@
+import { ImageAttachmentView } from './ImageAttachments';
+import { useImageAttachments } from './useImageAttachments';
 import { chatFontSizes, codeFontSizes } from './font-sizes';
 import React, {
   memo,
@@ -14,6 +16,7 @@ import remarkGfm from 'remark-gfm';
 import type {
   Action,
   Attachment,
+  ImageAttachment,
   Envelope,
   FileContent,
   Message,
@@ -105,6 +108,7 @@ const save = (key: string, value: string) => {
 const draftKey = (projectId: string, threadId: string) =>
   'codes.draft.' + (threadId || 'new.' + projectId);
 const MessageView = memo(function MessageView({
+  projectId,
   item,
   streaming,
   onReply,
@@ -119,6 +123,7 @@ const MessageView = memo(function MessageView({
   onFork?: (item: Message) => void;
   disabled?: boolean;
   onReview?: (item: Message, path?: string) => void;
+  projectId: string;
   item: Message;
   streaming: boolean;
   actions?: boolean;
@@ -182,6 +187,22 @@ const MessageView = memo(function MessageView({
             </span>
           )}
         </div>
+        {!!item.images?.length && (
+          <div className="message-images">
+            {item.images.map((image, index) => (
+              <ImageAttachmentView
+                key={image.id + ':' + index}
+                image={image}
+                projectId={projectId}
+              />
+            ))}
+          </div>
+        )}
+        {!!item.unavailableImages && (
+          <p className="image-unavailable">
+            {item.unavailableImages} image attachment(s) available in native history.
+          </p>
+        )}
         <div className="prose">
           {streaming ? (
             <div className="stream-text">
@@ -286,7 +307,11 @@ function App() {
     }
   });
   const [preferencesError, setPreferencesError] = useState('');
-  const [steerReceipt, setSteerReceipt] = useState<{ operationId: string; text: string }>();
+  const [steerReceipt, setSteerReceipt] = useState<{
+    operationId: string;
+    text: string;
+    attachments?: Attachment[];
+  }>();
   const threadRef = useRef(threadId);
   threadRef.current = threadId;
   const composerControls = useRef<ComposerControlsHandle>(null);
@@ -451,6 +476,22 @@ function App() {
       setAuth('login');
     } else setError(message(e));
   }, []);
+  const images = useImageAttachments({
+    projectId,
+    scope: auth + ':' + projectId + ':' + threadId,
+    count: attachments.length,
+    disabled: auth !== 'ready' || !projectId || !!thread?.archived || !!thread?.managementPending,
+    attach: (image: ImageAttachment) => {
+      draftRevision.current++;
+      setAttachments((list) =>
+        list.length >= 4 || list.some((entry) => entry.kind === 'image' && entry.id === image.id)
+          ? list
+          : [...list, image],
+      );
+    },
+    error: notice,
+  });
+  const hasInput = !!draft.trim() || attachments.some((entry) => entry.kind === 'image');
   const connectionStatus = useCallback((status: string) => {
     setConnection(status);
     if (status === 'Connected') setConnectionError('');
@@ -864,7 +905,15 @@ function App() {
     }
   };
   const enqueue = async () => {
-    if (!threadId || busy || !draft.trim() || thread?.archived || thread?.managementPending) return;
+    if (
+      !threadId ||
+      busy ||
+      images.pending ||
+      !hasInput ||
+      thread?.archived ||
+      thread?.managementPending
+    )
+      return;
     setBusy(true);
     setError('');
     const version = draftRevision.current;
@@ -983,8 +1032,9 @@ function App() {
     }
     if (
       busy ||
+      images.pending ||
       queueRequest ||
-      !draft.trim() ||
+      !hasInput ||
       !projectId ||
       loadingConversation ||
       connection !== 'Connected' ||
@@ -1028,6 +1078,11 @@ function App() {
       if (feed.current && threadId === id) void feed.current.connect();
     } catch (e) {
       notice(e);
+      if (
+        version === draftRevision.current &&
+        (threadRef.current === id || threadRef.current === origin)
+      )
+        setAttachments(attachments);
       if (id && e instanceof ApiError && !e.uncertain) {
         save(`codes.operation.${id}`, '');
         setReceipt('');
@@ -1135,7 +1190,7 @@ function App() {
     if (!file || attachments.length >= 4) return;
     draftRevision.current++;
     setAttachments((list) => [
-      ...list.filter((x) => x.path !== file.path),
+      ...list.filter((x) => x.kind === 'image' || x.path !== file.path),
       { path: file.path, sha: file.sha, fromLine: Math.min(...range), toLine: Math.max(...range) },
     ]);
     returnToComposer();
@@ -1211,9 +1266,10 @@ function App() {
   const deliveryBlocked =
     connection !== 'Connected' ||
     busy ||
+    !!images.pending ||
     !!steerReceipt ||
     !!queueRequest ||
-    !draft.trim() ||
+    !hasInput ||
     !projectId ||
     loadingConversation ||
     !!thread?.archived ||
@@ -1302,7 +1358,7 @@ function App() {
     }
   };
   const steer = async () => {
-    if (busy || !canSteer || !draft.trim() || steerReceipt || queueRequest) return;
+    if (busy || images.pending || !canSteer || !hasInput || steerReceipt || queueRequest) return;
     if (draft.trimStart().startsWith('/')) {
       runCommand(draft.trim());
       return;
@@ -1310,7 +1366,7 @@ function App() {
     const id = threadId;
     const text = draft;
     const version = draftRevision.current;
-    const record = { operationId: crypto.randomUUID(), text };
+    const record = { operationId: crypto.randomUUID(), text, attachments };
     setBusy(true);
     setError('');
     save('codes.steer.' + id, JSON.stringify(record));
@@ -1350,7 +1406,11 @@ function App() {
         if (result.state === 'unknown' || result.state === 'dispatching')
           throw new Error('Follow-up acceptance is still unconfirmed. It will not be resent.');
       }
-      if (result.state !== 'failed' && draft === steerReceipt.text) {
+      if (
+        result.state !== 'failed' &&
+        draft === steerReceipt.text &&
+        JSON.stringify(attachments) === JSON.stringify(steerReceipt.attachments ?? [])
+      ) {
         changeDraft('');
         setAttachments([]);
       }
@@ -1889,6 +1949,7 @@ function App() {
                     activeIds={activeTurnIds}
                     render={(m, finalReply, changes, timestamp) => (
                       <MessageView
+                        projectId={projectId}
                         key={m.id}
                         item={m}
                         actions={finalReply}
@@ -1937,6 +1998,7 @@ function App() {
                 {thread?.pending &&
                   !thread.messages.some((m) => m.clientId === thread.pending?.id) && (
                     <MessageView
+                      projectId={projectId}
                       item={{
                         id: thread.pending.id,
                         turnId: '',
@@ -2064,6 +2126,7 @@ function App() {
           )}
           {thread?.queue && (
             <QueuePanel
+              projectId={projectId}
               key={threadId}
               threadId={threadId}
               state={thread.queue}
@@ -2141,25 +2204,48 @@ function App() {
             style={{ display: queueEditing ? 'none' : undefined }}
           >
             {attachments.length > 0 && (
-              <div className="attachments">
-                {attachments.map((a) => (
-                  <span key={a.path}>
-                    <Icon name="file" size={13} />
-                    {a.path}:{a.fromLine}–{a.toLine}
-                    <button
-                      aria-label={`Remove ${a.path}`}
-                      onClick={() => {
+              <div
+                className={
+                  'attachments' +
+                  (attachments.some((entry) => entry.kind === 'image') ? ' has-images' : '')
+                }
+              >
+                {attachments.map((a) =>
+                  a.kind === 'image' ? (
+                    <ImageAttachmentView
+                      key={a.id}
+                      image={a}
+                      projectId={projectId}
+                      remove={() => {
                         draftRevision.current++;
-                        setAttachments((list) => list.filter((x) => x !== a));
+                        setAttachments((list) => list.filter((entry) => entry !== a));
                       }}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+                    />
+                  ) : (
+                    <span key={a.path}>
+                      <Icon name="file" size={13} />
+                      {a.path}:{a.fromLine}–{a.toLine}
+                      <button
+                        aria-label={`Remove ${a.path}`}
+                        onClick={() => {
+                          draftRevision.current++;
+                          setAttachments((list) => list.filter((x) => x !== a));
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ),
+                )}
               </div>
             )}
+            {!!images.pending && (
+              <p className="image-upload-status" role="status">
+                Uploading {images.pending} image(s)…
+              </p>
+            )}
             <textarea
+              onPaste={images.paste}
               aria-label="Message Codex"
               aria-describedby="message-delivery-help"
               aria-keyshortcuts={shortcut === 'Enter' ? 'Enter' : 'Control+Enter Meta+Enter'}
@@ -2206,15 +2292,42 @@ function App() {
               }}
             />
             <div className="composer-toolbar">
-              <button
-                className="icon-button"
-                aria-label="Attach file context"
-                onClick={() => setPanel('files')}
-                disabled={!projectId}
-              >
-                <Icon name="plus" size={17} />
-              </button>
+              <div className="composer-attachment-controls">
+                <button
+                  className="icon-button"
+                  aria-label="Attach file context"
+                  onClick={() => setPanel('files')}
+                  disabled={!projectId}
+                >
+                  <Icon name="plus" size={17} />
+                </button>
 
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Attach image"
+                  title="Attach image"
+                  disabled={
+                    !projectId ||
+                    !!thread?.archived ||
+                    !!thread?.managementPending ||
+                    !!images.pending ||
+                    attachments.length >= 4
+                  }
+                  onClick={() => images.picker.current?.click()}
+                >
+                  <Icon name="image" size={17} />
+                </button>
+                <input
+                  hidden
+                  ref={images.picker}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  aria-label="Choose images"
+                  onChange={images.choose}
+                />
+              </div>
               <ComposerControls
                 ref={composerControls}
                 settings={settings}
@@ -2274,7 +2387,8 @@ function App() {
                     disabled={
                       connection !== 'Connected' ||
                       busy ||
-                      !draft.trim() ||
+                      !!images.pending ||
+                      !hasInput ||
                       !projectId ||
                       loadingConversation ||
                       !!receipt ||
@@ -2536,7 +2650,9 @@ function App() {
                         if (file) {
                           draftRevision.current++;
                           setAttachments((list) => [
-                            ...list.filter((entry) => entry.path !== file.path),
+                            ...list.filter(
+                              (entry) => entry.kind === 'image' || entry.path !== file.path,
+                            ),
                             { path: file.path, sha: file.sha, fromLine: 1, toLine: file.lines },
                           ]);
                           returnToComposer();

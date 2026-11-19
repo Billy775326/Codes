@@ -1,4 +1,4 @@
-import { limits, type Message, type TurnInfo } from '../shared/types.js';
+import { limits, type Message, type TurnInfo, type ImageAttachment } from '../shared/types.js';
 import { record } from '../shared/errors.js';
 import { fileChanges } from './file-changes.js';
 const text = (value: unknown, maximum: number = limits.item) =>
@@ -19,9 +19,25 @@ export function nativeTurn(raw: any): TurnInfo {
     ...(finiteTime(raw.durationMs) ? { durationMs: raw.durationMs } : {}),
   };
 }
-export function nativeMessage(raw: any, turnId: string): Message | undefined {
+export function nativeMessage(
+  raw: any,
+  turnId: string,
+  imageReference?: (path: string) => ImageAttachment | undefined,
+): Message | undefined {
   if (!record(raw) || typeof raw.id !== 'string') return;
-  if (raw.type === 'userMessage')
+  if (raw.type === 'userMessage') {
+    const content = Array.isArray(raw.content) ? raw.content : [];
+    const nativeImages = content.filter(
+      (entry: any) => entry?.type === 'image' || entry?.type === 'localImage',
+    );
+    const images = nativeImages
+      .slice(0, 4)
+      .map((entry: any) =>
+        entry.type === 'localImage' && typeof entry.path === 'string'
+          ? imageReference?.(entry.path)
+          : undefined,
+      )
+      .filter((entry: ImageAttachment | undefined): entry is ImageAttachment => !!entry);
     return {
       id: raw.id,
       turnId,
@@ -30,7 +46,12 @@ export function nativeMessage(raw: any, turnId: string): Message | undefined {
         ? raw.content.map((x: any) => text(x?.text)).join('\n')
         : text(raw.text),
       clientId: typeof raw.clientId === 'string' ? raw.clientId : undefined,
+      ...(images.length ? { images } : {}),
+      ...(nativeImages.length > images.length
+        ? { unavailableImages: nativeImages.length - images.length }
+        : {}),
     };
+  }
   if (raw.type === 'agentMessage')
     return {
       id: raw.id,
