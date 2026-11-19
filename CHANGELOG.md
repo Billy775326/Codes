@@ -69,6 +69,8 @@
 
 ### Fixed
 
+- Restore cold-loading conversations containing multi-megabyte native tool results. Read turn metadata without eager items, fetch one history item per response, and decode native frames up to 16 MiB with one concatenation per frame. Browser history and snapshot limits remain bounded.
+
 - Remove queued messages and their sidebar counts immediately after native acceptance, while retaining private execution receipts. Keep later messages waiting until the current task finishes; stopping or failing a delivered task pauses the remaining queue without putting the delivered message back. Preserve unconfirmed-delivery checks and confirmed delivery state across restart.
 
 - Retain history-confirmed outcomes for imported conversations when refreshing the sidebar, preserving uncertain execution receipts and concurrent title/archive updates.

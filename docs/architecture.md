@@ -59,7 +59,7 @@ Streaming deltas update memory and an event buffer, not a database row per token
 
 | Resource                             | Preview limit                                          |
 | ------------------------------------ | ------------------------------------------------------ |
-| CLI line                             | 4 MiB                                                  |
+| CLI line                             | 16 MiB                                                 |
 | Outstanding CLI requests             | 64                                                     |
 | CLI input buffer                     | 1 MiB                                                  |
 | Normal RPC acknowledgement           | 30 seconds                                             |
@@ -75,10 +75,12 @@ Streaming deltas update memory and an event buffer, not a database row per token
 | Event replay                         | 512 events / 1 MiB                                     |
 | Browser SSE connections              | 32                                                     |
 | Slow-client queued output            | 512 KiB before disconnect                              |
-| Unfinished queued messages           | 10 per conversation / 100 workspace-wide               |
+| Pending queued deliveries            | 10 per conversation / 100 workspace-wide               |
 | Queue event/snapshot text preview    | 2,000 characters per message; full payload retained    |
 | Pending steering previews            | 10 entries per conversation / 2,000 characters each    |
 | Completed/failed operation receipts  | 30 days                                                |
+
+Native turn lists omit item bodies; item hydration requests one item at a time so large results do not accumulate into a single RPC response. The JSONL decoder accumulates fragments within its 16 MiB frame budget and concatenates once per complete frame. These transport limits are separate from the bounded browser representation.
 
 History pages automatically use fewer turns when their combined items exceed the display budget. A single oversized turn still produces an explicit limit error. Very large native tool results can exceed the JSONL frame limit and close the runtime; use the CLI to inspect such conversations. The preview is designed around a small working set, not unlimited logs. Limits are implementation constraints, not measured throughput claims.
 

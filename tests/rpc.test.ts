@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { Rpc } from '../src/codex/rpc';
+import { Rpc, nativeFrameBytes } from '../src/codex/rpc';
 
 function fixture(timeout = 1000) {
   const input = new PassThrough();
@@ -49,10 +49,23 @@ describe('CLI JSONL transport', () => {
     await expect(pending).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
     await expect(rpc.request('hello', {})).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
   });
+  it('reads a fragmented multi-megabyte native result and keeps later envelopes usable', async () => {
+    const { rpc, output } = fixture();
+    const pending = rpc.request('thread/items/list', {});
+    const text = '界'.repeat(2 * 1024 * 1024);
+    const bytes = Buffer.from(JSON.stringify({ id: 1, result: { text } }) + '\n');
+    for (let offset = 0; offset < bytes.length; offset += 64 * 1024)
+      output.write(bytes.subarray(offset, offset + 64 * 1024));
+    expect((await pending).text.length).toBe(text.length);
+    const next = rpc.request('hello', {});
+    output.write('{"id":2,"result":{"ok":true}}\n');
+    await expect(next).resolves.toEqual({ ok: true });
+    rpc.fail();
+  });
   it('rejects oversized frames', async () => {
     const { rpc, output } = fixture();
     const pending = rpc.request('hello', {});
-    output.write(Buffer.alloc(4 * 1024 * 1024 + 1, 65));
+    output.write(Buffer.alloc(nativeFrameBytes + 1, 65));
     await expect(pending).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
   });
   it('distinguishes a definite CLI rejection from a lost result', async () => {

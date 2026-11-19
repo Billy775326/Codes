@@ -48,6 +48,9 @@ const nativeStatus = z.discriminatedUnion('type', [
   z.object({ type: z.literal('active'), activeFlags: z.array(z.string()) }),
 ]);
 
+const nativeHistoryItemPageSize = 1;
+const nativeHistoryItemLimit = 2000;
+
 export class Service {
   readonly events = new Events();
   readonly images: Images;
@@ -685,7 +688,7 @@ export class Service {
             threadId: id,
             turnId: turn.id,
             cursor: next,
-            limit: 20,
+            limit: nativeHistoryItemPageSize,
             sortDirection: 'asc',
           });
           if (!Array.isArray(items.data))
@@ -702,7 +705,10 @@ export class Service {
             messages.push(mapped);
           }
           next = items.nextCursor ?? undefined;
-          if (next && (seen.has(next) || seen.size >= 100))
+          if (
+            next &&
+            (seen.has(next) || seen.size >= nativeHistoryItemLimit / nativeHistoryItemPageSize)
+          )
             throw new AppError(
               'HISTORY_LIMIT',
               'History pagination exceeded the supported limit.',
@@ -722,7 +728,7 @@ export class Service {
           cursor,
           limit: pageLimit,
           sortDirection: direction === 'newer' ? 'asc' : 'desc',
-          itemsView: 'summary',
+          itemsView: 'notLoaded',
         });
       } catch (error) {
         // CLI 0.167.0 creates threads lazily; only its specific empty-thread error is benign.

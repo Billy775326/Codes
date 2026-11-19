@@ -2,9 +2,13 @@ import { EventEmitter } from 'node:events';
 import type { Readable, Writable } from 'node:stream';
 import { AppError, record } from '../shared/errors.js';
 
+// Native tool results can be larger than the bounded browser transcript.
+export const nativeFrameBytes = 16 * 1024 * 1024;
+
 export class Rpc extends EventEmitter {
   private serial = 0;
-  private tail = Buffer.alloc(0);
+  private fragments: Buffer[] = [];
+  private frameBytes = 0;
   private pending = new Map<
     number,
     {
@@ -23,16 +27,25 @@ export class Rpc extends EventEmitter {
     output.on('data', (chunk: Buffer) => {
       if (this.failure) return;
       try {
-        this.tail = Buffer.concat([this.tail, chunk]);
-        let end: number;
-        while ((end = this.tail.indexOf(10)) >= 0) {
-          if (end > 4 * 1024 * 1024) throw new Error('line limit');
-          const line = this.tail.subarray(0, end);
-          this.tail = this.tail.subarray(end + 1);
+        let offset = 0;
+        while (offset < chunk.length) {
+          const end = chunk.indexOf(10, offset);
+          const part = chunk.subarray(offset, end < 0 ? chunk.length : end);
+          if (this.frameBytes + part.length > nativeFrameBytes) throw new Error('line limit');
+          if (part.length) this.fragments.push(part);
+          this.frameBytes += part.length;
+          if (end < 0) break;
+          // Concatenate each frame once, rather than copying an ever-growing tail on every chunk.
+          const line =
+            this.fragments.length === 1
+              ? this.fragments[0]!
+              : Buffer.concat(this.fragments, this.frameBytes);
+          this.fragments = [];
+          this.frameBytes = 0;
           if (line.length)
             this.receive(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(line)));
+          offset = end + 1;
         }
-        if (this.tail.length > 4 * 1024 * 1024) throw new Error('line limit');
       } catch {
         this.fail(new AppError('PROTOCOL_ERROR', 'Invalid or oversized CLI response.', 502, true));
       }
@@ -133,7 +146,8 @@ export class Rpc extends EventEmitter {
       pending.reject(error);
     }
     this.pending.clear();
-    this.tail = Buffer.alloc(0);
+    this.fragments = [];
+    this.frameBytes = 0;
     this.emit('offline', error);
   }
 }

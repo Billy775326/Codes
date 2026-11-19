@@ -62,7 +62,7 @@ An unknown result that cannot be proven terminal remains locked. Inspect the tas
 - One selected conversation receives detailed events in each browser. An idle browser subscribes to project summaries so newly created conversations appear without refreshing.
 - The sidebar browses native conversations in pages of up to 30, with separate active/archived views. Case-insensitive title search scans up to four native pages per request; use Next to continue. A failed read retains the displayed portion and offers refresh. The project summary snapshot remains capped at 200; it is not the discovery limit.
 - Empty CLI threads are materialized lazily. If the CLI is restarted before the first user message, an empty thread may no longer be readable; create a new conversation.
-- Native item display is capped. Huge outputs may exceed the 4 MiB protocol frame and require CLI inspection.
+- Native item display is capped. History reads fetch one native item per response and use a 16 MiB JSONL frame limit. Larger individual native items still require CLI inspection; browser snapshot/display limits remain smaller.
 - File context is a checksum-verified copy of selected lines at send time, not a live editor. Hidden paths are intentionally excluded from the file browser.
 - The change view shows native current-turn diff events or file-change items from the loaded history. It is not a general Git staging or merge interface.
 - The isolated live read/write/interrupt pilot passed. Remote proxy behavior, a real prompting approval policy, and the remaining permission/question variants still require manual acceptance; simulator success is insufficient.

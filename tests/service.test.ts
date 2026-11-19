@@ -9,6 +9,35 @@ import { Driver } from '../src/codex/driver';
 import { AppError } from '../src/shared/errors';
 import type { Thread } from '../src/shared/types';
 const cleanup: (() => Promise<void>)[] = [];
+it('hydrates history without eager turn items and keeps large tool payloads outside snapshots', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), 'Bounded native history fixture', thread.settings);
+  await until(() => thread.state === 'completed');
+  const call = service.driver.call.bind(service.driver);
+  let largeItem = false;
+  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
+    if (method === 'thread/turns/list') expect(params).toMatchObject({ itemsView: 'notLoaded' });
+    if (method === 'thread/items/list') expect(params).toMatchObject({ limit: 1 });
+    const result = await call(method, params, timeout);
+    if (method === 'thread/items/list' && !largeItem && result.data.length) {
+      const entry = result.data[0];
+      entry.item = {
+        id: entry.item.id,
+        type: 'mcpToolCall',
+        server: 'fixture',
+        tool: 'large-result',
+        status: 'completed',
+        result: { content: 'x'.repeat(6 * 1024 * 1024) },
+      };
+      largeItem = true;
+    }
+    return result;
+  });
+  const history = await service.history(thread.id);
+  expect(largeItem).toBe(true);
+  expect(history.messages.some((item) => item.text === 'Used fixture: large-result')).toBe(true);
+  expect(Buffer.byteLength(JSON.stringify(history))).toBeLessThan(2 * 1024 * 1024);
+});
 it('retains native turn timing and reply phase through live events and paginated history reload', async () => {
   const { service, thread } = await fixture();
   await service.send(
