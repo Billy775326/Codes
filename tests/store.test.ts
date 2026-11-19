@@ -9,6 +9,37 @@ const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) cleanup();
 });
+it('dequeues accepted deliveries from counts and capacity while retaining recovery records across restart', () => {
+  const { store, directory } = fixture();
+  const payload = {
+    text: 'Queue fixture',
+    settings: { permission: 'read-only' as const },
+    attachments: [],
+  };
+  store.queue.add('accepted', 'a', payload);
+  store.queue.set('accepted', 'sent');
+  store.begin('accepted', 'a', 'send', {});
+  store.update('accepted', 'acknowledged', 'native-turn');
+  for (let i = 0; i < 10; i++) store.queue.add('waiting-' + i, 'a', payload);
+  expect(store.queue.count('a')).toBe(10);
+  expect(store.thread('a')?.queueCount).toBe(10);
+  expect(store.queue.state('a').items.map((item) => item.id)).not.toContain('accepted');
+  expect(store.queue.inFlight('a')).toMatchObject([{ id: 'accepted', state: 'sent' }]);
+  expect(() => store.queue.add('overflow', 'a', payload)).toThrow(/queue is full/);
+  store.queue.set('waiting-0', 'dispatching');
+  store.close();
+  const restarted = new Store(directory);
+  try {
+    expect(restarted.operation('accepted')?.state).toBe('unknown');
+    expect(restarted.queue.get('accepted')?.state).toBe('sent');
+    expect(restarted.queue.state('a')).toMatchObject({ paused: true });
+    expect(restarted.queue.state('a').items.map((item) => item.id)).not.toContain('accepted');
+    expect(restarted.queue.get('waiting-0')?.state).toBe('unknown');
+    expect(restarted.queue.count('a')).toBe(10);
+  } finally {
+    restarted.close();
+  }
+});
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'codes-store-'));
   cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
@@ -121,7 +152,7 @@ it('backs up schema 1 before adding archive metadata and preserves pending recei
   }
 });
 
-it('preserves queued messages across restart and pauses uncertain dispatches instead of resending', () => {
+it('preserves delivery confirmation across restart and pauses uncertain dispatches instead of resending', () => {
   const { store, directory } = fixture();
   const payload = {
     text: 'Queued private fixture',
@@ -131,12 +162,16 @@ it('preserves queued messages across restart and pauses uncertain dispatches ins
   store.queue.add('queued', 'a', payload);
   store.queue.add('sent', 'a', payload);
   store.queue.set('sent', 'sent');
+  store.queue.add('uncertain', 'a', payload);
+  store.queue.set('uncertain', 'dispatching');
   store.close();
   const reopened = new Store(directory);
   try {
     expect(reopened.queue.state('a')).toMatchObject({ paused: true });
     expect(reopened.queue.get('queued')).toMatchObject({ state: 'queued', text: payload.text });
-    expect(reopened.queue.get('sent')).toMatchObject({ state: 'unknown' });
+    expect(reopened.queue.get('sent')).toMatchObject({ state: 'sent' });
+    expect(reopened.queue.get('uncertain')).toMatchObject({ state: 'unknown' });
+    expect(reopened.queue.state('a').items.map((item) => item.id)).toEqual(['queued', 'uncertain']);
     expect(() => reopened.queue.cancel('sent', 'a')).toThrow(/may already be executing/);
   } finally {
     reopened.close();

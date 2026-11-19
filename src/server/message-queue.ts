@@ -50,9 +50,8 @@ export class MessageQueue {
       const queue = this.store.state(id);
       if (
         queue.paused ||
-        queue.items.some((item) =>
-          ['dispatching', 'sent', 'unknown', 'failed'].includes(item.state),
-        )
+        this.store.inFlight(id).some((item) => item.state === 'sent') ||
+        queue.items.some((item) => ['dispatching', 'unknown', 'failed'].includes(item.state))
       )
         return;
       const first = queue.items[0];

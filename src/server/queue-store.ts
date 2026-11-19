@@ -19,7 +19,7 @@ export class QueueStore {
     return (
       this.db
         .prepare(
-          "SELECT count(*) AS count FROM queued_messages WHERE thread_id=? AND state NOT IN ('completed','cancelled')",
+          "SELECT count(*) AS count FROM queued_messages WHERE thread_id=? AND state NOT IN ('completed','cancelled','sent')",
         )
         .get(threadId) as any
     ).count as number;
@@ -33,7 +33,7 @@ export class QueueStore {
         coalesce(max(state='unknown'),0) AS unknown_result,
         coalesce(max(state='failed'),0) AS failed,
         coalesce((SELECT paused FROM queue_controls WHERE thread_id=?),0) AS paused
-      FROM queued_messages WHERE thread_id=? AND state NOT IN ('completed','cancelled')
+      FROM queued_messages WHERE thread_id=? AND state NOT IN ('completed','cancelled','sent')
     `,
       )
       .get(threadId, threadId) as {
@@ -58,7 +58,7 @@ export class QueueStore {
       .get(threadId) as any;
     const rows = this.db
       .prepare(
-        "SELECT * FROM queued_messages WHERE thread_id=? AND state NOT IN ('completed','cancelled') ORDER BY seq LIMIT 10",
+        "SELECT * FROM queued_messages WHERE thread_id=? AND state NOT IN ('completed','cancelled','sent') ORDER BY seq LIMIT 10",
       )
       .all(threadId) as any[];
     return {
@@ -73,6 +73,14 @@ export class QueueStore {
         };
       }),
     };
+  }
+  /** Accepted deliveries stay private until their execution receipt is settled. */
+  inFlight(threadId: string): Pick<QueueItem, 'id' | 'state'>[] {
+    return this.db
+      .prepare(
+        "SELECT id,state FROM queued_messages WHERE thread_id=? AND state IN ('dispatching','sent','unknown') ORDER BY seq",
+      )
+      .all(threadId) as Pick<QueueItem, 'id' | 'state'>[];
   }
   private map(row: any): QueueItem {
     return {
@@ -107,7 +115,7 @@ export class QueueStore {
     const total = (
       this.db
         .prepare(
-          "SELECT count(*) AS count FROM queued_messages WHERE state NOT IN ('completed','cancelled')",
+          "SELECT count(*) AS count FROM queued_messages WHERE state NOT IN ('completed','cancelled','sent')",
         )
         .get() as any
     ).count;
@@ -188,7 +196,7 @@ export class QueueStore {
   }
   recover() {
     this.db
-      .exec(`UPDATE queued_messages SET state='unknown',error='Check the execution receipt before continuing.' WHERE state IN ('dispatching','sent');
+      .exec(`UPDATE queued_messages SET state='unknown',error='Check the execution receipt before continuing.' WHERE state='dispatching';
    INSERT INTO queue_controls SELECT DISTINCT thread_id,1,'Service restarted. Review and resume waiting messages.' FROM queued_messages WHERE state NOT IN ('completed','cancelled')
     ON CONFLICT(thread_id) DO UPDATE SET paused=1,reason='Service restarted. Review and resume waiting messages.';`);
   }

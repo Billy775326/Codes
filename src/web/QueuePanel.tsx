@@ -143,13 +143,11 @@ export function QueuePanel({
                 <span>
                   {entry.state === 'queued'
                     ? 'Waiting · Editable'
-                    : entry.state === 'sent'
-                      ? 'Running · Locked'
-                      : entry.state === 'dispatching'
-                        ? 'Sending · Locked'
-                        : entry.state === 'unknown'
-                          ? 'Unconfirmed · Locked'
-                          : 'Needs review · Text locked'}
+                    : entry.state === 'dispatching'
+                      ? 'Sending · Locked'
+                      : entry.state === 'unknown'
+                        ? 'Unconfirmed · Locked'
+                        : 'Needs review · Text locked'}
                 </span>
                 <small>
                   {permissionLabel(entry.settings.permission)}

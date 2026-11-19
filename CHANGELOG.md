@@ -69,6 +69,8 @@
 
 ### Fixed
 
+- Remove queued messages and their sidebar counts immediately after native acceptance, while retaining private execution receipts. Keep later messages waiting until the current task finishes; stopping or failing a delivered task pauses the remaining queue without putting the delivered message back. Preserve unconfirmed-delivery checks and confirmed delivery state across restart.
+
 - Retain history-confirmed outcomes for imported conversations when refreshing the sidebar, preserving uncertain execution receipts and concurrent title/archive updates.
 
 - Compress large JSON responses when supported and declare their exact transfer length. Let progressing read downloads finish beyond 35 seconds, with a 35-second inactivity deadline and a two-minute overall bound, instead of repeatedly discarding partial conversation history. Keep write deadlines and duplicate-execution protection unchanged; interrupted downloads remain retryable.

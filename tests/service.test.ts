@@ -622,6 +622,45 @@ it('dispatches queued messages in FIFO order only after the active task complete
     'Second queued',
   ]);
 });
+it('dequeues accepted messages while execution is active and still pauses followers when stopped', async () => {
+  const { service, thread } = await fixture();
+  const first = randomUUID(),
+    next = randomUUID();
+  const payload = {
+    text: '[hold] Accepted queued task',
+    settings: thread.settings,
+    attachments: [],
+  };
+  await service.enqueue(thread.id, first, payload);
+  await until(() => service.store.queue.get(first)?.state === 'sent');
+  expect(thread.state).toBe('running');
+  expect(service.queueState(thread.id).items).toEqual([]);
+  expect(service.store.thread(thread.id)?.queueCount).toBe(0);
+  // An execution acknowledgement can become uncertain after confirmed delivery.
+  service.store.update(first, 'unknown', thread.turnId);
+  await service.reconcile(thread.id);
+  expect(service.store.queue.get(first)?.state).toBe('sent');
+  expect(service.queueState(thread.id).items).toEqual([]);
+  expect(service.store.thread(thread.id)?.executionUnknown).toBe(true);
+  expect(() => service.cancelQueued(thread.id, first)).toThrow(/already be executing/);
+  await service.enqueue(thread.id, next, { ...payload, text: 'After accepted execution' });
+  await service.enqueue(thread.id, first, payload);
+  expect(service.queueState(thread.id).items.map((item) => item.id)).toEqual([next]);
+  expect(service.store.queue.get(next)?.state).toBe('queued');
+  expect(thread.messages.filter((item) => item.kind === 'user')).toHaveLength(1);
+  await service.interrupt(thread.id);
+  await until(() => thread.state === 'interrupted');
+  expect(service.store.queue.get(first)?.state).toBe('completed');
+  expect(service.queueState(thread.id)).toMatchObject({ paused: true });
+  expect(service.queueState(thread.id).items.map((item) => item.id)).toEqual([next]);
+  service.controlQueue(thread.id, false);
+  await until(() => service.store.queue.get(next)?.state === 'completed');
+  expect(service.queueState(thread.id).items).toEqual([]);
+  expect(thread.messages.filter((item) => item.kind === 'user').map((item) => item.text)).toEqual([
+    payload.text,
+    'After accepted execution',
+  ]);
+});
 it('pauses, edits, and removes waiting messages without cancelling the active task', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[approve] Editing fixture', thread.settings);

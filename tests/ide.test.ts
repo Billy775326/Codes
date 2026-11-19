@@ -175,6 +175,7 @@ it('claims queued Send now atomically and refuses different settings', async () 
   ]);
   expect(attempts.some((result) => result.status === 'fulfilled')).toBe(true);
   expect(thread.messages.filter((entry) => entry.clientId === id)).toHaveLength(1);
+  expect(service.queueState(thread.id).items.map((entry) => entry.id)).not.toContain(id);
   const other = randomUUID();
   await service.enqueue(thread.id, other, {
     text: 'Different permissions',
@@ -189,9 +190,10 @@ it('claims queued Send now atomically and refuses different settings', async () 
   await until(() => thread.state === 'interrupted');
   expect(service.store.operation(id)?.state).toBe('completed');
   expect(service.store.queue.get(id)).toMatchObject({
-    state: 'failed',
+    state: 'completed',
     error: 'The task ended interrupted.',
   });
+  expect(service.queueState(thread.id).items.map((entry) => entry.id)).toEqual([other]);
   expect(service.store.queue.state(thread.id).paused).toBe(true);
 });
 it('runs native reviews in Read only with idempotent receipts and visible review output', async () => {

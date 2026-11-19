@@ -1523,14 +1523,13 @@ export class Service {
     }
   }
   private syncQueue(thread: Thread) {
-    for (const entry of this.store.queue.state(thread.id).items) {
-      if (!['dispatching', 'sent', 'unknown'].includes(entry.state)) continue;
+    for (const entry of this.store.queue.inFlight(thread.id)) {
       const op = this.store.operation(entry.id);
       if (op?.state === 'completed') {
         const successful = thread.state === 'completed';
         this.store.queue.set(
           entry.id,
-          successful ? 'completed' : 'failed',
+          'completed',
           successful ? undefined : 'The task ended ' + thread.state + '.',
         );
         if (!successful)
@@ -1539,10 +1538,11 @@ export class Service {
             'A task stopped or failed. Review the remaining messages before resuming.',
           );
       } else if (op?.state === 'unknown') {
-        this.store.queue.set(entry.id, 'unknown', 'Check result before continuing.');
+        if (entry.state !== 'sent')
+          this.store.queue.set(entry.id, 'unknown', 'Check result before continuing.');
         this.store.queue.pause(thread.id, 'An execution result is unknown.');
       } else if (op?.state === 'failed') {
-        this.store.queue.set(entry.id, 'failed', op.error);
+        this.store.queue.set(entry.id, entry.state === 'sent' ? 'completed' : 'failed', op.error);
         this.store.queue.pause(thread.id, 'A queued task failed.');
       }
     }
