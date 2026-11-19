@@ -11,8 +11,7 @@
   width: min(100%, 360px);
 }
 .login-panel .brand {
-  font-size: 20px;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 .login-panel h1 {
   font-size: 22px;

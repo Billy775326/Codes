@@ -4,10 +4,12 @@ The sidebar manages native conversations for the selected project. It uses the e
 
 ## Layout
 
-1. Project selection and Add project, followed by New conversation.
-2. Title search and Refresh, then Chats / Archived. Chats includes completed conversations; it does not mean currently running tasks.
-3. Date groups with two-line rows: title, then task status and last update time. A nonempty queue adds its count and any paused/error condition. The selected row stays highlighted; secondary operations live in its actions menu.
-4. Native Previous / Next pagination when needed. Connection/reconnect and Sign out remain in the navigation footer. During a disconnected subscription the list also offers Updates paused; saved task states remain visible.
+1. Project context and New conversation.
+2. A conversation-view dropdown (Chats / Archived) with Refresh, followed by title search.
+3. Date groups with title and update time on one row. Running, approval, question, failure, interrupted and uncertain states have a second line. Routine Ready / Done states stay in the accessible description. Queue conditions remain visible. Secondary operations live in each conversation's actions menu.
+4. Native Previous / Next pagination when needed. The footer contains connection status, Settings, and Workspace actions. Workspace actions holds Add project, Reconnect updates and Sign out; an empty workspace offers Add project directly. An interrupted connection exposes one direct reconnect button.
+
+Settings appears in the footer when navigation is open, and in the conversation header when it is closed. The layout removes duplicate connection controls and routine state labels without removing recovery actions or archived conversations.
 
 Search uses native cursors, including conversations beyond the local 200-summary window. There are no global counts, page-only task filters presented as global filters, automatic history loads for individual rows, or per-row event connections. Times use native/server `updatedAt` in milliseconds, rendered in the browser's timezone with a full timestamp tooltip. Status-only refreshes do not advance this timestamp.
 
@@ -19,10 +21,10 @@ Search uses native cursors, including conversations beyond the local 200-summary
 | Pending archive receipt                            | Check archive                                                                           | Rename/archive controls remain protected; Check status queries native evidence     |
 | Pending execution with a non-active saved state    | Confirming result                                                                       | Does not present saved completion as a confirmed new result                        |
 | Task state                                         | Ready, Running, Needs approval, Needs answer, Done, Failed, Interrupted, Status unknown | Task and interaction lifecycle updates remain authoritative for owned executions   |
-| Queue aggregate                                    | Count, Paused, Failed, Check result                                                     | Displayed alongside task state; completed/cancelled entries excluded               |
-| Browser connection                                 | Updates paused                                                                          | Separate from execution state; disconnect does not mean task failure or completion |
+| Queue aggregate                                    | Count, Paused, Failed, Check result                                                     | Displayed alongside task state; sent/completed/cancelled entries excluded          |
+| Browser connection                                 | Connection status                                                                       | Separate from execution state; disconnect does not mean task failure or completion |
 
-The SQLite summary projection reads only aggregate queue/receipt metadata, never queued message bodies. Optional summary fields are additive; schema 4 and stored settings/history remain unchanged. Queue counts include unfinished dispatched entries as well as waiting entries, so the label is “in queue”, not “waiting”. An empty paused queue has no queue badge.
+The SQLite summary projection reads only aggregate queue/receipt metadata, never queued message bodies. Optional summary fields are additive; schema 4 and stored settings/history remain unchanged. Queue counts include waiting, dispatching and uncertain-delivery entries; confirmed deliveries leave the visible queue while their execution receipts are retained. An empty paused queue has no queue badge.
 
 Native `thread/list` observations and `thread/status/changed` update known conversations that have no owned execution lease or pending interaction. `idle` and `notLoaded` do not prove a task completed; existing terminal outcomes are retained, while an unloaded previously active conversation becomes Status unknown. Unknown owned receipts remain protected until existing reconciliation establishes their outcome. Native status payloads are validated before use. Runtime flags are not evidence about a separate Codex process sharing the same account.
 

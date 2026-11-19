@@ -1,3 +1,4 @@
+import { reconnectUpdates } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot, Message } from '../../src/shared/types';
 async function fixture(page: Page, count: number) {
@@ -119,7 +120,7 @@ test('command status and appended entries update without opening a collapsed run
 }) => {
   const { base, commands } = await fixture(page, 2);
   commands[1]!.status = 'inProgress';
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   const group = page.locator('.work-history');
   await expect(
     group.getByRole('button', { name: /Worked for|Working|Work history/ }),
@@ -134,7 +135,7 @@ test('command status and appended entries update without opening a collapsed run
     text: 'printf appended',
   };
   base.thread.messages.splice(4, 0, added);
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(
     group.getByRole('button', { name: /Worked for|Working|Work history/ }),
   ).toContainText('3 activities');
@@ -145,7 +146,7 @@ test('command status and appended entries update without opening a collapsed run
   await group.getByRole('button', { name: /Worked for|Working|Work history/ }).click();
   await expect(page.locator('.tool')).toHaveCount(3);
   base.thread.messages.splice(5, 0, { ...added, id: 'fixture-last', status: 'failed' });
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(
     group.getByRole('button', { name: /Worked for|Working|Work history/ }),
   ).toContainText('4 activities');
@@ -171,7 +172,7 @@ test('running work opens, completion collapses untouched history, and manual cho
     text: 'Used GitHub: search',
     status: 'completed',
   });
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   const toggle = page.locator('.work-history-toggle');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByText('Inspecting the workspace.', { exact: true })).toBeVisible();
@@ -180,17 +181,17 @@ test('running work opens, completion collapses untouched history, and manual cho
   base.thread.state = 'completed';
   base.thread.turns = [{ id: base.thread.turnId!, status: 'completed', durationMs: 8000 }];
   base.thread.messages.push(final);
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(toggle).toContainText('Worked for 8s');
   await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
   await toggle.click();
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   // A deliberate close is also respected while the task is active.
   await toggle.click();
   base.thread.state = 'running';
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 });
 
@@ -200,7 +201,7 @@ test('legacy history uses a neutral label and the last unknown-phase reply witho
   const { base } = await fixture(page, 2);
   delete base.thread.turns;
   for (const message of base.thread.messages) delete message.phase;
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(page.locator('.work-history-toggle')).toContainText('Work history');
   await expect(page.locator('.work-history-toggle')).not.toContainText('Worked for');
   await expect(page.getByText('Inspecting the workspace.', { exact: true })).toHaveCount(0);
@@ -312,7 +313,7 @@ test.describe('native message timestamps', () => {
         durationMs: 125000,
       },
     ];
-    await page.locator('.connection').click();
+    await reconnectUpdates(page);
     const userTime = page.getByTestId('message-user').locator('time');
     const final = page
       .getByTestId('message-assistant')
@@ -344,12 +345,12 @@ test.describe('native message timestamps', () => {
       kind: 'user',
       text: 'Same-turn follow-up without its own native time',
     });
-    await page.locator('.connection').click();
+    await reconnectUpdates(page);
     await expect(page.getByTestId('message-user').first().locator('time')).toHaveCount(1);
     await expect(page.getByTestId('message-user').last().locator('time')).toHaveCount(0);
     await expect(page.getByTestId('message-assistant').locator('time')).toHaveCount(0);
     delete base.thread.turns;
-    await page.locator('.connection').click();
+    await reconnectUpdates(page);
     await expect(page.locator('.turn time')).toHaveCount(0);
     await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
   });

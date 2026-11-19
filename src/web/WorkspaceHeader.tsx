@@ -104,14 +104,16 @@ export function WorkspaceHeader(props: Props) {
           <Icon name="review" size={16} />
           <span className="header-action-label">Changes</span>
         </button>
-        <button
-          aria-label="Interaction settings"
-          title="Settings"
-          className="icon-button"
-          onClick={props.onSettings}
-        >
-          <Icon name="settings" size={16} />
-        </button>
+        {!props.sidebarOpen && (
+          <button
+            aria-label="Interaction settings"
+            title="Settings"
+            className="icon-button"
+            onClick={props.onSettings}
+          >
+            <Icon name="settings" size={16} />
+          </button>
+        )}
         {!props.sidebarOpen && (
           <button
             aria-label="New conversation"

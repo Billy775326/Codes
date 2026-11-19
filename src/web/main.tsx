@@ -1710,7 +1710,7 @@ function App() {
             <Icon name="close" />
           </button>
         </div>
-        <div className="workspace-project">
+        <section className="workspace-project" aria-label="Project context">
           <label className="project-select">
             <Icon name="folder" />
             <select
@@ -1729,58 +1729,96 @@ function App() {
               ))}
             </select>
           </label>
-          <button
-            className="icon-button"
-            aria-label="Add project"
-            title="Add project"
-            onClick={() => setAdding(true)}
-          >
-            <Icon name="plus" size={16} />
-          </button>
-        </div>
+          {!projects.length && (
+            <button
+              className="add-project-empty"
+              aria-label="Add project"
+              onClick={() => setAdding(true)}
+            >
+              <Icon name="plus" size={16} /> Add project
+            </button>
+          )}
+        </section>
         <button
           aria-label="New conversation"
           className="new-conversation"
-          disabled={busy}
+          disabled={busy || !projectId}
+          title="New conversation"
           onClick={newThread}
         >
           <Icon name="plus" size={16} />
-          New conversation<kbd>Ctrl N</kbd>
+          New conversation
         </button>
         <Conversations
           projectId={projectId}
           selectedId={threadId}
           updates={threads}
           connection={connection}
-          onReconnect={() => setRetry((n) => n + 1)}
           disabled={busy}
           onSelect={select}
           onUpdated={conversationUpdated}
           onModalChange={setConversationModalOpen}
         />
-        <div className="workspace-connection">
-          <button
-            className={`connection ${connection === 'Connected' || connection === 'Ready' ? 'connected' : ''}`}
-            onClick={() => setRetry((n) => n + 1)}
-            title="Reconnect"
-          >
-            <i />
-            {connection}
-          </button>
-          <button
-            className="icon-button"
-            aria-label="Sign out"
-            onClick={() =>
-              void post('/logout')
-                .then(() => {
-                  feed.current?.close();
-                  setAuth('login');
-                })
-                .catch(notice)
-            }
-          >
-            <Icon name="logout" size={16} />
-          </button>
+        <div className="workspace-footer" role="group" aria-label="Workspace controls">
+          <div className="workspace-connection">
+            <span
+              className={`connection ${['Connected', 'Ready'].includes(connection) ? 'connected' : ''}`}
+              role="status"
+              aria-label={'Connection: ' + connection}
+            >
+              <i />
+              {connection}
+            </span>
+            {!['Connected', 'Ready'].includes(connection) && (
+              <button
+                className="icon-button"
+                aria-label="Reconnect conversation updates"
+                title="Reconnect"
+                onClick={() => setRetry((n) => n + 1)}
+              >
+                <Icon name="refresh" size={16} />
+              </button>
+            )}
+          </div>
+          <div className="workspace-actions">
+            <button
+              className="workspace-settings"
+              aria-label="Interaction settings"
+              onClick={() => setDialog('preferences')}
+            >
+              <Icon name="settings" size={16} /> Settings
+            </button>
+            <PanelMenu
+              label="Workspace actions"
+              className="workspace-menu"
+              trigger={<Icon name="more" size={16} />}
+            >
+              {!!projects.length && (
+                <button data-close-menu onClick={() => setAdding(true)}>
+                  <Icon name="folder" size={14} />
+                  Add project
+                </button>
+              )}
+              <button data-close-menu onClick={() => setRetry((n) => n + 1)}>
+                <Icon name="refresh" size={14} />
+                Reconnect updates
+              </button>
+              <button
+                data-close-menu
+                onClick={() =>
+                  void post('/logout')
+                    .then(() => {
+                      feed.current?.close();
+                      setAuth('login');
+                    })
+                    .catch(notice)
+                }
+              >
+                <Icon name="logout" size={14} />
+                Sign out
+              </button>
+            </PanelMenu>
+          </div>
         </div>
       </aside>
       <main

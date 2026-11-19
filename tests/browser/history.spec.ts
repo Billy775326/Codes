@@ -1,3 +1,4 @@
+import { reconnectUpdates } from './sidebar-helpers';
 import { expect, test, type Page } from '@playwright/test';
 import type { Message, Snapshot } from '../../src/shared/types';
 function messages(first: number, last: number): Message[] {
@@ -115,7 +116,7 @@ test('history can continue paging at the display limit, survives reconnect, and 
   await expect(load).toBeEnabled();
   base.thread.messages = [...base.thread.messages.slice(2), ...messages(240, 241)];
   base.thread.turnId = 'history-turn-120';
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(page.locator('.connection')).toHaveText('Connected');
   await expect(page.getByText('Earlier prompt -48', { exact: true })).toHaveCount(1);
   await expect(page.getByRole('status', { name: 'Conversation position' })).toContainText(

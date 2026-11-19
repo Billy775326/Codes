@@ -16,6 +16,8 @@ codes brings Codex into a self-hosted browser workspace. Everyday work should fl
 
 These principles guide implementation choices; they do not promise that every Codex surface feature is already available in codes. The README and acceptance documents track actual support.
 
-## Identity status
+## Identity assets
 
-The previous C/S logo has been withdrawn. The interface uses its earlier temporary mark while new directions await the project owner's selection. Candidate designs are review material, not an approved identity, and are not applied to the interface before that selection.
+The project owner supplied the approved V3 identity in `codes-logo-v3`. The sidebar and login use its original outlined **Codes** wordmark; the browser favicon uses its standalone icon. Light and dark SVG variants are selected by the workspace theme, with no external font request or regenerated artwork.
+
+Production assets are in `public/brand/`. Keep these originals unchanged. The outlined wordmark derives from Inter; its font license is preserved in `LICENSES/OFL-Inter.txt`. This attribution does not assign a license to the application's source code. Earlier candidate galleries are review archives, not the current identity.

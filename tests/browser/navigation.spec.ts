@@ -120,7 +120,9 @@ test('phone drawers own focus and attaching context returns to the running conve
     navigation.getByRole('button', { name: 'Close navigation', exact: true }),
   ).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(navigation.getByRole('button', { name: 'Sign out', exact: true })).toBeFocused();
+  await expect(
+    navigation.getByRole('button', { name: 'Workspace actions', exact: true }),
+  ).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeFocused();
   await page.getByLabel('Message Codex').fill('[slow] Drawer task fixture');
