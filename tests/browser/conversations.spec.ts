@@ -295,8 +295,17 @@ test('sidebar keeps task and paused queue status across selection, reload, theme
     await page.keyboard.press('Escape');
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 844 });
-      const open = page.getByRole('button', { name: 'Open navigation', exact: true });
-      if (await open.isVisible()) await open.click();
+      // Wait for the media-query state before acting: after growing to desktop,
+      // a previous phone's Open button can disappear on the next resize event.
+      if (width <= 1099) {
+        const open = page.getByRole('button', { name: 'Open navigation', exact: true });
+        await expect(open).toBeVisible();
+        await open.click();
+      } else {
+        await expect(
+          page.getByRole('complementary', { name: 'Workspace navigation' }),
+        ).toBeVisible();
+      }
       await expect(row.locator('.conversation-status')).toBeVisible();
       await expect
         .poll(async () => {

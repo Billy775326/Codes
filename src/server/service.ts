@@ -608,9 +608,10 @@ export class Service {
     this.project(saved.projectId);
     const page = await this.history(id);
     const pending = this.store.active(id);
+    const metadata = this.store.thread(id)!;
     const thread: Thread = {
-      ...saved,
-      state: pending ? 'unknown' : page.state,
+      ...metadata,
+      state: metadata.executionPending ? 'unknown' : page.state,
       messages: page.messages,
       turns: page.turns,
       actions: [],
@@ -627,6 +628,13 @@ export class Service {
       queue: this.store.queue.state(id),
     };
     await this.remember(thread);
+    // A history read can establish an imported conversation's terminal state.
+    // Retain concurrent title/archive changes and publish only its small summary.
+    const latest = this.store.thread(id)!;
+    this.metadataChanged(id);
+    this.store.saveThread({ ...latest, state: thread.state }, latest.settings);
+    Object.assign(thread, this.store.thread(id));
+    this.events.publish('summary', this.store.thread(id), id);
     return thread;
   }
   async history(id: string, continuation?: string) {

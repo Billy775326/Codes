@@ -61,6 +61,8 @@
 
 ### Fixed
 
+- Retain history-confirmed outcomes for imported conversations when refreshing the sidebar, preserving uncertain execution receipts and concurrent title/archive updates.
+
 - Compress large JSON responses when supported and declare their exact transfer length. Let progressing read downloads finish beyond 35 seconds, with a 35-second inactivity deadline and a two-minute overall bound, instead of repeatedly discarding partial conversation history. Keep write deadlines and duplicate-execution protection unchanged; interrupted downloads remain retryable.
 
 - Show snapshot connection failures immediately during bounded retry, distinguish HTTP/proxy responses, invalid JSON and request deadlines from an unreachable service, and reserve uncertain-execution warnings for writes.

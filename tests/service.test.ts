@@ -921,3 +921,27 @@ it('does not let delayed native list status overwrite a newer completion event',
   expect(result.data.find((row) => row.id === thread.id)?.state).toBe('completed');
   expect(service.store.thread(thread.id)?.state).toBe('completed');
 });
+
+it('retains history-established imported outcomes through list refresh without clearing unknown receipts', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', { cwd: project.path, count: 2 });
+  await service.conversations(project.id);
+  const thread = await service.read(seeded.thread.id);
+  expect(thread.state).toBe('completed');
+  expect(service.store.thread(thread.id)?.state).toBe('completed');
+  expect(
+    (await service.conversations(project.id)).data.find((row) => row.id === thread.id)?.state,
+  ).toBe('completed');
+  const next = await service.driver.call('test/seed', { cwd: project.path, count: 2 });
+  await service.conversations(project.id);
+  service.store.begin('unknown-imported-task', next.thread.id, 'send', {});
+  service.store.update('unknown-imported-task', 'unknown');
+  expect((await service.read(next.thread.id)).state).toBe('unknown');
+  expect(service.store.thread(next.thread.id)).toMatchObject({
+    state: 'unknown',
+    executionUnknown: true,
+  });
+  expect(
+    (await service.conversations(project.id)).data.find((row) => row.id === next.thread.id)?.state,
+  ).toBe('unknown');
+});

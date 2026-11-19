@@ -26,6 +26,8 @@ The SQLite summary projection reads only aggregate queue/receipt metadata, never
 
 Native `thread/list` observations and `thread/status/changed` update known conversations that have no owned execution lease or pending interaction. `idle` and `notLoaded` do not prove a task completed; existing terminal outcomes are retained, while an unloaded previously active conversation becomes Status unknown. Unknown owned receipts remain protected until existing reconciliation establishes their outcome. Native status payloads are validated before use. Runtime flags are not evidence about a separate Codex process sharing the same account.
 
+Opening an imported conversation records its history-established state in the summary, so refreshing the list cannot return it to an older idle/unknown label. Unfinished receipts stay unknown, and concurrent title/archive changes are retained.
+
 A lifecycle revision prevents a native list response captured before a newer event from overwriting it. The browser likewise merges metadata received while its list request was in flight. Queue changes publish the same summary projection and refresh the cached snapshot. A ready connection re-reads the current list page, retaining search and cursor, to recover updates missed beyond event replay. This uses the existing single project-or-thread subscription; it does not add a second stream.
 
 ## Interaction and verification
