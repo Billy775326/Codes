@@ -161,22 +161,11 @@ code {
   letter-spacing: -0.8px;
 }
 .brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 29px;
-  height: 29px;
-  border-radius: 8px;
-  background: var(--field);
-  color: var(--fg);
-  font-size: 23px;
-  font-weight: 700;
-  letter-spacing: -3px;
-  padding-right: 3px;
-}
-.brand-mark span {
-  font-size: 27px;
-  line-height: 1;
+  display: block;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 .modal label {

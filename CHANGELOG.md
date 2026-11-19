@@ -4,6 +4,8 @@
 
 ### Added
 
+- Document the project philosophy, “codex no cli = codes”, and introduce a C/S logo shared by the README, sign-in, navigation, and browser icon. Provide the transparent source and lightweight web assets.
+
 - Add Fast and Execution / Plan controls to the model/reasoning popup, with the selected model and effective reasoning effort visible in its trigger. Fast uses native service-tier overrides independently of reasoning, persists with task/queue settings, and is unavailable when the selected model does not advertise support. Standard explicitly overrides inherited Fast for new tasks.
 
 - Show native turn start times below the first user message and finish times beside final-reply actions, with local dates and a full timestamp/timezone tooltip. Leave unavailable historical and intermediate-item times unset.

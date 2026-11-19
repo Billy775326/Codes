@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "node --import tsx src/server/main.ts --dev",
+    "brand:export": "node scripts/export-brand.mjs",
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/main.js",
     "install:command": "node scripts/install-command.mjs",

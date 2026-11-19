@@ -1,8 +1,16 @@
-# codes
+# <img src="public/brand/codes-mark.png" width="36" height="36" alt="" /> codes
 
 A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interface. Use a desktop browser to work with conversations and file context, and a phone to check progress and approve requests.
 
 **Status: an initial development preview, not a released product.** The interface and recovery flows have automated simulator coverage. Real CLI metadata has a separate smoke check, and an isolated live read/write/interrupt pilot has passed. Real approval-policy variants and deployment acceptance remain open gates. See the [acceptance plan](docs/acceptance.md).
+
+## Design philosophy
+
+**codex no cli = codes**
+
+Use Codex through a browser, without operating a terminal for everyday work. Conversations, approvals, planning, queues, and change review should form one clear Web workflow. Codex CLI and its App Server remain the execution engine; “no cli” describes the user experience.
+
+Keep the interface, architecture, and implementation simple. Let layout and explicit state explain the workflow, preserve native behavior, and make operations clear to people and agents. See the [design philosophy and logo](docs/brand.md) ([中文](docs/zh-CN/brand.md)).
 
 ## What is implemented
 

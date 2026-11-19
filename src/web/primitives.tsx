@@ -127,9 +127,14 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
 export function Brand() {
   return (
     <span className="brand">
-      <span className="brand-mark" aria-hidden="true">
-        c<span>›</span>
-      </span>
+      <img
+        className="brand-mark"
+        src="/brand/codes-mark.png"
+        width="32"
+        height="32"
+        alt=""
+        aria-hidden="true"
+      />
       codes
     </span>
   );
