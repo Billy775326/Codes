@@ -81,6 +81,8 @@
 
 ### Fixed
 
+- Open imported legacy Codex conversations through bounded full turn pages rather than unsupported item pagination. Preserve history cursors, existing display limits, archived records and the original native files.
+
 - Bind conversation file previews and task working directories to server-verified project ownership, repairing stale browser project selections. Preserve history when a registered directory is missing, including after service restart; expose directory/file errors and explicit recovery, and pause queued work before claiming it.
 
 - Reconcile English/Chinese feature documentation, schema 4 migration notes, bounded history behavior, and owner-approved V3 logo status; keep proposed conversation-first navigation separate from implemented behavior.

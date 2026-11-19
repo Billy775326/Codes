@@ -88,6 +88,8 @@ The historical display retains three native pages independently of the live cach
 
 History pages automatically use fewer turns when their combined items exceed the display budget. A single oversized turn still produces an explicit limit error. Very large native tool results can exceed the JSONL frame limit and close the runtime; use the CLI to inspect such conversations. The preview is designed around a small working set, not unlimited logs. Limits are implementation constraints, not measured throughput claims.
 
+Legacy Codex histories use native `thread/turns/list` with full items and a one-turn initial page. Paginated histories retain separate item hydration. Both paths apply the same display budgets and cursor handling; Codes never requests an eager full-thread read to import old conversations. This follows the [native history contracts](https://learn.chatgpt.com/docs/app-server#list-thread-items), where item pagination requires a supporting thread store. Registration reuses native IDs and files; it does not convert or duplicate transcripts.
+
 ## Project and conversation context
 
 SQLite schema 4 retains project registrations and conversation associations. Browser navigation stores at most 20 recent project views, separately from conversation drafts and server-backed settings. The native conversation header validates ownership; selected snapshots add bounded project/directory metadata, and conversation file APIs derive their directory from the thread ID. Project-level file APIs remain compatible for uncreated drafts and older callers.

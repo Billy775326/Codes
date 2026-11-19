@@ -1124,3 +1124,99 @@ it('rejects image-incapable models before native task execution', async () => {
   ).rejects.toMatchObject({ code: 'IMAGES_UNAVAILABLE' });
   expect(spy.mock.calls.filter(([method]) => method === 'turn/start')).toHaveLength(0);
 });
+
+it('reads legacy full turn pages in both directions without item pagination or eager thread reads', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', { cwd: project.path, count: 40 });
+  await service.list(project.id);
+  const call = service.driver.call.bind(service.driver);
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation(async (method, params, timeout) => {
+      if (method === 'thread/read') expect(params).toMatchObject({ includeTurns: false });
+      const result = await call(method, params, timeout);
+      if (method === 'thread/read') result.thread.historyMode = 'legacy';
+      if (method === 'thread/turns/list') {
+        expect(params).toMatchObject({ itemsView: 'full', limit: 1 });
+        for (const turn of result.data) {
+          turn.itemsView = 'full';
+          turn.items = [
+            {
+              type: 'userMessage',
+              id: turn.id + '-user',
+              content: [{ type: 'text', text: 'Legacy question' }],
+            },
+            {
+              type: 'agentMessage',
+              id: turn.id + '-answer',
+              text: 'Legacy answer ' + turn.id,
+              phase: 'final_answer',
+            },
+          ];
+        }
+      }
+      return result;
+    });
+  const latest = await service.history(seeded.thread.id);
+  expect(latest.messages.map((row) => row.kind)).toEqual(['user', 'assistant']);
+  expect(latest.messages.at(-1)?.text).toContain('Legacy answer');
+  expect(latest.olderCursor).toBeTruthy();
+  const earlier = await service.history(seeded.thread.id, latest.olderCursor!);
+  expect(earlier.turns[0]?.id).not.toBe(latest.turns[0]?.id);
+  const forward = await service.history(seeded.thread.id, earlier.newerCursor!);
+  expect(forward.turns.at(-1)?.id).toBe(earlier.turns.at(-1)?.id);
+  const caughtUp = await service.history(seeded.thread.id, forward.newerCursor!);
+  expect(caughtUp.turns.at(-1)?.id).toBe(latest.turns.at(-1)?.id);
+  expect(spy.mock.calls.some(([method]) => method === 'thread/items/list')).toBe(false);
+});
+it('retains the display budget for oversized legacy turns instead of silently dropping items', async () => {
+  const { service, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
+    const result = await call(method, params, timeout);
+    if (method === 'thread/read') result.thread.historyMode = 'legacy';
+    if (method === 'thread/turns/list')
+      result.data = [
+        {
+          id: 'legacy-large',
+          status: 'completed',
+          itemsView: 'full',
+          items: Array.from({ length: 241 }, (_, n) => ({
+            type: 'agentMessage',
+            id: 'message-' + n,
+            text: 'Legacy content ' + n,
+          })),
+        },
+      ];
+    return result;
+  });
+  await expect(service.history(thread.id)).rejects.toMatchObject({
+    code: 'HISTORY_LIMIT',
+    status: 413,
+  });
+});
+it('rejects malformed full legacy items without treating them as an empty transcript', async () => {
+  const { service, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
+    const result = await call(method, params, timeout);
+    if (method === 'thread/read') result.thread.historyMode = 'legacy';
+    if (method === 'thread/turns/list')
+      result.data = [{ id: 'legacy-invalid', status: 'completed', itemsView: 'full', items: null }];
+    return result;
+  });
+  await expect(service.history(thread.id)).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
+});
+it('preserves genuinely empty legacy history without requesting unsupported item pages', async () => {
+  const { service, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation(async (method, params, timeout) => {
+      const result = await call(method, params, timeout);
+      if (method === 'thread/read') result.thread.historyMode = 'legacy';
+      return result;
+    });
+  expect((await service.history(thread.id)).messages).toEqual([]);
+  expect(spy.mock.calls.some(([method]) => method === 'thread/items/list')).toBe(false);
+});

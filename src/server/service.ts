@@ -744,9 +744,36 @@ export class Service {
     const hydrate = async (turns: any[]): Promise<Message[] | undefined> => {
       const messages: Message[] = [];
       let messageBytes = 0;
+      const append = (entry: any, turn: any) => {
+        const mapped = item(
+          entry.item,
+          turn.id,
+          (path) => this.images.reference(saved.projectId, path),
+          Number.isFinite(entry.completedAtMs) && entry.completedAtMs >= 0
+            ? 'completed'
+            : Number.isFinite(entry.startedAtMs) &&
+                entry.startedAtMs >= 0 &&
+                turn.status === 'inProgress'
+              ? 'inProgress'
+              : undefined,
+        );
+        if (!mapped) return true;
+        messageBytes += Buffer.byteLength(mapped.text);
+        // A smaller turn page may fit. Discard this attempted page rather than
+        // truncating its items or returning a cursor that skips unread history.
+        if (messages.length >= 240 || messageBytes > 2 * 1024 * 1024) return false;
+        messages.push(mapped);
+        return true;
+      };
       for (const turn of turns) {
         if (typeof turn.id !== 'string')
           throw new AppError('PROTOCOL_ERROR', 'Invalid turn identity.', 502);
+        if (turn.itemsView === 'full') {
+          if (!Array.isArray(turn.items))
+            throw new AppError('PROTOCOL_ERROR', 'Invalid full turn history.', 502);
+          for (const value of turn.items) if (!append({ item: value }, turn)) return;
+          continue;
+        }
         let next: string | undefined;
         const seen = new Set<string>();
         do {
@@ -759,26 +786,7 @@ export class Service {
           });
           if (!Array.isArray(items.data))
             throw new AppError('PROTOCOL_ERROR', 'Invalid item history.', 502);
-          for (const entry of items.data) {
-            const mapped = item(
-              entry.item,
-              turn.id,
-              (path) => this.images.reference(saved.projectId, path),
-              Number.isFinite(entry.completedAtMs) && entry.completedAtMs >= 0
-                ? 'completed'
-                : Number.isFinite(entry.startedAtMs) &&
-                    entry.startedAtMs >= 0 &&
-                    turn.status === 'inProgress'
-                  ? 'inProgress'
-                  : undefined,
-            );
-            if (!mapped) continue;
-            messageBytes += Buffer.byteLength(mapped.text);
-            // A smaller turn page may fit. Discard this attempted page rather than
-            // truncating its items or returning a cursor that skips unread history.
-            if (messages.length >= 240 || messageBytes > 2 * 1024 * 1024) return;
-            messages.push(mapped);
-          }
+          for (const entry of items.data) if (!append(entry, turn)) return;
           next = items.nextCursor ?? undefined;
           if (
             next &&
@@ -794,7 +802,10 @@ export class Service {
       }
       return messages;
     };
-    let pageLimit: number = limits.page;
+    // Legacy stores expose turn pages with full items, but no item-pagination endpoint.
+    // Start with one turn so old transcripts cannot create an eager multi-turn payload.
+    const legacy = header.thread.historyMode === 'legacy';
+    let pageLimit: number = legacy ? 1 : limits.page;
     for (;;) {
       let page;
       try {
@@ -803,7 +814,7 @@ export class Service {
           cursor,
           limit: pageLimit,
           sortDirection: direction === 'newer' ? 'asc' : 'desc',
-          itemsView: 'notLoaded',
+          itemsView: legacy ? 'full' : 'notLoaded',
         });
       } catch (error) {
         // CLI 0.167.0 creates threads lazily; only its specific empty-thread error is benign.

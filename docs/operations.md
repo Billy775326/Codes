@@ -10,6 +10,12 @@ Native task transcripts and CLI authentication remain in the server user's Codex
 
 Completed/failed operation receipts are retained for 30 days. Completed/cancelled queue entries are also retained for 30 days. Failed and unknown queue entries remain available for review; remove a failed entry after correcting its cause. Unknown operations are retained until resolved. Treat the data directory and native Codex home as private user data. To back up, stop codes and back up both locations, preserving permissions. Schemas 1–3 are automatically backed up and migrated to schema 4 on startup, retaining queues and branch receipts while adding the review execution lease. See [migration and rollback](conversations.md#metadata-migration-and-rollback). There is no automatic restore tool; unsupported database versions are rejected rather than reset.
 
+## Existing Codex conversations
+
+Register an existing conversation's original working directory using Add project. Codes discovers native conversations for that exact directory in Chats and Archived; paginated lists may require moving through their pages. It reuses native thread IDs and history files rather than copying transcripts or changing working directories. Existing Codes settings and receipts remain independent. Newly discovered conversations start with Read only for future Codes tasks; this does not rewrite the original CLI configuration.
+
+Both legacy and paginated native histories are readable. Legacy stores use full items from one native turn at a time; paginated stores use item pages. The same display limits apply, and a genuinely empty native history remains empty. Importing a registration does not reconstruct deleted or incompatible source records. See [history and transport limits](architecture.md).
+
 ## Project directory recovery
 
 The selected conversation's server-verified project supplies its working directory and file context. If it is missing or inaccessible, the UI keeps history and saved settings visible, disables new execution/filesystem actions, and offers **Retry directory**. Restore the registered canonical directory or its search permissions, then retry. Choosing another project starts or restores that project's own conversation; Codes does not move an existing transcript or silently substitute a directory.
