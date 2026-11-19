@@ -34,6 +34,8 @@
 
 ### Changed
 
+- Expand chat text sizes to 12–24px and code text sizes to 10–20px in 1px steps. Preview immediately and retain new choices after reload, alongside existing choices and Default.
+
 - Reduce default conversation text to 15px, workspace text to 14px, and desktop composer text to 15px. Retain 16px phone input text and existing explicit chat/code size preferences.
 
 - Simplify sign-in, project navigation, conversation headings, and composer chrome. Keep starter actions in the conversation menu and detailed delivery scope on accessible controls. Share theme and modal primitives across login, workspace, and confirmation dialogs, including consistent keyboard focus and background locking.

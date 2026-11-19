@@ -1,3 +1,4 @@
+import { chatFontSizes, codeFontSizes } from './font-sizes';
 import React, {
   memo,
   useCallback,
@@ -277,8 +278,8 @@ function App() {
           : 'enter',
         review: value.review === 'detached' ? 'detached' : 'inline',
         theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
-        chatFontSize: [16, 18, 20].includes(value.chatFontSize) ? value.chatFontSize : undefined,
-        codeFontSize: [12, 14, 16].includes(value.codeFontSize) ? value.codeFontSize : undefined,
+        chatFontSize: chatFontSizes.includes(value.chatFontSize) ? value.chatFontSize : undefined,
+        codeFontSize: codeFontSizes.includes(value.codeFontSize) ? value.codeFontSize : undefined,
       };
     } catch {
       return { followUp: 'queue', enter: 'enter', review: 'inline' };

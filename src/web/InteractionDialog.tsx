@@ -1,3 +1,4 @@
+import { chatFontSizes, codeFontSizes } from './font-sizes';
 import { permissionLabel } from '../shared/permissions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
@@ -128,7 +129,7 @@ export function PreferencesDialog({
                 }
               >
                 <option value="">Default</option>
-                {[16, 18, 20].map((size) => (
+                {chatFontSizes.map((size) => (
                   <option key={size} value={size}>
                     {size} px
                   </option>
@@ -148,7 +149,7 @@ export function PreferencesDialog({
                 }
               >
                 <option value="">Default</option>
-                {[12, 14, 16].map((size) => (
+                {codeFontSizes.map((size) => (
                   <option key={size} value={size}>
                     {size} px
                   </option>
