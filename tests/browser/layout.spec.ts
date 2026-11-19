@@ -12,7 +12,7 @@ test('workspace defaults to persistent navigation, retains drafts through histor
 }) => {
   await login(page);
   await expect(page.getByLabel('Search conversations', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Ask Codex' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'New conversation' })).toBeVisible();
   await page.getByLabel('Message Codex').fill('Unsent panel draft');
   await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
   await expect(page.getByLabel('Search conversations', { exact: true })).toBeHidden();
@@ -29,7 +29,7 @@ test('workspace defaults to persistent navigation, retains drafts through histor
   await page.getByLabel('Message Codex').fill('/model');
   await page.getByLabel('Message Codex').press('Enter');
   await expect(page.getByLabel('Model', { exact: true })).toBeFocused();
-  await page.getByRole('heading', { name: 'Ask Codex' }).click();
+  await page.getByRole('heading', { name: 'New conversation' }).click();
   await expect(page.getByLabel('Model', { exact: true })).toBeHidden();
 });
 

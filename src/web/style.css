@@ -1,155 +1,3 @@
-:root {
-  font-family:
-    'DM Sans',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  color: #e5e5eb;
-  background: #121316;
-  font-synthesis: none;
-  font-size: 14px;
-  color-scheme: dark;
-  --muted: #85868e;
-  --line: #ffffff0e;
-  --accent: #ae9cff;
-  --panel: #17181c;
-}
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-button {
-  cursor: pointer;
-  color: inherit;
-}
-button:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid #b7a5ff;
-  outline-offset: 3px;
-}
-button {
-  border: 0;
-  background: transparent;
-}
-input {
-  border: 1px solid #ffffff1c;
-  background: #101114;
-  color: inherit;
-  border-radius: 8px;
-  padding: 12px;
-}
-select {
-  background: transparent;
-  color: inherit;
-  border: 0;
-  cursor: pointer;
-  max-width: 100%;
-}
-select option {
-  background: #202126;
-}
-a {
-  color: #c3b7ff;
-}
-pre,
-code {
-  font-family: 'JetBrains Mono', monospace;
-}
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-thumb {
-  background: #ffffff1c;
-  border-radius: 8px;
-}
-.muted {
-  color: var(--muted);
-}
-.primary {
-  background: #ad9af5;
-  color: #181321;
-  font-weight: 650;
-  border-radius: 7px;
-  padding: 10px 15px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-.primary:hover {
-  background: #c1b1ff;
-}
-.secondary {
-  background: #ffffff08;
-  border: 1px solid #ffffff16;
-  border-radius: 7px;
-  padding: 9px 15px;
-}
-.icon-button {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  color: #95959f;
-  flex-shrink: 0;
-}
-.icon-button:hover,
-.icon-button.selected {
-  color: #d3c9ff;
-  background: #ffffff08;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.8px;
-}
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 29px;
-  height: 29px;
-  border-radius: 8px;
-  background: #b4a1f3;
-  color: #241d39;
-  font-size: 23px;
-  font-weight: 700;
-  letter-spacing: -3px;
-  padding-right: 3px;
-}
-.brand-mark span {
-  font-size: 27px;
-  line-height: 1;
-}
-.brand-tag {
-  font-size: 8px;
-  letter-spacing: 1.7px;
-  color: #666771;
-  margin-left: 4px;
-  font-weight: 550;
-}
 .app {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
@@ -171,21 +19,6 @@ code {
   display: flex;
   align-items: center;
   padding: 0 23px;
-}
-.workspace-label {
-  font-size: 9px;
-  letter-spacing: 1.3px;
-  color: #73747d;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  margin: 13px 0 8px;
-  font-weight: 650;
-}
-.workspace-label .icon-button {
-  height: 20px;
-  width: 20px;
 }
 .project-select {
   display: flex;
@@ -228,9 +61,6 @@ code {
   margin-left: auto;
   color: #66616f;
   font-size: 13px;
-}
-.conversation-label {
-  margin: 30px 0 10px;
 }
 .sidebar nav {
   padding: 0 10px;
@@ -297,39 +127,6 @@ code {
   padding: 0 12px;
   color: #595b66;
 }
-.sidebar-footer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 17px 15px;
-  border-top: 1px solid var(--line);
-}
-.host-symbol {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #ffffff11;
-  background: #ffffff03;
-  width: 31px;
-  height: 31px;
-  border-radius: 7px;
-  color: #9d96ad;
-}
-.sidebar-footer strong {
-  font-size: 10px;
-  font-weight: 500;
-  display: block;
-  color: #b3b1be;
-}
-.sidebar-footer small {
-  font-size: 9px;
-  display: block;
-  color: #676873;
-  margin-top: 4px;
-}
-.sidebar-footer button {
-  margin-left: auto;
-}
 .main {
   min-width: 0;
   display: flex;
@@ -361,14 +158,6 @@ code {
 }
 .breadcrumb .slash {
   color: #474851;
-}
-.breadcrumb strong {
-  font-size: 11px;
-  font-weight: 450;
-  color: #c1becb;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .top-actions {
   display: flex;
@@ -434,102 +223,6 @@ code {
   max-width: 840px;
   margin: 0 auto;
   padding: 32px 34px 36px;
-}
-.welcome {
-  padding-top: clamp(40px, 9vh, 120px);
-  text-align: center;
-  max-width: 720px;
-  margin: auto;
-}
-.welcome-mark {
-  font-size: 60px;
-  color: #b9a6f4;
-  font-weight: 650;
-  letter-spacing: -9px;
-  position: relative;
-  width: 76px;
-  height: 75px;
-  margin: 0 auto 28px;
-  padding-right: 11px;
-  line-height: 1.15;
-}
-.welcome-mark span {
-  font-size: 70px;
-}
-.welcome-mark i {
-  position: absolute;
-  inset: 4px -15px -3px;
-  border-radius: 50%;
-  background: #bb8aff15;
-  filter: blur(24px);
-  z-index: 0;
-}
-.eyebrow {
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: #7f758e;
-  font-weight: 600;
-}
-.welcome h1 {
-  font-size: 32px;
-  line-height: 1.25;
-  font-weight: 500;
-  letter-spacing: -1.2px;
-  margin: 14px 0;
-}
-.welcome > p:not(.eyebrow) {
-  color: #7c7c88;
-  font-size: 12px;
-  line-height: 1.95;
-  margin: 0;
-}
-.suggestions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 38px;
-  text-align: left;
-}
-.suggestions button {
-  position: relative;
-  text-align: left;
-  border: 1px solid #ffffff0c;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #ffffff04, #ffffff01);
-  padding: 17px 15px;
-  min-width: 0;
-  transition:
-    border-color 0.2s,
-    background 0.2s;
-}
-.suggestions button:hover {
-  border-color: #b6a0ff40;
-  background: #b6a0ff07;
-}
-.suggestions button > svg {
-  color: #9786b6;
-  margin-bottom: 16px;
-  display: block;
-}
-.suggestions strong {
-  display: block;
-  font-size: 11px;
-  font-weight: 500;
-  color: #c0bacd;
-}
-.suggestions button > span:not(.suggestion-arrow) {
-  display: block;
-  font-size: 9px;
-  line-height: 1.5;
-  color: #74717e;
-  margin-top: 7px;
-}
-.suggestion-arrow {
-  position: absolute;
-  top: 16px;
-  right: 14px;
-  font-size: 12px;
-  color: #57525f;
 }
 .add-first {
   margin-top: 25px;
@@ -621,28 +314,6 @@ code {
   padding: 7px 10px;
   border-radius: 6px;
   color: #bcb1d3;
-}
-.composer-hint {
-  display: flex;
-  justify-content: space-between;
-  gap: 15px;
-  font-size: 9px;
-  color: #5e5e6b;
-  margin-top: 12px;
-  padding: 0 3px;
-  line-height: 1.6;
-}
-.composer-hint > span:first-child {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.composer-hint i {
-  height: 4px;
-  width: 4px;
-  background: #5f7669;
-  border-radius: 50%;
-  display: inline-block;
 }
 .desktop-hint span {
   margin: 0 5px;
@@ -1167,64 +838,6 @@ code {
   color: #d19292;
   background: #d192920b;
 }
-.modal label {
-  font-size: 10px;
-  color: #aea4b9;
-}
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: #0009;
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-  padding: 20px;
-}
-.modal {
-  width: 430px;
-  max-width: 100%;
-  background: #1a1b20;
-  border: 1px solid #ffffff1c;
-  border-radius: 13px;
-  padding: 25px;
-  box-shadow: 0 25px 100px #0005;
-}
-.modal-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.modal h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: -0.5px;
-}
-.modal > p {
-  color: #8d839b;
-  font-size: 11px;
-  line-height: 1.7;
-  margin: 15px 0 23px;
-}
-.modal input {
-  width: 100%;
-  font-size: 11px;
-  margin: 10px 0;
-}
-.modal small {
-  font-size: 9px;
-  color: #6f657d;
-  display: block;
-  line-height: 1.7;
-}
-.modal > .primary {
-  margin-top: 23px;
-  width: 100%;
-  font-size: 11px;
-  justify-content: space-between;
-}
 .mobile-only,
 .scrim {
   display: none;
@@ -1239,9 +852,6 @@ code {
   .composer-area {
     max-width: 930px;
   }
-  .welcome {
-    padding-top: 13vh;
-  }
 }
 @media (max-width: 1200px) {
   .app.has-panel {
@@ -1252,28 +862,6 @@ code {
   }
   .sidebar-brand {
     padding: 0 19px;
-  }
-  .brand-tag {
-    font-size: 7px;
-    letter-spacing: 1px;
-  }
-  .has-panel .suggestions {
-    grid-template-columns: 1fr;
-    gap: 7px;
-  }
-  .has-panel .suggestions button {
-    padding: 12px 13px;
-    min-height: 50px;
-  }
-  .has-panel .suggestions button > svg {
-    float: left;
-    margin: 3px 12px 0 0;
-  }
-  .has-panel .suggestions button > span:not(.suggestion-arrow) {
-    margin-top: 4px;
-  }
-  .has-panel .welcome {
-    padding-top: 35px;
   }
   .topbar {
     padding: 0 18px;
@@ -1311,22 +899,6 @@ code {
     max-width: 95vw;
     z-index: 12;
     box-shadow: -10px 0 80px #0007;
-  }
-  .has-panel .welcome {
-    padding-top: 8vh;
-  }
-  .has-panel .suggestions {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .has-panel .suggestions button {
-    padding: 17px 12px;
-  }
-  .has-panel .suggestions button > svg {
-    float: none;
-    margin: 0 0 16px;
-  }
-  .breadcrumb strong {
-    max-width: 160px;
   }
   .top-actions {
     gap: 4px;
@@ -1376,8 +948,7 @@ code {
     font-size: 10px;
   }
   .breadcrumb > svg,
-  .breadcrumb .slash,
-  .breadcrumb strong {
+  .breadcrumb .slash {
     display: none;
   }
   .top-actions {
@@ -1408,55 +979,6 @@ code {
   .conversation-inner {
     padding: 22px 17px 28px;
   }
-  .welcome,
-  .has-panel .welcome {
-    padding-top: 6vh;
-  }
-  .welcome-mark {
-    font-size: 50px;
-    height: 62px;
-    margin-bottom: 23px;
-  }
-  .welcome-mark span {
-    font-size: 60px;
-  }
-  .welcome h1 {
-    font-size: 25px;
-    letter-spacing: -0.7px;
-    margin: 16px 0;
-  }
-  .welcome > p:not(.eyebrow) {
-    font-size: 11px;
-    line-height: 1.8;
-  }
-  .eyebrow {
-    font-size: 8px;
-  }
-  .suggestions,
-  .has-panel .suggestions {
-    grid-template-columns: 1fr;
-    gap: 8px;
-    margin: 28px auto 0;
-    max-width: 360px;
-  }
-  .suggestions button,
-  .has-panel .suggestions button {
-    padding: 12px 15px;
-  }
-  .suggestions button > svg,
-  .has-panel .suggestions button > svg {
-    float: left;
-    margin: 4px 13px 0 0;
-  }
-  .suggestions button > span:not(.suggestion-arrow) {
-    margin-top: 3px;
-  }
-  .suggestions strong {
-    font-size: 11px;
-  }
-  .suggestions button > span:not(.suggestion-arrow) {
-    font-size: 9px;
-  }
   .composer-area {
     padding: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
@@ -1472,11 +994,6 @@ code {
   .composer-toolbar select {
     max-width: 120px;
     font-size: 10px;
-  }
-  .composer-hint {
-    font-size: 8px;
-    margin-top: 9px;
-    justify-content: center;
   }
   .desktop-hint {
     display: none;
@@ -1542,15 +1059,6 @@ code {
   }
   .selection-hint {
     font-size: 9px;
-  }
-  .modal {
-    padding: 22px;
-  }
-  .modal input {
-    font-size: 13px;
-  }
-  .modal label {
-    font-size: 11px;
   }
   .error-text {
     font-size: 11px !important;

@@ -34,13 +34,9 @@ for (const width of [1440, 320]) {
         centers.push(box!.y + box!.height / 2);
       }
     expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(2);
-    if (width > 460) {
-      const location = await page.locator('.composer-location').boundingBox();
-      const hint = await page.locator('.composer-keyboard-hint').boundingBox();
-      expect(
-        Math.abs(location!.y + location!.height / 2 - hint!.y - hint!.height / 2),
-      ).toBeLessThan(2);
-    } else await expect(page.locator('.composer-mobile-label')).toBeVisible();
+    await expect(page.getByLabel('Project', { exact: true })).toHaveCount(1);
+    await expect(page.locator('#message-delivery-help')).toBeHidden();
+    await expect(input).toHaveAccessibleDescription(/Send starts a new turn/);
     await input.fill(Array.from({ length: 24 }, (_, i) => 'Synthetic draft line ' + i).join('\n'));
     expect((await input.boundingBox())!.height).toBeLessThanOrEqual(180);
     expect(await input.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
@@ -73,9 +69,15 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
   await page.keyboard.press('Escape');
   const input = page.getByLabel('Message Codex');
   await input.fill('One line');
-  await expect(page.locator('.composer-keyboard-hint')).toHaveText('Enter to send');
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toHaveAttribute(
+    'title',
+    /Enter to send/,
+  );
   await input.fill('First line\nSecond line');
-  await expect(page.locator('.composer-keyboard-hint')).toHaveText('Ctrl/Cmd+Enter to send');
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toHaveAttribute(
+    'title',
+    /Ctrl\/Cmd\+Enter to send/,
+  );
   await input.fill('[approve] Composer queue fixture');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
@@ -83,7 +85,10 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   await page.getByRole('button', { name: 'Decline', exact: true }).click();
   await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
-  await expect(page.locator('.composer-keyboard-hint')).toHaveText('Enter to queue');
+  await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toHaveAttribute(
+    'title',
+    /Enter to queue/,
+  );
   await expect(page.locator('#message-delivery-help')).toContainText('Waiting text stays editable');
 });
 

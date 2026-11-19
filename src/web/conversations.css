@@ -4,13 +4,6 @@
   flex: 1;
   min-height: 0;
 }
-.conversations .conversation-label {
-  margin: 25px 0 10px;
-}
-.conversations .workspace-label .icon-button {
-  height: 20px;
-  width: 20px;
-}
 .conversation-search {
   display: flex;
   align-items: center;
@@ -214,12 +207,12 @@
   font-size: 10px;
   color: #8c7f98;
 }
-.conversation-confirm > p {
+.conversation-confirm p {
   overflow-wrap: anywhere;
 }
-.conversation-confirm > p strong {
+.conversation-confirm p strong {
   font-weight: 500;
-  color: #bbb0ca;
+  color: var(--fg);
 }
 .conversation-confirm-actions {
   display: flex;
@@ -227,7 +220,8 @@
   gap: 9px;
 }
 .conversation-confirm-actions button {
-  font-size: 11px;
+  font-size: 14px;
+  min-height: var(--control-size);
 }
 .conversation-lock-banner {
   display: flex;
@@ -292,4 +286,16 @@
   .conversation-lock-banner > span {
     display: block;
   }
+}
+
+.conversation-search-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+}
+.app .conversation-search-row .conversation-search {
+  min-width: 0;
+  flex: 1;
+  margin-right: 0;
 }

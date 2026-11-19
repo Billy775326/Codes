@@ -1,8 +1,9 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ConversationPage, Summary } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon } from './primitives';
+import { InteractionDialog } from './InteractionDialog';
 import './conversations.css';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
   disabled: boolean;
   onSelect: (id: string) => void;
   onUpdated: (summary: Summary) => void;
+  onModalChange: (open: boolean) => void;
 }
 const isWorking = (row: Summary) =>
   !!row.executionPending ||
@@ -45,6 +47,7 @@ export const Conversations = memo(function Conversations({
   disabled,
   onSelect,
   onUpdated,
+  onModalChange,
 }: Props) {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
@@ -59,9 +62,16 @@ export const Conversations = memo(function Conversations({
   const [editing, setEditing] = useState('');
   const [name, setName] = useState('');
   const [pending, setPending] = useState('');
-  const [confirmation, setConfirmation] = useState<Summary>();
+  const [confirmation, saveConfirmation] = useState<Summary>();
+  const setConfirmation = useCallback(
+    (value?: Summary) => {
+      saveConfirmation(value);
+      onModalChange(!!value);
+    },
+    [onModalChange],
+  );
+  useEffect(() => () => onModalChange(false), [onModalChange]);
   const priorUpdates = useRef(new Map<string, string>());
-  const dialog = useRef<HTMLFormElement>(null);
   const generation = useRef(0);
   const latestUpdates = useRef(updates);
   latestUpdates.current = updates;
@@ -157,14 +167,6 @@ export const Conversations = memo(function Conversations({
       };
     });
   }, [updates, projectId, archived, search, cursor]);
-  useEffect(() => {
-    if (!confirmation) return;
-    const before = document.activeElement as HTMLElement | null;
-    dialog.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    return () => {
-      if (before?.isConnected) before.focus();
-    };
-  }, [confirmation]);
 
   const refresh = () => {
     setCursor(undefined);
@@ -237,8 +239,22 @@ export const Conversations = memo(function Conversations({
 
   return (
     <section className="conversations" aria-label="Conversation management">
-      <div className="workspace-label conversation-label">
-        CONVERSATIONS
+      <div className="conversation-search-row">
+        <div className="conversation-search">
+          <Icon name="search" size={14} />
+          <input
+            aria-label="Search conversations"
+            placeholder="Search conversations"
+            value={query}
+            maxLength={120}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button aria-label="Clear conversation search" onClick={() => setQuery('')}>
+              <Icon name="close" size={13} />
+            </button>
+          )}
+        </div>
         <button
           className="icon-button"
           aria-label="Refresh conversations"
@@ -248,21 +264,6 @@ export const Conversations = memo(function Conversations({
         >
           <Icon name="refresh" size={14} />
         </button>
-      </div>
-      <div className="conversation-search">
-        <Icon name="search" size={14} />
-        <input
-          aria-label="Search conversations"
-          placeholder="Search conversations"
-          value={query}
-          maxLength={120}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        {query && (
-          <button aria-label="Clear conversation search" onClick={() => setQuery('')}>
-            <Icon name="close" size={13} />
-          </button>
-        )}
       </div>
       <div className="conversation-views" role="group" aria-label="Conversation view">
         <button
@@ -450,40 +451,20 @@ export const Conversations = memo(function Conversations({
       )}
       {confirmation &&
         createPortal(
-          <div
-            className="modal-backdrop"
-            onClick={() => {
-              if (!pending) setConfirmation(undefined);
-            }}
+          <InteractionDialog
+            title="Archive this conversation?"
+            close={() => setConfirmation(undefined)}
+            busy={!!pending}
+            className="conversation-confirm"
+            closeOnBackdrop
+            initialFocus="[data-confirm-cancel]"
           >
             <form
-              ref={dialog}
-              className="modal conversation-confirm"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="archive-title"
-              onClick={(e) => e.stopPropagation()}
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event) => {
+                event.preventDefault();
                 void mutate(confirmation, 'archive');
               }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape' && !pending) setConfirmation(undefined);
-                if (e.key === 'Tab') {
-                  const buttons = [
-                    ...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
-                  ];
-                  if (e.shiftKey && document.activeElement === buttons[0]) {
-                    e.preventDefault();
-                    buttons.at(-1)?.focus();
-                  } else if (!e.shiftKey && document.activeElement === buttons.at(-1)) {
-                    e.preventDefault();
-                    buttons[0]?.focus();
-                  }
-                }
-              }}
             >
-              <h2 id="archive-title">Archive this conversation?</h2>
               <p>
                 <strong>{confirmation.title}</strong> will move to the archived view. Project files
                 and history are kept. Codex may also archive chats spawned by this conversation.
@@ -497,6 +478,7 @@ export const Conversations = memo(function Conversations({
                 <button
                   type="button"
                   className="secondary"
+                  data-confirm-cancel
                   disabled={!!pending}
                   onClick={() => setConfirmation(undefined)}
                 >
@@ -507,7 +489,7 @@ export const Conversations = memo(function Conversations({
                 </button>
               </div>
             </form>
-          </div>,
+          </InteractionDialog>,
           document.querySelector<HTMLElement>('.app')!,
         )}
     </section>

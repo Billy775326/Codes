@@ -63,7 +63,7 @@ For a simulation without Codex or an account:
 CODES_RUNTIME=mock CODES_DATA_DIR=.local/demo CODES_PROJECT_ROOT="$PWD" npm start
 ```
 
-The UI clearly labels simulation mode. Send `[approve]` or `[question]` to exercise an interaction, or `[slow]` to try stopping and reconnecting. These markers have no special meaning in real Codex mode.
+The UI clearly labels simulation mode. Send `[approve]` or `[question]` to exercise an interaction, or `[slow]` to try stopping and reconnecting. `[hold]` keeps a simulated turn active until explicit Stop for deterministic cancellation checks. These markers have no special meaning in real Codex mode.
 
 For development, run `npm run dev` after installing dependencies. It serves the UI and API on the same origin with Vite middleware.
 
@@ -128,6 +128,7 @@ Both pilots are excluded from CI and the default test command. Unexpected approv
 ## Documentation
 
 - [Architecture and decisions](docs/architecture.md)
+- [Interface structure and UX/DX/AX criteria](docs/interface-design.md)
 - [Small-scale acceptance and current evidence](docs/acceptance.md)
 - [Development milestones](docs/roadmap.md)
 - [Remaining implementation and acceptance](docs/requirements.md)

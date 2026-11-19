@@ -37,6 +37,8 @@ function finish(thread: any, turn: any, status = 'completed') {
     note('turn/completed', { threadId: thread.id, turn });
 }
 function respond(thread: any, turn: any, slow = false) {
+  // Multi-step cancellation fixtures must not finish while the browser is checking receipts.
+  const hold = turn.items[0]?.content?.[0]?.text?.includes('[hold]');
   const item = { id: randomUUID(), type: 'agentMessage', phase: 'final_answer', text: '' };
   turn.items.push(item);
   note('item/started', { threadId: thread.id, turnId: turn.id, item });
@@ -57,6 +59,9 @@ function respond(thread: any, turn: any, slow = false) {
             itemId: item.id,
             delta,
           });
+        } else if (hold) {
+          clearInterval(timers.get(turn.id));
+          timers.delete(turn.id);
         } else {
           note('item/completed', { threadId: thread.id, turnId: turn.id, item });
           finish(thread, turn);

@@ -1,4 +1,3 @@
-import { permissionLabel, permissionPresets } from '../shared/permissions';
 import React, {
   memo,
   useCallback,
@@ -53,11 +52,15 @@ import {
   type HistoryWindow,
 } from './history';
 import {
+  InteractionDialog,
   PreferencesDialog,
   ReviewDialog,
   StatusDialog,
   type Preferences,
 } from './InteractionDialog';
+import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
+import { WorkspaceHeader } from './WorkspaceHeader';
+import './foundation.css';
 import './interactions.css';
 import './workflow.css';
 import './style.css';
@@ -285,9 +288,7 @@ function App() {
   const [steerReceipt, setSteerReceipt] = useState<{ operationId: string; text: string }>();
   const threadRef = useRef(threadId);
   threadRef.current = threadId;
-  const modelControl = useRef<HTMLSelectElement>(null);
-  const effortControl = useRef<HTMLSelectElement>(null);
-  const permissionControl = useRef<HTMLDetailsElement>(null);
+  const composerControls = useRef<ComposerControlsHandle>(null);
   const [settings, setSettings] = useState<Settings>({ permission: 'read-only' });
   const [draft, setDraft] = useState('');
   const [queueEditing, setQueueEditing] = useState(false);
@@ -314,10 +315,18 @@ function App() {
   const [sidebar, setSidebar] = useState(
     window.innerWidth > 1099 && saved('codes.navigation') !== 'closed',
   );
-  const modelMenu = useRef<HTMLDetailsElement>(null);
   const [prefersDark, setPrefersDark] = useState(
     window.matchMedia('(prefers-color-scheme: dark)').matches,
   );
+  const theme =
+    preferences.theme === 'system'
+      ? prefersDark
+        ? 'dark'
+        : 'light'
+      : (preferences.theme ?? 'dark');
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const update = () => setPrefersDark(media.matches);
@@ -362,6 +371,7 @@ function App() {
   const [diffTurn, setDiffTurn] = useState('');
   const [diffPath, setDiffPath] = useState('');
   const [adding, setAdding] = useState(false);
+  const [conversationModalOpen, setConversationModalOpen] = useState(false);
   const [newPath, setNewPath] = useState('');
   const [directory, setDirectory] = useState('');
   const [files, setFiles] = useState<{ path: string; name: string; directory: boolean }[]>([]);
@@ -1216,31 +1226,26 @@ function App() {
           ? 'Add now updates this running task using its current settings. Accepted additions cannot be edited.'
           : 'Add now is unavailable while awaiting approval, input, or confirmation. Queue a message for later.'
       : 'Send starts a new turn. Edit this draft before sending; sent history stays unchanged.';
-  const selectedModel =
-    models.find(
-      (entry) =>
-        entry.id === (settings.model || thread?.resolvedModel) ||
-        entry.model === (settings.model || thread?.resolvedModel),
-    ) ??
-    (!settings.model && !thread?.resolvedModel
-      ? models.find((entry) => entry.isDefault)
-      : undefined);
+  const shortcut =
+    window.innerWidth <= 700 ||
+    preferences.enter === 'cmdAlways' ||
+    (preferences.enter === 'cmdIfMultiline' && draft.includes('\n'))
+      ? 'Ctrl/Cmd+Enter'
+      : 'Enter';
+  const deliveryShortcut =
+    shortcut +
+    ' to ' +
+    (active || thread?.queue?.items.length ? (deliveryMode === 'steer' ? 'add' : 'queue') : 'send');
   const commands = [
     {
       name: '/model',
       detail: 'Choose a model',
-      run: () => {
-        if (modelMenu.current) modelMenu.current.open = true;
-        modelControl.current?.focus();
-      },
+      run: () => composerControls.current?.openModel(),
     },
     {
       name: '/reasoning',
       detail: 'Set reasoning effort',
-      run: () => {
-        if (modelMenu.current) modelMenu.current.open = true;
-        effortControl.current?.focus();
-      },
+      run: () => composerControls.current?.openReasoning(),
     },
     {
       name: '/plan',
@@ -1255,12 +1260,7 @@ function App() {
     {
       name: '/approve',
       detail: 'Choose task permissions',
-      run: () => {
-        if (permissionControl.current && !active && !busy && !loadingConversation) {
-          permissionControl.current.open = true;
-          permissionControl.current.querySelector('summary')?.focus();
-        }
-      },
+      run: () => composerControls.current?.openPermissions(),
     },
     {
       name: '/ide-context',
@@ -1522,6 +1522,10 @@ function App() {
     anchorRevision,
   ]);
 
+  const modalOpen = adding || !!dialog || !!forking || conversationModalOpen;
+  const conversationLoadError =
+    connectionError ||
+    (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
   if (auth !== 'ready')
     return (
       <Login
@@ -1549,13 +1553,7 @@ function App() {
     );
   return (
     <div
-      data-theme={
-        preferences.theme === 'system'
-          ? prefersDark
-            ? 'dark'
-            : 'light'
-          : (preferences.theme ?? 'dark')
-      }
+      data-theme={theme}
       data-chat-font-size={preferences.chatFontSize}
       data-code-font-size={preferences.codeFontSize}
       style={
@@ -1575,8 +1573,9 @@ function App() {
         ref={navigationElement}
         className={`sidebar ${sidebar ? 'open' : ''}`}
         aria-label="Workspace navigation"
-        role={narrow && sidebar ? 'dialog' : undefined}
-        aria-modal={narrow && sidebar ? true : undefined}
+        inert={modalOpen || undefined}
+        role={narrow && sidebar && !modalOpen ? 'dialog' : undefined}
+        aria-modal={narrow && sidebar && !modalOpen ? true : undefined}
       >
         <div className="sidebar-brand">
           <Brand />
@@ -1584,30 +1583,34 @@ function App() {
             <Icon name="close" />
           </button>
         </div>
-        <div className="workspace-label">
-          WORKSPACE
-          <button className="icon-button" aria-label="Add project" onClick={() => setAdding(true)}>
-            <Icon name="plus" size={15} />
+        <div className="workspace-project">
+          <label className="project-select">
+            <Icon name="folder" />
+            <select
+              aria-label="Project"
+              disabled={busy}
+              value={projectId}
+              onChange={(e) => {
+                changeProject(e.target.value);
+              }}
+            >
+              {!projectId && <option value="">Choose a project</option>}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="icon-button"
+            aria-label="Add project"
+            title="Add project"
+            onClick={() => setAdding(true)}
+          >
+            <Icon name="plus" size={16} />
           </button>
         </div>
-        <label className="project-select">
-          <Icon name="folder" />
-          <select
-            aria-label="Project"
-            disabled={busy}
-            value={projectId}
-            onChange={(e) => {
-              changeProject(e.target.value);
-            }}
-          >
-            {!projectId && <option value="">Choose a project</option>}
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
         <button
           aria-label="New conversation"
           className="new-conversation"
@@ -1624,6 +1627,7 @@ function App() {
           disabled={busy}
           onSelect={select}
           onUpdated={conversationUpdated}
+          onModalChange={setConversationModalOpen}
         />
         <div className="workspace-connection">
           <button
@@ -1634,16 +1638,6 @@ function App() {
             <i />
             {connection}
           </button>
-          {system?.runtime === 'mock' && <span className="simulation">Simulation</span>}
-        </div>
-        <div className="sidebar-footer">
-          <div className="host-symbol">
-            <Icon name="terminal" size={17} />
-          </div>
-          <div>
-            <strong>Self-hosted workspace</strong>
-            <small>{system?.runtime === 'mock' ? 'Simulation runtime' : 'Codex CLI · Linux'}</small>
-          </div>
           <button
             className="icon-button"
             aria-label="Sign out"
@@ -1660,94 +1654,30 @@ function App() {
           </button>
         </div>
       </aside>
-      <div className="main" inert={narrow && (sidebar || !!panel) ? true : undefined}>
-        <header className="topbar">
-          {!sidebar && (
-            <button
-              className="icon-button"
-              aria-label="Open navigation"
-              title="Show workspace navigation"
-              onClick={() => setSidebar(true)}
-            >
-              <Icon name="menu" size={17} />
-            </button>
-          )}
-          <div className="breadcrumb">
-            <span className="project-breadcrumb">{project?.name ?? 'Workspace'}</span>
-            <strong>{thread?.title ?? 'New conversation'}</strong>
-          </div>
-          <div className="top-actions">
-            {!sidebar && (
-              <span
-                className={`header-connection ${connection === 'Connected' || connection === 'Ready' ? 'connected' : ''}`}
-                aria-label={'Connection: ' + connection}
-                title={connection}
-              >
-                {connection}
-              </span>
-            )}
-            <PanelMenu
-              label="Conversation actions"
-              className="conversation-menu"
-              trigger={<Icon name="more" size={17} />}
-            >
-              <button
-                data-close-menu
-                onClick={() => setDialog('review')}
-                disabled={!projectId || busy}
-              >
-                <Icon name="review" size={14} />
-                Review code
-              </button>
-              <button data-close-menu onClick={() => setDialog('status')}>
-                <Icon name="terminal" size={14} />
-                Session status
-              </button>
-            </PanelMenu>
-            <button
-              aria-label="Browse files"
-              title="Browse files"
-              className={`icon-button ${panel === 'files' ? 'selected' : ''}`}
-              onClick={() => setPanel(panel === 'files' ? null : 'files')}
-            >
-              <Icon name="file" size={16} />
-              <span className="header-action-label">Files</span>
-            </button>
-            <button
-              aria-label="Review changes"
-              title="Review changes"
-              className={`icon-button ${panel === 'diff' ? 'selected' : ''}`}
-              onClick={() => setPanel(panel === 'diff' ? null : 'diff')}
-            >
-              <Icon name="review" size={16} />
-              <span className="header-action-label">Changes</span>
-            </button>
-            <button
-              aria-label="Interaction settings"
-              title="Settings"
-              className="icon-button"
-              onClick={() => setDialog('preferences')}
-            >
-              <Icon name="settings" size={16} />
-            </button>
-            {!sidebar && (
-              <button
-                aria-label="New conversation"
-                title="New conversation"
-                className="icon-button"
-                disabled={busy}
-                onClick={newThread}
-              >
-                <Icon name="newchat" size={16} />
-              </button>
-            )}
-          </div>
-        </header>
+      <main
+        className="main"
+        aria-label="Conversation workspace"
+        inert={modalOpen || (narrow && (sidebar || !!panel)) || undefined}
+      >
+        <WorkspaceHeader
+          title={thread?.title ?? 'New conversation'}
+          projectName={project?.name}
+          sidebarOpen={sidebar}
+          connection={connection}
+          panel={panel}
+          busy={busy}
+          hasProject={!!projectId}
+          onNavigation={() => setSidebar(true)}
+          onNewConversation={newThread}
+          onSettings={() => setDialog('preferences')}
+          onReview={() => setDialog('review')}
+          onStatus={() => setDialog('status')}
+          onPanel={(kind) => setPanel(panel === kind ? null : kind)}
+          onDraft={changeDraft}
+          showStarters={!thread?.messages.length && !active}
+        />
         {system?.runtime === 'mock' && (
-          <div className="simulation-strip">
-            <span>DEMO WORKSPACE</span>Responses are simulated. No models, commands, or file changes
-            are executed.
-          </div>
+          <div className="simulation-strip">Simulation · No model or command execution</div>
         )}
         {thread?.forkedFromId && (
           <div className="branch-origin">
@@ -1902,16 +1832,9 @@ function App() {
               >
                 <Icon name="history" size={24} />
                 <h2>
-                  {connectionError || ['Unavailable', 'Disconnected'].includes(connection)
-                    ? 'Unable to load conversation'
-                    : 'Loading conversation…'}
+                  {conversationLoadError ? 'Unable to load conversation' : 'Loading conversation…'}
                 </h2>
-                <p role={connectionError ? 'alert' : undefined}>
-                  {connectionError ||
-                    (['Unavailable', 'Disconnected'].includes(connection)
-                      ? 'Retry, or choose another conversation from the sidebar.'
-                      : 'Retrieving the saved conversation and task status.')}
-                </p>
+                {conversationLoadError && <p role="alert">{conversationLoadError}</p>}
                 <button
                   onClick={() => {
                     setError('');
@@ -1922,34 +1845,11 @@ function App() {
                 </button>
               </section>
             ) : !thread?.messages.length && !active ? (
-              <section className="welcome">
-                <h1>Ask Codex</h1>
-                <p>Ask a question, plan a change, or review your code.</p>
-                <div className="suggestions">
-                  {[
-                    [
-                      'Explore this project',
-                      'Explain the architecture of this project and its main entry points.',
-                    ],
-                    [
-                      'Plan a change',
-                      'Review this project and help me plan a small, verifiable improvement.',
-                    ],
-                    [
-                      'Review the code',
-                      'Review the current code for potential bugs and explain your findings.',
-                    ],
-                  ].map(([title, text]) => (
-                    <button key={title} onClick={() => changeDraft(text!)}>
-                      <Icon name="arrow" size={13} />
-                      {title}
-                    </button>
-                  ))}
-                </div>
+              <section className="conversation-start" aria-label="New conversation">
                 {!projectId && (
-                  <button className="primary add-first" onClick={() => setAdding(true)}>
+                  <button className="primary" onClick={() => setAdding(true)}>
                     <Icon name="plus" />
-                    Add your first project
+                    Add project
                   </button>
                 )}
               </section>
@@ -2253,6 +2153,7 @@ function App() {
             <textarea
               aria-label="Message Codex"
               aria-describedby="message-delivery-help"
+              aria-keyshortcuts={shortcut === 'Enter' ? 'Enter' : 'Control+Enter Meta+Enter'}
               ref={composer}
               value={draft}
               readOnly={!!thread?.archived || !!thread?.managementPending}
@@ -2305,119 +2206,15 @@ function App() {
                 <Icon name="plus" size={17} />
               </button>
 
-              <PanelMenu
-                label="Codex permissions"
-                controller={permissionControl}
-                className="permission-menu"
-                disabled={active || busy || loadingConversation || !modes.length}
-                trigger={
-                  <>
-                    <span>{permissionLabel(settings.permission)}</span>
-                    <Icon name="chevron" size={11} />
-                  </>
-                }
-              >
-                <strong>Codex permissions</strong>
-                <p>
-                  Applies to the next task in this conversation. Server configuration is unchanged.
-                </p>
-                <div role="group" aria-label="Permission presets">
-                  {permissionPresets.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      aria-pressed={settings.permission === preset.id}
-                      disabled={active || busy || loadingConversation}
-                      data-close-menu
-                      onClick={() => setSettings({ ...settings, permission: preset.id })}
-                    >
-                      <span>{preset.label}</span>
-                      <small>{preset.description}</small>
-                    </button>
-                  ))}
-                </div>
-              </PanelMenu>
-              {settings.mode === 'plan' && (
-                <button
-                  className="plan-mode"
-                  aria-label="Exit Plan mode"
-                  disabled={active || busy || loadingConversation}
-                  onClick={() => setSettings({ ...settings, mode: 'default' })}
-                >
-                  Plan ×
-                </button>
-              )}
-              <div className="toolbar-spacer" />
-              <PanelMenu
-                label="Model and reasoning"
-                controller={modelMenu}
-                className="model-menu"
-                trigger={
-                  <>
-                    <span>{selectedModel?.displayName ?? settings.model ?? 'Default model'}</span>
-                    <Icon name="chevron" size={11} />
-                  </>
-                }
-              >
-                <strong>Model and reasoning</strong>
-                <label>
-                  Model
-                  <select
-                    aria-label="Model"
-                    ref={modelControl}
-                    value={settings.model ?? ''}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        model: e.target.value || undefined,
-                        effort: undefined,
-                      })
-                    }
-                    disabled={active || busy || loadingConversation}
-                  >
-                    <option value="">Default model</option>
-                    {settings.model && !models.some((entry) => entry.id === settings.model) && (
-                      <option value={settings.model}>{settings.model}</option>
-                    )}
-                    {models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.displayName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Reasoning effort
-                  <select
-                    ref={effortControl}
-                    aria-label="Reasoning effort"
-                    value={settings.effort ?? ''}
-                    disabled={active || busy || loadingConversation || !selectedModel}
-                    onChange={(event) =>
-                      setSettings({ ...settings, effort: event.target.value || undefined })
-                    }
-                  >
-                    <option value="">
-                      Model default
-                      {selectedModel ? ' · ' + selectedModel.defaultReasoningEffort : ''}
-                    </option>
-                    {settings.effort &&
-                      !selectedModel?.supportedReasoningEfforts.some(
-                        (entry) => entry.reasoningEffort === settings.effort,
-                      ) && <option value={settings.effort}>{settings.effort} (unavailable)</option>}
-                    {selectedModel?.supportedReasoningEfforts.map((entry) => (
-                      <option
-                        key={entry.reasoningEffort}
-                        value={entry.reasoningEffort}
-                        title={entry.description}
-                      >
-                        {entry.reasoningEffort}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p>Settings apply to your next turn.</p>
-              </PanelMenu>
+              <ComposerControls
+                ref={composerControls}
+                settings={settings}
+                change={setSettings}
+                models={models}
+                resolvedModel={thread?.resolvedModel}
+                modesReady={!!modes.length}
+                disabled={active || busy || loadingConversation}
+              />
               <div className="composer-dispatch-actions">
                 {(active || !!thread?.queue?.items.length) && (
                   <button
@@ -2427,7 +2224,7 @@ function App() {
                         ? 'Add to current task'
                         : 'Queue message'
                     }
-                    title={deliveryHelp}
+                    title={deliveryHelp + ' ' + deliveryShortcut}
                     aria-describedby="message-delivery-help"
                     disabled={deliveryMode === 'steer' ? addBlocked : queueBlocked}
                     onClick={() => followUp()}
@@ -2462,7 +2259,7 @@ function App() {
                   <button
                     className="send-button"
                     aria-label="Send message"
-                    title={deliveryHelp}
+                    title={deliveryHelp + ' ' + deliveryShortcut}
                     onClick={() => void send()}
                     disabled={
                       connection !== 'Connected' ||
@@ -2485,66 +2282,27 @@ function App() {
               </div>
             </div>
           </div>
-          <div
-            className={`composer-footer ${active || thread?.queue?.items.length ? 'has-delivery-status' : ''}`}
-            style={{ display: queueEditing ? 'none' : undefined }}
-          >
-            <button
-              className="composer-location"
-              onClick={() => {
-                setSidebar(true);
-                requestAnimationFrame(() =>
-                  document.querySelector<HTMLSelectElement>('[aria-label="Project"]')?.focus(),
-                );
-              }}
-              title="Choose project"
-            >
-              <Icon name="monitor" size={13} />
-              <span className="composer-location-label">Work locally</span>
-              <span className="composer-project">{project?.name ?? 'Choose project'}</span>
-              <Icon name="chevron" size={10} />
-            </button>
-            <div className="composer-delivery-help" id="message-delivery-help">
-              {active || thread?.queue?.items.length ? (
-                <span>{deliveryHelp}</span>
-              ) : (
-                <span>
-                  <span className="composer-idle-label">Send starts a new turn.</span>
-                  <span className="composer-mobile-label" aria-hidden="true">
-                    New turn
-                  </span>
-                  <span className="composer-scope-detail">
-                    {' '}
-                    Edit this draft before sending; sent history stays unchanged.
-                  </span>
-                </span>
-              )}
-              {active && (
-                <button
-                  type="button"
-                  disabled={deliveryMode === 'queue' ? addBlocked : queueBlocked}
-                  title={
-                    deliveryMode === 'queue'
-                      ? 'Apply this draft to the running task; accepted additions cannot be edited'
-                      : 'Wait for a new turn; waiting text remains editable'
-                  }
-                  onClick={() => followUp(true)}
-                >
-                  {deliveryMode === 'queue' ? 'Add now instead' : 'Queue instead'}
-                </button>
-              )}
-            </div>
-            <span className="composer-keyboard-hint">
-              {active
-                ? 'Task continues with this page closed'
-                : preferences.enter === 'cmdAlways' ||
-                    (preferences.enter === 'cmdIfMultiline' && draft.includes('\n'))
-                  ? `Ctrl/Cmd+Enter to ${thread?.queue?.items.length ? 'queue' : 'send'}`
-                  : `Enter to ${thread?.queue?.items.length ? 'queue' : 'send'}`}
-            </span>
+          <span hidden id="message-delivery-help">
+            {deliveryHelp}
+          </span>
+          <div className="composer-footer" style={{ display: queueEditing ? 'none' : undefined }}>
+            {active && (
+              <button
+                type="button"
+                disabled={deliveryMode === 'queue' ? addBlocked : queueBlocked}
+                title={
+                  deliveryMode === 'queue'
+                    ? 'Apply this draft to the running task; accepted additions cannot be edited'
+                    : 'Wait for a new turn; waiting text remains editable'
+                }
+                onClick={() => followUp(true)}
+              >
+                {deliveryMode === 'queue' ? 'Add now instead' : 'Queue instead'}
+              </button>
+            )}
           </div>
         </div>
-      </div>
+      </main>
       {dialog === 'preferences' && (
         <PreferencesDialog
           value={preferences}
@@ -2585,35 +2343,18 @@ function App() {
         />
       )}
       {forking && (
-        <div className="modal-backdrop">
+        <InteractionDialog
+          title="Branch from this turn?"
+          close={() => setForking(undefined)}
+          busy={forkBusy}
+          initialFocus="[data-confirm-cancel]"
+        >
           <form
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="fork-title"
             onSubmit={(event) => {
               event.preventDefault();
               void fork();
             }}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && !forkBusy) setForking(undefined);
-              if (event.key === 'Tab') {
-                const buttons = [
-                  ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                    'button:not(:disabled)',
-                  ),
-                ];
-                if (event.shiftKey && document.activeElement === buttons[0]) {
-                  event.preventDefault();
-                  buttons.at(-1)?.focus();
-                } else if (!event.shiftKey && document.activeElement === buttons.at(-1)) {
-                  event.preventDefault();
-                  buttons[0]?.focus();
-                }
-              }
-            }}
           >
-            <h2 id="fork-title">Branch from this turn?</h2>
             <p>
               Copy the conversation through this completed turn into a new conversation. Later turns
               and queued messages stay in the source conversation. Both conversations use the
@@ -2629,7 +2370,7 @@ function App() {
               <button
                 type="button"
                 className="secondary"
-                autoFocus
+                data-confirm-cancel
                 disabled={forkBusy}
                 onClick={() => setForking(undefined)}
               >
@@ -2640,16 +2381,16 @@ function App() {
               </button>
             </div>
           </form>
-        </div>
+        </InteractionDialog>
       )}
       {panel && (
         <aside
           ref={contextElement}
+          inert={modalOpen || (narrow && sidebar) || undefined}
           className="context-panel"
           aria-label="Project context"
-          role={narrow ? 'dialog' : undefined}
-          aria-modal={narrow ? true : undefined}
-          inert={narrow && sidebar ? true : undefined}
+          role={narrow && !sidebar && !modalOpen ? 'dialog' : undefined}
+          aria-modal={narrow && !sidebar && !modalOpen ? true : undefined}
         >
           <div className="panel-heading">
             <div className="panel-tabs">
@@ -2806,11 +2547,7 @@ function App() {
               ) : (
                 <div className="panel-empty">
                   <Icon name="file" size={28} />
-                  <p>
-                    Open a file to add context.
-                    <br />
-                    Files stay on your server.
-                  </p>
+                  <p>Select a file</p>
                 </div>
               )}
             </>
@@ -2818,34 +2555,24 @@ function App() {
         </aside>
       )}
       {adding && (
-        <div className="modal-backdrop" onClick={() => setAdding(false)}>
-          <form
-            className="modal"
-            onSubmit={(e) => void addProject(e)}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-heading">
-              <h2>Add a project</h2>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Close dialog"
-                onClick={() => setAdding(false)}
-              >
-                <Icon name="close" />
-              </button>
-            </div>
-            <p>Choose an existing directory on the Linux host.</p>
-            <label htmlFor="project-path">Absolute directory path</label>
+        <InteractionDialog
+          title="Add a project"
+          close={() => setAdding(false)}
+          busy={busy}
+          className="project-dialog"
+          closeOnBackdrop
+          initialFocus="#project-path"
+        >
+          <form onSubmit={(event) => void addProject(event)}>
+            <label htmlFor="project-path">Project directory on server</label>
             <input
               id="project-path"
               value={newPath}
-              onChange={(e) => setNewPath(e.target.value)}
+              onChange={(event) => setNewPath(event.target.value)}
               placeholder="/home/you/projects/my-project"
               autoFocus
               required
             />
-            <small>Codex uses this directory as its workspace.</small>
             {error && (
               <p role="alert" className="error-text">
                 {error}
@@ -2856,7 +2583,7 @@ function App() {
               <Icon name="plus" size={16} />
             </button>
           </form>
-        </div>
+        </InteractionDialog>
       )}
     </div>
   );

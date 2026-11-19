@@ -127,10 +127,10 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
 export function Brand() {
   return (
     <span className="brand">
-      <span className="brand-mark">
+      <span className="brand-mark" aria-hidden="true">
         c<span>›</span>
       </span>
-      codes<span className="brand-tag">WORKSPACE</span>
+      codes
     </span>
   );
 }

@@ -1,39 +1,10 @@
-/* Web workspace shell; IDE interaction controls stay within their owning pane. */
+/* Workspace geometry. Shared colors and primitives live in foundation.css. */
 .app {
-  --fg: #e1e4e8;
-  --muted: #adb3bd;
-  --line: #ffffff16;
-  --border: #535862;
-  --accent: #dce0e6;
-  --panel: #202328;
-  --field: #2a2e34;
-  --hover: #ffffff0a;
-  --selected: #ffffff10;
-  --popup: #30353c;
-  --editor: #191c21;
-  --bubble: #333941;
-  --primary-ink: #202328;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   font-size: 15.4px;
   color: var(--fg);
   background: var(--panel);
   grid-template-columns: minmax(0, 1fr);
-}
-.app[data-theme='light'] {
-  --fg: #252526;
-  --muted: #686868;
-  --line: #00000012;
-  --border: #d2d2d2;
-  --accent: #333;
-  --panel: #fafafa;
-  --field: #fff;
-  --hover: #00000006;
-  --selected: #00000008;
-  --popup: #fff;
-  --editor: #fff;
-  --bubble: #ededed;
-  --primary-ink: #fff;
-  color-scheme: light;
 }
 .app .main {
   grid-column: 1;
@@ -143,8 +114,8 @@
   align-items: center;
 }
 .app .topbar {
-  height: 70px;
-  min-height: 70px;
+  height: 56px;
+  min-height: 56px;
   padding: 0 24px;
   gap: 12px;
   border-bottom: 1px solid var(--line);
@@ -154,6 +125,9 @@
   font-size: 12.1px;
   color: var(--muted);
   margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .app .connection i {
   background: #888;
@@ -173,9 +147,9 @@
   gap: 1px;
 }
 .app .icon-button {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
+  width: var(--control-size);
+  height: var(--control-size);
+  min-width: var(--control-size);
   border-radius: 5px;
   color: var(--muted);
 }
@@ -190,11 +164,12 @@
   min-width: 0;
   gap: 0;
 }
-.app .breadcrumb strong {
+.app .breadcrumb h1 {
   display: block;
   max-width: none;
-  font-size: 14.3px;
-  font-weight: 400;
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -204,8 +179,8 @@
   margin-left: auto;
 }
 .app .sidebar-brand {
-  height: 70px;
-  min-height: 70px;
+  height: 56px;
+  min-height: 56px;
   padding: 0 16px;
 }
 .app .brand {
@@ -224,17 +199,10 @@
 .app .brand-mark span {
   font-size: 22px;
 }
-.app .brand-tag {
-  display: none;
-}
-.app .workspace-label {
-  margin: 4px 0;
-  font-size: 11px;
-  color: var(--muted);
-  padding: 10px 12px 4px;
-}
 .app .project-select {
-  margin: 4px 10px 8px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   padding: 7px 9px;
   border-color: var(--line);
   background: transparent;
@@ -242,10 +210,6 @@
 .app .project-select select {
   color: var(--fg);
   font-size: 14.3px;
-}
-.app .conversations .conversation-label {
-  margin: 6px 0 4px;
-  padding-top: 6px;
 }
 .app .conversation-search {
   margin: 8px 10px;
@@ -289,24 +253,6 @@
 .app .thread-link.active {
   background: transparent;
   color: var(--fg);
-}
-.app .sidebar-footer {
-  height: 46px;
-  min-height: 46px;
-  padding: 8px 12px;
-  border-color: var(--line);
-}
-.app .sidebar-footer strong {
-  font-size: 12.1px;
-  color: var(--fg);
-}
-.app .sidebar-footer small {
-  font-size: 11px;
-}
-.app .host-symbol {
-  width: 24px;
-  height: 24px;
-  border-color: var(--line);
 }
 .app .simulation-strip {
   min-height: 22px;
@@ -501,8 +447,9 @@
   flex: 1;
 }
 .edit-summary-heading strong {
-  font-size: 14.3px;
-  font-weight: 400;
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
 }
 .edit-summary-heading small {
   display: block;
@@ -552,51 +499,6 @@
   font-size: 12.1px;
   color: var(--muted);
   margin-top: 10px;
-}
-.app .welcome {
-  text-align: left;
-  padding: max(5vh, 30px) 0 0;
-  max-width: 400px;
-  margin: auto;
-}
-.app .welcome h1 {
-  margin: 0 0 8px;
-  font-size: 24.2px;
-  font-weight: 500;
-  letter-spacing: -0.35px;
-}
-.app .welcome > p {
-  font-size: 14.3px;
-  line-height: 1.7;
-  color: var(--muted);
-}
-.app .suggestions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 3px;
-  margin: 22px 0;
-  max-width: 300px;
-}
-.app .suggestions button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 34px;
-  padding: 8px 10px;
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  font-size: 14.3px;
-  text-align: left;
-  color: var(--muted);
-}
-.app .suggestions button:hover {
-  background: var(--hover);
-  color: var(--fg);
-}
-.app .suggestions button > svg {
-  margin: 0;
-  color: inherit;
 }
 .app .composer-area {
   flex-shrink: 0;
@@ -707,36 +609,6 @@
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.app .work-location {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 2px 0;
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-}
-.app .work-location button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0;
-  font-size: 12.1px;
-  color: var(--muted);
-  min-width: 0;
-}
-.app .work-location button > span {
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.app .work-location button > svg:last-child {
-  transform: rotate(90deg);
-}
-.app .work-location > span {
-  font-size: 11px;
 }
 .panel-menu {
   position: relative;
@@ -1058,27 +930,49 @@
     background: #81a888;
   }
   .app .top-actions .icon-button:has(.header-action-label) {
-    width: 27px;
+    width: var(--control-size);
     padding: 5px;
   }
   .app .topbar {
-    height: 58px;
-    min-height: 58px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: var(--control-size) auto;
+    height: auto;
+    min-height: 84px;
+    padding: 6px 10px;
+    gap: 6px;
   }
-  .app .breadcrumb strong {
-    font-size: 13.2px;
+  .app .topbar > .icon-button {
+    grid-column: 1;
+    grid-row: 1;
   }
-  .app .topbar {
-    padding: 0 7px;
-    gap: 3px;
+  .app .topbar > .top-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .app .topbar > .breadcrumb {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+  }
+  .app .breadcrumb h1 {
+    order: 0;
+    flex: 1;
+    font-size: 14.3px;
+    line-height: 20px;
+  }
+  .app .project-breadcrumb {
+    order: 1;
+    max-width: 35%;
+    margin: 0;
   }
   .app .top-actions {
     gap: 0;
   }
   .app .icon-button {
-    width: 25px;
-    height: 27px;
-    min-width: 25px;
   }
   .app .conversation-inner,
   .app.has-panel .conversation-inner {
@@ -1113,18 +1007,6 @@
   .app .message-actions {
     opacity: 1;
   }
-  .app .work-location > span {
-    display: none;
-  }
-  .app .welcome {
-    padding-top: 4vh;
-  }
-  .app .welcome h1 {
-    font-size: 22px;
-  }
-  .app .welcome > p {
-    font-size: 14.3px;
-  }
   .app .approval-actions {
     flex-wrap: wrap;
   }
@@ -1138,10 +1020,6 @@
   }
 }
 
-.app :is(button, summary, a, input, select, textarea):focus-visible {
-  outline: 1px solid var(--fg);
-  outline-offset: 2px;
-}
 .app .prose :is(h1, h2, h3, h4) {
   color: var(--fg);
 }
@@ -1331,25 +1209,6 @@
 .app .composer-dispatch-actions .action-label {
   display: inline;
 }
-.app .composer-delivery-help {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 6px 2px 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.app .composer-delivery-help > span {
-  flex: 1 1 220px;
-}
-.app .composer-delivery-help button {
-  flex-shrink: 0;
-  padding: 4px 7px;
-  font-size: 12px;
-}
 .app .queued-text-editor > p,
 .app .queue-edit-scope {
   color: var(--muted);
@@ -1388,4 +1247,24 @@
 .app .composer-dispatch-actions > button > svg,
 .app .composer-dispatch-actions .action-label {
   flex-shrink: 0;
+}
+
+.workspace-project {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 10px;
+}
+.app .workspace-connection {
+  justify-content: space-between;
+}
+.app .conversation-start {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+}
+.app .topbar .header-connection {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

@@ -99,81 +99,6 @@
   padding: 7px 10px;
   border-radius: 8px;
 }
-.composer-footer {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px 12px;
-  padding: 8px 2px 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.composer-location {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  gap: 5px;
-  padding: 3px 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-.composer-location > svg {
-  flex-shrink: 0;
-}
-.composer-location > svg:last-child {
-  transform: rotate(90deg);
-}
-.composer-project {
-  max-width: 120px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.composer-project::before {
-  content: '· ';
-}
-.app .composer-footer .composer-delivery-help {
-  display: block;
-  min-width: 0;
-  padding: 0;
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.composer-keyboard-hint {
-  font-size: 12px;
-  white-space: nowrap;
-}
-.composer-mobile-label {
-  display: none;
-}
-.composer-scope-detail {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-.app .composer-footer.has-delivery-status .composer-delivery-help {
-  display: flex;
-  grid-column: 1 / -1;
-  grid-row: 1;
-  align-items: center;
-  text-align: left;
-  gap: 4px 12px;
-  flex-wrap: wrap;
-}
-.composer-footer.has-delivery-status .composer-location {
-  grid-column: 1;
-  grid-row: 2;
-}
-.composer-footer.has-delivery-status .composer-keyboard-hint {
-  grid-column: 3;
-  grid-row: 2;
-}
 @container (max-width: 460px) {
   .app .composer-toolbar {
     gap: 6px;
@@ -204,29 +129,6 @@
   .app .composer-toolbar .model-menu .panel-menu-content {
     left: 8px;
     right: 8px;
-  }
-  .composer-footer {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px 10px;
-  }
-  .composer-keyboard-hint {
-    display: none;
-  }
-  .composer-idle-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .composer-mobile-label {
-    display: inline;
-  }
-  .app .composer-footer .composer-delivery-help {
-    text-align: right;
-  }
-  .composer-project {
-    max-width: 105px;
   }
 }
 @media (max-width: 700px) {
@@ -358,4 +260,19 @@
   .app .compact-queue ol {
     max-height: 120px;
   }
+}
+
+.composer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.composer-footer:empty {
+  display: none;
+}
+.composer-footer > button {
+  min-height: var(--control-size);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 2px;
 }

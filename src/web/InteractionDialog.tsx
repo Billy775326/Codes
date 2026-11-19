@@ -8,21 +8,37 @@ export function InteractionDialog({
   children,
   busy = false,
   className = '',
+  initialFocus,
+  closeOnBackdrop = false,
 }: {
   title: string;
   close: () => void;
   children: ReactNode;
   busy?: boolean;
   className?: string;
+  initialFocus?: string;
+  closeOnBackdrop?: boolean;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
+  // Capture the opener before mounting auto-focused fields or making the workspace inert.
+  const previous = useRef(document.activeElement as HTMLElement | null);
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    dialog.current?.querySelector<HTMLElement>('button,select,input,textarea')?.focus();
-    return () => previous?.focus();
-  }, []);
+    dialog.current
+      ?.querySelector<HTMLElement>(initialFocus ?? 'button,select,input,textarea')
+      ?.focus();
+    return () => {
+      const opener = previous.current;
+      if (opener?.isConnected && opener.checkVisibility() && !opener.closest('[inert]'))
+        opener.focus();
+    };
+  }, [initialFocus]);
   return (
-    <div className="modal-backdrop interaction-backdrop">
+    <div
+      className="modal-backdrop interaction-backdrop"
+      onClick={(event) => {
+        if (closeOnBackdrop && event.target === event.currentTarget && !busy) close();
+      }}
+    >
       <div
         className={`modal interaction-dialog ${className}`}
         role="dialog"
@@ -143,9 +159,9 @@ export function PreferencesDialog({
           <div className="preferences-preview" role="region" aria-label="Text preview">
             <div className="prose">
               <p>
-                Readable conversations, clear code.
+                Aa Bb Cc · 0123456789
                 <br />
-                清晰阅读，专注交流。
+                中文字体预览。
               </p>
               <pre>
                 <code>const message = "Hello, Codex";</code>
@@ -156,10 +172,7 @@ export function PreferencesDialog({
         <section className="preferences-section" aria-labelledby="preferences-interaction">
           <h3 id="preferences-interaction">Interaction</h3>
           <label className="preference-row">
-            <span className="preference-description">
-              Follow-up behavior
-              <span className="preference-help">Default action while a task is running.</span>
-            </span>
+            <span className="preference-description">Follow-up behavior</span>
             <select
               aria-label="Follow-up behavior"
               value={value.followUp}
@@ -172,12 +185,7 @@ export function PreferencesDialog({
             </select>
           </label>
           <label className="preference-row">
-            <span className="preference-description">
-              Enter behavior
-              <span className="preference-help">
-                Shift+Enter adds a line. Phone keyboards always add a line.
-              </span>
-            </span>
+            <span className="preference-description">Enter behavior</span>
             <select
               aria-label="Enter behavior"
               value={value.enter}
@@ -206,8 +214,9 @@ export function PreferencesDialog({
           <details className="preferences-help">
             <summary>Editing and shortcuts</summary>
             <p>
-              Ctrl/Cmd+Shift+Enter reverses queue and steer for one follow-up. Steering uses the
-              running task's settings; accepted additions cannot be edited or recalled.
+              Shift+Enter adds a line. Phone keyboards always add a line. Ctrl/Cmd+Shift+Enter
+              reverses queue and steer for one follow-up. Steering uses the running task's settings;
+              accepted additions cannot be edited or recalled.
             </p>
             <p>
               Drafts and waiting queued text are editable. Sent history is not edited in place.
@@ -222,10 +231,13 @@ export function PreferencesDialog({
           <span className="preferences-save-error" role="alert">
             {saveError}
           </span>
-        ) : (
-          <span className="preferences-scope">Saves automatically in this browser</span>
-        )}
-        <button className="preferences-done" type="button" onClick={close}>
+        ) : null}
+        <button
+          className="preferences-done"
+          type="button"
+          title="Preferences are saved in this browser"
+          onClick={close}
+        >
           Done
         </button>
       </div>

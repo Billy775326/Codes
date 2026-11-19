@@ -54,50 +54,60 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
   page,
 }) => {
   await login(page);
-  await send(page, '[slow] Immediate follow-up fixture ' + Date.now());
-  const origin = page.getByTestId('message-user').first();
-  // A pending bubble uses the client operation UUID until a native item arrives.
-  await expect(origin).toHaveAttribute('data-turn-id', /.+/);
-  const first = await origin.getAttribute('data-message-id');
-  const turnId = await origin.getAttribute('data-turn-id');
-  await page.getByLabel('Message Codex').fill('Use the smaller approach');
-  await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled();
-  await page.getByLabel('Message Codex').press('Control+Shift+Enter');
-  await expect(page.getByTestId('message-user')).toHaveCount(2);
-  await expect(page.getByRole('region', { name: 'Immediate follow-ups' })).toContainText(
-    'Added to current task',
-  );
-  await page.getByLabel('Message Codex').fill('Queued then promoted');
-  await page.getByRole('button', { name: 'Queue message', exact: true }).click();
-  const queue = page.getByRole('region', { name: 'Queued messages' });
-  await queue
-    .getByRole('button', { name: 'Add queued message to current task', exact: true })
-    .click();
-  await expect(page.getByTestId('message-user')).toHaveCount(3);
-  await expect(page.getByTestId('message-user').first()).toHaveAttribute('data-message-id', first!);
-  for (const entry of await page.getByTestId('message-user').all())
-    await expect(entry).toHaveAttribute('data-turn-id', turnId!);
-  await page.getByRole('button', { name: 'Interaction settings' }).click();
-  await page.getByLabel('Follow-up behavior').selectOption('steer');
-  await page.keyboard.press('Escape');
-  await page.route(
-    '**/api/threads/*/steer',
-    async (route) => {
-      await route.fetch();
-      await route.abort();
-    },
-    { times: 1 },
-  );
-  await page.getByLabel('Message Codex').fill('Only accepted once');
-  await page.getByRole('button', { name: 'Add to current task', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Check follow-up receipt', exact: true }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Check follow-up receipt', exact: true }).click();
-  await expect(page.getByLabel('Message Codex')).toHaveValue('');
-  await expect(page.getByTestId('message-user')).toHaveCount(4);
-  await stop(page);
-  await expect(page.getByRole('region', { name: 'Immediate follow-ups' })).toHaveCount(0);
+  // Keep this task active until native interruption, independent of host/browser speed.
+  try {
+    await send(page, '[slow] [hold] Immediate follow-up fixture ' + Date.now());
+    const origin = page.getByTestId('message-user').first();
+    // A pending bubble uses the client operation UUID until a native item arrives.
+    await expect(origin).toHaveAttribute('data-turn-id', /.+/);
+    const first = await origin.getAttribute('data-message-id');
+    const turnId = await origin.getAttribute('data-turn-id');
+    await page.getByLabel('Message Codex').fill('Use the smaller approach');
+    await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled();
+    await page.getByLabel('Message Codex').press('Control+Shift+Enter');
+    await expect(page.getByTestId('message-user')).toHaveCount(2);
+    await expect(page.getByRole('region', { name: 'Immediate follow-ups' })).toContainText(
+      'Added to current task',
+    );
+    await page.getByLabel('Message Codex').fill('Queued then promoted');
+    await page.getByRole('button', { name: 'Queue message', exact: true }).click();
+    const queue = page.getByRole('region', { name: 'Queued messages' });
+    await queue
+      .getByRole('button', { name: 'Add queued message to current task', exact: true })
+      .click();
+    await expect(page.getByTestId('message-user')).toHaveCount(3);
+    await expect(page.getByTestId('message-user').first()).toHaveAttribute(
+      'data-message-id',
+      first!,
+    );
+    for (const entry of await page.getByTestId('message-user').all())
+      await expect(entry).toHaveAttribute('data-turn-id', turnId!);
+    await page.getByRole('button', { name: 'Interaction settings' }).click();
+    await page.getByLabel('Follow-up behavior').selectOption('steer');
+    await page.keyboard.press('Escape');
+    await page.route(
+      '**/api/threads/*/steer',
+      async (route) => {
+        await route.fetch();
+        await route.abort();
+      },
+      { times: 1 },
+    );
+    await page.getByLabel('Message Codex').fill('Only accepted once');
+    await page.getByRole('button', { name: 'Add to current task', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Check follow-up receipt', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Check follow-up receipt', exact: true }).click();
+    await expect(page.getByLabel('Message Codex')).toHaveValue('');
+    await expect(page.getByTestId('message-user')).toHaveCount(4);
+    await stop(page);
+    await expect(page.getByRole('region', { name: 'Immediate follow-ups' })).toHaveCount(0);
+  } finally {
+    await page.keyboard.press('Escape');
+    const stopTask = page.getByRole('button', { name: 'Stop task', exact: true });
+    if (await stopTask.isVisible()) await stopTask.click();
+  }
 });
 
 test('queue/steer inversion, multiline Enter preferences, and Ctrl+N preserve the old draft', async ({

@@ -34,6 +34,8 @@
 
 ### Changed
 
+- Simplify sign-in, project navigation, conversation headings, and composer chrome. Keep starter actions in the conversation menu and detailed delivery scope on accessible controls. Share theme and modal primitives across login, workspace, and confirmation dialogs, including consistent keyboard focus and background locking.
+
 - Keep queued follow-ups in a compact card above the composer, group editing under message actions, and edit waiting text in the input area while preserving the original draft. Editing pauses the queue; saving does not send it or alter its model, permissions, or attachments.
 
 - Replace the composer Code dropdown with an explicit Codex permissions menu for Read only, Ask for approval, and Full access. Apply both sandbox and approval policies to subsequent tasks; keep Plan available through `/plan` and a visible exit marker.

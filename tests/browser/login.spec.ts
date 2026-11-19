@@ -14,20 +14,12 @@ for (const viewport of [
     await expect(input).toBeEnabled();
     await expect(input).toHaveAttribute('type', 'password');
     await expect(page.getByRole('button', { name: 'Open workspace', exact: true })).toBeDisabled();
-    const layout = await page.evaluate(() => {
-      const intro = document.querySelector('.login-intro')!.getBoundingClientRect();
-      const panel = document.querySelector('.login-panel')!.getBoundingClientRect();
-      return {
-        overflow: document.documentElement.scrollWidth > innerWidth,
-        introRight: intro.right,
-        introBottom: intro.bottom,
-        panelX: panel.x,
-        panelY: panel.y,
-      };
-    });
-    expect(layout.overflow).toBe(false);
-    if (viewport.width > 700) expect(layout.panelX).toBeGreaterThan(layout.introRight);
-    else expect(layout.panelY).toBeGreaterThan(layout.introBottom);
+    await expect(page.getByRole('heading', { name: 'Open workspace', exact: true })).toBeVisible();
+    const panel = await page.locator('.login-panel').boundingBox();
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(viewport.width);
+    expect(Math.abs(panel!.x + panel!.width / 2 - viewport.width / 2)).toBeLessThan(2);
+    await expect(page.getByText('In clear focus.', { exact: false })).toHaveCount(0);
     await page.getByText('Where do I find my token?', { exact: true }).click();
     await expect(page.locator('.login-help code')).toHaveText('.local/access-token');
     await expect(page.locator('.login-help code')).toBeVisible();

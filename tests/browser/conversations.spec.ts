@@ -36,7 +36,7 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await page.getByRole('button', { name: first, exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
   await rename(page, first, renamed);
-  await expect(page.locator('.breadcrumb strong')).toHaveText(renamed);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
   await page.getByRole('button', { name: renamed, exact: true }).click();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
@@ -55,7 +55,7 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await page.reload();
-  await expect(page.locator('.breadcrumb strong')).toHaveText(renamed);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
   await page.getByRole('button', { name: 'Archived', exact: true }).click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
@@ -158,7 +158,7 @@ test('another client sees metadata changes, and renaming never clears a live exe
     const newTitle = 'Active renamed ' + Date.now();
     const id = await owner.evaluate(() => localStorage.getItem('codes.thread'));
     await rename(owner, title, newTitle);
-    await expect(observer.locator('.breadcrumb strong')).toHaveText(newTitle);
+    await expect(observer.getByRole('heading', { level: 1 })).toHaveText(newTitle);
     expect(
       await owner.evaluate((id) => localStorage.getItem('codes.operation.' + id), id),
     ).toBeTruthy();
@@ -245,7 +245,7 @@ test('a delayed list response cannot undo a title already received through live 
       });
       if (!response.ok) throw new Error('Fixture rename failed');
     }, renamed);
-    await expect(page.locator('.breadcrumb strong')).toHaveText(renamed);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
   } finally {
     release();
   }

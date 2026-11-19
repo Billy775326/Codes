@@ -147,7 +147,7 @@ test('a late history response cannot enter a different conversation or block its
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
   await page.getByLabel('Message Codex').fill('Keep the new conversation draft');
   release();
-  await expect(page.getByRole('heading', { name: 'Ask Codex', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'New conversation', exact: true })).toBeVisible();
   await expect(page.locator('[data-message-id]')).toHaveCount(0);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the new conversation draft');
   await expect(page.getByRole('status', { name: 'Conversation position' })).toHaveCount(0);
