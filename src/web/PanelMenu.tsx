@@ -28,16 +28,16 @@ export function PanelMenu({
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && ref.current?.open) {
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation();
         ref.current.open = false;
         ref.current.querySelector('summary')?.focus();
       }
     };
     document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', escape);
+    document.addEventListener('keydown', escape, true);
     return () => {
       document.removeEventListener('pointerdown', outside);
-      document.removeEventListener('keydown', escape);
+      document.removeEventListener('keydown', escape, true);
     };
   }, [ref]);
   return (
@@ -59,8 +59,10 @@ export function PanelMenu({
         role="dialog"
         aria-label={label}
         onClick={(event) => {
-          if ((event.target as Element).closest('[data-close-menu]') && ref.current)
+          if ((event.target as Element).closest('[data-close-menu]') && ref.current) {
             ref.current.open = false;
+            ref.current.querySelector('summary')?.focus();
+          }
         }}
       >
         {children}

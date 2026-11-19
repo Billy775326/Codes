@@ -41,24 +41,27 @@
 .conversation-search button {
   display: flex;
   padding: 0;
-}
-.conversation-views {
-  display: flex;
-  gap: 5px;
-  padding: 0 10px 7px;
-}
-.conversation-views button {
-  display: flex;
-  gap: 5px;
+  min-width: 32px;
+  min-height: 32px;
   align-items: center;
-  color: var(--muted);
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: 5px;
+  justify-content: center;
 }
-.conversation-views button.selected {
-  background: var(--selected);
+.conversation-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+}
+.conversation-controls select {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 0;
+  background: transparent;
   color: var(--fg);
+  font-size: 13px;
 }
 .conversations nav {
   padding: 0 10px;
@@ -112,6 +115,8 @@
   min-width: 0;
 }
 .conversation-title > span:first-child {
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -124,9 +129,14 @@
   font-size: 11px;
   line-height: 1.4;
 }
-.conversation-meta time {
-  margin-left: auto;
+.conversation-title time {
+  flex-shrink: 0;
   white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.conversation-meta.is-routine {
+  display: contents;
 }
 .conversation-status {
   display: inline-flex;
@@ -154,8 +164,13 @@
   color: var(--status-error);
 }
 .conversation-queue {
-  flex-basis: 100%;
   overflow-wrap: anywhere;
+}
+.conversation-queue.tone-attention {
+  color: var(--status-attention);
+}
+.conversation-queue.tone-error {
+  color: var(--status-error);
 }
 .conversation-menu-trigger {
   width: 32px;
@@ -268,16 +283,6 @@
 .conversation-loading {
   padding: 10px 8px;
 }
-.conversation-sync {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 10px 8px;
-  padding: 6px 8px;
-  color: var(--status-attention);
-  text-align: left;
-  font-size: 12px;
-}
 .conversation-confirm p {
   overflow-wrap: anywhere;
 }
@@ -333,7 +338,8 @@
   .conversation-search input {
     font-size: 16px;
   }
-  .conversation-views button,
+  .conversation-controls select,
+  .conversation-search button,
   .conversation-actions button {
     min-height: 36px;
   }

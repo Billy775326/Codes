@@ -133,11 +133,23 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
 }
 export function Brand() {
   return (
-    <span className="brand">
-      <span className="brand-mark" aria-hidden="true">
-        c<span>›</span>
-      </span>
-      codes
+    <span className="brand" role="img" aria-label="Codes">
+      <img
+        className="brand-dark"
+        src="/brand/codes-lockup-dark.svg"
+        alt=""
+        aria-hidden="true"
+        width="140"
+        height="48"
+      />
+      <img
+        className="brand-light"
+        src="/brand/codes-lockup-light.svg"
+        alt=""
+        aria-hidden="true"
+        width="140"
+        height="48"
+      />
     </span>
   );
 }

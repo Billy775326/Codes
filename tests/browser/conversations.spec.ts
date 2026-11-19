@@ -1,3 +1,4 @@
+import { reconnectUpdates } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 const token = 'test-only-browser-token-not-a-real-secret';
 async function login(page: Page) {
@@ -57,12 +58,12 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
-  await page.getByRole('button', { name: 'Archived', exact: true }).click();
+  await page.getByLabel('Conversation view', { exact: true }).selectOption('archived');
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Restore conversation', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).not.toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Chats', exact: true }).click();
+  await page.getByLabel('Conversation view', { exact: true }).selectOption('chats');
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await page.screenshot({
     path: 'test-results/conversation-management-desktop.png',
@@ -152,7 +153,7 @@ test('another client sees metadata changes, and renaming never clears a live exe
     await expect(owner.getByRole('button', { name: 'Approve once' })).toBeVisible();
     await expect(owner.getByRole('button', { name: title, exact: true })).toBeVisible();
     await owner.unroute('**/api/events?threadId=*');
-    await owner.locator('.connection').click();
+    await reconnectUpdates(owner);
     await expect(owner.locator('.connection')).toHaveText('Connected');
     await observer.getByRole('button', { name: title, exact: true }).click();
     const newTitle = 'Active renamed ' + Date.now();
@@ -359,7 +360,7 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
     },
     { times: 1 },
   );
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await ready;
   await expect(page.getByRole('button', { name: 'Reconnect conversation updates' })).toBeVisible();
   await expect(row.locator('.conversation-status')).toHaveText('Done');

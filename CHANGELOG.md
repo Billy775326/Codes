@@ -42,6 +42,9 @@
 
 ### Changed
 
+- Organize navigation around project context, a conversation-view dropdown, compact status-aware rows, and workspace controls. Preserve archive and recovery actions without duplicate controls.
+- Apply the owner-provided Codes V3 logo to navigation, sign-in and the browser favicon using the original light/dark SVG assets.
+
 - Withdraw the C/S logo, restore the previous temporary interface mark, and clear the rejected browser icon while the owner selects a new identity.
 
 - Reorganize conversation navigation into Chats / Archived and readable title/status/time rows. Show approvals, questions, uncertain results and queue pause/failure conditions; retain saved states during disconnection and refresh the current list page when live updates resume. Reconcile validated native status metadata without treating idle/unloaded as completion or clearing uncertain receipts.

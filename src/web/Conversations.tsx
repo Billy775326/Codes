@@ -14,7 +14,6 @@ interface Props {
   updates: Summary[];
   disabled: boolean;
   connection: string;
-  onReconnect: () => void;
   onSelect: (id: string) => void;
   onUpdated: (summary: Summary) => void;
   onModalChange: (open: boolean) => void;
@@ -53,7 +52,6 @@ export const Conversations = memo(function Conversations({
   updates,
   disabled,
   connection,
-  onReconnect,
   onSelect,
   onUpdated,
   onModalChange,
@@ -256,6 +254,25 @@ export const Conversations = memo(function Conversations({
 
   return (
     <section className="conversations" aria-label="Conversation management">
+      <div className="conversation-controls">
+        <select
+          aria-label="Conversation view"
+          value={archived ? 'archived' : 'chats'}
+          onChange={(event) => toggleView(event.target.value === 'archived')}
+        >
+          <option value="chats">Chats</option>
+          <option value="archived">Archived</option>
+        </select>
+        <button
+          className="icon-button"
+          aria-label="Refresh conversations"
+          title="Refresh conversations"
+          disabled={loading}
+          onClick={refresh}
+        >
+          <Icon name="refresh" size={15} />
+        </button>
+      </div>
       <div className="conversation-search-row">
         <div className="conversation-search">
           <Icon name="search" size={14} />
@@ -272,44 +289,7 @@ export const Conversations = memo(function Conversations({
             </button>
           )}
         </div>
-        <button
-          className="icon-button"
-          aria-label="Refresh conversations"
-          title="Refresh conversations"
-          disabled={loading}
-          onClick={refresh}
-        >
-          <Icon name="refresh" size={14} />
-        </button>
       </div>
-      <div className="conversation-views" role="group" aria-label="Conversation view">
-        <button
-          aria-pressed={!archived}
-          className={!archived ? 'selected' : ''}
-          onClick={() => toggleView(false)}
-        >
-          Chats
-        </button>
-        <button
-          aria-pressed={archived}
-          className={archived ? 'selected' : ''}
-          onClick={() => toggleView(true)}
-        >
-          <Icon name="archive" size={12} />
-          Archived
-        </button>
-      </div>
-      {connection !== 'Connected' && connection !== 'Ready' && (
-        <button
-          className="conversation-sync"
-          onClick={onReconnect}
-          title="Reconnect live conversation updates"
-          aria-label="Reconnect conversation updates"
-        >
-          <Icon name="refresh" size={12} />
-          Updates paused
-        </button>
-      )}
       {error && !confirmation && (
         <div className="conversation-error" role="alert">
           {error}
@@ -322,6 +302,8 @@ export const Conversations = memo(function Conversations({
             <h2>{group.label}</h2>
             {group.rows.map((row) => {
               const status = conversationStatus(row);
+              const routine =
+                status.tone === 'neutral' && ['idle', 'completed'].includes(row.state);
               const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt) : undefined;
               const shortTime =
                 time &&
@@ -346,7 +328,11 @@ export const Conversations = memo(function Conversations({
                       onClick={() => onSelect(row.id)}
                       title={row.title}
                       aria-label={row.title}
-                      aria-describedby={'conversation-status-' + row.id}
+                      aria-describedby={
+                        'conversation-status-' +
+                        row.id +
+                        (time ? ' conversation-updated-' + row.id : '')
+                      }
                     >
                       <span className="conversation-title">
                         <span>{row.title}</span>
@@ -359,13 +345,9 @@ export const Conversations = memo(function Conversations({
                             ⑂
                           </span>
                         )}
-                      </span>
-                      <span className="conversation-meta" id={'conversation-status-' + row.id}>
-                        <span className={'conversation-status tone-' + status.tone}>
-                          {status.label}
-                        </span>
                         {time && (
                           <time
+                            id={'conversation-updated-' + row.id}
                             dateTime={time.iso}
                             title={'Updated: ' + time.full}
                             aria-label={'Updated: ' + time.full}
@@ -373,7 +355,36 @@ export const Conversations = memo(function Conversations({
                             {shortTime}
                           </time>
                         )}
-                        {status.queue && <span className="conversation-queue">{status.queue}</span>}
+                      </span>
+                      <span
+                        className={
+                          'conversation-meta' + (routine && !status.queue ? ' is-routine' : '')
+                        }
+                        id={'conversation-status-' + row.id}
+                      >
+                        <span
+                          className={
+                            'conversation-status tone-' +
+                            status.tone +
+                            (routine ? ' visually-hidden' : '')
+                          }
+                        >
+                          {status.label}
+                        </span>
+                        {status.queue && (
+                          <span
+                            className={
+                              'conversation-queue ' +
+                              (row.queueIssue === 'failed'
+                                ? 'tone-error'
+                                : row.queueIssue || row.queuePaused
+                                  ? 'tone-attention'
+                                  : '')
+                            }
+                          >
+                            {status.queue}
+                          </span>
+                        )}
                       </span>
                     </button>
                     <button

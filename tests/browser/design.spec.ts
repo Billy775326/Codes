@@ -19,6 +19,7 @@ for (const width of [1440, 320]) {
     if (width === 320)
       await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
     await expect(page.getByLabel('Project', { exact: true })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
     await page.getByRole('button', { name: 'Add project', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });
     await expect(
@@ -34,7 +35,9 @@ for (const width of [1440, 320]) {
     await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add project', exact: true })).toBeFocused();
+    await expect(
+      page.getByRole('button', { name: 'Workspace actions', exact: true }),
+    ).toBeFocused();
     if (width === 320)
       await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
     await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
@@ -98,6 +101,7 @@ test('light theme reaches sign-in and portaled archive dialogs', async ({ page }
     'rgb(255, 255, 255)',
   );
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByLabel('Workspace access token')).toBeVisible();
   expect(

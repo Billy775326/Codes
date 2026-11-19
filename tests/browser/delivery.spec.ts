@@ -1,3 +1,4 @@
+import { reconnectUpdates } from './sidebar-helpers';
 import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '../../src/shared/types';
 async function login(page: Page) {
@@ -99,14 +100,14 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
   page.on('request', (request) => {
     if (request.method() === 'PATCH') patches++;
   });
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(queue.getByLabel('Edit queued message')).toHaveAttribute('readonly', '');
   await expect(
     queue.getByRole('button', { name: 'Save queued message', exact: true }),
   ).toBeDisabled();
   await expect(queue).toContainText('Your local edit was not submitted');
   base.thread.queue!.items = [];
-  await page.locator('.connection').click();
+  await reconnectUpdates(page);
   await expect(queue.getByLabel('Edit queued message')).toHaveValue(
     'Keep this unsubmitted local correction',
   );
