@@ -34,6 +34,8 @@
 
 ### Changed
 
+- Reduce default conversation text to 15px, workspace text to 14px, and desktop composer text to 15px. Retain 16px phone input text and existing explicit chat/code size preferences.
+
 - Simplify sign-in, project navigation, conversation headings, and composer chrome. Keep starter actions in the conversation menu and detailed delivery scope on accessible controls. Share theme and modal primitives across login, workspace, and confirmation dialogs, including consistent keyboard focus and background locking.
 
 - Keep queued follow-ups in a compact card above the composer, group editing under message actions, and edit waiting text in the input area while preserving the original draft. Editing pauses the queue; saving does not send it or alter its model, permissions, or attachments.

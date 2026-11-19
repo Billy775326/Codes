@@ -217,7 +217,7 @@ test('legacy history uses a neutral label and the last unknown-phase reply witho
 });
 
 for (const width of [1440, 320])
-  test(`larger fixed text ignores legacy display size and collapsed activity fits ${width}px in both themes`, async ({
+  test(`smaller default text ignores legacy display size and collapsed activity fits ${width}px in both themes`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: width === 320 ? 844 : 1000 });
@@ -227,7 +227,7 @@ for (const width of [1440, 320])
       .last()
       .locator('.prose')
       .evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
-    expect(initial).toBeGreaterThanOrEqual(16);
+    expect(initial).toBe(15);
     await page.evaluate(() => {
       const preferences = JSON.parse(localStorage.getItem('codes.preferences') || '{}');
       localStorage.setItem(

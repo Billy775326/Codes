@@ -1,7 +1,7 @@
 /* Workspace geometry. Shared colors and primitives live in foundation.css. */
 .app {
   font-family: var(--font-body);
-  font-size: 15.4px;
+  font-size: 14px;
   color: var(--fg);
   background: var(--panel);
   grid-template-columns: minmax(0, 1fr);
@@ -167,7 +167,7 @@
 .app .breadcrumb h1 {
   display: block;
   max-width: none;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
   margin: 0;
   overflow: hidden;
@@ -313,7 +313,7 @@
 }
 .app .prose {
   color: var(--fg);
-  font-size: 16.5px;
+  font-size: 15px;
   line-height: 1.8;
 }
 .app .prose > :first-child {
@@ -326,15 +326,15 @@
   margin: 8px 0;
 }
 .app .prose h1 {
-  font-size: 22px;
+  font-size: 20px;
   margin: 12px 0;
 }
 .app .prose h2 {
-  font-size: 17.6px;
+  font-size: 16px;
   margin: 12px 0 8px;
 }
 .app .prose h3 {
-  font-size: 15.4px;
+  font-size: 15px;
   margin: 10px 0 6px;
 }
 .app .prose strong {

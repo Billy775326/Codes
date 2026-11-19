@@ -15,6 +15,9 @@ for (const width of [1440, 320]) {
     await input.fill('A short draft');
     await expect(input).toBeFocused();
     expect(await input.evaluate((e) => getComputedStyle(e).outlineStyle)).toBe('none');
+    expect(await input.evaluate((e) => getComputedStyle(e).fontSize)).toBe(
+      width > 700 ? '15px' : '16px',
+    );
     expect(await input.evaluate((e) => getComputedStyle(e).fontFamily)).toBe(
       await page.locator('.app').evaluate((e) => getComputedStyle(e).fontFamily),
     );

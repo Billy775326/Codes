@@ -106,6 +106,13 @@ test('font previews and chat typography persist alongside legacy interaction pre
   await page.keyboard.press('Escape');
   await expect(page.locator('.app')).not.toHaveAttribute('data-chat-font-size');
   await expect(page.locator('.app')).not.toHaveAttribute('data-code-font-size');
+  expect(
+    await page
+      .getByTestId('message-assistant')
+      .last()
+      .locator('.prose')
+      .evaluate((element) => getComputedStyle(element).fontSize),
+  ).toBe('15px');
   await expect(page.getByLabel('Message Codex')).toHaveValue('Preserve draft across font changes');
 });
 test('a failed preference save is visible while current-session changes apply', async ({
