@@ -62,7 +62,7 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await page.getByRole('button', { name: 'Restore conversation', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).not.toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Active', exact: true }).click();
+  await page.getByRole('button', { name: 'Chats', exact: true }).click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await page.screenshot({
     path: 'test-results/conversation-management-desktop.png',
@@ -255,4 +255,119 @@ test('a delayed list response cannot undo a title already received through live 
   );
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
+});
+
+test('sidebar keeps task and paused queue status across selection, reload, themes and narrow layouts', async ({
+  page,
+}) => {
+  await login(page);
+  const title = '[approve] Sidebar status ' + Date.now();
+  await page.getByLabel('Message Codex').fill(title);
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
+  const row = page
+    .locator('.conversation-row')
+    .filter({ has: page.getByRole('button', { name: title, exact: true }) });
+  await expect(row.locator('.conversation-status')).toHaveText('Needs approval');
+  await expect(row.locator('.thread-link')).toHaveAccessibleDescription(/Needs approval.*Updated:/);
+  await expect(row.locator('time')).toHaveAttribute('datetime', /T/);
+  await page.getByLabel('Message Codex').fill('Waiting sidebar follow-up');
+  await page.getByRole('button', { name: 'Queue message', exact: true }).click();
+  await page.evaluate(async () => {
+    const id = localStorage.getItem('codes.thread');
+    const response = await fetch('/api/threads/' + id + '/queue/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paused: true }),
+    });
+    if (!response.ok) throw new Error('Queue pause failed');
+  });
+  await expect(row.locator('.conversation-queue')).toHaveText('1 in queue · Paused');
+  await page.getByRole('button', { name: 'New conversation', exact: true }).click();
+  await expect(row.locator('.conversation-status')).toHaveText('Needs approval');
+  await row.getByRole('button', { name: title, exact: true }).click();
+  await page.reload();
+  await expect(row.locator('.conversation-status')).toHaveText('Needs approval');
+  await expect(row.locator('.conversation-queue')).toHaveText('1 in queue · Paused');
+  for (const theme of ['light', 'dark']) {
+    await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    await page.getByLabel('Workspace theme', { exact: true }).selectOption(theme);
+    await page.keyboard.press('Escape');
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      const open = page.getByRole('button', { name: 'Open navigation', exact: true });
+      if (await open.isVisible()) await open.click();
+      await expect(row.locator('.conversation-status')).toBeVisible();
+      await expect
+        .poll(async () => {
+          const bounds = await row.boundingBox();
+          return !!bounds && bounds.x >= 0 && bounds.x + bounds.width <= width;
+        })
+        .toBe(true);
+      expect(await row.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
+      await page.screenshot({ path: `test-results/sidebar-${theme}-${width}.png` });
+      const close = page.getByRole('button', { name: 'Close navigation', exact: true });
+      if (width <= 1099 && (await close.isVisible())) await close.click();
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('button', { name: 'Decline', exact: true }).click();
+  await expect(row.locator('.conversation-status')).toHaveText('Interrupted');
+  await expect(row.locator('.conversation-queue')).toHaveText('1 in queue · Paused');
+  const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
+  await queue.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(row.locator('.conversation-queue')).toHaveCount(0);
+});
+
+test('sidebar preserves search and statuses while disconnected and reconciles its page on reconnect', async ({
+  page,
+}) => {
+  await login(page);
+  const title = 'Sidebar reconnect ' + Date.now();
+  await create(page, title);
+  await page.getByLabel('Search conversations', { exact: true }).fill(title);
+  await expect(page.locator('.thread-link')).toHaveCount(1);
+  const row = page
+    .locator('.conversation-row')
+    .filter({ has: page.getByRole('button', { name: title, exact: true }) });
+  await expect(row.locator('.conversation-status')).toHaveText('Done');
+  // Close the single stream using the existing reconnect action, then hold its handshake.
+  let release!: () => void;
+  let captured!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const ready = new Promise<void>((resolve) => {
+    captured = resolve;
+  });
+  await page.route(
+    '**/api/threads/*/snapshot',
+    async (route) => {
+      const response = await route.fetch();
+      captured();
+      await held;
+      await route.fulfill({ response });
+    },
+    { times: 1 },
+  );
+  await page.locator('.connection').click();
+  await ready;
+  await expect(page.getByRole('button', { name: 'Reconnect conversation updates' })).toBeVisible();
+  await expect(row.locator('.conversation-status')).toHaveText('Done');
+  const list = page.waitForResponse(
+    (response) => response.url().includes('/conversations?') && response.status() === 200,
+  );
+  release();
+  await list;
+  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.getByRole('button', { name: 'Reconnect conversation updates' })).toHaveCount(0);
+  await expect(page.getByLabel('Search conversations', { exact: true })).toHaveValue(title);
+  await expect(row.locator('.conversation-status')).toHaveText('Done');
+  expect(
+    await page.evaluate(
+      () =>
+        performance.getEntriesByType('resource').filter((e) => e.name.includes('/api/events?'))
+          .length,
+    ),
+  ).toBeLessThanOrEqual(3);
 });

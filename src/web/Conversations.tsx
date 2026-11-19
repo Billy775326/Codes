@@ -4,6 +4,8 @@ import type { ConversationPage, Summary } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon } from './primitives';
 import { InteractionDialog } from './InteractionDialog';
+import { conversationStatus } from './conversation-status';
+import { formatMessageTime } from './MessageTime';
 import './conversations.css';
 
 interface Props {
@@ -11,6 +13,8 @@ interface Props {
   selectedId: string;
   updates: Summary[];
   disabled: boolean;
+  connection: string;
+  onReconnect: () => void;
   onSelect: (id: string) => void;
   onUpdated: (summary: Summary) => void;
   onModalChange: (open: boolean) => void;
@@ -30,6 +34,9 @@ const signature = (row: Summary) =>
     !!row.managementPending,
     !!row.executionPending,
     row.queueCount,
+    row.queuePaused,
+    row.queueIssue,
+    row.executionUnknown,
     row.forkedFromId,
   ]);
 function dayLabel(time: number) {
@@ -45,6 +52,8 @@ export const Conversations = memo(function Conversations({
   selectedId,
   updates,
   disabled,
+  connection,
+  onReconnect,
   onSelect,
   onUpdated,
   onModalChange,
@@ -71,6 +80,14 @@ export const Conversations = memo(function Conversations({
     [onModalChange],
   );
   useEffect(() => () => onModalChange(false), [onModalChange]);
+  const lastConnection = useRef(connection);
+  useEffect(() => {
+    // Replay may have expired while the browser was away. Re-read only the current
+    // native list page, preserving search/cursor and avoiding conversation histories.
+    if (connection === 'Connected' && lastConnection.current !== 'Connected')
+      setRevision((value) => value + 1);
+    lastConnection.current = connection;
+  }, [connection]);
   const priorUpdates = useRef(new Map<string, string>());
   const generation = useRef(0);
   const latestUpdates = useRef(updates);
@@ -271,7 +288,7 @@ export const Conversations = memo(function Conversations({
           className={!archived ? 'selected' : ''}
           onClick={() => toggleView(false)}
         >
-          Active
+          Chats
         </button>
         <button
           aria-pressed={archived}
@@ -282,6 +299,17 @@ export const Conversations = memo(function Conversations({
           Archived
         </button>
       </div>
+      {connection !== 'Connected' && connection !== 'Ready' && (
+        <button
+          className="conversation-sync"
+          onClick={onReconnect}
+          title="Reconnect live conversation updates"
+          aria-label="Reconnect conversation updates"
+        >
+          <Icon name="refresh" size={12} />
+          Updates paused
+        </button>
+      )}
       {error && !confirmation && (
         <div className="conversation-error" role="alert">
           {error}
@@ -292,123 +320,154 @@ export const Conversations = memo(function Conversations({
         {groups.map((group) => (
           <section key={group.label} className="conversation-group">
             <h2>{group.label}</h2>
-            {group.rows.map((row) => (
-              <div
-                key={row.id}
-                className={'conversation-row ' + (row.id === selectedId ? 'selected' : '')}
-              >
-                <div className="conversation-row-heading">
-                  <button
-                    className={'thread-link ' + (row.id === selectedId ? 'active' : '')}
-                    aria-current={row.id === selectedId ? 'page' : undefined}
-                    disabled={disabled}
-                    onClick={() => onSelect(row.id)}
-                    title={row.title}
-                  >
-                    <span className={'status-dot ' + row.state} />
-                    <span>{row.title}</span>
-                    {row.forkedFromId && (
-                      <span className="branch-mark" title="Conversation branch">
-                        ⑂
-                      </span>
-                    )}
-                    {['waitingApproval', 'waitingInput'].includes(row.state) && (
-                      <span className="attention" aria-hidden="true">
-                        !
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    className="icon-button conversation-menu-trigger"
-                    aria-label={'Actions for ' + row.title}
-                    aria-expanded={menu === row.id}
-                    disabled={!!pending}
-                    onClick={() => {
-                      setMenu(menu === row.id ? '' : row.id);
-                      setEditing('');
-                      setError('');
-                    }}
-                  >
-                    <Icon name="more" size={16} />
-                  </button>
-                </div>
-                {menu === row.id && (
-                  <div
-                    className="conversation-actions"
-                    role="group"
-                    aria-label={'Conversation actions: ' + row.title}
-                  >
+            {group.rows.map((row) => {
+              const status = conversationStatus(row);
+              const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt) : undefined;
+              const shortTime =
+                time &&
+                new Intl.DateTimeFormat(
+                  undefined,
+                  group.label === 'Today'
+                    ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+                    : { month: 'short', day: 'numeric' },
+                ).format(row.updatedAt);
+              return (
+                <div
+                  key={row.id}
+                  className={'conversation-row ' + (row.id === selectedId ? 'selected' : '')}
+                  data-conversation-id={row.id}
+                  data-state={row.state}
+                >
+                  <div className="conversation-row-heading">
                     <button
-                      disabled={!!pending || row.managementPending}
+                      className={'thread-link ' + (row.id === selectedId ? 'active' : '')}
+                      aria-current={row.id === selectedId ? 'page' : undefined}
+                      disabled={disabled}
+                      onClick={() => onSelect(row.id)}
+                      title={row.title}
+                      aria-label={row.title}
+                      aria-describedby={'conversation-status-' + row.id}
+                    >
+                      <span className="conversation-title">
+                        <span>{row.title}</span>
+                        {row.forkedFromId && (
+                          <span
+                            className="branch-mark"
+                            title="Conversation branch"
+                            aria-label="Conversation branch"
+                          >
+                            ⑂
+                          </span>
+                        )}
+                      </span>
+                      <span className="conversation-meta" id={'conversation-status-' + row.id}>
+                        <span className={'conversation-status tone-' + status.tone}>
+                          {status.label}
+                        </span>
+                        {time && (
+                          <time
+                            dateTime={time.iso}
+                            title={'Updated: ' + time.full}
+                            aria-label={'Updated: ' + time.full}
+                          >
+                            {shortTime}
+                          </time>
+                        )}
+                        {status.queue && <span className="conversation-queue">{status.queue}</span>}
+                      </span>
+                    </button>
+                    <button
+                      className="icon-button conversation-menu-trigger"
+                      aria-label={'Actions for ' + row.title}
+                      aria-expanded={menu === row.id}
+                      disabled={!!pending}
                       onClick={() => {
-                        setEditing(row.id);
-                        setName(row.title);
+                        setMenu(menu === row.id ? '' : row.id);
+                        setEditing('');
+                        setError('');
                       }}
                     >
-                      <Icon name="edit" size={12} />
-                      Rename
+                      <Icon name="more" size={16} />
                     </button>
-                    {row.managementPending ? (
-                      <button disabled={!!pending} onClick={() => void mutate(row, 'check')}>
-                        <Icon name="refresh" size={12} />
-                        Check status
-                      </button>
-                    ) : (
-                      <button
-                        disabled={!!pending || isWorking(row)}
-                        title={
-                          isWorking(row)
-                            ? 'Finish or stop the task, confirm its result, and remove queued messages first.'
-                            : undefined
-                        }
-                        onClick={() =>
-                          row.archived
-                            ? void mutate(row, 'archive')
-                            : (setConfirmation(row), setError(''))
-                        }
-                      >
-                        <Icon name={row.archived ? 'refresh' : 'archive'} size={12} />
-                        {row.archived ? 'Restore' : 'Archive'}
-                      </button>
-                    )}
                   </div>
-                )}
-                {editing === row.id && (
-                  <form
-                    className="conversation-rename"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (name.trim() && name.trim() !== row.title) void mutate(row, 'rename');
-                    }}
-                  >
-                    <label htmlFor={'rename-' + row.id}>Conversation title</label>
-                    <input
-                      id={'rename-' + row.id}
-                      aria-label="Conversation title"
-                      value={name}
-                      maxLength={80}
-                      disabled={!!pending}
-                      onChange={(e) => setName(e.target.value)}
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') setEditing('');
-                      }}
-                    />
-                    <div>
-                      <button type="button" onClick={() => setEditing('')} disabled={!!pending}>
-                        Cancel
-                      </button>
+                  {menu === row.id && (
+                    <div
+                      className="conversation-actions"
+                      role="group"
+                      aria-label={'Conversation actions: ' + row.title}
+                    >
                       <button
-                        className="primary"
-                        disabled={!!pending || !name.trim() || name.trim() === row.title}
+                        disabled={!!pending || row.managementPending}
+                        onClick={() => {
+                          setEditing(row.id);
+                          setName(row.title);
+                        }}
                       >
-                        {pending ? 'Saving…' : 'Save name'}
+                        <Icon name="edit" size={12} />
+                        Rename
                       </button>
+                      {row.managementPending ? (
+                        <button disabled={!!pending} onClick={() => void mutate(row, 'check')}>
+                          <Icon name="refresh" size={12} />
+                          Check status
+                        </button>
+                      ) : (
+                        <button
+                          disabled={!!pending || isWorking(row)}
+                          title={
+                            isWorking(row)
+                              ? 'Finish or stop the task, confirm its result, and remove queued messages first.'
+                              : undefined
+                          }
+                          onClick={() =>
+                            row.archived
+                              ? void mutate(row, 'archive')
+                              : (setConfirmation(row), setError(''))
+                          }
+                        >
+                          <Icon name={row.archived ? 'refresh' : 'archive'} size={12} />
+                          {row.archived ? 'Restore' : 'Archive'}
+                        </button>
+                      )}
                     </div>
-                  </form>
-                )}
-              </div>
-            ))}
+                  )}
+                  {editing === row.id && (
+                    <form
+                      className="conversation-rename"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (name.trim() && name.trim() !== row.title) void mutate(row, 'rename');
+                      }}
+                    >
+                      <label htmlFor={'rename-' + row.id}>Conversation title</label>
+                      <input
+                        id={'rename-' + row.id}
+                        aria-label="Conversation title"
+                        value={name}
+                        maxLength={80}
+                        disabled={!!pending}
+                        onChange={(e) => setName(e.target.value)}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') setEditing('');
+                        }}
+                      />
+                      <div>
+                        <button type="button" onClick={() => setEditing('')} disabled={!!pending}>
+                          Cancel
+                        </button>
+                        <button
+                          className="primary"
+                          disabled={!!pending || !name.trim() || name.trim() === row.title}
+                        >
+                          {pending ? 'Saving…' : 'Save name'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              );
+            })}
           </section>
         ))}
         {!page.data.length && !loading && (

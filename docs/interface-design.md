@@ -4,15 +4,16 @@ codes uses a task-focused browser layout: navigation, conversation, and an optio
 
 ## Structure and ownership
 
-| Source                          | Responsibility                                                                                                             |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `src/web/foundation.css`        | Shared dark/light palette, fonts, form controls, buttons, focus indicators, and modal surfaces                             |
-| `src/web/workspace.css`         | Navigation, conversation, preview geometry, and responsive drawers                                                         |
-| `src/web/WorkspaceHeader.tsx`   | Conversation title and named workspace actions                                                                             |
-| `src/web/ComposerControls.tsx`  | Model, reasoning, and permission controls; popup focus for local commands                                                  |
-| `src/web/InteractionDialog.tsx` | Shared modal keyboard handling and opener restoration; settings, review, status, project, branch, and confirmation content |
-| `src/web/Login.tsx`             | Workspace-token sign-in, pending/error states, and optional token-location help                                            |
-| `src/web/main.tsx`              | Existing workspace state, subscriptions, drafts, dispatch, receipts, and recovery                                          |
+| Source                                                                     | Responsibility                                                                                                                                              |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/web/foundation.css`                                                   | Shared dark/light palette, fonts, form controls, buttons, focus indicators, and modal surfaces                                                              |
+| `src/web/workspace.css`                                                    | Navigation, conversation, preview geometry, and responsive drawers                                                                                          |
+| `src/web/WorkspaceHeader.tsx`                                              | Conversation title and named workspace actions                                                                                                              |
+| `src/web/ComposerControls.tsx`                                             | Model, reasoning, and permission controls; popup focus for local commands                                                                                   |
+| `src/web/InteractionDialog.tsx`                                            | Shared modal keyboard handling and opener restoration; settings, review, status, project, branch, and confirmation content                                  |
+| `src/web/Login.tsx`                                                        | Workspace-token sign-in, pending/error states, and optional token-location help                                                                             |
+| `src/web/Conversations.tsx`, `conversations.css`, `conversation-status.ts` | Conversation navigation, row metadata presentation, search, native pagination, and management actions; see [sidebar state sources](conversation-sidebar.md) |
+| `src/web/main.tsx`                                                         | Existing workspace state, subscriptions, drafts, dispatch, receipts, and recovery                                                                           |
 
 Feature styles remain with their feature. New changes should edit the owning rule or component instead of introducing another general override stylesheet. Shared colors are defined once on the document root, so login and portaled confirmation dialogs inherit the selected theme. Chat text offers 12–24px and code text offers 10–20px, both in 1px steps; Default continues to use the application defaults. The picker and persisted-value reader share one list per field. Existing browser font and interaction preferences remain compatible.
 

@@ -196,3 +196,47 @@ it('backs up schema 3 and preserves unknown task and steer receipts while adding
     upgraded.close();
   }
 });
+
+it('projects queue controls and unknown execution receipts without loading message bodies', () => {
+  const { store } = fixture();
+  try {
+    const payload = {
+      text: 'private queued input',
+      settings: { permission: 'read-only' as const },
+      attachments: [],
+    };
+    store.queue.add('q1', 'a', payload);
+    store.queue.add('q2', 'a', payload);
+    store.queue.pause('a');
+    // Summary projection must not parse or expose the payload, even if it is unreadable.
+    store.db.prepare("UPDATE queued_messages SET payload='unreadable' WHERE thread_id='a'").run();
+    expect(store.thread('a')).toMatchObject({
+      queueCount: 2,
+      queuePaused: true,
+      executionPending: false,
+      executionUnknown: false,
+    });
+    store.queue.set('q1', 'failed');
+    expect(store.thread('a')?.queueIssue).toBe('failed');
+    store.queue.set('q2', 'unknown');
+    expect(store.thread('a')?.queueIssue).toBe('unknown');
+    store.queue.set('q1', 'cancelled');
+    store.queue.set('q2', 'completed');
+    expect(store.thread('a')).toMatchObject({
+      queueCount: 0,
+      queuePaused: true,
+      queueIssue: undefined,
+    });
+    store.begin('run', 'a', 'send', {});
+    store.update('run', 'acknowledged', 'turn');
+    store.begin('steer', 'a', 'steer', {});
+    store.update('steer', 'unknown', 'turn');
+    expect(store.thread('a')).toMatchObject({ executionPending: true, executionUnknown: true });
+    store.finishSteers('a', 'turn');
+    expect(store.thread('a')).toMatchObject({ executionPending: true, executionUnknown: false });
+    store.complete('a', 'turn');
+    expect(store.thread('a')).toMatchObject({ executionPending: false, executionUnknown: false });
+  } finally {
+    store.close();
+  }
+});

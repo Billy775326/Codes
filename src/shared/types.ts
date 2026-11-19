@@ -68,6 +68,9 @@ export interface Summary {
   archived?: boolean;
   forkedFromId?: string;
   queueCount?: number;
+  queuePaused?: boolean;
+  queueIssue?: 'unknown' | 'failed';
+  executionUnknown?: boolean;
   managementPending?: boolean;
   executionPending?: boolean;
 }

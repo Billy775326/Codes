@@ -24,6 +24,34 @@ export class QueueStore {
         .get(threadId) as any
     ).count as number;
   }
+  /** Sidebar metadata never reads or broadcasts queued message bodies. */
+  summary(threadId: string) {
+    const row = this.db
+      .prepare(
+        `
+      SELECT count(*) AS count,
+        coalesce(max(state='unknown'),0) AS unknown_result,
+        coalesce(max(state='failed'),0) AS failed,
+        coalesce((SELECT paused FROM queue_controls WHERE thread_id=?),0) AS paused
+      FROM queued_messages WHERE thread_id=? AND state NOT IN ('completed','cancelled')
+    `,
+      )
+      .get(threadId, threadId) as {
+      count: number;
+      unknown_result: number;
+      failed: number;
+      paused: number;
+    };
+    return {
+      queueCount: row.count,
+      queuePaused: !!row.paused,
+      queueIssue: row.unknown_result
+        ? ('unknown' as const)
+        : row.failed
+          ? ('failed' as const)
+          : undefined,
+    };
+  }
   state(threadId: string): QueueState {
     const control = this.db
       .prepare('SELECT paused,reason FROM queue_controls WHERE thread_id=?')
