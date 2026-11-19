@@ -24,6 +24,7 @@ try {
   const project = await service.addProject(join(directory, 'project'));
   const configuration = await service.driver.call('config/read', { includeLayers: false });
   assert.equal(configuration.config.features.default_mode_request_user_input, true);
+  assert.equal(configuration.config.features.fast_mode, true);
   const models = await service.modelSettings.models();
   assert.ok(models.length > 0);
   const modes = await service.modelSettings.modes();
@@ -41,6 +42,44 @@ try {
     collaborationMode: mode,
     sandboxPolicy: { type: 'readOnly' },
   });
+  for (const serviceTier of ['priority', 'default']) {
+    let cancel!: () => void;
+    const changed = new Promise<any>((resolve, reject) => {
+      const onNotification = (event: any) => {
+        if (
+          event.method !== 'thread/settings/updated' ||
+          event.params.threadId !== thread.id ||
+          event.params.threadSettings?.serviceTier !== serviceTier
+        )
+          return;
+        cancel();
+        resolve(event.params);
+      };
+      const timeout = setTimeout(() => {
+        cancel();
+        reject(new Error('Native settings notification timed out'));
+      }, 5000);
+      cancel = () => {
+        clearTimeout(timeout);
+        service.driver.off('notification', onNotification);
+      };
+      service.driver.on('notification', onNotification);
+    });
+    try {
+      const result = await service.driver.call('thread/settings/update', {
+        threadId: thread.id,
+        serviceTier,
+      });
+      assert.deepEqual(result, {});
+      const notification = await changed;
+      assert.equal(notification.threadSettings.serviceTier, serviceTier);
+      assert.equal(notification.threadSettings.collaborationMode.mode, 'plan');
+    } finally {
+      cancel();
+    }
+  }
+  const afterSpeedChange = await service.driver.call('config/read', { includeLayers: false });
+  assert.equal(afterSpeedChange.config.service_tier, configuration.config.service_tier);
   for (const preset of permissionPresets) {
     const configured = await service.create(project.id, { permission: preset.id });
     await service.driver.call('thread/settings/update', {
@@ -56,7 +95,7 @@ try {
   assert.equal(history.messages.length, 0);
   assert.equal(history.state, 'idle');
   console.log(
-    'PASS: CLI 0.167.0 initialization, model/reasoning metadata, Plan/Code presets, thread settings, creation/read, all three sandbox/approval presets with read-only restoration, and lazy empty history. No model requests.',
+    'PASS: CLI 0.167.0 initialization, model/reasoning metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all three sandbox/approval presets with read-only restoration, and lazy empty history. No model requests.',
   );
 } finally {
   await service.close();

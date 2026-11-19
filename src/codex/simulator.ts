@@ -117,6 +117,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
             displayName: 'Demo model',
             isDefault: true,
             defaultReasoningEffort: 'medium',
+            serviceTiers: [
+              { id: 'default', name: 'Standard', description: 'Standard speed' },
+              { id: 'priority', name: 'Fast', description: 'Faster fixture' },
+            ],
             supportedReasoningEfforts: [
               { reasoningEffort: 'low', description: 'Quick fixture' },
               { reasoningEffort: 'medium', description: 'Balanced fixture' },

@@ -78,7 +78,7 @@
   font-size: 12px;
 }
 .app .model-menu {
-  max-width: 200px;
+  max-width: 260px;
 }
 .app .model-menu summary {
   min-height: 36px;
@@ -87,8 +87,69 @@
   font-size: 14px;
 }
 .app .model-menu summary > span {
-  max-width: 160px;
+  max-width: 230px;
 }
+.app .model-menu .model-selection {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+}
+.model-selection-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.model-selection-effort {
+  flex-shrink: 0;
+}
+.app .model-menu .panel-menu-content > .fast-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 40px;
+  gap: 12px;
+  color: var(--fg);
+}
+.fast-option > span {
+  display: grid;
+  gap: 3px;
+}
+.fast-option small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.fast-option input {
+  appearance: none;
+  flex-shrink: 0;
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--field);
+  cursor: pointer;
+}
+.fast-option input::before {
+  content: '';
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.fast-option input:checked {
+  background: var(--fg);
+}
+.fast-option input:checked::before {
+  transform: translateX(14px);
+  background: var(--panel);
+}
+.fast-option input:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .app .composer-toolbar .panel-menu-content {
   max-height: min(300px, calc(100dvh - 220px));
   overflow-y: auto;

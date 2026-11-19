@@ -11,7 +11,7 @@ A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interfa
 - Searchable, paginated conversation navigation with native rename, archive, and restore controls.
 - Command, file, and turn-scoped permission approvals; proactive native questions in Code and Plan, with choices, custom answers, secret inputs, and explicit skipping for optional questions.
 - Quoted follow-up drafts, compact durable FIFO queue cards, immediate native steering, and conversation branches through completed turns. Edit waiting text in the composer area without replacing a separate unsent draft; editing pauses the queue until you resume it.
-- Native Plan/Code modes, model-specific reasoning effort, task-plan steps, inline/separate code reviews, and session/context-token status.
+- Native Execution/Plan modes, model-specific reasoning effort, Fast speed control, task-plan steps, inline/separate code reviews, and session/context-token status.
 - A browser workspace with persistent desktop project/conversation navigation, central chat, right-side file/change previews, larger text and controls, and dark/light/system themes.
 - IDE-style model/reasoning controls, edited-file cards, questions, approvals and follow-up actions within that Web layout.
 - Browser interaction preferences for Enter, queue/steer inversion, review delivery, and local slash commands.
@@ -77,7 +77,7 @@ ssh -L 6670:127.0.0.1:6670 you@your-linux-host
 
 Then open `http://127.0.0.1:6670` on your computer. Phone access requires a private HTTPS reverse proxy or private network with HTTPS. Set `CODES_PUBLIC_ORIGIN` to the exact browser origin and preserve its `Host` header when proxying. See [operations](docs/operations.md).
 
-This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Ask for approval** to edit workspace files with approval for external access. **Full access** removes file/network sandbox restrictions and approval prompts on the server. The composer permission menu applies to the next task, preserves the current task and existing queues, and does not modify global CLI configuration. Use `/plan` to toggle native Plan mode; its visible Plan marker exits back to Code.
+This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Ask for approval** to edit workspace files with approval for external access. **Full access** removes file/network sandbox restrictions and approval prompts on the server. The composer permission menu applies to the next task, preserves the current task and existing queues, and does not modify global CLI configuration. Use the model/reasoning popup to choose Execution or Plan and toggle Fast; the input bar shows the model and effective reasoning effort. Fast uses a supported native speed tier with higher usage, independently of reasoning effort. It defaults off; Standard is explicitly selected for new tasks instead of inheriting the host tier. Task settings are saved when sent and travel with queued messages. Model changes reset Fast and reasoning overrides. This does not change global CLI configuration or an active task. Use `/plan` to toggle native Plan mode; its visible Plan marker exits back to Code.
 
 ## Configuration
 

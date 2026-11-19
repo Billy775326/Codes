@@ -4,6 +4,8 @@
 
 ### Added
 
+- Add Fast and Execution / Plan controls to the model/reasoning popup, with the selected model and effective reasoning effort visible in its trigger. Fast uses native service-tier overrides independently of reasoning, persists with task/queue settings, and is unavailable when the selected model does not advertise support. Standard explicitly overrides inherited Fast for new tasks.
+
 - Show native turn start times below the first user message and finish times beside final-reply actions, with local dates and a full timestamp/timezone tooltip. Leave unavailable historical and intermediate-item times unset.
 
 - Group each native turn into one work-history disclosure containing intermediate commentary and tool/integration activity. Completed work collapses by default; final answers, one edited-files card and one action row stay visible. Preserve manual disclosure choices through updates, show failures while collapsed, and display elapsed time only when native timing is available. Legacy turns without phases retain their last completed assistant reply as the answer.

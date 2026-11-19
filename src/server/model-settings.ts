@@ -8,6 +8,17 @@ const modelSchema = z.object({
   model: z.string().min(1).max(150),
   displayName: z.string().max(200),
   isDefault: z.boolean(),
+  serviceTiers: z
+    .array(
+      z.object({
+        id: z.string().max(80),
+        name: z.string().max(200),
+        description: z.string().max(2000),
+      }),
+    )
+    .max(20)
+    .optional(),
+  additionalSpeedTiers: z.array(z.string().max(80)).max(20).optional(),
   defaultReasoningEffort: z.string().min(1).max(80),
   supportedReasoningEfforts: z
     .array(
@@ -36,7 +47,13 @@ export class ModelSettings {
     const parsed = z.array(modelSchema).max(100).safeParse(response?.data);
     if (!parsed.success)
       throw new AppError('PROTOCOL_ERROR', 'The CLI returned invalid model metadata.', 502);
-    return parsed.data;
+    return parsed.data.map(({ serviceTiers, additionalSpeedTiers, ...model }) => ({
+      ...model,
+      supportsFast:
+        serviceTiers?.some((tier) => tier.id === 'priority' || tier.id === 'fast') ??
+        additionalSpeedTiers?.includes('fast') ??
+        false,
+    }));
   }
   async modes() {
     const response = await this.driver.call('collaborationMode/list', {});
@@ -54,11 +71,18 @@ export class ModelSettings {
     const model = settings.model || resolvedModel || preset.model;
     if (!model)
       throw new AppError('MODEL_UNKNOWN', 'Choose a model before starting this task.', 409);
-    if (settings.effort) {
+    if (settings.effort || settings.fast) {
       const metadata = (await this.models()).find(
         (entry) => entry.id === model || entry.model === model,
       );
+      if (settings.fast && !metadata?.supportsFast)
+        throw new AppError(
+          'FAST_UNAVAILABLE',
+          'Fast mode is unavailable for the selected model.',
+          409,
+        );
       if (
+        settings.effort &&
         !metadata?.supportedReasoningEfforts.some(
           (entry) => entry.reasoningEffort === settings.effort,
         )

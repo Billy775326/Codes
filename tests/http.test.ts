@@ -314,6 +314,7 @@ it('validates native steering/review inputs and publishes bounded reasoning meta
     'isDefault',
     'defaultReasoningEffort',
     'supportedReasoningEfforts',
+    'supportsFast',
   ]);
   const modes = await (await fetch(origin + '/api/modes', { headers: { cookie } })).json();
   expect(modes.map((entry: { mode: string }) => entry.mode)).toEqual(['default', 'plan']);

@@ -1229,6 +1229,7 @@ export class Service {
           sandboxPolicy,
           approvalPolicy,
           collaborationMode,
+          serviceTier: settings.fast ? 'priority' : 'default',
         });
       }
       thread.resolvedModel = collaborationMode.settings.model;
@@ -1253,6 +1254,7 @@ export class Service {
               sandboxPolicy,
               approvalPolicy,
               collaborationMode,
+              serviceTierForTurn: settings.fast ? 'priority' : 'default',
             },
       );
       if (typeof result.turn?.id !== 'string')

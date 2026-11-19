@@ -392,3 +392,80 @@ for (const [permission, sandboxPolicy, approvalPolicy] of [
     expect(thread.settings.permission).toBe('read-only');
   });
 }
+
+it('keeps Fast independent of reasoning and maps on/off to native task speed overrides', async () => {
+  const { service, thread } = await fixture();
+  const spy = vi.spyOn(service.driver, 'call');
+  await service.send(thread.id, randomUUID(), 'Fast plan', {
+    permission: 'read-only',
+    mode: 'plan',
+    effort: 'high',
+    fast: true,
+  });
+  await until(() => thread.state === 'completed');
+  let start = spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)![1] as any;
+  expect(start.serviceTierForTurn).toBe('priority');
+  expect(start.collaborationMode).toMatchObject({
+    mode: 'plan',
+    settings: { reasoning_effort: 'high' },
+  });
+  expect(service.store.thread(thread.id)?.settings.fast).toBe(true);
+  await service.send(thread.id, randomUUID(), 'Standard execution', {
+    permission: 'read-only',
+    mode: 'default',
+    effort: 'high',
+    fast: false,
+  });
+  await until(() => thread.state === 'completed');
+  start = spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)![1] as any;
+  expect(start.serviceTierForTurn).toBe('default');
+  expect(start.collaborationMode).toMatchObject({
+    mode: 'default',
+    settings: { reasoning_effort: 'high' },
+  });
+  expect(service.store.thread(thread.id)?.settings.fast).toBe(false);
+});
+
+it('refuses unavailable Fast before execution and excludes private/native model configuration from public metadata', async () => {
+  const { service, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation(async (method, params, timeout) => {
+      const response = await call(method, params, timeout);
+      if (method === 'model/list') {
+        response.data[0].serviceTiers = [
+          { id: 'default', name: 'Standard', description: 'Standard' },
+        ];
+        response.data[0].privateConfig = 'not-public';
+      }
+      return response;
+    });
+  const models = await service.modelSettings.models();
+  expect(models[0]?.supportsFast).toBe(false);
+  expect(models[0]).not.toHaveProperty('privateConfig');
+  const operationId = randomUUID();
+  await expect(
+    service.send(thread.id, operationId, 'Do not run', { permission: 'read-only', fast: true }),
+  ).rejects.toMatchObject({ code: 'FAST_UNAVAILABLE' });
+  expect(spy.mock.calls.filter(([method]) => method === 'turn/start')).toHaveLength(0);
+  expect(service.store.operation(operationId)?.state).toBe('failed');
+});
+
+it('keeps queued Fast settings and refuses to apply them by steering a different-speed task', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[approve] Standard task', thread.settings);
+  await until(() => thread.actions.length > 0);
+  const id = randomUUID();
+  await service.enqueue(thread.id, id, {
+    text: 'Fast next turn',
+    settings: { ...thread.settings, fast: true },
+    attachments: [],
+  });
+  await expect(service.steerQueued(thread.id, id, thread.turnId!)).rejects.toMatchObject({
+    code: 'STEER_SETTINGS',
+  });
+  expect(service.store.queue.get(id)).toMatchObject({ state: 'queued', settings: { fast: true } });
+  service.cancelQueued(thread.id, id);
+  await service.interrupt(thread.id);
+});

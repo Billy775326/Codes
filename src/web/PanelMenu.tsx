@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 export function PanelMenu({
   label,
   trigger,
+  description,
   children,
   controller,
   className = '',
@@ -11,6 +12,7 @@ export function PanelMenu({
 }: {
   label: string;
   trigger: ReactNode;
+  description?: string;
   children: ReactNode;
   controller?: RefObject<HTMLDetailsElement | null>;
   className?: string;
@@ -43,7 +45,8 @@ export function PanelMenu({
       <summary
         role="button"
         aria-label={label}
-        title={label}
+        title={description ? label + ': ' + description : label}
+        aria-description={description}
         aria-disabled={disabled || undefined}
         onClick={(event) => {
           if (disabled) event.preventDefault();

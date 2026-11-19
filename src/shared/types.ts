@@ -15,6 +15,8 @@ export interface Project {
 export interface Settings {
   model?: string;
   effort?: string;
+  /** Standard when absent; independent of reasoning effort. */
+  fast?: boolean;
   mode?: 'default' | 'plan';
   permission: 'read-only' | 'workspace-write' | 'danger-full-access';
 }
@@ -177,6 +179,7 @@ export interface Model {
   displayName: string;
   isDefault: boolean;
   defaultReasoningEffort: string;
+  supportsFast?: boolean;
   supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
 }
 export type ReviewTarget =
@@ -191,6 +194,7 @@ export function sameSettings(a: Settings, b: Settings): boolean {
     a.permission === b.permission &&
     (a.model ?? '') === (b.model ?? '') &&
     (a.effort ?? '') === (b.effort ?? '') &&
-    (a.mode ?? 'default') === (b.mode ?? 'default')
+    (a.mode ?? 'default') === (b.mode ?? 'default') &&
+    !!a.fast === !!b.fast
   );
 }

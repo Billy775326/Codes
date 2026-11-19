@@ -13,6 +13,7 @@ const settings = z
   .object({
     model: z.string().min(1).max(150).optional(),
     effort: z.string().min(1).max(80).optional(),
+    fast: z.boolean().optional(),
     mode: z.enum(['default', 'plan']).optional(),
     permission: z.enum(['read-only', 'workspace-write', 'danger-full-access']),
   })

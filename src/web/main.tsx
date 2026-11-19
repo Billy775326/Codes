@@ -2213,7 +2213,8 @@ function App() {
                 change={setSettings}
                 models={models}
                 resolvedModel={thread?.resolvedModel}
-                modesReady={!!modes.length}
+                modesReady={modes.some((entry) => entry.mode === 'default')}
+                planReady={modes.some((entry) => entry.mode === 'plan')}
                 disabled={active || busy || loadingConversation}
               />
               <div className="composer-dispatch-actions">

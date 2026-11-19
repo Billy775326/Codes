@@ -9,7 +9,7 @@ codes uses a task-focused browser layout: navigation, conversation, and an optio
 | `src/web/foundation.css`        | Shared dark/light palette, fonts, form controls, buttons, focus indicators, and modal surfaces                             |
 | `src/web/workspace.css`         | Navigation, conversation, preview geometry, and responsive drawers                                                         |
 | `src/web/WorkspaceHeader.tsx`   | Conversation title and named workspace actions                                                                             |
-| `src/web/ComposerControls.tsx`  | Model, reasoning, and permission controls; popup focus for local commands                                                  |
+| `src/web/ComposerControls.tsx`  | Model/effort summary, reasoning, native Fast, Execution/Plan, and permission controls; popup focus for local commands      |
 | `src/web/InteractionDialog.tsx` | Shared modal keyboard handling and opener restoration; settings, review, status, project, branch, and confirmation content |
 | `src/web/Login.tsx`             | Workspace-token sign-in, pending/error states, and optional token-location help                                            |
 | `src/web/main.tsx`              | Existing workspace state, subscriptions, drafts, dispatch, receipts, and recovery                                          |
@@ -39,3 +39,13 @@ Keep approval questions, permission boundaries, task errors, unknown outcomes, a
 Browser regressions cover desktop and narrow layouts, both themes, keyboard navigation, project/conversation switching, drafts, popup hit targets, approval/question flows, queues, stopping, reconnection, and paginated history. The design-specific suite checks the shared modal, local-command focus, retained starter actions, and theme inheritance.
 
 The existing unit/integration suite continues to cover task and storage contracts. Real preview acceptance checks the actual port 6670 service and existing conversations without submitting model prompts. Resized desktop browsers do not establish physical-phone or every assistive-technology acceptance, and passing tests is not a guarantee against every possible defect.
+
+## Model, reasoning, mode and speed
+
+The composer trigger shows the selected/resolved model and reasoning effort. With no override it displays the catalog default; if metadata is unavailable it says Default rather than inventing an effort. The model name may ellipsize in a narrow layout while the effort remains visible; the accessible description and tooltip retain the full selection.
+
+The same popup contains Model, Reasoning effort, Execution / Plan, and a Fast switch. The switch includes the necessary higher-usage indication. Fast is independent of reasoning and is enabled only for models advertising the native tier. A persisted unavailable Fast setting can still be turned off. Model changes reset effort and Fast overrides. Existing Plan shortcut/exit and permission controls retain their behavior.
+
+`Settings.fast` is optional for schema-4 compatibility and defaults to false. New ordinary turns send native `serviceTierForTurn: "priority"` (the native Fast tier) or `"default"`; reviews apply the corresponding thread-local tier before `review/start`. The app-server receives a process-local `features.fast_mode=true` override, without writing global CLI configuration. Queue entries retain their settings, and a different-speed entry cannot be steered into an existing turn. No settings click dispatches work; saved conversation settings change when a task is sent.
+
+References: [native App Server turn parameters](https://learn.chatgpt.com/docs/app-server) and [Fast speed and usage](https://learn.chatgpt.com/docs/agent-configuration/speed), checked against generated CLI 0.167.0 types. Simulator tests establish protocol mapping and UI behavior; native metadata-only checks do not establish account-specific access, billed usage, or a measured speed improvement.

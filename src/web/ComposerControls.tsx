@@ -17,6 +17,7 @@ export function ComposerControls({
   models,
   resolvedModel,
   modesReady,
+  planReady,
   disabled,
   ref,
 }: {
@@ -25,6 +26,7 @@ export function ComposerControls({
   models: Model[];
   resolvedModel?: string;
   modesReady: boolean;
+  planReady: boolean;
   disabled: boolean;
   ref: Ref<ComposerControlsHandle>;
 }) {
@@ -58,6 +60,10 @@ export function ComposerControls({
         entry.id === (settings.model || resolvedModel) ||
         entry.model === (settings.model || resolvedModel),
     ) ?? (!settings.model && !resolvedModel ? models.find((entry) => entry.isDefault) : undefined);
+  const effort = settings.effort || selectedModel?.defaultReasoningEffort;
+  const effortLabel = effort ? effort.charAt(0).toUpperCase() + effort.slice(1) : 'Default';
+  const modelLabel =
+    selectedModel?.displayName ?? settings.model ?? resolvedModel ?? 'Default model';
   return (
     <>
       <PanelMenu
@@ -102,11 +108,18 @@ export function ComposerControls({
       <div className="toolbar-spacer" />
       <PanelMenu
         label="Model and reasoning"
+        description={`${modelLabel} · ${effortLabel}${!settings.effort ? ' (model default)' : ''}${settings.fast ? ' · Fast' : ''} · ${settings.mode === 'plan' ? 'Plan' : 'Execution'}`}
         controller={modelMenu}
         className="model-menu"
         trigger={
           <>
-            <span>{selectedModel?.displayName ?? settings.model ?? 'Default model'}</span>
+            <span
+              className="model-selection"
+              title={`${modelLabel} · ${effortLabel}${!settings.effort ? ' (model default)' : ''}`}
+            >
+              <span className="model-selection-name">{modelLabel}</span>
+              <span className="model-selection-effort">· {effortLabel}</span>
+            </span>
             <Icon name="chevron" size={11} />
           </>
         }
@@ -123,6 +136,7 @@ export function ComposerControls({
                 ...settings,
                 model: e.target.value || undefined,
                 effort: undefined,
+                fast: false,
               })
             }
             disabled={disabled}
@@ -165,6 +179,38 @@ export function ComposerControls({
               </option>
             ))}
           </select>
+        </label>
+        <label>
+          Mode
+          <select
+            aria-label="Task mode"
+            value={settings.mode ?? 'default'}
+            disabled={disabled || !modesReady}
+            onChange={(event) =>
+              change({ ...settings, mode: event.target.value as Settings['mode'] })
+            }
+          >
+            <option value="default">Execution</option>
+            <option value="plan" disabled={!planReady}>
+              Plan
+            </option>
+          </select>
+        </label>
+        <label className="fast-option">
+          <span>
+            Fast
+            <small>
+              {selectedModel?.supportsFast ? 'Higher usage' : 'Unavailable for this model'}
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            aria-label="Fast mode"
+            checked={!!settings.fast}
+            disabled={disabled || (!selectedModel?.supportsFast && !settings.fast)}
+            onChange={(event) => change({ ...settings, fast: event.target.checked })}
+          />
         </label>
       </PanelMenu>
     </>
