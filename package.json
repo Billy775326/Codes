@@ -20,7 +20,8 @@
     "test:live:ide": "node --import tsx scripts/live-ide-pilot.ts",
     "test:live": "node --import tsx scripts/live-pilot.ts",
     "format:check": "prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:sandbox": "node --import tsx scripts/native-boundary-smoke.ts"
   },
   "dependencies": {
     "image-size": "2.1.0",

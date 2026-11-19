@@ -12,10 +12,15 @@ import { resolve, join } from 'node:path';
 import { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Service } from './service.js';
+import { taskWriteBoundary } from './task-policy.js';
 import { application } from './http.js';
 
 const directory = resolve(process.env.CODES_DATA_DIR ?? '.local');
 mkdirSync(directory, { recursive: true, mode: 0o700 });
+const writeBoundary = taskWriteBoundary(
+  resolve(import.meta.dirname, '../..'),
+  process.env.CODES_TASK_WRITE_ROOT,
+);
 const lock = join(directory, 'server.lock');
 if (existsSync(lock)) {
   const pid = Number(readFileSync(lock, 'utf8'));
@@ -56,6 +61,7 @@ const service = new Service(
     binary: process.env.CODES_CODEX_BINARY,
     stateFile: join(directory, 'mock-history.json'),
     codeQuestions: process.env.CODES_CODE_QUESTIONS !== '0',
+    writeBoundary,
   }),
 );
 if (process.env.CODES_PROJECT_ROOT) await service.addProject(process.env.CODES_PROJECT_ROOT);

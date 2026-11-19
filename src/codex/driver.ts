@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import type { WriteBoundary } from './write-boundary.js';
 import { Rpc } from './rpc.js';
 import { AppError } from '../shared/errors.js';
 import type { System } from '../shared/types.js';
@@ -23,9 +24,13 @@ export class Driver extends EventEmitter {
       stateFile: string;
       timeoutMs?: number;
       codeQuestions?: boolean;
+      writeBoundary?: WriteBoundary;
     },
   ) {
     super();
+  }
+  get writeBoundary() {
+    return this.options.writeBoundary;
   }
   system(): System {
     return {
@@ -33,6 +38,7 @@ export class Driver extends EventEmitter {
       state: this.state,
       version: this.mode === 'mock' ? 'simulator' : '0.167.0',
       codeQuestions: this.options.codeQuestions !== false,
+      ...(this.writeBoundary ? { taskWriteRoot: this.writeBoundary.root } : {}),
     };
   }
   async start(): Promise<void> {
@@ -84,10 +90,17 @@ export class Driver extends EventEmitter {
             'features.default_mode_request_user_input=' + (this.options.codeQuestions !== false),
             '-c',
             'features.fast_mode=true',
+            ...(this.writeBoundary
+              ? Object.entries(this.writeBoundary.configuration()).flatMap(([key, value]) => [
+                  '-c',
+                  key + '=' + JSON.stringify(value),
+                ])
+              : []),
           ];
     const child = spawn(binary, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
+      ...(this.writeBoundary ? { cwd: this.writeBoundary.root } : {}),
       env: { ...process.env, CODES_MOCK_STATE_FILE: this.options.stateFile },
     });
     this.child = child;
@@ -110,6 +123,10 @@ export class Driver extends EventEmitter {
         capabilities: { experimentalApi: true },
       });
       await rpc.notify('initialized');
+      if (this.mode === 'codex' && this.writeBoundary) {
+        const configuration = await rpc.request('config/read', { includeLayers: false });
+        this.writeBoundary.checkConfiguration(configuration.config);
+      }
       this.state = 'ready';
     } catch (error) {
       child.kill('SIGTERM');
@@ -118,8 +135,31 @@ export class Driver extends EventEmitter {
     }
   }
   async call(method: string, params: unknown, timeoutMs?: number) {
+    const bounded = this.writeBoundary?.params(method, params) ?? params;
     await this.start();
-    return this.rpc!.request(method, params, timeoutMs);
+    if (
+      this.mode === 'codex' &&
+      this.writeBoundary &&
+      ['thread/start', 'thread/resume', 'thread/fork'].includes(method)
+    ) {
+      const configuration = await this.rpc!.request('config/read', {
+        includeLayers: false,
+        cwd: (bounded as { cwd?: string }).cwd,
+      });
+      this.writeBoundary.checkConfiguration(configuration.config);
+    }
+    const result = await this.rpc!.request(method, bounded, timeoutMs);
+    if (
+      this.writeBoundary &&
+      method === 'thread/resume' &&
+      result.thread?.status?.type === 'active'
+    )
+      throw new AppError(
+        'TASK_POLICY_ACTIVE',
+        'Finish the existing native task before using this conversation with the write boundary.',
+        409,
+      );
+    return result;
   }
   answer(id: string | number, result: unknown) {
     if (!this.rpc || this.state !== 'ready')

@@ -2403,6 +2403,7 @@ function App() {
               </div>
               <ComposerControls
                 ref={composerControls}
+                taskWriteRoot={system?.taskWriteRoot}
                 settings={settings}
                 change={changeSettings}
                 models={models}
@@ -2515,6 +2516,7 @@ function App() {
           value={preferences}
           defaults={{
             settings: defaultSettings.value?.settings,
+            taskWriteRoot: system?.taskWriteRoot,
             saving: defaultSettings.saving,
             loading: defaultSettings.loading,
             error: defaultSettings.error,

@@ -18,8 +18,8 @@ export const permissionPresets = [
   },
 ] as const;
 
-export function permissionLabel(permission: Settings['permission']) {
-  return permissionPresets.find((preset) => preset.id === permission)!.label;
+export function permissionLabel(permission: Settings['permission'], writeRoot?: string) {
+  return permissionOptions(writeRoot).find((preset) => preset.id === permission)!.label;
 }
 
 /** Each preset fixes both controls, so lowering access also restores approval prompts. */
@@ -33,4 +33,25 @@ export function nativePermissions(permission: Settings['permission'], projectPat
           ? { type: 'dangerFullAccess' }
           : { type: 'workspaceWrite', writableRoots: [projectPath], networkAccess: false },
   };
+}
+
+/** The owner policy is process-wide; the browser only presents its permitted choices. */
+export function permissionOptions(writeRoot?: string) {
+  return permissionPresets.map((preset) => {
+    if (!writeRoot) return preset;
+    if (preset.id === 'workspace-write')
+      return {
+        ...preset,
+        label: 'Workspace only',
+        description:
+          'Edit files inside the server task write root. External writes and sandbox elevation are blocked.',
+      };
+    return {
+      ...preset,
+      description:
+        preset.id === 'read-only'
+          ? 'Inspect files without changes. Sandbox elevation is disabled.'
+          : 'Disabled by the server task write boundary.',
+    };
+  });
 }

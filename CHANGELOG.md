@@ -4,6 +4,8 @@
 
 ### Added
 
+- Support a persisted, owner-controlled task write root without moving Codex login or history. Enforce native filesystem boundaries, exclude temporary roots, disable Full access and elevation, and refuse external tool processes that cannot be confined. Expose Workspace only permissions in the composer and new-conversation defaults.
+
 - Save permissions, model, reasoning effort, Fast, and mode independently for each conversation as soon as they change. Add server-backed New conversation defaults to the settings modal, with serialized saves, revision conflict recovery, and persistent choices across switching, reload, and restart. Running tasks and existing queue entries keep their captured settings.
 
 - Paste or choose image attachments in the composer, with previews, removal, image-only messages, queue previews, and native immediate additions. Keep image bytes outside conversation snapshots, validate supported model input, and block dispatch until uploads finish. PNG, JPEG, and WebP are supported, with four combined attachments and 8 MiB per image; see [image limits and retention](docs/image-attachments.md).

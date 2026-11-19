@@ -28,7 +28,7 @@ Build the application first with npm run build in ${root}`);
   process.exitCode = 1;
 } else {
   // Keep one data directory across callers, while honoring explicit relative paths.
-  for (const key of ['CODES_DATA_DIR', 'CODES_PROJECT_ROOT']) {
+  for (const key of ['CODES_DATA_DIR', 'CODES_PROJECT_ROOT', 'CODES_TASK_WRITE_ROOT']) {
     if (process.env[key]) process.env[key] = resolve(process.env[key]);
   }
   if (process.env.CODES_CODEX_BINARY?.includes('/'))

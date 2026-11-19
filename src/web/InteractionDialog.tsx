@@ -1,6 +1,6 @@
 import { chatFontSizes, codeFontSizes } from './font-sizes';
 import { ModelSettingsFields } from './ComposerControls';
-import { permissionPresets } from '../shared/permissions';
+import { permissionOptions } from '../shared/permissions';
 import type { Model } from '../shared/types';
 import { permissionLabel } from '../shared/permissions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -101,6 +101,7 @@ export function PreferencesDialog({
   saveError?: string;
   defaults: {
     settings?: Settings;
+    taskWriteRoot?: string;
     saving: boolean;
     loading: boolean;
     error: string;
@@ -211,8 +212,12 @@ export function PreferencesDialog({
                     })
                   }
                 >
-                  {permissionPresets.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
+                  {permissionOptions(defaults.taskWriteRoot).map((preset) => (
+                    <option
+                      key={preset.id}
+                      value={preset.id}
+                      disabled={!!defaults.taskWriteRoot && preset.id === 'danger-full-access'}
+                    >
                       {preset.label}
                     </option>
                   ))}
@@ -220,8 +225,9 @@ export function PreferencesDialog({
               </label>
               <p className="preference-help">
                 {
-                  permissionPresets.find((preset) => preset.id === defaults.settings!.permission)
-                    ?.description
+                  permissionOptions(defaults.taskWriteRoot).find(
+                    (preset) => preset.id === defaults.settings!.permission,
+                  )?.description
                 }
               </p>
               <div className="default-model-settings">
