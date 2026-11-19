@@ -142,7 +142,6 @@ export interface System {
   version: string;
   error?: string;
   codeQuestions?: boolean;
-  taskWriteRoot?: string;
 }
 export interface Envelope {
   seq: number;

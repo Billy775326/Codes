@@ -1,6 +1,6 @@
 import { useImperativeHandle, useRef, type Ref } from 'react';
 import type { Model, Settings } from '../shared/types';
-import { permissionLabel, permissionOptions } from '../shared/permissions';
+import { permissionLabel, permissionPresets } from '../shared/permissions';
 import { PanelMenu } from './PanelMenu';
 import { Icon } from './primitives';
 
@@ -13,7 +13,6 @@ export interface ComposerControlsHandle {
 /** Presentation and popup focus only. Task dispatch and durable receipts stay with the workspace. */
 export function ComposerControls({
   settings,
-  taskWriteRoot,
   change,
   models,
   resolvedModel,
@@ -23,7 +22,6 @@ export function ComposerControls({
   ref,
 }: {
   settings: Settings;
-  taskWriteRoot?: string;
   change: (settings: Settings) => void;
   models: Model[];
   resolvedModel?: string;
@@ -76,24 +74,19 @@ export function ComposerControls({
         disabled={disabled || !modesReady}
         trigger={
           <>
-            <span>{permissionLabel(settings.permission, taskWriteRoot)}</span>
+            <span>{permissionLabel(settings.permission)}</span>
             <Icon name="chevron" size={11} />
           </>
         }
       >
         <strong>Conversation permissions</strong>
-        {taskWriteRoot && (
-          <p className="permission-boundary" aria-label="Task write root">
-            {taskWriteRoot}
-          </p>
-        )}
         <div role="group" aria-label="Permission presets">
-          {permissionOptions(taskWriteRoot).map((preset) => (
+          {permissionPresets.map((preset) => (
             <button
               key={preset.id}
               type="button"
               aria-pressed={settings.permission === preset.id}
-              disabled={disabled || (!!taskWriteRoot && preset.id === 'danger-full-access')}
+              disabled={disabled}
               data-close-menu
               onClick={() => change({ ...settings, permission: preset.id })}
             >

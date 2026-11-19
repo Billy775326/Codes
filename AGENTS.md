@@ -12,7 +12,7 @@
 
 - Use a short-lived task branch; inspect the working tree and compare against the target branch before committing. Preserve unrelated work and shared history.
 - Use Node 24.x, `npm ci`, and the checked-in lockfile. Run `npm run format:check`, `npm run check`, `npm test`, and `npm run test:e2e` for implementation changes.
-- `npm run test:native` uses an empty temporary Codex home and sends no model prompts. `npm run test:sandbox` additionally runs disposable native shell commands to validate filesystem boundaries, without any model request. `npm run test:live -- --allow-model-requests` uses the server login and model quota, edits a disposable fixture, and leaves native acceptance conversations; do not run it as part of normal CI.
+- `npm run test:native` uses an empty temporary Codex home and sends no model prompts. `npm run test:live -- --allow-model-requests` uses the server login and model quota, edits a disposable fixture, and leaves native acceptance conversations; do not run it as part of normal CI.
 - Keep task dispatch, native approval callbacks, durable receipts, and browser subscriptions separate. Never automatically resend a task with an uncertain outcome.
 - Update `CHANGELOG.md` under Unreleased for user-facing changes. Distinguish local simulator evidence, native metadata checks, live pilot results, and deployment acceptance.
 - Keep UI changes consistent with [interface ownership and UX/DX/AX acceptance](docs/interface-design.md): improve the layout before adding explanatory copy, retain semantic control names and necessary recovery states, and edit the owning component/style instead of appending another override layer.

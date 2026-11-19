@@ -21,13 +21,16 @@ async function stop(child: ChildProcess) {
   child.kill('SIGTERM');
   await ended;
 }
-it('reloads the private data-directory policy on ordinary server restarts without an environment root', async () => {
+it('ignores retired global policy settings and preserves native permissions across restart', async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'codes-startup-policy-')));
-  const root = join(directory, 'allowed'),
+  const root = join(directory, 'project-outside-retired-root'),
     data = join(directory, 'private-data');
   await mkdir(root);
   await mkdir(data);
-  await writeFile(join(data, 'task-policy.json'), JSON.stringify({ version: 1, writeRoot: root }));
+  const retiredRoot = join(directory, 'retired-root');
+  await mkdir(retiredRoot);
+  // A retired file is neither loaded nor migrated, even when malformed.
+  await writeFile(join(data, 'task-policy.json'), '{retired-preview-policy');
   const token = 'isolated-startup-token-not-a-real-secret';
   let child: ChildProcess | undefined;
   try {
@@ -39,7 +42,7 @@ it('reloads the private data-directory policy on ordinary server restarts withou
           ...process.env,
           CODES_RUNTIME: 'mock',
           CODES_DATA_DIR: data,
-          CODES_TASK_WRITE_ROOT: '',
+          CODES_TASK_WRITE_ROOT: attempt === 0 ? retiredRoot : '',
           CODES_PROJECT_ROOT: root,
           CODES_HOST: '127.0.0.1',
           CODES_PORT: new URL(base).port,
@@ -69,7 +72,31 @@ it('reloads the private data-directory policy on ordinary server restarts withou
       expect(response.status).toBe(200);
       const cookie = response.headers.get('set-cookie')!.split(';')[0]!;
       const system = await (await fetch(base + '/api/system', { headers: { cookie } })).json();
-      expect(system.taskWriteRoot).toBe(root);
+      expect(system).not.toHaveProperty('taskWriteRoot');
+      const projects = await (await fetch(base + '/api/projects', { headers: { cookie } })).json();
+      const project = projects.find((item: { path: string }) => item.path === root);
+      expect(project).toBeDefined();
+      const profile = await (
+        await fetch(base + '/api/settings/defaults', { headers: { cookie } })
+      ).json();
+      if (attempt === 0) {
+        const saved = await fetch(base + '/api/settings/defaults', {
+          method: 'PUT',
+          headers: { cookie, Origin: base, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            revision: profile.revision,
+            settings: { permission: 'danger-full-access' },
+          }),
+        });
+        expect(saved.status).toBe(200);
+      } else expect(profile.settings.permission).toBe('danger-full-access');
+      const created = await fetch(base + '/api/projects/' + project.id + '/threads', {
+        method: 'POST',
+        headers: { cookie, Origin: base, 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      expect(created.status).toBe(200);
+      expect((await created.json()).settings.permission).toBe('danger-full-access');
       await stop(child);
       child = undefined;
     }

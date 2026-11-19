@@ -174,7 +174,6 @@ export class Service {
     const canonical = await realpath(path);
     if (!(await stat(canonical)).isDirectory())
       throw new AppError('INVALID_DIRECTORY', 'Choose an existing directory.');
-    this.driver.writeBoundary?.directory(canonical);
     return this.store.addProject(name || basename(canonical), canonical);
   }
   private metadataChanged(id: string) {
@@ -544,8 +543,6 @@ export class Service {
   }
   async create(projectId: string, settings: Settings = this.store.settingsProfile().settings) {
     const project = this.project(projectId);
-    this.driver.writeBoundary?.directory(project.path);
-    this.driver.writeBoundary?.settings(settings);
     const result = await this.driver.call('thread/start', {
       cwd: project.path,
       sandbox: settings.permission,
@@ -620,7 +617,6 @@ export class Service {
         'Restore or finish managing this conversation before changing its settings.',
         409,
       );
-    this.driver.writeBoundary?.settings(settings);
     const profile = this.store.saveSettingsProfile(id, revision, settings);
     const cached = this.cache.get(id);
     if (cached) cached.composerSettings = profile;
@@ -628,7 +624,6 @@ export class Service {
     return profile;
   }
   saveDefaultSettings(revision: number, settings: Settings) {
-    this.driver.writeBoundary?.settings(settings);
     const profile = this.store.saveSettingsProfile(undefined, revision, settings);
     this.events.publish('defaults', profile);
     return profile;
@@ -832,7 +827,6 @@ export class Service {
     return this.store.queue.state(id);
   }
   async enqueue(id: string, messageId: string, payload: QueuePayload) {
-    this.driver.writeBoundary?.settings(payload.settings);
     const saved = this.store.thread(id);
     if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
     if (saved.archived || saved.managementPending || this.managing.has(id))
@@ -1261,8 +1255,6 @@ export class Service {
     const input = { prompt, settings, attachments, ...(review ? { review } : {}) };
     const receipt = this.store.existing(operationId, id, kind, input);
     if (receipt) return receipt;
-    this.driver.writeBoundary?.directory(project.path);
-    this.driver.writeBoundary?.settings(settings);
     const nativeInput = await this.input(project.id, prompt, attachments);
     if (this.store.thread(id)?.archived)
       throw new AppError(
@@ -1865,15 +1857,6 @@ export class Service {
       void this.driver
         .reject(event.id)
         ?.catch(() => console.error('Unable to reject an unsupported CLI interaction.'));
-      return;
-    }
-    if (this.driver.writeBoundary && kind !== 'questions') {
-      void this.driver
-        .answer(
-          event.id,
-          kind === 'permissions' ? { permissions: {}, scope: 'turn' } : { decision: 'decline' },
-        )
-        .catch(() => console.error('Unable to decline a sandbox elevation request.'));
       return;
     }
     const action: Action = {

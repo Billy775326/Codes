@@ -1185,12 +1185,6 @@
   flex-shrink: 0;
 }
 
-.permission-boundary {
-  margin: 5px 0 9px;
-  font-size: 12px;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
 .workspace-project {
   display: flex;
   flex-direction: column;

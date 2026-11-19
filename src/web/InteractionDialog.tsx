@@ -1,6 +1,6 @@
 import { chatFontSizes, codeFontSizes } from './font-sizes';
 import { ModelSettingsFields } from './ComposerControls';
-import { permissionOptions } from '../shared/permissions';
+import { permissionPresets } from '../shared/permissions';
 import type { Model } from '../shared/types';
 import { permissionLabel } from '../shared/permissions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -101,7 +101,6 @@ export function PreferencesDialog({
   saveError?: string;
   defaults: {
     settings?: Settings;
-    taskWriteRoot?: string;
     saving: boolean;
     loading: boolean;
     error: string;
@@ -212,12 +211,8 @@ export function PreferencesDialog({
                     })
                   }
                 >
-                  {permissionOptions(defaults.taskWriteRoot).map((preset) => (
-                    <option
-                      key={preset.id}
-                      value={preset.id}
-                      disabled={!!defaults.taskWriteRoot && preset.id === 'danger-full-access'}
-                    >
+                  {permissionPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
                       {preset.label}
                     </option>
                   ))}
@@ -225,9 +220,8 @@ export function PreferencesDialog({
               </label>
               <p className="preference-help">
                 {
-                  permissionOptions(defaults.taskWriteRoot).find(
-                    (preset) => preset.id === defaults.settings!.permission,
-                  )?.description
+                  permissionPresets.find((preset) => preset.id === defaults.settings!.permission)
+                    ?.description
                 }
               </p>
               <div className="default-model-settings">
@@ -480,7 +474,7 @@ export function StatusDialog({
               : 'Not reported'}
         </dd>
         <dt>Permissions</dt>
-        <dd>{permissionLabel(settings.permission, system?.taskWriteRoot)}</dd>
+        <dd>{permissionLabel(settings.permission)}</dd>
         <dt>Conversation</dt>
         <dd>{thread?.id ?? 'Not created'}</dd>
         <dt>Turn</dt>

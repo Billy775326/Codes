@@ -89,24 +89,23 @@ Then open `http://127.0.0.1:6670` on your computer. Phone access requires a priv
 
 This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Ask for approval** to edit workspace files with approval for external access. **Full access** removes file/network sandbox restrictions and approval prompts on the server. The composer permission menu saves independently for each conversation and applies to its future tasks. It preserves the current task and existing queue entries, and does not modify global CLI configuration. Use the model/reasoning popup to choose Execution or Plan and toggle Fast; the input bar shows the model and effective reasoning effort. Fast uses a supported native speed tier with higher usage, independently of reasoning effort. It defaults off; Standard is explicitly selected for new tasks instead of inheriting the host tier. Conversation choices save immediately; each dispatched or queued message captures its settings. Interaction settings → New conversation defaults defines the starting configuration for later conversations without changing existing ones. Model changes reset Fast and reasoning overrides. This does not change global CLI configuration or an active task. Use `/plan` to toggle native Plan mode; its visible Plan marker exits back to Code.
 
-An owner can enforce a fixed task write root independently of conversation preferences. With this policy, Full access and sandbox elevation are unavailable; login, history and runtime data retain their current locations. See [task write confinement](docs/task-write-boundary.md) for configuration, tool restrictions and verification.
+The preview's extra global directory restriction has been removed. `CODES_TASK_WRITE_ROOT` and `CODES_DATA_DIR/task-policy.json` are no longer read. Projects can use existing directories independently of the codes installation directory; each conversation retains its selected native permission preset. This does not automatically select Full access or change the host's Codex configuration. The right-side Files / Changes viewers retain their existing project scope.
 
 ## Configuration
 
 Set environment variables in the process environment; the application does not automatically load `.env` files.
 
-| Variable                | Default                   | Purpose                                                                                 |
-| ----------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
-| `CODES_RUNTIME`         | `codex`                   | `codex` or `mock`                                                                       |
-| `CODES_HOST`            | `127.0.0.1`               | Bind address                                                                            |
-| `CODES_PORT`            | `6670`                    | Listener port, 1024–65535                                                               |
-| `CODES_PUBLIC_ORIGIN`   | `http://127.0.0.1:<port>` | Exact allowed browser origin                                                            |
-| `CODES_DATA_DIR`        | `.local`                  | Private database, token, lock, and simulator data                                       |
-| `CODES_TASK_WRITE_ROOT` | unset                     | Fixed native task write boundary; optional persisted owner policy in the data directory |
-| `CODES_PROJECT_ROOT`    | unset                     | Register an existing directory at startup                                               |
-| `CODES_CODEX_BINARY`    | `codex`                   | CLI executable path                                                                     |
-| `CODES_CODE_QUESTIONS`  | `1`                       | Enable native Code-mode questions; `0` leaves them available in Plan only               |
-| `CODES_ACCESS_TOKEN`    | generated token file      | Optional access token, minimum 16 characters                                            |
+| Variable               | Default                   | Purpose                                                                   |
+| ---------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| `CODES_RUNTIME`        | `codex`                   | `codex` or `mock`                                                         |
+| `CODES_HOST`           | `127.0.0.1`               | Bind address                                                              |
+| `CODES_PORT`           | `6670`                    | Listener port, 1024–65535                                                 |
+| `CODES_PUBLIC_ORIGIN`  | `http://127.0.0.1:<port>` | Exact allowed browser origin                                              |
+| `CODES_DATA_DIR`       | `.local`                  | Private database, token, lock, and simulator data                         |
+| `CODES_PROJECT_ROOT`   | unset                     | Register an existing directory at startup                                 |
+| `CODES_CODEX_BINARY`   | `codex`                   | CLI executable path                                                       |
+| `CODES_CODE_QUESTIONS` | `1`                       | Enable native Code-mode questions; `0` leaves them available in Plan only |
+| `CODES_ACCESS_TOKEN`   | generated token file      | Optional access token, minimum 16 characters                              |
 
 Codex inherits the server user's environment and `CODEX_HOME`. Run codes as the intended user, not as root by default. Keep the same CLI login and filesystem access you would use from the command line.
 
@@ -120,7 +119,6 @@ npm run check
 npm test
 npm run test:e2e
 npm run test:native
-npm run test:sandbox
 ```
 
 Install a test browser first with `npx playwright install chromium`. Alternatively, set `CODES_CHROME` to an existing Chrome executable. Browser tests use a temporary project, a test-only token, and the simulation runtime. `test:native` requires CLI 0.167.0 and uses an empty temporary `CODEX_HOME`; it sends no prompts or model requests.

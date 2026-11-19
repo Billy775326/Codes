@@ -2,9 +2,11 @@
 
 ## [Unreleased]
 
-### Added
+### Removed
 
-- Support a persisted, owner-controlled task write root without moving Codex login or history. Enforce native filesystem boundaries, exclude temporary roots, disable Full access and elevation, and refuse external tool processes that cannot be confined. Expose Workspace only permissions in the composer and new-conversation defaults.
+- Remove the preview-only global task write-root policy and its forced permission, network, temporary-directory and tool overrides. Restore the existing native conversation permission presets and approval callbacks while preserving saved conversation/default settings and the Files / Changes interface. Retired `CODES_TASK_WRITE_ROOT` and `task-policy.json` configuration no longer applies.
+
+### Added
 
 - Save permissions, model, reasoning effort, Fast, and mode independently for each conversation as soon as they change. Add server-backed New conversation defaults to the settings modal, with serialized saves, revision conflict recovery, and persistent choices across switching, reload, and restart. Running tasks and existing queue entries keep their captured settings.
 
