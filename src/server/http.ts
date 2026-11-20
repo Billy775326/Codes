@@ -199,7 +199,17 @@ export async function application(
           return json(response, { ok: true });
         }
         if (url.pathname === '/api/system' && method === 'GET')
-          return json(response, service.driver.system());
+          return json(response, service.system());
+        if (url.pathname === '/api/maintenance' && method === 'POST') {
+          const { action } = z
+            .object({ action: z.enum(['start', 'cancel']) })
+            .strict()
+            .parse(await body(request));
+          return json(
+            response,
+            action === 'start' ? service.startMaintenance() : service.cancelMaintenance(),
+          );
+        }
         if (url.pathname === '/api/models' && method === 'GET')
           return json(response, await service.modelSettings.models());
         if (url.pathname === '/api/permissions' && method === 'GET')

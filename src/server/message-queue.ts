@@ -12,12 +12,13 @@ export class MessageQueue {
     private dispatch: (threadId: string, id: string) => Promise<Operation>,
     private ready: (id: string) => Promise<boolean>,
     private publish: (id: string, state: QueueState) => void,
+    private suspended: () => boolean,
   ) {}
   notify(id: string) {
     this.publish(id, this.store.state(id));
   }
   wake(id: string) {
-    if (this.closed) return;
+    if (this.closed || this.suspended()) return;
     if (this.workers.has(id)) {
       this.again.add(id);
       return;
@@ -46,7 +47,7 @@ export class MessageQueue {
     }
   }
   private async run(id: string) {
-    while (!this.closed) {
+    while (!this.closed && !this.suspended()) {
       const queue = this.store.state(id);
       if (
         queue.paused ||
@@ -61,6 +62,7 @@ export class MessageQueue {
       const current = this.store.state(id);
       if (
         this.closed ||
+        this.suspended() ||
         current.paused ||
         current.items[0]?.id !== first.id ||
         this.store.get(first.id)?.state !== 'queued'

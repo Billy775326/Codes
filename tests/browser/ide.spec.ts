@@ -253,3 +253,30 @@ for (const phase of ['create', 'send', 'queue', 'steer'] as const) {
     }
   });
 }
+
+test('preparing maintenance pauses dispatch while an inline question can still be answered', async ({
+  page,
+}) => {
+  await login(page);
+  await send(page, '[question] Maintenance fixture');
+  const submit = page.getByRole('button', { name: 'Submit answer', exact: true });
+  await expect(submit).toBeEnabled();
+  await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
+  await page.getByRole('button', { name: 'Session status', exact: true }).click();
+  await page.getByRole('button', { name: 'Prepare maintenance', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Session status' })).toContainText(
+    'Waiting for active work',
+  );
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  try {
+    await page.getByLabel('Message Codex').fill('Keep this next draft');
+    await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeDisabled();
+    await submit.click();
+    await expect(page.getByText('Maintenance ready. New tasks are paused.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+  } finally {
+    await page.getByRole('button', { name: 'Cancel maintenance', exact: true }).click();
+  }
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this next draft');
+});

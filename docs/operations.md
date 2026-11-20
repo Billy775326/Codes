@@ -2,6 +2,12 @@
 
 Run codes as the Linux account that owns the projects and is already signed in to Codex CLI. Start one codes service per data directory. Use Node 24.x and the pinned CLI version from the [README](../README.md).
 
+## Prepare maintenance
+
+Open **Session status** and choose **Prepare maintenance**. Codes stops admitting new tasks, follow-ups and queued messages. Existing tasks can finish, including answering questions and handling approvals. The dispatcher holds existing queued messages without changing their pause settings. **Maintenance ready** means Codes has no outstanding work it can identify, including receipts with an uncertain result. Maintenance expires after five minutes. **Cancel maintenance** resumes normal scheduling early.
+
+An authenticated operator can also POST `{"action":"start"}` or `{"action":"cancel"}` to `/api/maintenance` and read `maintenance.ready` and `maintenance.expiresAt` from `GET /api/system`. Recheck readiness and the expiration immediately before switching. This control gates task admission in the current process. The operator still owns backup, restart and verification.
+
 ## Persistent state
 
 `CODES_DATA_DIR` contains a SQLite database, WAL files, the workspace access token, and a PID lock. Mock mode also stores synthetic history there. The directory defaults to `.local` and is ignored by Git.

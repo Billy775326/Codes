@@ -441,12 +441,16 @@ export function ReviewDialog({
 }
 export function StatusDialog({
   system,
+  maintenanceBusy,
+  changeMaintenance,
   thread,
   settings,
   connection,
   close,
 }: {
   system?: System;
+  maintenanceBusy: boolean;
+  changeMaintenance: (action: 'start' | 'cancel') => Promise<void>;
   thread?: Thread;
   settings: Settings;
   connection: string;
@@ -495,7 +499,21 @@ export function StatusDialog({
         </dd>
         <dt>Cumulative usage</dt>
         <dd>{usage ? usage.totalTokens.toLocaleString() + ' tokens' : 'Not reported'}</dd>
+        <dt>Maintenance</dt>
+        <dd>
+          {system?.maintenance
+            ? system.maintenance.ready
+              ? 'Ready'
+              : 'Waiting for active work'
+            : 'Accepting tasks'}
+        </dd>
       </dl>
+      <button
+        disabled={maintenanceBusy}
+        onClick={() => void changeMaintenance(system?.maintenance ? 'cancel' : 'start')}
+      >
+        {system?.maintenance ? 'Cancel maintenance' : 'Prepare maintenance'}
+      </button>
       <p>
         Usage is reported by the CLI while connected. It is not your account quota or billing
         balance.

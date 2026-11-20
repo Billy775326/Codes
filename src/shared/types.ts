@@ -153,7 +153,12 @@ export interface FileContent {
   sha: string;
   lines: number;
 }
+export interface MaintenanceState {
+  expiresAt: number;
+  ready: boolean;
+}
 export interface System {
+  maintenance?: MaintenanceState;
   runtime: 'codex' | 'mock';
   state: string;
   version: string;

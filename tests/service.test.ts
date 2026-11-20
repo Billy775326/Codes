@@ -1310,3 +1310,38 @@ it('never selects a running turn as the ownership-recovery branch point', async 
   expect(await service.branchPoint(thread.id)).toEqual({ lastTurnId: first });
   await expect(service.retryWriter(thread.id)).rejects.toMatchObject({ code: 'EXECUTION_UNKNOWN' });
 });
+
+it('drains existing tasks during maintenance and resumes queued work only when canceled', async () => {
+  const { service, thread } = await fixture();
+  const settings = { ...thread.settings, mode: 'plan' as const };
+  const first = randomUUID();
+  await service.send(thread.id, first, '[question]', settings);
+  await until(() => thread.state === 'waitingInput');
+  const queued = randomUUID();
+  await service.enqueue(thread.id, queued, {
+    text: 'Queued before maintenance',
+    settings,
+    attachments: [],
+  });
+
+  expect(service.startMaintenance().maintenance?.ready).toBe(false);
+  expect(() => service.startMaintenance()).toThrow(/already active/);
+  await expect(service.send(thread.id, randomUUID(), 'New work', settings)).rejects.toMatchObject({
+    code: 'MAINTENANCE_ACTIVE',
+  });
+  await expect(
+    service.enqueue(thread.id, randomUUID(), {
+      text: 'New queued work',
+      settings,
+      attachments: [],
+    }),
+  ).rejects.toMatchObject({ code: 'MAINTENANCE_ACTIVE' });
+  await service.answer(thread.actions[0]!.id, randomUUID(), { answers: { direction: 'Continue' } });
+  await until(() => service.system().maintenance?.ready === true);
+  expect(service.store.operation(first)?.state).toBe('completed');
+  expect(service.store.operation(queued)).toBeUndefined();
+  expect(service.store.queue.get(queued)?.state).toBe('queued');
+
+  expect(service.cancelMaintenance().maintenance).toBeUndefined();
+  await until(() => service.store.operation(queued)?.state === 'completed');
+});

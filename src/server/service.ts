@@ -63,6 +63,7 @@ export class Service {
   readonly queue: MessageQueue;
   readonly modelSettings: ModelSettings;
   private sending = new Map<string, number>();
+  private maintenance?: { expiresAt: number; timer: ReturnType<typeof setTimeout> };
   private terminals = new Map<string, State>();
   private metadataRevision = 0;
   private metadataRevisions = new Map<string, number>();
@@ -158,6 +159,7 @@ export class Service {
           this.events.publish('summary', summary, id);
         }
       },
+      () => !!this.maintenance,
     );
     driver.on('notification', (event) => this.notification(event));
     driver.on('request', (event) => this.request(event));
@@ -178,8 +180,59 @@ export class Service {
         this.queue.notify(thread.id);
       }
       this.actions.clear();
-      this.events.publish('runtime', driver.system());
+      this.events.publish('runtime', this.system());
     });
+  }
+  system() {
+    const maintenance = this.maintenance;
+    return {
+      ...this.driver.system(),
+      maintenance: maintenance
+        ? {
+            expiresAt: maintenance.expiresAt,
+            ready:
+              !this.sending.size &&
+              !this.managing.size &&
+              !this.actions.size &&
+              !this.store.db
+                .prepare(
+                  `SELECT 1 FROM operations
+                WHERE state IN ('dispatching','acknowledged','unknown') LIMIT 1`,
+                )
+                .get() &&
+              !this.store.db
+                .prepare(
+                  `SELECT 1 FROM queued_messages
+                WHERE state IN ('dispatching','sent') LIMIT 1`,
+                )
+                .get(),
+          }
+        : undefined,
+    };
+  }
+  startMaintenance() {
+    if (this.maintenance)
+      throw new AppError('MAINTENANCE_ACTIVE', 'Maintenance is already active.', 409);
+    const duration = 5 * 60_000;
+    const timer = setTimeout(() => this.cancelMaintenance(), duration);
+    timer.unref();
+    this.maintenance = { expiresAt: Date.now() + duration, timer };
+    const status = this.system();
+    this.events.publish('runtime', status);
+    return status;
+  }
+  cancelMaintenance() {
+    if (this.maintenance) {
+      clearTimeout(this.maintenance.timer);
+      this.maintenance = undefined;
+      this.events.publish('runtime', this.system());
+      for (const id of this.store.queue.pendingThreads()) this.queue.wake(id);
+    }
+    return this.system();
+  }
+  private requireTaskAdmission() {
+    if (this.maintenance)
+      throw new AppError('MAINTENANCE_ACTIVE', 'Maintenance is active. New tasks are paused.', 503);
   }
   project(id: string) {
     const project = this.store.projects().find((x) => x.id === id);
@@ -905,6 +958,7 @@ export class Service {
     return this.store.queue.state(id);
   }
   async enqueue(id: string, messageId: string, payload: QueuePayload) {
+    this.requireTaskAdmission();
     const saved = this.store.thread(id);
     if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
     if (saved.archived || saved.managementPending || this.managing.has(id))
@@ -961,6 +1015,7 @@ export class Service {
       );
     await this.conversationOwner(id);
     await this.requireProject(thread.projectId);
+    this.requireTaskAdmission();
     // Readiness awaits I/O; a completed turn may already have dispatched this entry.
     if (this.store.queue.get(messageId)?.state !== 'queued')
       throw new AppError('QUEUE_STARTED', 'This message has already started.', 409);
@@ -988,6 +1043,10 @@ export class Service {
           receipt.error,
         );
     } catch (error) {
+      if (error instanceof AppError && error.code === 'MAINTENANCE_ACTIVE') {
+        this.store.queue.set(messageId, 'queued');
+        throw error;
+      }
       const receipt = this.store.operation(messageId);
       this.store.queue.set(
         messageId,
@@ -1339,6 +1398,7 @@ export class Service {
         'Wait for pending follow-ups to finish before adding another.',
         429,
       );
+    this.requireTaskAdmission();
     const receipt = this.store.begin(operationId, id, 'steer', input, prompt);
     if (receipt.existing) return receipt.existing;
     this.boundary(thread);
@@ -1392,6 +1452,7 @@ export class Service {
       attachments,
       ...(review ? { review } : {}),
     });
+    if (!existing) this.requireTaskAdmission();
     if (!fromQueue && !existing && this.store.queue.count(id))
       throw new AppError(
         'QUEUE_PENDING',
@@ -2345,6 +2406,7 @@ export class Service {
     return canonical;
   }
   async close() {
+    clearTimeout(this.maintenance?.timer);
     this.events.close();
     await this.admission;
     const queued = this.queue.close();

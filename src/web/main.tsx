@@ -301,6 +301,8 @@ function App() {
   const [auth, setAuth] = useState<'loading' | 'login' | 'ready'>('loading');
   const [token, setToken] = useState('');
   const [system, setSystem] = useState<System>();
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const maintenanceExpiresAt = system?.maintenance?.expiresAt;
   const [projects, setProjects] = useState<Project[]>([]);
   const views = useRef<Record<string, string>>({});
   const recentProject = useRef<string | undefined>(undefined);
@@ -648,6 +650,33 @@ function App() {
       });
     return () => controller.abort();
   }, [auth]);
+  useEffect(() => {
+    if (auth !== 'ready' || !maintenanceExpiresAt) return;
+    const controller = new AbortController();
+    const refresh = async () => {
+      try {
+        const next = await request<System>('/system', {}, controller.signal);
+        if (!controller.signal.aborted) setSystem(next);
+      } catch {
+        // The connection indicator reports outages during a preview switch.
+      }
+    };
+    const timer = setInterval(() => void refresh(), 2000);
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
+  }, [auth, maintenanceExpiresAt]);
+  const changeMaintenance = async (action: 'start' | 'cancel') => {
+    setMaintenanceBusy(true);
+    try {
+      setSystem(await post<System>('/maintenance', { action }));
+    } catch (error) {
+      notice(error);
+    } finally {
+      setMaintenanceBusy(false);
+    }
+  };
   useEffect(() => {
     setThreads([]);
     setThread((current) =>
@@ -1517,6 +1546,7 @@ function App() {
     connection !== 'Connected' ||
     busy ||
     settingsBlocked ||
+    !!system?.maintenance ||
     !!thread?.writerConflict ||
     !!images.pending ||
     !!steerReceipt ||
@@ -2051,6 +2081,18 @@ function App() {
         />
         {system?.runtime === 'mock' && (
           <div className="simulation-strip">Simulation · No model or command execution</div>
+        )}
+        {system?.maintenance && (
+          <div className="conversation-lock-banner" role="status">
+            <span>
+              {system.maintenance.ready
+                ? 'Maintenance ready. New tasks are paused.'
+                : 'Maintenance pending. Existing tasks can finish.'}
+            </span>
+            <button disabled={maintenanceBusy} onClick={() => void changeMaintenance('cancel')}>
+              Cancel maintenance
+            </button>
+          </div>
         )}
         {directoryBlocked && (
           <div className="conversation-lock-banner directory-unavailable" role="alert">
@@ -2865,6 +2907,8 @@ function App() {
       {dialog === 'status' && (
         <StatusDialog
           system={system}
+          maintenanceBusy={maintenanceBusy}
+          changeMaintenance={changeMaintenance}
           thread={thread}
           settings={thread?.settings ?? settings}
           connection={connection}

@@ -8,6 +8,8 @@
 
 ### Added
 
+- Prepare maintenance from Session status to pause new tasks and queue dispatch while existing work finishes. The pause expires after five minutes and can be canceled.
+
 - Add Approve for me to conversation permissions and new-conversation defaults using native Auto-review within the workspace sandbox. Explicitly restore manual review for other presets, honor managed restrictions, and display native review outcomes when supplied.
 - Show native context-compaction progress and completion without ending the current task or dispatching queued work. Restore progress on browser reconnect and clear it on terminal outcomes/runtime loss.
 
