@@ -43,9 +43,14 @@ for (const width of [1440, 390, 320]) {
       await page.keyboard.press('Enter');
     } else await view.click();
     await expect(view).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      navigation
+        .locator('.conversation-controls')
+        .getByRole('button', { name: 'Add project', exact: true }),
+    ).toBeVisible();
     await navigation.getByRole('button', { name: 'Workspace actions', exact: true }).click();
     const menu = navigation.getByRole('dialog', { name: 'Workspace actions', exact: true });
-    for (const name of ['Add project', 'Reconnect updates', 'Sign out'])
+    for (const name of ['Reconnect updates', 'Sign out'])
       await expect(menu.getByRole('button', { name, exact: true })).toBeVisible();
     const box = await menu.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);

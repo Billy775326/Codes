@@ -77,6 +77,7 @@ import {
 } from './InteractionDialog';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
 import { ControlTooltip } from './ControlTooltip';
+import { AddProjectDialog } from './AddProjectDialog';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import './foundation.css';
 import './interactions.css';
@@ -490,8 +491,8 @@ function App() {
   const [diffTurn, setDiffTurn] = useState('');
   const [diffPath, setDiffPath] = useState('');
   const [adding, setAdding] = useState(false);
+  const openAddProject = useCallback(() => setAdding(true), []);
   const [conversationModalOpen, setConversationModalOpen] = useState(false);
-  const [newPath, setNewPath] = useState('');
   const [directory, setDirectory] = useState('');
   const [files, setFiles] = useState<{ path: string; name: string; directory: boolean }[]>([]);
   const [file, setFile] = useState<FileContent | { path: string; kind: 'image' }>();
@@ -1444,22 +1445,11 @@ function App() {
   ) => {
     await post(`/actions/${action.id}`, { operationId: crypto.randomUUID(), ...resolution });
   };
-  const addProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      const project = await post<Project>('/projects', { path: newPath });
-      projectMetadataRevision.current++;
-      setProjects((list) => (list.some((x) => x.id === project.id) ? list : [...list, project]));
-      changeProject(project.id);
-      setAdding(false);
-      setNewPath('');
-      setError('');
-    } catch (e) {
-      notice(e);
-    } finally {
-      setBusy(false);
-    }
+  const projectAdded = (project: Project) => {
+    projectMetadataRevision.current++;
+    setProjects((list) => (list.some((x) => x.id === project.id) ? list : [...list, project]));
+    if (project.id !== projectRef.current) changeProject(project.id);
+    setAdding(false);
   };
   useEffect(() => () => fileRead.current?.abort(), [projectId, auth]);
   useEffect(() => {
@@ -2026,6 +2016,7 @@ function App() {
           sidebarPreferences={sidebarPreferences}
           onSidebarPreference={changeSidebarPreference}
           onRefreshProjects={refreshProjects}
+          onAddProject={openAddProject}
           onProjectUpdated={projectUpdated}
           onProject={changeProject}
           onNew={newThreadIn}
@@ -2069,12 +2060,6 @@ function App() {
               iconOnly
               trigger={<Icon name="more" size={16} />}
             >
-              {!!projects.length && (
-                <button data-close-menu onClick={() => setAdding(true)}>
-                  <Icon name="folder" size={14} />
-                  Add project
-                </button>
-              )}
               <button data-close-menu onClick={() => setRetry((n) => n + 1)}>
                 <Icon name="refresh" size={14} />
                 Reconnect updates
@@ -2319,8 +2304,8 @@ function App() {
             ) : !thread?.messages.length && !active ? (
               <section className="conversation-start" aria-label="New conversation">
                 {!projectId && (
-                  <button className="primary" onClick={() => setAdding(true)}>
-                    <Icon name="plus" />
+                  <button className="primary" onClick={openAddProject}>
+                    <Icon name="folder-add" />
                     Add project
                   </button>
                 )}
@@ -3177,37 +3162,7 @@ function App() {
           )}
         </aside>
       )}
-      {adding && (
-        <InteractionDialog
-          title="Add a project"
-          close={() => setAdding(false)}
-          busy={busy}
-          className="project-dialog"
-          closeOnBackdrop
-          initialFocus="#project-path"
-        >
-          <form onSubmit={(event) => void addProject(event)}>
-            <label htmlFor="project-path">Project directory on server</label>
-            <input
-              id="project-path"
-              value={newPath}
-              onChange={(event) => setNewPath(event.target.value)}
-              placeholder="/home/you/projects/my-project"
-              autoFocus
-              required
-            />
-            {error && (
-              <p role="alert" className="error-text">
-                {error}
-              </p>
-            )}
-            <button className="primary" disabled={busy || !newPath.trim()}>
-              Add project
-              <Icon name="plus" size={16} />
-            </button>
-          </form>
-        </InteractionDialog>
-      )}
+      {adding && <AddProjectDialog close={() => setAdding(false)} added={projectAdded} />}
       <ControlTooltip />
     </div>
   );

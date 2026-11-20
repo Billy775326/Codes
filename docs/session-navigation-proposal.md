@@ -6,7 +6,7 @@ A project is an existing server directory. A conversation owns its native histor
 
 ## Layout and navigation
 
-- The sidebar shows a card for each project, with the full directory path in the tooltip and a plus button to start a conversation in that project. Adding a directory stays in Workspace actions. An empty installation has one Add project action.
+- The sidebar shows a card for each project, with the full directory path in the tooltip and a new-conversation button in each card. Add project is in the toolbar above the cards. An empty installation has one Add project action.
 - Each project retains its last conversation or explicit New conversation view in this browser. Switching back restores that view. Text drafts remain project-scoped before creation and conversation-scoped afterward. Conversation settings remain on the server; project switching does not inherit another conversation's permissions.
 - Project cards share title search and the Chats / Archived view, and each card has its own cursor pagination and status actions. Other projects’ conversations load only their list metadata in the background.
 - Switching projects or conversations closes previews, cancels stale file/history reads, and clears unsent attachment selections. Background tasks and queues continue on the server.

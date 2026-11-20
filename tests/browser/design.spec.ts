@@ -53,8 +53,8 @@ for (const width of [1440, 320]) {
     if (width === 320)
       await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
     await expect(page.locator('.project-card-name[aria-current="true"]')).toHaveCount(1);
-    await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
-    await page.getByRole('button', { name: 'Add project', exact: true }).click();
+    const add = page.getByRole('button', { name: 'Add project', exact: true });
+    await add.click();
     const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });
     await expect(
       page.getByRole('dialog', { name: 'Workspace navigation', exact: true }),
@@ -69,9 +69,7 @@ for (const width of [1440, 320]) {
     await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: 'Workspace actions', exact: true }),
-    ).toBeFocused();
+    await expect(add).toBeFocused();
     if (width === 320)
       await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
     await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();

@@ -134,11 +134,35 @@
 
 .project-dialog form {
   display: grid;
-  gap: 12px;
+  margin-top: 18px;
+  gap: 14px;
+}
+.project-dialog form label {
+  margin: 0;
 }
 .project-dialog form input {
   width: 100%;
+  min-width: 0;
 }
-.project-dialog form .primary {
-  justify-self: end;
+.project-dialog form input[aria-invalid='true'] {
+  border-color: var(--status-error);
+}
+.project-dialog .project-field-help {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+.project-dialog .error-text {
+  margin: 0;
+}
+.project-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.project-dialog-actions > button {
+  min-height: var(--control-size);
+  padding-inline: 12px;
+}
+.project-dialog-actions > button.primary {
+  margin: 0;
 }

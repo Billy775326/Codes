@@ -53,6 +53,11 @@
   gap: 8px;
   padding: 0 10px;
 }
+.conversation-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .app .conversation-controls .archive-toggle[aria-pressed='true'] {
   width: auto;
   gap: 6px;

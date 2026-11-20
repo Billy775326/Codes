@@ -1,6 +1,6 @@
 import { openProject, projectCard } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
-import { mkdir, writeFile, rename } from 'node:fs/promises';
+import { mkdir, writeFile, rename, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 const origin = 'http://127.0.0.1:19140';
@@ -372,11 +372,57 @@ test('one project uses a project card and an empty installation has one add-proj
     'sample-project',
   );
   await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Add project', exact: true })).toBeVisible();
+  await expect(
+    page.locator('.sidebar').getByRole('button', { name: 'Add project', exact: true }),
+  ).toBeVisible();
   empty = true;
   await page.reload();
   await expect(page.getByRole('button', { name: 'Add project', exact: true })).toHaveCount(1);
+});
+
+test('adding a project validates the path and reuses a registered directory', async ({ page }) => {
+  await login(page);
+  const registered = () => page.request.get('/api/projects').then((response) => response.json());
+  const original = (await registered()).find(
+    (project: { name: string }) => project.name === 'sample-project',
+  );
+  const suffix = randomUUID();
+  const path = join(original.path, 'conversation-fixtures', 'added-' + suffix);
+  const alias = path + '-alias';
+  await mkdir(path);
+  await symlink(path, alias);
+  const add = page.locator('.sidebar').getByRole('button', { name: 'Add project', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });
+  const directory = dialog.getByLabel('Project directory on server', { exact: true });
+  const projectName = dialog.getByLabel('Project name (optional)', { exact: true });
+  const submit = dialog.getByRole('button', { name: 'Add project', exact: true });
+  const name = 'zz Added project ' + suffix;
+  await add.click();
+  await projectName.fill(name);
+  await directory.fill('.');
+  await submit.click();
+  await expect(dialog.getByRole('alert')).toHaveText('Enter an absolute path on the server.');
+  await directory.fill(path + '-missing');
+  await submit.click();
+  await expect(dialog.getByRole('alert')).toContainText('Choose an existing');
+  await expect(projectName).toHaveValue(name);
+  await directory.fill(path);
+  await submit.click();
+  await expect(dialog).toHaveCount(0);
+  const selected = page.locator('.project-card-name[aria-current="true"]');
+  await expect(selected).toHaveText(name);
+  const draft = page.getByLabel('Message Codex');
+  await draft.fill('Preserve this project draft');
+  await add.click();
+  await directory.fill(alias);
+  await projectName.fill('Duplicate label');
+  await submit.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(selected).toHaveText(name);
+  await expect(draft).toHaveValue('Preserve this project draft');
+  expect(
+    (await registered()).filter((project: { path: string }) => project.path === path),
+  ).toHaveLength(1);
 });
 
 test('project management and conversation links survive reload and keep the verified owner', async ({

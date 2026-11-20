@@ -19,6 +19,7 @@ interface Props {
   sidebarPreferences: Record<string, ProjectSidebarPreference>;
   onProject: (id: string) => void;
   onNew: (projectId: string) => void;
+  onAddProject: () => void;
   onSelect: (id: string, projectId: string) => void;
   onUpdated: (summary: Summary) => void;
   onProjectUpdated: (project: Project, expectedName: string) => void;
@@ -94,6 +95,7 @@ export const Conversations = memo(function Conversations({
   selectedId,
   updates,
   sidebarPreferences,
+  onAddProject,
   onRefreshProjects,
   ...props
 }: Props) {
@@ -144,17 +146,27 @@ export const Conversations = memo(function Conversations({
           <Icon name="archive" size={16} />
           {archived && <span>Archived</span>}
         </button>
-        <button
-          className="icon-button"
-          aria-label="Refresh conversations"
-          data-tooltip=""
-          onClick={() => {
-            onRefreshProjects();
-            setRevision((value) => value + 1);
-          }}
-        >
-          <Icon name="refresh" size={15} />
-        </button>
+        <div className="conversation-tools">
+          <button
+            className="icon-button"
+            aria-label="Add project"
+            data-tooltip=""
+            onClick={onAddProject}
+          >
+            <Icon name="folder-add" size={16} />
+          </button>
+          <button
+            className="icon-button"
+            aria-label="Refresh conversations"
+            data-tooltip=""
+            onClick={() => {
+              onRefreshProjects();
+              setRevision((value) => value + 1);
+            }}
+          >
+            <Icon name="refresh" size={15} />
+          </button>
+        </div>
       </div>
       <div className="conversation-search-row">
         <div className="conversation-search">
@@ -228,7 +240,12 @@ const ProjectCard = memo(function ProjectCard({
   onModalChange,
 }: Omit<
   Props,
-  'projects' | 'activeProjectId' | 'updates' | 'sidebarPreferences' | 'onRefreshProjects'
+  | 'projects'
+  | 'activeProjectId'
+  | 'updates'
+  | 'sidebarPreferences'
+  | 'onRefreshProjects'
+  | 'onAddProject'
 > & {
   project: Project;
   active: boolean;
