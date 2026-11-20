@@ -73,16 +73,18 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
     .selectOption('cmdIfMultiline');
   await page.keyboard.press('Escape');
   const input = page.getByLabel('Message Codex');
+  const send = page.getByRole('button', { name: 'Send message', exact: true });
+  const tooltip = page.locator('.control-tooltip');
   await input.fill('One line');
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toHaveAttribute(
-    'title',
-    /Enter to send/,
-  );
+  await send.hover();
+  await expect(tooltip).toHaveText('Send message · Enter');
+  await expect(tooltip).toBeVisible();
+  await input.hover();
+  await expect(tooltip).toBeHidden();
   await input.fill('First line\nSecond line');
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toHaveAttribute(
-    'title',
-    /Ctrl\/Cmd\+Enter to send/,
-  );
+  await send.hover();
+  await expect(tooltip).toHaveText('Send message · Ctrl/Cmd+Enter');
+  await expect(tooltip).toBeVisible();
   await input.fill('[approve] Composer queue fixture');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
