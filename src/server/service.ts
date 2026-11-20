@@ -1,14 +1,16 @@
 import { directoryStatus, directoryError } from './project-context.js';
 import { nativePermissions } from '../shared/permissions.js';
 import { randomUUID, createHash } from 'node:crypto';
-import { realpath, readFile, readdir, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, realpath, readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, basename, isAbsolute } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
-import { Images } from './images.js';
+import { Images, validatedImageType } from './images.js';
+import { imageLimits, projectImageType } from '../shared/images.js';
 import { ModelSettings } from './model-settings.js';
 import { nativeMessage as item, nativeTurn } from './transcript.js';
 import { z } from 'zod';
@@ -2505,6 +2507,39 @@ export class Service {
       sha: createHash('sha256').update(bytes).digest('hex'),
       lines: content.split('\n').length,
     };
+  }
+  async projectImage(projectId: string, path: string) {
+    const contentType = projectImageType(path);
+    if (!contentType)
+      throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP project image.', 415);
+    const absolute = await this.safePath(projectId, path);
+    const file = await open(
+      absolute,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    ).catch((error) => this.fileError(projectId, error));
+    try {
+      const openedPath = await realpath('/proc/self/fd/' + file.fd);
+      const rel = relative(this.project(projectId).path, openedPath);
+      if (!rel || isAbsolute(rel) || rel.split('/').some((part) => part.startsWith('.')))
+        throw new AppError('PATH_DENIED', 'This path is outside the file browser scope.', 403);
+      const info = await file.stat();
+      if (!info.isFile() || info.size > imageLimits.bytes)
+        throw new AppError('IMAGE_LIMIT', 'Project images must be at most 8 MiB.', 413);
+      const size = info.size;
+      const header = Buffer.allocUnsafe(Math.min(size, imageLimits.previewHeaderBytes));
+      let length = 0;
+      while (length < header.length) {
+        const { bytesRead } = await file.read(header, length, header.length - length, length);
+        if (!bytesRead) break;
+        length += bytesRead;
+      }
+      if (validatedImageType(header.subarray(0, length)) !== contentType)
+        throw new AppError('IMAGE_FORMAT', 'The image content does not match its filename.', 415);
+      return { stream: file.createReadStream({ start: 0, end: size - 1 }), size, contentType };
+    } catch (error) {
+      await file.close();
+      throw error;
+    }
   }
   async files(projectId: string, path = '') {
     const absolute = await this.safePath(projectId, path);

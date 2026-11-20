@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -446,6 +446,36 @@ it('sends small JSON with an exact length without introducing a compressed strea
   expect(result.headers['content-encoding']).toBeUndefined();
   expect(result.headers['content-length']).toBe(String(result.bytes.length));
   expect(JSON.parse(result.bytes.toString()).runtime).toBe('mock');
+});
+
+it('serves only validated images inside the authenticated project scope', async () => {
+  const { imagePng } = await import('./fixtures/image');
+  const work = join(directory, 'project');
+  await mkdir(work);
+  const imageBytes = Buffer.concat([imagePng, Buffer.alloc(600_000)]);
+  await writeFile(join(work, 'plot.png'), imageBytes);
+  await writeFile(join(work, 'wrong.jpg'), imagePng);
+  await writeFile(join(work, 'not-an-image.png'), '<html>invalid image</html>');
+  await writeFile(join(directory, 'outside.png'), imagePng);
+  await symlink(join(directory, 'outside.png'), join(work, 'escape.png'));
+  const project = await service.addProject(work);
+  const read = (path: string, session = cookie) =>
+    fetch(
+      origin + '/api/projects/' + project.id + '/image-preview?path=' + encodeURIComponent(path),
+      {
+        headers: { cookie: session },
+      },
+    );
+  expect((await read('plot.png', '')).status).toBe(401);
+  const image = await read('plot.png');
+  expect(image.status).toBe(200);
+  expect(image.headers.get('content-type')).toBe('image/png');
+  expect(image.headers.get('cache-control')).toBe('private,no-store');
+  expect(Buffer.from(await image.arrayBuffer())).toEqual(imageBytes);
+  expect((await read('../outside.png')).status).toBe(403);
+  expect((await read('escape.png')).status).toBe(403);
+  expect((await read('wrong.jpg')).status).toBe(415);
+  expect((await read('not-an-image.png')).status).toBe(400);
 });
 
 it('validates local text uploads and only resolves their references in the owning project', async () => {

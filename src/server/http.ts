@@ -11,6 +11,7 @@ import { AppError, asError } from '../shared/errors.js';
 import { imageId, imageLimits, imageTypes } from '../shared/images.js';
 import { limits } from '../shared/types.js';
 import { Service } from './service.js';
+import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
 
 const sha256 = /^[a-f0-9]{64}$/;
@@ -198,6 +199,16 @@ export async function application(
       if (url.pathname.startsWith('/api/')) {
         if (!authenticated(request))
           throw new AppError('AUTH_REQUIRED', 'Sign in to your workspace.', 401);
+        if (url.pathname === '/api/html-preview' && method === 'GET') {
+          response.writeHead(200, {
+            'content-type': 'text/html; charset=utf-8',
+            'content-security-policy': htmlPreviewPolicy,
+            'x-frame-options': 'SAMEORIGIN',
+            'cache-control': 'no-store',
+          });
+          response.end(htmlPreviewDocument);
+          return;
+        }
         if (url.pathname === '/api/logout' && method === 'POST') {
           sessions.delete(sessionId(request) ?? '');
           response.setHeader(
@@ -376,6 +387,20 @@ export async function application(
               response,
               await service.file(projectId, url.searchParams.get('path') ?? ''),
             );
+          if (segments[3] === 'image-preview' && !segments[4] && method === 'GET') {
+            const { stream, size, contentType } = await service.projectImage(
+              projectId,
+              url.searchParams.get('path') ?? '',
+            );
+            response.writeHead(200, {
+              'content-type': contentType,
+              'content-length': size,
+              'cache-control': 'private,no-store',
+              'cross-origin-resource-policy': 'same-origin',
+            });
+            await pipeline(stream, response);
+            return;
+          }
           if (
             segments[3] === 'seed-conversations' &&
             method === 'POST' &&

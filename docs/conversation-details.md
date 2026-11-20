@@ -2,6 +2,12 @@
 
 codes follows the published Codex IDE interaction contracts for native clarifications and local patch inspection. Use a desktop to review changes and a phone to answer a pending question. This is an independent Web implementation; it does not include VS Code editor integration or Git stage/revert actions.
 
+## Preview images and HTML
+
+Files previews project PNG, JPEG, and WebP images in place. In a Codex answer, Markdown image references and links can use paths relative to the project root or absolute paths within that project. Project images load on demand, are validated from a header of at most 512 KiB, and stream through the authenticated workspace. Each image is limited to 8 MiB and 24 megapixels.
+
+Use **Preview HTML** below an HTML code block, standalone HTML answer, or inside an open `.html` / `.htm` file. Opening a preview closes the previous one. The isolated preview supports static markup, inline CSS and embedded raster images. Scripts, navigation, form submissions and external asset requests are disabled. Source stays visible in the conversation or Files.
+
 ## Read a turn's work history
 
 Each native turn has one work-history disclosure. Intermediate assistant commentary, command activity, integration/search summaries, and review progress belong inside it. The final answer, one edited-files card, and one Copy/Reply/Branch row stay outside. Multiple native edits in the turn share the card; repeated edits preserve their recorded order rather than claiming a net Git diff. Follow-up user messages remain visible above their turn's work history. Pending approvals and questions remain directly available outside the disclosure. Consecutive terminal and tool activities form collapsed groups inside work history, so opening the turn reveals the commentary without listing every command.

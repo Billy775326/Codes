@@ -1,9 +1,10 @@
 import { projectViews, rememberProject } from './project-navigation';
 import { sameSettings } from '../shared/types';
-import { imageLimits } from '../shared/images';
+import { imageLimits, projectImageType } from '../shared/images';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
+import { AnswerMarkdown, HtmlPreview, ProjectImagePreview } from './ContentPreview';
 import { useLocalAttachments } from './useLocalAttachments';
 import { chatFontSizes, codeFontSizes } from './font-sizes';
 import React, {
@@ -124,6 +125,7 @@ const sameQueueDraft = (a: QueuePayload, b: QueuePayload) =>
 
 const MessageView = memo(function MessageView({
   projectId,
+  projectPath,
   item,
   streaming,
   onReply,
@@ -140,6 +142,7 @@ const MessageView = memo(function MessageView({
   disabled?: boolean;
   onReview?: (item: Message, path?: string) => void;
   projectId: string;
+  projectPath?: string;
   item: Message;
   streaming: boolean;
   actions?: boolean;
@@ -232,6 +235,8 @@ const MessageView = memo(function MessageView({
               {item.text}
               <span className="caret" />
             </div>
+          ) : item.kind === 'assistant' ? (
+            <AnswerMarkdown text={item.text} projectId={projectId} projectPath={projectPath} />
           ) : (
             <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
           )}
@@ -484,7 +489,7 @@ function App() {
   const [newPath, setNewPath] = useState('');
   const [directory, setDirectory] = useState('');
   const [files, setFiles] = useState<{ path: string; name: string; directory: boolean }[]>([]);
-  const [file, setFile] = useState<FileContent>();
+  const [file, setFile] = useState<FileContent | { path: string; kind: 'image' }>();
   const fileRead = useRef<AbortController | undefined>(undefined);
   const [range, setRange] = useState<[number, number]>([1, 1]);
   const [receipt, setReceipt] = useState('');
@@ -1425,6 +1430,10 @@ function App() {
     if (!contextReady || directoryBlocked) return;
     const owner = contextProjectId;
     const conversation = threadId;
+    if (projectImageType(path)) {
+      setFile({ path, kind: 'image' });
+      return;
+    }
     setFile(undefined);
     try {
       const file = await request<FileContent>(
@@ -1454,7 +1463,7 @@ function App() {
     requestAnimationFrame(() => composer.current?.focus());
   };
   const attachProjectFile = (fromLine: number, toLine: number) => {
-    if (!file || attachmentBlocked) return;
+    if (!file || !('text' in file) || attachmentBlocked) return;
     draftRevision.current++;
     setAttachments((list) => [
       ...list.filter((entry) => !('path' in entry) || entry.path !== file.path),
@@ -2326,6 +2335,7 @@ function App() {
                       return (
                         <MessageView
                           projectId={contextProjectId}
+                          projectPath={project?.path}
                           key={m.id}
                           item={m}
                           actions={finalReply}
@@ -3070,43 +3080,54 @@ function App() {
                     {file.path}
                     <span>READ ONLY</span>
                   </div>
-                  <div className="file-lines">
-                    {file.text.split('\n').map((line, i) => (
-                      <button
-                        key={i}
-                        className={
-                          i + 1 >= Math.min(...range) && i + 1 <= Math.max(...range)
-                            ? 'highlighted'
-                            : ''
-                        }
-                        onClick={(e) => setRange(e.shiftKey ? [range[0], i + 1] : [i + 1, i + 1])}
-                      >
-                        <span>{i + 1}</span>
-                        <code>{line || ' '}</code>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="selection-toolbar">
-                    <span>
-                      Lines {Math.min(...range)}–{Math.max(...range)}
-                    </span>
-                    <button
-                      onClick={() => attachProjectFile(1, file.lines)}
-                      disabled={attachmentBlocked}
-                    >
-                      Attach file
-                    </button>
-                    <button
-                      className="primary"
-                      onClick={() => attachProjectFile(Math.min(...range), Math.max(...range))}
-                      disabled={attachmentBlocked}
-                    >
-                      Attach selection
-                    </button>
-                  </div>
-                  <small className="selection-hint">
-                    Click a line, then Shift-click to select a range.
-                  </small>
+                  {'text' in file ? (
+                    <>
+                      {/\.html?$/i.test(file.path) && (
+                        <HtmlPreview key={file.path} html={file.text} />
+                      )}
+                      <div className="file-lines">
+                        {file.text.split('\n').map((line, i) => (
+                          <button
+                            key={i}
+                            className={
+                              i + 1 >= Math.min(...range) && i + 1 <= Math.max(...range)
+                                ? 'highlighted'
+                                : ''
+                            }
+                            onClick={(e) =>
+                              setRange(e.shiftKey ? [range[0], i + 1] : [i + 1, i + 1])
+                            }
+                          >
+                            <span>{i + 1}</span>
+                            <code>{line || ' '}</code>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="selection-toolbar">
+                        <span>
+                          Lines {Math.min(...range)}–{Math.max(...range)}
+                        </span>
+                        <button
+                          onClick={() => attachProjectFile(1, file.lines)}
+                          disabled={attachmentBlocked}
+                        >
+                          Attach file
+                        </button>
+                        <button
+                          className="primary"
+                          onClick={() => attachProjectFile(Math.min(...range), Math.max(...range))}
+                          disabled={attachmentBlocked}
+                        >
+                          Attach selection
+                        </button>
+                      </div>
+                      <small className="selection-hint">
+                        Click a line, then Shift-click to select a range.
+                      </small>
+                    </>
+                  ) : (
+                    <ProjectImagePreview projectId={contextProjectId} path={file.path} />
+                  )}
                 </div>
               ) : (
                 <div className="panel-empty">

@@ -1,0 +1,28 @@
+.html-preview {
+  margin-block: 8px;
+}
+
+.html-preview > summary {
+  width: fit-content;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.html-preview > iframe {
+  display: block;
+  width: 100%;
+  height: clamp(220px, 44vh, 360px);
+  margin-block-start: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+}
+
+.project-preview-image {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}

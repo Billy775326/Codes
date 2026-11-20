@@ -1,6 +1,9 @@
 import { reconnectUpdates } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot, Message } from '../../src/shared/types';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { imagePng } from '../fixtures/image';
 async function fixture(page: Page, count: number) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
@@ -52,6 +55,70 @@ async function fixture(page: Page, count: number) {
   await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
   return { base, commands };
 }
+test('answers and project files preview raster images and isolated static HTML', async ({
+  page,
+}) => {
+  const { base } = await fixture(page, 0);
+  const project = base.context!.project;
+  const imageName = 'preview-test.png';
+  const htmlName = 'preview-test.html';
+  const html = [
+    '<meta http-equiv="refresh" content="0; url=/preview-external-test">',
+    '<style>@import url("/preview-external-test"); h1 { color: rgb(12, 34, 56) }</style>',
+    '<h1 onclick="document.body.textContent=\'unexpected event\'">Preview headline</h1>',
+    '<script>document.body.textContent="unexpected script"</script>',
+    '<img src="/preview-external-test"><a href="/preview-external-test">An example link</a>',
+  ].join('\n');
+  await writeFile(join(project.path, imageName), imagePng);
+  await writeFile(join(project.path, htmlName), html);
+  const reply = base.thread.messages.find((message) => message.phase === 'final_answer')!;
+  reply.text = '![Generated plot](./' + imageName + ')\n\n```html\n' + html + '\n```';
+  let externalResponses = 0;
+  page.on('response', (response) => {
+    if (new URL(response.url()).pathname === '/preview-external-test') externalResponses++;
+  });
+  await reconnectUpdates(page);
+  const preview = page
+    .getByTestId('message-assistant')
+    .filter({ has: page.getByRole('img', { name: 'Generated plot' }) });
+  const expectImage = async (name: string) =>
+    expect
+      .poll(() =>
+        page
+          .getByRole('img', { name, exact: true })
+          .evaluate((image: HTMLImageElement) => image.naturalWidth),
+      )
+      .toBeGreaterThan(0);
+  await expectImage('Generated plot');
+  await expect(preview.locator('pre')).toContainText('<script>');
+  await preview.getByText('Preview HTML', { exact: true }).click();
+  const frame = preview.frameLocator('iframe[title="HTML preview"]');
+  const heading = frame.getByRole('heading', { name: 'Preview headline' });
+  await expect(heading).toHaveCSS('color', 'rgb(12, 34, 56)');
+  await expect(heading).not.toHaveAttribute('onclick');
+  await expect(frame.locator('a')).not.toHaveAttribute('href');
+  await expect(frame.locator('img')).not.toHaveAttribute('src');
+  expect(
+    await preview
+      .locator('iframe')
+      .evaluate((element: HTMLIFrameElement) => element.contentDocument),
+  ).toBeNull();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  const files = page.locator('.context-panel');
+  await files.getByRole('button', { name: imageName, exact: true }).click();
+  await expectImage(imageName);
+  await files.getByRole('button', { name: htmlName, exact: true }).click();
+  await expect(files.locator('.file-lines')).toContainText('<h1');
+  await files.getByText('Preview HTML', { exact: true }).click();
+  await expect(
+    files.frameLocator('iframe').getByRole('heading', { name: 'Preview headline' }),
+  ).toHaveCSS('color', 'rgb(12, 34, 56)');
+  await expect(page.locator('.html-preview iframe')).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  expect(externalResponses).toBe(0);
+});
 test('the whole work history defaults collapsed with final answer, edits and one footer outside', async ({
   page,
 }) => {

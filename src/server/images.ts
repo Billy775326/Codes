@@ -7,6 +7,39 @@ import { imageId, imageLimits } from '../shared/images.js';
 import type { ImageAttachment } from '../shared/types.js';
 
 const formats = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' } as const;
+function inspectImage(bytes: Buffer) {
+  if (!bytes.length || bytes.length > imageLimits.bytes)
+    throw new AppError('IMAGE_LIMIT', 'Images must be at most 8 MiB.', 413);
+  const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+  const webp =
+    bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+  if (!png && !jpeg && !webp)
+    throw new AppError('IMAGE_FORMAT', 'Choose a valid PNG, JPEG, or WebP image.');
+  let header: ReturnType<typeof imageSize>;
+  try {
+    header = imageSize(bytes);
+  } catch {
+    throw new AppError('IMAGE_FORMAT', 'Choose a valid PNG, JPEG, or WebP image.');
+  }
+  if (
+    !header.type ||
+    !Object.hasOwn(formats, header.type) ||
+    !header.width ||
+    !header.height ||
+    header.width * header.height > imageLimits.pixels
+  )
+    throw new AppError(
+      'IMAGE_FORMAT',
+      'Choose a PNG, JPEG, or WebP image of at most 24 megapixels.',
+    );
+  return header.type as keyof typeof formats;
+}
+
+export function validatedImageType(bytes: Buffer) {
+  return formats[inspectImage(bytes)];
+}
+
 export class Images {
   private root: string;
   private writes: Promise<unknown> = Promise.resolve();
@@ -22,41 +55,13 @@ export class Images {
     if (!imageId.test(id)) throw new AppError('IMAGE_NOT_FOUND', 'Image not found.', 404);
     return join(this.directory(projectId), id);
   }
-  private inspect(bytes: Buffer) {
-    if (!bytes.length || bytes.length > imageLimits.bytes)
-      throw new AppError('IMAGE_LIMIT', 'Images must be at most 8 MiB.', 413);
-    const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-    const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-    const webp =
-      bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
-    if (!png && !jpeg && !webp)
-      throw new AppError('IMAGE_FORMAT', 'Choose a valid PNG, JPEG, or WebP image.');
-    let header: ReturnType<typeof imageSize>;
-    try {
-      header = imageSize(bytes);
-    } catch {
-      throw new AppError('IMAGE_FORMAT', 'Choose a valid PNG, JPEG, or WebP image.');
-    }
-    if (
-      !header.type ||
-      !Object.hasOwn(formats, header.type) ||
-      !header.width ||
-      !header.height ||
-      header.width * header.height > imageLimits.pixels
-    )
-      throw new AppError(
-        'IMAGE_FORMAT',
-        'Choose a PNG, JPEG, or WebP image of at most 24 megapixels.',
-      );
-    return header.type as keyof typeof formats;
-  }
   async save(
     projectId: string,
     bytes: Buffer,
     name: string,
     contentType: string,
   ): Promise<ImageAttachment> {
-    const kind = this.inspect(bytes);
+    const kind = inspectImage(bytes);
     if (contentType !== formats[kind])
       throw new AppError('IMAGE_FORMAT', 'The image format does not match its content type.');
     const id = createHash('sha256').update(bytes).digest('hex') + '.' + kind;
@@ -134,7 +139,7 @@ export class Images {
   async read(projectId: string, id: string) {
     const { path } = await this.file(projectId, id);
     const bytes = await readFile(path);
-    const kind = this.inspect(bytes);
+    const kind = inspectImage(bytes);
     if (id !== createHash('sha256').update(bytes).digest('hex') + '.' + kind)
       throw new AppError('IMAGE_CHANGED', 'The attached image changed. Attach it again.', 409);
     return { path, bytes, contentType: formats[kind] };
