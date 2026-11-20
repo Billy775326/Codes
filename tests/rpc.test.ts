@@ -76,3 +76,26 @@ describe('CLI JSONL transport', () => {
     rpc.fail();
   });
 });
+
+it('reports an explicit native writer conflict as retryable ownership contention without resending', async () => {
+  const { rpc, output, sent } = fixture();
+  const pending = rpc.request('thread/resume', {
+    threadId: '00000000-0000-0000-0000-000000000001',
+  });
+  output.write(
+    JSON.stringify({
+      id: sent[0].id,
+      error: {
+        code: -32600,
+        message: 'thread 00000000-0000-0000-0000-000000000001 already has an active writer',
+      },
+    }) + '\n',
+  );
+  await expect(pending).rejects.toMatchObject({
+    code: 'THREAD_WRITER_BUSY',
+    status: 409,
+    uncertain: false,
+  });
+  expect(sent).toHaveLength(1);
+  rpc.fail();
+});

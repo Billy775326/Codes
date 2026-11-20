@@ -93,6 +93,14 @@ export class Service {
         )
           return false;
         const thread = await this.read(id);
+        if (thread.writerConflict) {
+          store.queue.pause(
+            id,
+            'Another Codex client owns this conversation. Check availability, then resume explicitly.',
+          );
+          this.queue.notify(id);
+          return false;
+        }
         if (thread.archived) {
           store.queue.pause(id, 'Restore the conversation before resuming the queue.');
           this.queue.notify(id);
@@ -394,11 +402,15 @@ export class Service {
     }
     throw new AppError('PROTOCOL_ERROR', 'Invalid conversation scan.', 502);
   }
-  private async conversationOwner(id: string) {
+  private async conversationOwner(id: string, timeoutMs?: number) {
     const saved = this.store.thread(id);
     if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
     const project = this.project(saved.projectId);
-    const response = await this.driver.call('thread/read', { threadId: id, includeTurns: false });
+    const response = await this.driver.call(
+      'thread/read',
+      { threadId: id, includeTurns: false },
+      timeoutMs,
+    );
     if (response.thread?.cwd !== project.path)
       throw new AppError(
         'PROJECT_OWNERSHIP',
@@ -1069,6 +1081,87 @@ export class Service {
     }
     return this.store.thread(parentId)!;
   }
+  async branchPoint(id: string) {
+    await this.conversationOwner(id, 10000);
+    const page = await this.driver.call(
+      'thread/turns/list',
+      {
+        threadId: id,
+        limit: 12,
+        itemsView: 'notLoaded',
+        sortDirection: 'desc',
+      },
+      10000,
+    );
+    if (
+      !Array.isArray(page.data) ||
+      page.data.length > 12 ||
+      !page.data.every(
+        (entry: unknown) =>
+          record(entry) && typeof entry.id === 'string' && typeof entry.status === 'string',
+      )
+    )
+      throw new AppError('PROTOCOL_ERROR', 'Invalid native turn metadata.', 502);
+    const turn = page.data.find(
+      (turn: any) => typeof turn.id === 'string' && terminal(turn.status),
+    );
+    if (!turn)
+      throw new AppError(
+        'NO_BRANCH_POINT',
+        'No completed turn was found in the recent history. Load an earlier completed turn to branch from.',
+        409,
+      );
+    return { lastTurnId: turn.id };
+  }
+  async retryWriter(id: string) {
+    if (
+      this.managing.has(id) ||
+      this.store.pendingManagement(id) ||
+      this.store.active(id) ||
+      this.store.steers(id).length
+    )
+      throw new AppError(
+        'EXECUTION_UNKNOWN',
+        'Finish or verify the existing operation before checking ownership.',
+        409,
+      );
+    this.managing.add(id);
+    try {
+      const thread = await this.read(id);
+      const { saved } = await this.conversationOwner(id, 10000);
+      await this.requireProject(saved.projectId);
+      if (!this.loaded.has(id)) {
+        const resumed = await this.driver.call(
+          'thread/resume',
+          {
+            threadId: id,
+            excludeTurns: true,
+            cwd: this.project(saved.projectId).path,
+          },
+          10000,
+        );
+        if (resumed.thread?.id !== id || resumed.thread?.cwd !== this.project(saved.projectId).path)
+          throw new AppError('PROTOCOL_ERROR', 'Invalid native resume metadata.', 502);
+        this.loaded.add(id);
+        thread.state = state(resumed.thread.status);
+        thread.resolvedModel = typeof resumed.model === 'string' ? resumed.model : undefined;
+      }
+      thread.writerConflict = false;
+      this.boundary(thread);
+      return thread;
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'THREAD_WRITER_BUSY') {
+        const thread = this.cache.get(id);
+        if (thread) {
+          thread.writerConflict = true;
+          this.boundary(thread);
+        }
+      }
+      throw error;
+    } finally {
+      this.managing.delete(id);
+    }
+  }
   async fork(id: string, operationId: string, lastTurnId: string) {
     const input = { lastTurnId };
     const receipt = this.store.existing(operationId, id, 'fork', input);
@@ -1324,6 +1417,7 @@ export class Service {
   ) {
     const kind = review ? 'review' : 'send';
     const thread = await this.read(id);
+    const previousState = thread.state;
     const project = this.project(thread.projectId);
     const input = { prompt, settings, attachments, ...(review ? { review } : {}) };
     const receipt = this.store.existing(operationId, id, kind, input);
@@ -1378,6 +1472,7 @@ export class Service {
         thread.resolvedModel = typeof resumed.model === 'string' ? resumed.model : undefined;
         this.loaded.add(id);
       }
+      thread.writerConflict = false;
       const collaborationMode = await this.modelSettings.resolve(
         settings,
         thread.resolvedModel,
@@ -1474,7 +1569,12 @@ export class Service {
         if (thread.pending) thread.pending.state = 'unknown';
       } else {
         delete thread.pending;
-        thread.state = 'failed';
+        thread.state =
+          error instanceof AppError && error.code === 'THREAD_WRITER_BUSY'
+            ? previousState
+            : 'failed';
+        if (error instanceof AppError && error.code === 'THREAD_WRITER_BUSY')
+          thread.writerConflict = true;
       }
       this.boundary(thread);
       throw error;
@@ -1686,6 +1786,7 @@ export class Service {
         settings: thread.settings,
         steering: thread.steering,
         resolvedModel: thread.resolvedModel,
+        writerConflict: thread.writerConflict ?? false,
       },
       id,
     );

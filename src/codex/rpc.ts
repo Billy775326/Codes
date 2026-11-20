@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { Readable, Writable } from 'node:stream';
-import { AppError, record } from '../shared/errors.js';
+import { AppError, record, cliError } from '../shared/errors.js';
 
 // Native tool results can be larger than the bounded browser transcript.
 export const nativeFrameBytes = 16 * 1024 * 1024;
@@ -122,16 +122,7 @@ export class Rpc extends EventEmitter {
     if (!pending) return;
     this.pending.delete(value.id);
     clearTimeout(pending.timer);
-    if (value.error)
-      pending.reject(
-        new AppError(
-          'CLI_ERROR',
-          typeof value.error.message === 'string'
-            ? value.error.message
-            : 'The CLI rejected the request.',
-          409,
-        ),
-      );
+    if (value.error) pending.reject(cliError(value.error.message));
     else if ('result' in value) pending.resolve(value.result);
     else
       pending.reject(

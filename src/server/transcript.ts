@@ -9,6 +9,33 @@ const finiteTime = (value: unknown): value is number =>
   value >= 0 &&
   value <= Number.MAX_SAFE_INTEGER / 1000;
 
+/** Covro stored answered questions as a text envelope, not a live native callback. */
+function legacyAnswer(value: string): string {
+  const match =
+    /^\s*<send_user_message_question_reply>([\s\S]*)<\/send_user_message_question_reply>\s*$/.exec(
+      value,
+    );
+  if (!match || value.length > limits.item) return value;
+  try {
+    const entries: unknown = JSON.parse(match[1]!);
+    if (
+      !Array.isArray(entries) ||
+      !entries.length ||
+      entries.length > 8 ||
+      !entries.every(
+        (entry) =>
+          record(entry) && typeof entry.question === 'string' && typeof entry.answer === 'string',
+      )
+    )
+      return value;
+    return entries
+      .map((entry) => `Question: ${entry.question}\n\nAnswer: ${entry.answer}`)
+      .join('\n\n');
+  } catch {
+    return value;
+  } // Ordinary text and malformed historical payloads stay readable.
+}
+
 /** Unknown native timing stays absent; never substitute browser load/arrival time. */
 export function nativeTurn(raw: any): TurnInfo {
   return {
@@ -56,9 +83,11 @@ export function nativeMessage(
       id: raw.id,
       turnId,
       kind: 'user',
-      text: Array.isArray(raw.content)
-        ? raw.content.map((x: any) => text(x?.text)).join('\n')
-        : text(raw.text),
+      text: legacyAnswer(
+        Array.isArray(raw.content)
+          ? raw.content.map((x: any) => text(x?.text)).join('\n')
+          : text(raw.text),
+      ),
       clientId: typeof raw.clientId === 'string' ? raw.clientId : undefined,
       ...(images.length ? { images } : {}),
       ...(nativeImages.length > images.length

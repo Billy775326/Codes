@@ -1220,3 +1220,64 @@ it('preserves genuinely empty legacy history without requesting unsupported item
   expect((await service.history(thread.id)).messages).toEqual([]);
   expect(spy.mock.calls.some(([method]) => method === 'thread/items/list')).toBe(false);
 });
+
+it('retains history and task status when an imported conversation belongs to another native writer', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', {
+    cwd: project.path,
+    count: 2,
+    foreignWriter: true,
+  });
+  await service.list(project.id);
+  const thread = await service.read(seeded.thread.id);
+  const messages = structuredClone(thread.messages);
+  const operation = randomUUID();
+  await expect(
+    service.send(thread.id, operation, 'Keep this draft', thread.settings),
+  ).rejects.toMatchObject({ code: 'THREAD_WRITER_BUSY', uncertain: false });
+  expect(thread.writerConflict).toBe(true);
+  expect(thread.state).toBe('completed');
+  expect(thread.pending).toBeUndefined();
+  expect(thread.messages).toEqual(messages);
+  expect(service.store.operation(operation)?.state).toBe('failed');
+  expect(service.store.active(thread.id)).toBeUndefined();
+  await expect(service.retryWriter(thread.id)).rejects.toMatchObject({
+    code: 'THREAD_WRITER_BUSY',
+  });
+  const point = await service.branchPoint(thread.id);
+  const branch = await service.fork(thread.id, randomUUID(), point.lastTurnId);
+  expect(branch.id).not.toBe(thread.id);
+  expect(branch.forkedFromId).toBe(thread.id);
+  expect((await service.history(thread.id)).messages).toEqual(messages);
+  expect((await service.read(branch.id)).settings.permission).toBe('read-only');
+});
+it('checks a released writer without sending the rejected task automatically', async () => {
+  const { service, project } = await fixture();
+  const seeded = await service.driver.call('test/seed', {
+    cwd: project.path,
+    count: 1,
+    foreignWriter: true,
+    releaseWriterOnRetry: true,
+  });
+  await service.list(project.id);
+  const thread = await service.read(seeded.thread.id);
+  await expect(
+    service.send(thread.id, randomUUID(), 'Do not replay', thread.settings),
+  ).rejects.toMatchObject({ code: 'THREAD_WRITER_BUSY' });
+  const restored = await service.retryWriter(thread.id);
+  expect(restored.writerConflict).toBe(false);
+  expect(restored.messages.filter((entry) => entry.kind === 'user')).toHaveLength(1);
+  expect(service.store.active(thread.id)).toBeUndefined();
+  await service.send(thread.id, randomUUID(), 'Explicit new task', thread.settings);
+  await until(() => thread.state === 'completed');
+  expect(thread.messages.filter((entry) => entry.kind === 'user')).toHaveLength(2);
+});
+it('never selects a running turn as the ownership-recovery branch point', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), 'First finished turn', thread.settings);
+  await until(() => thread.state === 'completed');
+  const first = thread.turnId;
+  await service.send(thread.id, randomUUID(), '[hold] Active turn', thread.settings);
+  expect(await service.branchPoint(thread.id)).toEqual({ lastTurnId: first });
+  await expect(service.retryWriter(thread.id)).rejects.toMatchObject({ code: 'EXECUTION_UNKNOWN' });
+});

@@ -16,6 +16,16 @@ Register an existing conversation's original working directory using Add project
 
 Both legacy and paginated native histories are readable. Legacy stores use full items from one native turn at a time; paginated stores use item pages. The same display limits apply, and a genuinely empty native history remains empty. Importing a registration does not reconstruct deleted or incompatible source records. See [history and transport limits](architecture.md).
 
+## Imported conversations still open in another client
+
+Import registers the original native thread and directory; it does not transfer that thread's writer ownership. Codex CLI 0.167.0 keeps a cross-process file lock while a client owns a loaded conversation, even between model turns. The native error `thread <id> already has an active writer` means another client (for example Covro) still owns it.
+
+History remains readable. Codes reports this as `THREAD_WRITER_BUSY`, preserves the prior task outcome and the unsent draft, and does not resend the rejected task. Close/unload the source conversation in its owning client, then use **Check availability**. Closing a browser tab alone does not necessarily release its server-side writer. This resumes the thread without a model prompt; sending again remains an explicit action. If the source must stay open, **Continue in branch** offers the existing confirmation dialog, copies history through the latest recent completed/interrupted/failed turn to a new native thread, and carries the unsent draft and attachments. It does not copy later unfinished work, change source history, roll back files or automatically send the draft. The new branch starts in Read only. Queues stopped by contention require explicit review/resumption.
+
+Do not delete an in-use lock or kill an unrelated client to make the error disappear. Native lock ownership is enforced by Codex, not by a second application lock. See the pinned [writer implementation](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/rollout/src/writer_lock.rs).
+
+Imported Covro answers may be stored in `send_user_message_question_reply` text envelopes. Codes formats well-formed, bounded envelopes as answered question/answer text for display. Native files, message/client IDs and malformed/ordinary text are preserved. These historical answers cannot restore a live callback from the old client; new Codes questions use native `item/tool/requestUserInput` callbacks.
+
 ## Project directory recovery
 
 The selected conversation's server-verified project supplies its working directory and file context. If it is missing or inaccessible, the UI keeps history and saved settings visible, disables new execution/filesystem actions, and offers **Retry directory**. Restore the registered canonical directory or its search permissions, then retry. Choosing another project starts or restores that project's own conversation; Codes does not move an existing transcript or silently substitute a directory.

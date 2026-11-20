@@ -169,6 +169,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     if (method === 'test/seed') {
       const thread: any = create(p.cwd);
       thread.name = 'Rendering reference';
+      thread.foreignWriter = !!p.foreignWriter;
+      thread.releaseWriterOnRetry = !!p.releaseWriterOnRetry;
       thread.preview = 'Synthetic history';
       for (let i = 0; i < Math.min(p.count, 100); i++)
         thread.turns.push({
@@ -178,7 +180,23 @@ createInterface({ input: process.stdin }).on('line', (line) => {
             {
               id: `user-${i}`,
               type: 'userMessage',
-              content: [{ type: 'text', text: `Reference task ${i}` }],
+              content: [
+                {
+                  type: 'text',
+                  text:
+                    p.foreignWriter && i === Math.min(p.count, 100) - 1
+                      ? '<send_user_message_question_reply>' +
+                        JSON.stringify([
+                          {
+                            questionItemId: 'old-callback',
+                            question: 'Which conversations?',
+                            answer: 'Imported conversations only',
+                          },
+                        ]) +
+                        '</send_user_message_question_reply>'
+                      : `Reference task ${i}`,
+                },
+              ],
             },
             ...Array.from(
               { length: Math.min(Math.max(0, p.extraCommandsPerTurn ?? 0), 300) },
@@ -218,8 +236,19 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       note('thread/started', { thread: summary(child) });
       return result(id, { thread: summary(child) });
     }
-    if (method === 'thread/read' || method === 'thread/resume')
+    if (method === 'thread/read' || method === 'thread/resume') {
+      if (method === 'thread/resume' && thread.foreignWriter) {
+        if (thread.releaseWriterOnRetry) {
+          thread.foreignWriter = false;
+          save();
+        }
+        return send({
+          id,
+          error: { code: -32600, message: 'thread ' + thread.id + ' already has an active writer' },
+        });
+      }
       return result(id, { thread: summary(thread), model: 'simulated-model' });
+    }
     if (method === 'thread/unsubscribe') return result(id, { status: 'unsubscribed' });
     if (method === 'thread/turns/list') {
       const ascending = p.sortDirection === 'asc';

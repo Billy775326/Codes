@@ -367,7 +367,12 @@ export async function application(
             service.driver.mode === 'mock'
           ) {
             const p = service.project(projectId);
-            await service.driver.call('test/seed', { cwd: p.path, count: 100 });
+            await service.driver.call('test/seed', {
+              cwd: p.path,
+              count: 100,
+              foreignWriter: ['busy', 'once'].includes(url.searchParams.get('writer') ?? ''),
+              releaseWriterOnRetry: url.searchParams.get('writer') === 'once',
+            });
             return json(response, await service.list(projectId));
           }
         }
@@ -394,6 +399,14 @@ export async function application(
                 service.saveConversationSettings(id, input.revision, input.settings),
               );
             }
+          }
+          if (segments[3] === 'branch-point' && method === 'GET')
+            return json(response, await service.branchPoint(id));
+          if (segments[3] === 'retry-writer' && method === 'POST') {
+            z.object({})
+              .strict()
+              .parse(await body(request));
+            return json(response, await service.retryWriter(id));
           }
           if (segments[3] === 'source' && method === 'GET')
             return json(response, await service.source(id));

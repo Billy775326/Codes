@@ -401,6 +401,8 @@ function App() {
   }>();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [forking, setForking] = useState<Message>();
+  const [recoveryFork, setRecoveryFork] = useState(false);
+  const branchContext = useRef<{ id: string; attachments: Attachment[] } | undefined>(undefined);
   const [forkBusy, setForkBusy] = useState(false);
   const forkOperations = useRef(new Map<string, string>());
   const [forkError, setForkError] = useState('');
@@ -796,7 +798,8 @@ function App() {
     } catch {
       setQueueRequest(undefined);
     }
-    setAttachments([]);
+    setAttachments(branchContext.current?.id === threadId ? branchContext.current.attachments : []);
+    branchContext.current = undefined;
     try {
       setSteerReceipt(JSON.parse(saved('codes.steer.' + threadId) || 'null') ?? undefined);
     } catch {
@@ -1080,6 +1083,7 @@ function App() {
       busy ||
       images.pending ||
       settingsBlocked ||
+      !!thread?.writerConflict ||
       !hasInput ||
       thread?.archived ||
       thread?.managementPending
@@ -1168,7 +1172,13 @@ function App() {
       save(key, '');
       forkOperations.current.delete(key);
       conversationUpdated(created);
+      if (recoveryFork) {
+        save('codes.draft.' + created.id, draftValue.current);
+        branchContext.current = { id: created.id, attachments };
+      }
       setForking(undefined);
+      setRecoveryFork(false);
+      setError('');
       select(created.id);
     } catch (error) {
       setForkError(message(error));
@@ -1178,6 +1188,33 @@ function App() {
       }
     } finally {
       setForkBusy(false);
+    }
+  };
+  const recoverBranch = async () => {
+    if (!threadId || busy) return;
+    setBusy(true);
+    try {
+      const point = await request<{ lastTurnId: string }>('/threads/' + threadId + '/branch-point');
+      setRecoveryFork(true);
+      setForking({ id: 'recovery-branch', turnId: point.lastTurnId, kind: 'assistant', text: '' });
+      setForkError('');
+    } catch (error) {
+      notice(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const checkWriter = async () => {
+    if (!threadId || busy) return;
+    setBusy(true);
+    try {
+      const updated = await post<Thread>('/threads/' + threadId + '/retry-writer');
+      setThread(updated);
+      setError('');
+    } catch (error) {
+      notice(error);
+    } finally {
+      setBusy(false);
     }
   };
   const newThread = () => {
@@ -1202,6 +1239,7 @@ function App() {
       busy ||
       images.pending ||
       settingsBlocked ||
+      !!thread?.writerConflict ||
       queueRequest ||
       !hasInput ||
       !contextReady ||
@@ -1382,7 +1420,9 @@ function App() {
   const active =
     !!thread?.pending ||
     !!thread?.steering?.length ||
-    (!!thread && ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
+    (!!thread &&
+      !thread.writerConflict &&
+      ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
   const project =
     context?.project.id === contextProjectId
       ? context.project
@@ -1400,6 +1440,7 @@ function App() {
     [thread?.turnId, project?.path],
   );
   const branchMessage = useCallback((item: Message) => {
+    setRecoveryFork(false);
     setForking(item);
     setForkError('');
   }, []);
@@ -1456,6 +1497,7 @@ function App() {
     connection !== 'Connected' ||
     busy ||
     settingsBlocked ||
+    !!thread?.writerConflict ||
     !!images.pending ||
     !!steerReceipt ||
     !!queueRequest ||
@@ -1532,6 +1574,7 @@ function App() {
           (entry) => entry.kind === 'assistant' && (!active || entry.turnId !== thread.turnId),
         );
         if (!last) throw new Error('No completed reply is available to branch from.');
+        setRecoveryFork(false);
         setForking(last);
         setForkError('');
       },
@@ -2425,6 +2468,17 @@ function App() {
               </button>
             </div>
           )}
+          {thread?.writerConflict && (
+            <section className="recovery" aria-label="Conversation ownership">
+              <span>Open in another Codex client</span>
+              <button disabled={busy || !!thread.pending} onClick={() => void checkWriter()}>
+                Check availability
+              </button>
+              <button disabled={busy || !!thread.pending} onClick={() => void recoverBranch()}>
+                Continue in branch
+              </button>
+            </section>
+          )}
           {error && (
             <div className="error-banner" role="alert">
               <span>{error}</span>
@@ -2751,7 +2805,10 @@ function App() {
       {forking && (
         <InteractionDialog
           title="Branch from this turn?"
-          close={() => setForking(undefined)}
+          close={() => {
+            setForking(undefined);
+            setRecoveryFork(false);
+          }}
           busy={forkBusy}
           initialFocus="[data-confirm-cancel]"
         >
@@ -2767,6 +2824,12 @@ function App() {
               current project files; files are not copied or rolled back. The branch starts in Read
               only.
             </p>
+            {recoveryFork && (
+              <p>
+                Your unsent draft and attachments will be copied to the branch. Nothing will be sent
+                automatically.
+              </p>
+            )}
             {forkError && (
               <p className="fork-error" role="alert">
                 {forkError}

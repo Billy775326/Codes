@@ -92,3 +92,40 @@ it('preserves terminal review output and a failed dynamic tool result', () => {
     )?.status,
   ).toBe('failed');
 });
+
+it('formats answered Covro question envelopes without creating live questions or losing native identity', () => {
+  const payload =
+    '<send_user_message_question_reply>' +
+    JSON.stringify([
+      {
+        questionItemId: 'opaque-private-id',
+        question: 'Which scope?',
+        answer: 'Imported conversations only',
+      },
+      { question: 'Next step?', answer: 'Keep\nall history' },
+    ]) +
+    '</send_user_message_question_reply>';
+  const result = nativeMessage(
+    {
+      id: 'reply',
+      clientId: 'receipt',
+      type: 'userMessage',
+      content: [{ type: 'text', text: payload }],
+    },
+    'turn',
+  );
+  expect(result).toMatchObject({
+    id: 'reply',
+    clientId: 'receipt',
+    kind: 'user',
+    text: 'Question: Which scope?\n\nAnswer: Imported conversations only\n\nQuestion: Next step?\n\nAnswer: Keep\nall history',
+  });
+  expect(result?.text).not.toContain('opaque-private-id');
+  for (const input of [
+    '<send_user_message_question_reply>bad JSON</send_user_message_question_reply>',
+    '<send_user_message_question_reply>[{"answer":"missing question"}]</send_user_message_question_reply>',
+    'Example: ' + payload,
+    payload + ' after',
+  ])
+    expect(nativeMessage({ id: 'raw', type: 'userMessage', text: input }, 't')?.text).toBe(input);
+});

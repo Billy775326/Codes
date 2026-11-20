@@ -100,6 +100,8 @@ export interface TurnInfo {
   durationMs?: number;
 }
 export interface Thread extends Summary {
+  /** The last explicit resume was refused by another native writer; history is still readable. */
+  writerConflict?: boolean;
   turns?: TurnInfo[];
   messages: Message[];
   actions: Action[];
