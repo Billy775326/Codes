@@ -157,7 +157,7 @@ export class Service {
         const summary = store.thread(id);
         if (summary) {
           if (thread) Object.assign(thread, summary);
-          this.events.publish('summary', summary, id);
+          this.publishSummary(summary);
         }
       },
       () => !!this.maintenance,
@@ -307,15 +307,15 @@ export class Service {
     const changed =
       (change.title !== undefined && change.title !== saved.title) ||
       (change.archived !== undefined && change.archived !== saved.archived);
-    if (!force && !changed && !settled) return saved;
+    if (!force && !changed && !settled) return this.withSidebarActivity(saved);
     if (changed) this.metadataChanged(id);
     this.store.setMetadata(id, change);
     const updated = this.store.thread(id)!;
     const cached = this.cache.get(id);
     if (cached) Object.assign(cached, change, { managementPending: updated.managementPending });
-    this.events.publish('summary', updated, id);
+    const summary = this.publishSummary(updated);
     this.events.publish('state', { ...change, managementPending: updated.managementPending }, id);
-    return updated;
+    return summary;
   }
   private observeStatus(id: string, raw: unknown) {
     const status = nativeStatus.safeParse(raw);
@@ -335,12 +335,43 @@ export class Service {
     this.metadataChanged(id);
     this.store.saveThread({ ...saved, state: next }, saved.settings);
     if (cached) cached.state = next;
-    this.events.publish('summary', this.store.thread(id), id);
+    this.publishSummary(this.store.thread(id)!);
     this.events.publish('state', { state: next }, id);
+  }
+  private withSidebarActivity<T extends Summary>(summary: T): T {
+    const thread = this.cache.get(summary.id);
+    const actions = thread?.actions.filter((action) => action.status === 'pending') ?? [];
+    const questions = actions.filter((action) => action.kind === 'questions');
+    const approvals = actions.length > questions.length;
+    let sidebarActivity: Summary['sidebarActivity'];
+    if (questions.length && approvals) sidebarActivity = 'approvalAndInput';
+    else if (questions.length)
+      sidebarActivity = questions.every((question) => question.blocking === false)
+        ? 'optionalInput'
+        : 'needsInput';
+    else if (approvals) sidebarActivity = 'needsApproval';
+    else if (thread?.actions.some((action) => action.status === 'responding'))
+      sidebarActivity = 'responding';
+    else if (summary.state === 'running' && thread?.compaction) sidebarActivity = 'compacting';
+    return {
+      ...summary,
+      sidebarActivity,
+      expiredQuestion: summary.executionUnknown
+        ? (thread?.expiredQuestion ?? this.store.hasExpiredQuestion(summary.id))
+        : undefined,
+    };
+  }
+  private publishSummary<T extends Summary>(summary: T): T {
+    const updated = this.withSidebarActivity(summary);
+    this.events.publish('summary', updated, updated.id);
+    return updated;
+  }
+  summaries(projectId: string) {
+    return this.store.summaries(projectId).map((summary) => this.withSidebarActivity(summary));
   }
   async list(projectId: string) {
     await this.conversations(projectId, { limit: 30 });
-    return this.store.summaries(projectId);
+    return this.summaries(projectId);
   }
   async conversations(
     projectId: string,
@@ -439,7 +470,7 @@ export class Service {
           !ids.has(summary.id)
         ) {
           data.push({
-            ...summary,
+            ...this.withSidebarActivity(summary),
             updatedAt: Math.max(summary.updatedAt, Number(raw.updatedAt || 0) * 1000),
           });
           ids.add(summary.id);
@@ -773,7 +804,7 @@ export class Service {
     this.metadataChanged(id);
     this.store.saveThread({ ...latest, state: thread.state }, latest.settings);
     Object.assign(thread, this.store.thread(id));
-    this.events.publish('summary', this.store.thread(id), id);
+    this.publishSummary(this.store.thread(id)!);
     return thread;
   }
   async history(id: string, continuation?: string) {
@@ -1289,7 +1320,7 @@ export class Service {
       } catch {
         console.error('Unable to unsubscribe an unused conversation branch.');
       }
-      this.events.publish('summary', this.store.thread(child.id), child.id);
+      this.publishSummary(this.store.thread(child.id)!);
       return this.store.thread(child.id)!;
     } catch (error) {
       if (this.store.operation(operationId))
@@ -1795,6 +1826,7 @@ export class Service {
         }),
       );
     action.status = 'responding';
+    this.publishSummary(this.store.thread(action.threadId)!);
     this.emitActions(action.threadId);
     try {
       await this.driver.answer(entry.rpcId, response);
@@ -1845,7 +1877,7 @@ export class Service {
     thread.steering = this.store.steers(id);
     const summary = this.store.thread(id)!;
     Object.assign(thread, summary);
-    this.events.publish('summary', summary, id);
+    this.publishSummary(summary);
     this.events.publish(
       'state',
       {
@@ -2209,11 +2241,14 @@ export class Service {
         !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
       )
         return;
+      const previousCompaction = thread.compaction?.id;
       if (lifecycle === 'inProgress' && typeof raw.id === 'string')
         thread.compaction = { id: raw.id, turnId };
       else if (lifecycle === 'completed' && thread.compaction?.id === raw.id)
         delete thread.compaction;
       this.events.publish('state', { compaction: thread.compaction ?? null }, thread.id);
+      if (previousCompaction !== thread.compaction?.id)
+        this.publishSummary(this.store.thread(thread.id)!);
     }
     const message = item(
       raw,

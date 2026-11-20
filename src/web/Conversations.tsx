@@ -36,6 +36,8 @@ const signature = (row: Summary) =>
     row.queuePaused,
     row.queueIssue,
     row.executionUnknown,
+    row.sidebarActivity,
+    row.expiredQuestion,
     row.forkedFromId,
   ]);
 function dayLabel(time: number) {

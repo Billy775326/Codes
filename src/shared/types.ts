@@ -93,6 +93,14 @@ export interface Summary {
   executionUnknown?: boolean;
   managementPending?: boolean;
   executionPending?: boolean;
+  sidebarActivity?:
+    | 'needsInput'
+    | 'needsApproval'
+    | 'optionalInput'
+    | 'approvalAndInput'
+    | 'responding'
+    | 'compacting';
+  expiredQuestion?: boolean;
 }
 export interface TurnInfo {
   id: string;
@@ -103,7 +111,6 @@ export interface TurnInfo {
   durationMs?: number;
 }
 export interface Thread extends Summary {
-  expiredQuestion?: boolean;
   /** The last explicit resume was refused by another native writer; history is still readable. */
   writerConflict?: boolean;
   turns?: TurnInfo[];

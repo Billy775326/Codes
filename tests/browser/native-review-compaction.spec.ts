@@ -38,7 +38,7 @@ test('Approve for me persists per conversation, is available for defaults, and s
   await choose(page, 'Approve for me');
   await page.getByLabel('Message Codex').fill('Auto-review browser fixture ' + Date.now());
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.locator('.turn-status')).toHaveText('Completed');
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   const id = await page.evaluate(() => localStorage.getItem('codes.thread'));
   expect(
     (await (await page.request.get('/api/threads/' + id + '/settings')).json()).settings.permission,
@@ -94,12 +94,16 @@ for (const width of [1440, 390])
         .fill('[compact] [slow] [hold] Synthetic compaction ' + Date.now());
       await page.getByRole('button', { name: 'Send message', exact: true }).click();
       await expect(page.locator('.turn-status')).toHaveText('Compacting context…');
+      const sidebarStatus = page.locator('.conversation-row.selected .conversation-status');
+      await expect(sidebarStatus).toHaveText('Compacting context');
       const id = await page.evaluate(() => localStorage.getItem('codes.thread'));
       await page.reload();
       await expect(page.locator('.turn-status')).toHaveText('Compacting context…');
+      await expect(sidebarStatus).toHaveText('Compacting context');
       await page.getByLabel('Message Codex').fill('Later queued turn');
       await page.getByRole('button', { name: 'Queue message', exact: true }).click();
       await expect(page.locator('.turn-status')).toHaveText('Working', { timeout: 10_000 });
+      await expect(sidebarStatus).toHaveText('Running');
       const snapshot = await (await page.request.get('/api/threads/' + id + '/snapshot')).json();
       expect(snapshot.thread.state).toBe('running');
       expect(
@@ -110,7 +114,9 @@ for (const width of [1440, 390])
         fullPage: true,
       });
       await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-      await expect(page.locator('.turn-status')).toHaveText('Stopped');
+      await expect(
+        page.locator('.turn-status').getByText('Stopped', { exact: true }),
+      ).toBeVisible();
       await expect(page.locator('.turn-status')).not.toContainText('Compacting');
     },
   );

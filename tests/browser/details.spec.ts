@@ -22,6 +22,9 @@ test('Code questions suggest without sending, support radio keys and keep the ne
   await send(page, '[question] Keyboard clarification ' + Date.now());
   const card = page.getByRole('region', { name: 'Your input is needed', exact: true });
   await expect(card).toContainText('OPTIONAL INPUT');
+  const sidebarStatus = page.locator('.conversation-row.selected .conversation-status');
+  await expect(sidebarStatus).toHaveText('Optional question');
+  await expect(sidebarStatus).toBeVisible();
   await expect(card.getByRole('radio', { name: /^Continue/ })).toBeChecked();
   await expect(card.getByRole('button', { name: 'Submit answer', exact: true })).toBeEnabled();
   expect(answers).toEqual([]);
@@ -32,6 +35,7 @@ test('Code questions suggest without sending, support radio keys and keep the ne
   await page.getByLabel('Message Codex').fill('Keep my next draft');
   await card.getByRole('button', { name: 'Submit answer', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
+  await expect(sidebarStatus).toHaveText('Completed');
   expect(answers).toEqual([expect.objectContaining({ answers: { direction: 'Explain first' } })]);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep my next draft');
   await expect(page.getByTestId('message-user')).toHaveCount(1);
@@ -45,6 +49,9 @@ test('Plan questions remain required, and custom text equal to an option stays v
   await send(page, '[question] Required clarification ' + Date.now());
   const card = page.getByRole('region', { name: 'Your input is needed', exact: true });
   await expect(card).toContainText('ANSWER REQUIRED');
+  const sidebarStatus = page.locator('.conversation-row.selected .conversation-status');
+  await expect(sidebarStatus).toHaveText('Needs answer');
+  await expect(sidebarStatus).toBeVisible();
   await expect(card.getByRole('button', { name: 'Skip question' })).toHaveCount(0);
   await card.getByLabel('What should happen next?', { exact: true }).fill('Continue');
   await expect(card.getByLabel('What should happen next?', { exact: true })).toHaveValue(
@@ -53,6 +60,7 @@ test('Plan questions remain required, and custom text equal to an option stays v
   await expect(card.getByRole('radio', { name: /^Continue/ })).not.toBeChecked();
   await card.getByRole('button', { name: 'Submit answer', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
+  await expect(sidebarStatus).toHaveText('Completed');
 });
 test('a phone can explicitly skip an optional question without sending another turn', async ({
   page,

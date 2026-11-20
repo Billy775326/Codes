@@ -306,7 +306,7 @@ export async function application(
           if (segments[3] === 'snapshot' && method === 'GET') {
             await service.list(projectId);
             return json(response, {
-              threads: service.store.summaries(projectId),
+              threads: service.summaries(projectId),
               cursor: { seq: service.events.seq, epoch: service.events.epoch },
             });
           }

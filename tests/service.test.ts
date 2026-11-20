@@ -284,6 +284,9 @@ it('identifies an unanswered question after a service restart without replaying 
   service = open();
   const restored = await service.read(thread.id);
   expect(restored).toMatchObject({ state: 'unknown', expiredQuestion: true, actions: [] });
+  expect(service.summaries(project.id)).toContainEqual(
+    expect.objectContaining({ id: thread.id, executionUnknown: true, expiredQuestion: true }),
+  );
   await expect(
     service.answer(actionId, randomUUID(), { answers: { direction: 'Continue' } }),
   ).rejects.toMatchObject({ code: 'STALE_ACTION' });
@@ -1373,4 +1376,45 @@ it('reports turn usage from native cumulative counters without counting duplicat
     turnTotalTokens: 1300,
     turnOutputTokens: 140,
   });
+});
+
+it('publishes both pending interactions and the response phase in sidebar summaries', async () => {
+  const { service, thread, project } = await fixture();
+  const published = vi.spyOn(service.events, 'publish');
+  await service.send(thread.id, randomUUID(), '[question]', { ...thread.settings, mode: 'plan' });
+  await until(() => thread.state === 'waitingInput');
+  expect(service.summaries(project.id)).toContainEqual(
+    expect.objectContaining({ id: thread.id, sidebarActivity: 'needsInput' }),
+  );
+
+  service.driver.emit('request', {
+    id: 900100,
+    method: 'item/commandExecution/requestApproval',
+    params: { threadId: thread.id, turnId: thread.turnId, command: 'synthetic approval' },
+  });
+  expect(published).toHaveBeenCalledWith(
+    'summary',
+    expect.objectContaining({ sidebarActivity: 'approvalAndInput' }),
+    thread.id,
+  );
+  await service.answer(thread.actions.find((a) => a.kind === 'questions')!.id, randomUUID(), {
+    answers: { direction: 'Continue' },
+  });
+  expect(published).toHaveBeenCalledWith(
+    'summary',
+    expect.objectContaining({ sidebarActivity: 'needsApproval' }),
+    thread.id,
+  );
+  await until(() => thread.state === 'completed');
+
+  await service.send(thread.id, randomUUID(), '[question]', { ...thread.settings, mode: 'plan' });
+  await until(() => thread.state === 'waitingInput');
+  await service.answer(thread.actions.find((a) => a.status === 'pending')!.id, randomUUID(), {
+    answers: { direction: 'Continue' },
+  });
+  expect(published).toHaveBeenCalledWith(
+    'summary',
+    expect.objectContaining({ sidebarActivity: 'responding' }),
+    thread.id,
+  );
 });

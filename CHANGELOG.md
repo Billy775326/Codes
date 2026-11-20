@@ -85,6 +85,8 @@
 
 ### Fixed
 
+- Show optional questions, simultaneous approval and answer requests, responses being submitted, context compaction and expired questions in the conversation sidebar.
+
 - Keep terminal activities collapsed in groups when opening a turn’s work history.
 
 - Explain when a pending Codex question expired after a runtime restart and keep the task result check available.
