@@ -211,6 +211,8 @@ export interface ConversationPage {
   data: Summary[];
   nextCursor: string | null;
   scanned: number;
+  /** Latest observed conversation update for the project, in milliseconds. */
+  latestConversationAt?: number;
 }
 
 export interface QueuePayload {

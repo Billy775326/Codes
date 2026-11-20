@@ -41,6 +41,7 @@ export class Store {
       INSERT INTO meta SELECT 4 WHERE NOT EXISTS (SELECT 1 FROM meta);
       CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT UNIQUE NOT NULL);
       CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), title TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL, settings TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0, forked_from_id TEXT);
+      CREATE INDEX IF NOT EXISTS thread_project_updated ON threads(project_id, updated_at);
       CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id), kind TEXT NOT NULL, digest TEXT NOT NULL, state TEXT NOT NULL, turn_id TEXT, error TEXT, pending_text TEXT, created_at INTEGER NOT NULL, result_id TEXT);
       CREATE UNIQUE INDEX IF NOT EXISTS active_turn ON operations(thread_id) WHERE kind IN ('send','review') AND state IN ('dispatching','acknowledged','unknown');`);
     const version = (this.db.prepare('SELECT version FROM meta').get() as any).version;
@@ -97,6 +98,12 @@ export class Store {
   }
   projects(): Project[] {
     return this.db.prepare('SELECT * FROM projects ORDER BY name').all() as unknown as Project[];
+  }
+  latestConversationAt(projectId: string) {
+    const row = this.db
+      .prepare('SELECT max(updated_at) AS updatedAt FROM threads WHERE project_id=?')
+      .get(projectId) as { updatedAt: number | null };
+    return row.updatedAt ?? undefined;
   }
   settingsProfile(id?: string): SettingsProfile {
     if (id && !this.thread(id))
@@ -227,11 +234,15 @@ export class Store {
     const value = JSON.parse(row.pending_text);
     return { id: row.id, archived: value.archived, epoch: value.epoch };
   }
-  setMetadata(id: string, change: { title?: string; archived?: boolean }) {
+  setMetadata(id: string, change: { title?: string; archived?: boolean; updatedAt?: number }) {
     if (change.title !== undefined)
       this.db.prepare('UPDATE threads SET title=? WHERE id=?').run(change.title, id);
     if (change.archived !== undefined)
       this.db.prepare('UPDATE threads SET archived=? WHERE id=?').run(Number(change.archived), id);
+    if (change.updatedAt !== undefined)
+      this.db
+        .prepare('UPDATE threads SET updated_at=max(updated_at,?) WHERE id=?')
+        .run(change.updatedAt, id);
   }
   operation(id: string): Operation | undefined {
     const row = this.db.prepare('SELECT * FROM operations WHERE id=?').get(id) as any;

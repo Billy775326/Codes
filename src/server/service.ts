@@ -282,7 +282,7 @@ export class Service {
   }
   private observeConversation(
     id: string,
-    change: { title?: string; archived?: boolean },
+    change: { title?: string; archived?: boolean; updatedAt?: number },
     force = false,
   ) {
     const saved = this.store.thread(id);
@@ -307,15 +307,28 @@ export class Service {
     }
     const changed =
       (change.title !== undefined && change.title !== saved.title) ||
-      (change.archived !== undefined && change.archived !== saved.archived);
+      (change.archived !== undefined && change.archived !== saved.archived) ||
+      (change.updatedAt !== undefined && change.updatedAt > saved.updatedAt);
     if (!force && !changed && !settled) return this.withSidebarActivity(saved);
     if (changed) this.metadataChanged(id);
     this.store.setMetadata(id, change);
     const updated = this.store.thread(id)!;
     const cached = this.cache.get(id);
-    if (cached) Object.assign(cached, change, { managementPending: updated.managementPending });
+    if (cached)
+      Object.assign(cached, change, {
+        updatedAt: updated.updatedAt,
+        managementPending: updated.managementPending,
+      });
     const summary = this.publishSummary(updated);
-    this.events.publish('state', { ...change, managementPending: updated.managementPending }, id);
+    this.events.publish(
+      'state',
+      {
+        ...change,
+        updatedAt: updated.updatedAt,
+        managementPending: updated.managementPending,
+      },
+      id,
+    );
     return summary;
   }
   private observeStatus(id: string, raw: unknown) {
@@ -439,6 +452,10 @@ export class Service {
         if (!record(raw) || typeof raw.id !== 'string' || raw.cwd !== project.path) continue;
         const saved = this.store.thread(raw.id);
         const title = text(raw.name || raw.preview, 80) || saved?.title || 'Untitled conversation';
+        const updatedAt =
+          typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt)
+            ? Math.max(0, raw.updatedAt * 1000)
+            : 0;
         if (!saved)
           this.store.saveThread(
             {
@@ -446,7 +463,7 @@ export class Service {
               projectId,
               title,
               state: state(raw.status),
-              updatedAt: Number(raw.updatedAt || 0) * 1000,
+              updatedAt,
               archived,
               forkedFromId: typeof raw.forkedFromId === 'string' ? raw.forkedFromId : undefined,
             },
@@ -460,7 +477,7 @@ export class Service {
               403,
             );
           if ((this.metadataRevisions.get(raw.id) ?? 0) <= readRevision) {
-            this.observeConversation(raw.id, { title, archived });
+            this.observeConversation(raw.id, { title, archived, updatedAt });
             this.observeStatus(raw.id, raw.status);
           }
         }
@@ -470,17 +487,20 @@ export class Service {
           (!search || summary.title.toLowerCase().includes(search.toLowerCase())) &&
           !ids.has(summary.id)
         ) {
-          data.push({
-            ...this.withSidebarActivity(summary),
-            updatedAt: Math.max(summary.updatedAt, Number(raw.updatedAt || 0) * 1000),
-          });
+          data.push(this.withSidebarActivity(summary));
           ids.add(summary.id);
         }
       }
       if (page.nextCursor && page.nextCursor === nativeCursor)
         throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
       const nextCursor = page.nextCursor ? encode(page.nextCursor) : null;
-      if (data.length || !nextCursor || pageNumber === 3) return { data, nextCursor, scanned };
+      if (data.length || !nextCursor || pageNumber === 3)
+        return {
+          data,
+          nextCursor,
+          scanned,
+          latestConversationAt: this.store.latestConversationAt(projectId),
+        };
       if (seen.has(page.nextCursor))
         throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
       seen.add(page.nextCursor);

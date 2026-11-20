@@ -93,12 +93,24 @@ export const Conversations = memo(function Conversations({
   const [search, setSearch] = useState('');
   const [archived, setArchived] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [activity, setActivity] = useState<Record<string, number>>({});
+  const recordActivity = useCallback((projectId: string, updatedAt: number) => {
+    setActivity((previous) =>
+      updatedAt > (previous[projectId] ?? 0) ? { ...previous, [projectId]: updatedAt } : previous,
+    );
+  }, []);
   useEffect(() => {
     if (query.trim() === search) return;
     const timer = setTimeout(() => setSearch(query.trim()), 200);
     return () => clearTimeout(timer);
   }, [query, search]);
   if (!projects.length) return null;
+  const orderedProjects = projects.toSorted(
+    (a, b) =>
+      (activity[b.id] ?? 0) - (activity[a.id] ?? 0) ||
+      a.name.localeCompare(b.name) ||
+      a.id.localeCompare(b.id),
+  );
   return (
     <section className="conversations" aria-label="Conversation management">
       <div className="conversation-controls">
@@ -137,7 +149,7 @@ export const Conversations = memo(function Conversations({
         </div>
       </div>
       <nav className="project-cards" aria-label="Conversations">
-        {projects.map((project) => (
+        {orderedProjects.map((project) => (
           <ProjectCard
             key={JSON.stringify([project.id, search, archived, revision])}
             project={project}
@@ -146,6 +158,7 @@ export const Conversations = memo(function Conversations({
             updates={updates[project.id] ?? noUpdates}
             search={search}
             archived={archived}
+            onActivity={recordActivity}
             {...props}
           />
         ))}
@@ -167,6 +180,7 @@ const ProjectCard = memo(function ProjectCard({
   onNew,
   onSelect,
   onUpdated,
+  onActivity,
   onModalChange,
 }: Omit<Props, 'projects' | 'activeProjectId' | 'updates'> & {
   project: Project;
@@ -174,6 +188,7 @@ const ProjectCard = memo(function ProjectCard({
   search: string;
   archived: boolean;
   updates: Summary[];
+  onActivity: (projectId: string, updatedAt: number) => void;
 }) {
   const projectId = project.id;
   const [cursor, setCursor] = useState<string>();
@@ -223,6 +238,7 @@ const ProjectCard = memo(function ProjectCard({
     )
       .then((result) => {
         if (current !== generation.current) return;
+        onActivity(projectId, result.latestConversationAt ?? 0);
         // A delayed list response must not undo metadata received over SSE in the meantime.
         const changed = latestUpdates.current.filter(
           (row) => row.projectId === projectId && before.get(row.id) !== signature(row),
@@ -248,7 +264,7 @@ const ProjectCard = memo(function ProjectCard({
         if (current === generation.current && !controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [projectId, search, archived, cursor, revision]);
+  }, [projectId, search, archived, cursor, revision, onActivity]);
   useEffect(() => {
     const delta = updates.filter(
       (row) => row.projectId === projectId && priorUpdates.current.get(row.id) !== signature(row),
@@ -257,6 +273,7 @@ const ProjectCard = memo(function ProjectCard({
       updates.filter((row) => row.projectId === projectId).map((row) => [row.id, signature(row)]),
     );
     if (!delta.length) return;
+    onActivity(projectId, Math.max(...delta.map((row) => row.updatedAt)));
     setPage((old) => {
       let data = old.data.slice();
       for (const row of delta) {
@@ -274,7 +291,7 @@ const ProjectCard = memo(function ProjectCard({
           .slice(0, 30),
       };
     });
-  }, [updates, projectId, archived, search, cursor]);
+  }, [updates, projectId, archived, search, cursor, onActivity]);
 
   const refresh = () => {
     setCursor(undefined);

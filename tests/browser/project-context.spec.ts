@@ -281,6 +281,53 @@ test('missing directories preserve history and block execution until explicit re
     await rename(path + '-moved', path);
   }
 });
+test('project cards follow conversation recency across live updates and search', async ({
+  page,
+}) => {
+  await login(page);
+  const { a, b, first, second } = await fixture(page);
+  const path = join(a.path, 'conversation-fixtures', 'empty-' + randomUUID());
+  await mkdir(path);
+  const added = await page.request.post('/api/projects', {
+    data: { path, name: 'AA Empty project' },
+    headers: { Origin: origin },
+  });
+  expect(added.ok()).toBe(true);
+  const empty = await added.json();
+  await page.reload();
+  await projectCard(page, b.id).getByRole('button', { name: second.title, exact: true }).click();
+  const cards = page
+    .getByRole('navigation', { name: 'Conversations', exact: true })
+    .locator('.project-card');
+  const ids = [a.id, b.id, empty.id];
+  const order = () =>
+    cards.evaluateAll(
+      (elements, ids) =>
+        elements
+          .map((element) => element.getAttribute('data-project-id'))
+          .filter((id) => ids.includes(id)),
+      ids,
+    );
+  await expect.poll(order).toEqual([b.id, a.id, empty.id]);
+  const search = page.getByLabel('Search conversations', { exact: true });
+  await search.fill(second.title);
+  await expect(projectCard(page, a.id)).toContainText('No matches');
+  await expect.poll(order).toEqual([b.id, a.id, empty.id]);
+  const sent = await page.request.post('/api/threads/' + first.id + '/send', {
+    data: {
+      operationId: randomUUID(),
+      text: 'Follow-up in another project',
+      settings: { permission: 'read-only' },
+      attachments: [],
+    },
+    headers: { Origin: origin },
+  });
+  expect(sent.ok()).toBe(true);
+  await expect.poll(order).toEqual([a.id, b.id, empty.id]);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
+  await page.reload();
+  await expect.poll(order).toEqual([a.id, b.id, empty.id]);
+});
 test('one project uses a project card and an empty installation has one add-project entry', async ({
   page,
 }) => {
