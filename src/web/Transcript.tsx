@@ -9,7 +9,6 @@ type RenderMessage = (
   finalReply: boolean,
   changes?: Message,
   timestamp?: number,
-  completion?: ReactNode,
 ) => ReactNode;
 const isActivity = (item: Message) => item.kind === 'command' || item.kind === 'tool';
 
@@ -53,15 +52,7 @@ function WorkItems({ items, render }: { items: Message[]; render: RenderMessage 
   );
 }
 
-function Turn({
-  turn,
-  render,
-  completion,
-}: {
-  turn: TurnActivity;
-  render: RenderMessage;
-  completion?: ReactNode;
-}) {
+function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
   const [choice, setChoice] = useState<boolean>();
   const open = choice ?? turn.active;
   const [now, setNow] = useState(Date.now);
@@ -147,18 +138,15 @@ function Turn({
             item === last && !turn.active,
             item === last ? turn.changes : undefined,
             item === last ? turn.info?.completedAtMs : undefined,
-            item === last ? completion : undefined,
           )}
         </Fragment>
       ))}
       {!last && turn.changes && render(turn.changes, false)}
-      {!last &&
-        (completion ??
-          (turn.info?.completedAtMs !== undefined && (
-            <div className="message-footer">
-              <MessageTime value={turn.info.completedAtMs} kind="finished" />
-            </div>
-          )))}
+      {!last && turn.info?.completedAtMs !== undefined && (
+        <div className="message-footer">
+          <MessageTime value={turn.info.completedAtMs} kind="finished" />
+        </div>
+      )}
     </section>
   );
 }
@@ -167,31 +155,16 @@ export function Transcript({
   messages,
   turns,
   activeIds,
-  completion,
   render,
 }: {
   messages: Message[];
   turns?: TurnInfo[];
   activeIds?: string[];
-  completion?: { turnId?: string; content: ReactNode };
   render: RenderMessage;
 }) {
   const entries = useMemo(
     () => groupTurns(messages, turns, activeIds),
     [messages, turns, activeIds],
   );
-  const resultTurn = entries.find((turn) => turn.id === completion?.turnId);
-  return (
-    <>
-      {entries.map((turn) => (
-        <Turn
-          key={turn.id}
-          turn={turn}
-          render={render}
-          completion={turn === resultTurn ? completion?.content : undefined}
-        />
-      ))}
-      {!resultTurn && completion?.content}
-    </>
-  );
+  return entries.map((turn) => <Turn key={turn.id} turn={turn} render={render} />);
 }
