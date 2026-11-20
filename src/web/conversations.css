@@ -76,6 +76,9 @@
   margin-bottom: 5px;
   background: var(--field);
 }
+.project-cards:has(.project-card:not([hidden])) > .sidebar-search-empty {
+  display: none;
+}
 .project-card:has(.project-card-name[aria-current='true']) {
   border-color: color-mix(in srgb, var(--link) 45%, var(--line));
 }
@@ -104,8 +107,7 @@
   text-align: left;
 }
 .project-card-name svg,
-.project-card-new,
-.project-card-collapse {
+.project-card-header > .icon-button {
   flex-shrink: 0;
 }
 .project-card-collapse svg {
@@ -279,6 +281,16 @@
   font-size: 12px;
   padding: 7px 8px;
   border-radius: 5px;
+}
+.conversation-link {
+  display: block;
+  padding: 4px 8px 8px;
+  font-size: 12px;
+}
+.conversation-link input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
 }
 .conversation-pagination {
   display: flex;

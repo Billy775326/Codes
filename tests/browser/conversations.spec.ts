@@ -41,7 +41,9 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await page.getByRole('button', { name: renamed, exact: true }).click();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
-  await page.getByLabel('Search conversations', { exact: true }).fill(renamed.toUpperCase());
+  await page
+    .getByLabel('Search projects and conversations', { exact: true })
+    .fill(renamed.toUpperCase());
   await expect(page.locator('.thread-link')).toHaveCount(1);
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Actions for ' + renamed, exact: true }).click();
@@ -118,7 +120,9 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
   await card.getByRole('button', { name: 'Collapse ' + fixture.name, exact: true }).click();
   await expect(projectName).toHaveAttribute('aria-expanded', 'false');
   await expect(projectName).toBeFocused();
-  await page.getByLabel('Search conversations', { exact: true }).fill('FIXTURE CONVERSATION 0');
+  await page
+    .getByLabel('Search projects and conversations', { exact: true })
+    .fill('FIXTURE CONVERSATION 0');
   // Searches scan at most four native pages per request. Continue through sparse results.
   await expect(card).toHaveAttribute('aria-busy', 'false');
   await expect(card.locator('.conversation-pagination')).toContainText('Page 1');
@@ -332,7 +336,7 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   await login(page);
   const title = 'Sidebar reconnect ' + Date.now();
   await create(page, title);
-  await page.getByLabel('Search conversations', { exact: true }).fill(title);
+  await page.getByLabel('Search projects and conversations', { exact: true }).fill(title);
   await expect(page.locator('.thread-link')).toHaveCount(1);
   const row = page
     .locator('.conversation-row')
@@ -369,7 +373,9 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   await list;
   await expect(page.locator('.connection')).toHaveText('Connected');
   await expect(page.getByRole('button', { name: 'Reconnect conversation updates' })).toHaveCount(0);
-  await expect(page.getByLabel('Search conversations', { exact: true })).toHaveValue(title);
+  await expect(page.getByLabel('Search projects and conversations', { exact: true })).toHaveValue(
+    title,
+  );
   await expect(row.locator('.conversation-status')).toHaveText('Completed');
   expect(
     await page.evaluate(

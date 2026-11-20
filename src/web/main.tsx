@@ -1,4 +1,10 @@
-import { projectViews, rememberProject } from './project-navigation';
+import {
+  linkedConversation,
+  projectSidebarPreferences,
+  projectViews,
+  rememberProject,
+  type ProjectSidebarPreference,
+} from './project-navigation';
 import { sameSettings } from '../shared/types';
 import { imageLimits, projectImageType } from '../shared/images';
 import { useSettingsProfile } from './useSettingsProfile';
@@ -304,13 +310,33 @@ function App() {
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const maintenanceExpiresAt = system?.maintenance?.expiresAt;
   const [projects, setProjects] = useState<Project[]>([]);
+  const projectMetadataRevision = useRef(0);
+  const [sidebarPreferences, setSidebarPreferences] = useState(() =>
+    projectSidebarPreferences(saved('codes.project-sidebar')),
+  );
+  const changeSidebarPreference = useCallback((id: string, patch: ProjectSidebarPreference) => {
+    setSidebarPreferences((old) => ({ ...old, [id]: { ...old[id], ...patch } }));
+  }, []);
+  useEffect(() => {
+    save('codes.project-sidebar', JSON.stringify(sidebarPreferences));
+  }, [sidebarPreferences]);
+  const projectUpdated = useCallback((project: Project, expectedName?: string) => {
+    projectMetadataRevision.current++;
+    setProjects((list) =>
+      list.map((old) =>
+        old.id === project.id && (expectedName === undefined || old.name === expectedName)
+          ? { ...old, name: project.name }
+          : old,
+      ),
+    );
+  }, []);
   const views = useRef<Record<string, string>>({});
   const recentProject = useRef<string | undefined>(undefined);
   const [selection, setSelection] = useState(() => {
     // Streaming renders must not repeatedly read browser storage.
     views.current = projectViews(saved('codes.project-views'));
     const projectId = saved('codes.project'),
-      explicitThread = saved('codes.thread');
+      explicitThread = linkedConversation(location.search) || saved('codes.thread');
     const threadId = explicitThread || views.current[projectId] || '';
     recentProject.current = !explicitThread && threadId ? projectId : undefined;
     return { projectId, threadId };
@@ -610,6 +636,12 @@ function App() {
     },
     [notice],
   );
+  const refreshProjects = useCallback(() => {
+    const revision = ++projectMetadataRevision.current;
+    void request<Project[]>('/projects').then((projects) => {
+      if (revision === projectMetadataRevision.current) setProjects(projects);
+    }, notice);
+  }, [notice]);
   useEffect(() => {
     if (auth === 'ready') return onAuthenticationRequired(notice);
   }, [auth, notice]);
@@ -764,6 +796,7 @@ function App() {
       (snapshot) => setThreads((byProject) => ({ ...byProject, [projectId]: snapshot.threads })),
       (event) => {
         if (event.kind === 'summary') conversationUpdated(event.data as Summary, false);
+        else if (event.kind === 'project') projectUpdated(event.data as Project);
         else if (event.kind === 'defaults') defaultSettings.sync(event.data as SettingsProfile);
         else if (event.kind === 'runtime') setSystem(event.data as System);
       },
@@ -816,7 +849,15 @@ function App() {
   useEffect(() => {
     if (auth !== 'ready') return;
     queueRevision.current++;
-    save('codes.thread', threadId);
+    if (
+      save('codes.thread', threadId) &&
+      linkedConversation(location.search) === threadId &&
+      threadId
+    ) {
+      const url = new URL(location.href);
+      url.searchParams.delete('conversation');
+      window.history.replaceState(window.history.state, '', url);
+    }
     const key = draftKey(projectId, threadId);
     // Move the legacy unscoped new draft into the selected project once.
     const restored = saved(key) || (!threadId ? saved('codes.draft.new') : '');
@@ -875,6 +916,10 @@ function App() {
       }
       if (e.kind === 'summary') {
         conversationUpdated(e.data as Summary, false);
+        return;
+      }
+      if (e.kind === 'project') {
+        projectUpdated(e.data as Project);
         return;
       }
       if (e.threadId !== threadId) return;
@@ -1398,6 +1443,7 @@ function App() {
     setBusy(true);
     try {
       const project = await post<Project>('/projects', { path: newPath });
+      projectMetadataRevision.current++;
       setProjects((list) => (list.some((x) => x.id === project.id) ? list : [...list, project]));
       changeProject(project.id);
       setAdding(false);
@@ -1474,9 +1520,8 @@ function App() {
     : undefined;
   const taskResult = outcome ? { status: outcome, turn: finishedTurn } : undefined;
   const project =
-    context?.project.id === contextProjectId
-      ? context.project
-      : projects.find((x) => x.id === contextProjectId);
+    projects.find((x) => x.id === contextProjectId) ??
+    (context?.project.id === contextProjectId ? context.project : undefined);
   const reviewMessage = useCallback(
     (item: Message, path?: string) => {
       setDiffTurn(item.turnId === thread?.turnId ? '' : item.turnId);
@@ -1965,6 +2010,10 @@ function App() {
           updates={threads}
           connection={connection}
           disabled={busy}
+          sidebarPreferences={sidebarPreferences}
+          onSidebarPreference={changeSidebarPreference}
+          onRefreshProjects={refreshProjects}
+          onProjectUpdated={projectUpdated}
           onProject={changeProject}
           onNew={newThreadIn}
           onSelect={select}

@@ -200,6 +200,9 @@ export class Store {
     this.db.prepare('INSERT INTO projects VALUES(?,?,?)').run(project.id, name, path);
     return project;
   }
+  renameProject(id: string, name: string) {
+    this.db.prepare('UPDATE projects SET name=? WHERE id=?').run(name, id);
+  }
   summaries(projectId: string): Summary[] {
     return (
       this.db

@@ -256,6 +256,16 @@ export async function application(
         const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
         if (segments[1] === 'projects' && segments[2]) {
           const projectId = segments[2];
+          if (segments.length === 3 && method === 'PUT') {
+            const { name, expectedName } = z
+              .object({
+                name: z.string().trim().min(1).max(80),
+                expectedName: z.string().max(2048),
+              })
+              .strict()
+              .parse(await body(request));
+            return json(response, service.renameProject(projectId, name, expectedName));
+          }
           if (segments[3] === 'context' && method === 'GET')
             return json(response, await service.projectContext(projectId));
           if (segments[3] === 'images' || segments[3] === 'uploaded-files') {

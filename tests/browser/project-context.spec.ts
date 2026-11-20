@@ -309,9 +309,9 @@ test('project cards follow conversation recency across live updates and search',
       ids,
     );
   await expect.poll(order).toEqual([b.id, a.id, empty.id]);
-  const search = page.getByLabel('Search conversations', { exact: true });
+  const search = page.getByLabel('Search projects and conversations', { exact: true });
   await search.fill(second.title);
-  await expect(projectCard(page, a.id)).toContainText('No matches');
+  await expect(projectCard(page, a.id)).toBeHidden();
   await expect.poll(order).toEqual([b.id, a.id, empty.id]);
   const sent = await page.request.post('/api/threads/' + first.id + '/send', {
     data: {
@@ -377,4 +377,79 @@ test('one project uses a project card and an empty installation has one add-proj
   empty = true;
   await page.reload();
   await expect(page.getByRole('button', { name: 'Add project', exact: true })).toHaveCount(1);
+});
+
+test('project management and conversation links survive reload and keep the verified owner', async ({
+  page,
+  context,
+}) => {
+  await login(page);
+  const { a, b, first, second, path } = await fixture(page);
+  await page.reload();
+  const card = projectCard(page, b.id);
+  await expect(card.getByRole('button', { name: second.title, exact: true })).toBeVisible();
+
+  const actions = (name: string) =>
+    card.getByRole('button', { name: 'Project actions for ' + name, exact: true });
+  await actions(b.name).click();
+  await card.getByRole('button', { name: 'Rename project', exact: true }).click();
+  const renamed = 'zz Sidebar ' + randomUUID();
+  await card.getByLabel('Project name', { exact: true }).fill('  ' + renamed + '  ');
+  await card.getByRole('button', { name: 'Save project name', exact: true }).click();
+  await expect(actions(renamed)).toBeVisible();
+  const conflict = await page.request.put('/api/projects/' + b.id, {
+    data: { name: 'Stale name', expectedName: b.name },
+    headers: { Origin: origin },
+  });
+  expect(conflict.status()).toBe(409);
+  const owned = await (await page.request.get('/api/threads/' + second.id + '/snapshot')).json();
+  expect(owned.context.project).toMatchObject({ id: b.id, path, name: renamed });
+  expect(owned.thread.projectId).toBe(b.id);
+
+  await actions(renamed).click();
+  await card.getByRole('button', { name: 'Pin project', exact: true }).click();
+  const firstCard = page
+    .getByRole('navigation', { name: 'Conversations' })
+    .locator('.project-card')
+    .first();
+  await expect(firstCard).toHaveAttribute('data-project-id', b.id);
+  await card.getByRole('button', { name: 'Collapse ' + renamed, exact: true }).click();
+
+  const listPath = '/api/projects/' + b.id + '/conversations';
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(new URL(request.url()).pathname));
+  await page.reload();
+  const projectName = card.getByRole('button', { name: renamed, exact: true });
+  await expect(projectName).toHaveAttribute('aria-expanded', 'false');
+  await expect(firstCard).toHaveAttribute('data-project-id', b.id);
+  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(
+    projectCard(page, a.id).getByRole('button', { name: first.title, exact: true }),
+  ).toBeVisible();
+  expect(requests).not.toContain(listPath);
+
+  const search = page.getByLabel('Search projects and conversations');
+  await search.fill(renamed.toUpperCase());
+  await expect(card.getByRole('button', { name: second.title, exact: true })).toBeVisible();
+  await expect(projectCard(page, a.id)).toBeHidden();
+  await search.fill('no match ' + randomUUID());
+  await expect(card).toBeHidden();
+  await page.getByRole('button', { name: 'Clear conversation search' }).click();
+  await expect(projectName).toHaveAttribute('aria-expanded', 'false');
+
+  await projectName.click();
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await card.getByRole('button', { name: 'Actions for ' + second.title, exact: true }).click();
+  await card.getByRole('button', { name: 'Copy link', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Link copied', exact: true })).toBeVisible();
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  expect(new URL(link).searchParams.get('conversation')).toBe(second.id);
+  await projectCard(page, a.id).getByRole('button', { name: first.title, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(first.title);
+  await page.goto(link);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
+  await expect(projectName).toHaveAttribute('aria-current', 'true');
+  await actions(renamed).click();
+  await card.getByRole('button', { name: 'Unpin project', exact: true }).click();
+  await expect(projectName).not.toHaveAttribute('aria-description', 'Pinned project');
 });

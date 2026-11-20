@@ -254,6 +254,20 @@ export class Service {
     if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Project not found.', 404);
     return project;
   }
+  renameProject(id: string, name: string, expectedName: string) {
+    const project = this.project(id);
+    if (project.name === name) return project;
+    if (project.name !== expectedName)
+      throw new AppError(
+        'PROJECT_NAME_CONFLICT',
+        'This project was renamed in another window. Refresh and try again.',
+        409,
+      );
+    this.store.renameProject(id, name);
+    const updated = { ...project, name };
+    this.events.publish('project', updated);
+    return updated;
+  }
   async projectContext(id: string) {
     const project = this.project(id);
     return { project, directory: await directoryStatus(project) };

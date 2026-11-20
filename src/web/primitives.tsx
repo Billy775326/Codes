@@ -71,6 +71,7 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
       </>
     ),
     folder: <path d="M3 7V5h7l2 2h9v13H3Z" />,
+    pin: <path d="M9 4h6l-1 6 4 4H6l4-4-1-6ZM12 14v7" />,
     review: (
       <>
         <path d="M8 3H4v18h4M16 3h4v18h-4M9 8h6m-3-3v6m-3 5h6" />

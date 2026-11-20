@@ -6,6 +6,7 @@ import { Icon } from './primitives';
 import { InteractionDialog } from './InteractionDialog';
 import { conversationStatus } from './conversation-status';
 import { formatMessageTime } from './MessageTime';
+import type { ProjectSidebarPreference } from './project-navigation';
 import './conversations.css';
 
 interface Props {
@@ -15,10 +16,14 @@ interface Props {
   updates: Record<string, Summary[]>;
   disabled: boolean;
   connection: string;
+  sidebarPreferences: Record<string, ProjectSidebarPreference>;
   onProject: (id: string) => void;
   onNew: (projectId: string) => void;
   onSelect: (id: string, projectId: string) => void;
   onUpdated: (summary: Summary) => void;
+  onProjectUpdated: (project: Project, expectedName: string) => void;
+  onSidebarPreference: (id: string, patch: ProjectSidebarPreference) => void;
+  onRefreshProjects: () => void;
   onModalChange: (open: boolean) => void;
 }
 
@@ -88,6 +93,8 @@ export const Conversations = memo(function Conversations({
   activeProjectId,
   selectedId,
   updates,
+  sidebarPreferences,
+  onRefreshProjects,
   ...props
 }: Props) {
   const [query, setQuery] = useState('');
@@ -95,14 +102,10 @@ export const Conversations = memo(function Conversations({
   const [archived, setArchived] = useState(false);
   const [revision, setRevision] = useState(0);
   const [activity, setActivity] = useState<Record<string, number>>({});
-  const [projectDisclosure, setProjectDisclosure] = useState<Record<string, boolean>>({});
   const recordActivity = useCallback((projectId: string, updatedAt: number) => {
     setActivity((previous) =>
       updatedAt > (previous[projectId] ?? -1) ? { ...previous, [projectId]: updatedAt } : previous,
     );
-  }, []);
-  const changeDisclosure = useCallback((projectId: string, expanded: boolean) => {
-    setProjectDisclosure((previous) => ({ ...previous, [projectId]: expanded }));
   }, []);
   useEffect(() => {
     if (query.trim() === search) return;
@@ -117,6 +120,8 @@ export const Conversations = memo(function Conversations({
     }))
     .sort(
       (a, b) =>
+        Number(!!sidebarPreferences[b.project.id]?.pinned) -
+          Number(!!sidebarPreferences[a.project.id]?.pinned) ||
         b.updatedAt - a.updatedAt ||
         a.project.name.localeCompare(b.project.name) ||
         a.project.id.localeCompare(b.project.id),
@@ -137,7 +142,10 @@ export const Conversations = memo(function Conversations({
           className="icon-button"
           aria-label="Refresh conversations"
           title="Refresh conversations"
-          onClick={() => setRevision((value) => value + 1)}
+          onClick={() => {
+            onRefreshProjects();
+            setRevision((value) => value + 1);
+          }}
         >
           <Icon name="refresh" size={15} />
         </button>
@@ -146,8 +154,8 @@ export const Conversations = memo(function Conversations({
         <div className="conversation-search">
           <Icon name="search" size={14} />
           <input
-            aria-label="Search conversations"
-            placeholder="Search conversations"
+            aria-label="Search projects and conversations"
+            placeholder="Search projects and chats"
             value={query}
             maxLength={120}
             onChange={(e) => setQuery(e.target.value)}
@@ -160,22 +168,32 @@ export const Conversations = memo(function Conversations({
         </div>
       </div>
       <nav className="project-cards" aria-label="Conversations">
-        {orderedProjects.map(({ project, updatedAt }) => (
-          <ProjectCard
-            key={JSON.stringify([project.id, search, archived, revision])}
-            project={project}
-            active={project.id === activeProjectId}
-            selectedId={project.id === activeProjectId ? selectedId : ''}
-            updates={updates[project.id] ?? noUpdates}
-            search={search}
-            archived={archived}
-            inactive={updatedAt >= 0 && updatedAt <= inactiveBefore}
-            expandedByUser={projectDisclosure[project.id]}
-            onDisclosure={changeDisclosure}
-            onActivity={recordActivity}
-            {...props}
-          />
-        ))}
+        {orderedProjects.map(({ project, updatedAt }) => {
+          const projectMatch =
+            !!search && project.name.toLowerCase().includes(search.toLowerCase());
+          return (
+            <ProjectCard
+              key={JSON.stringify([project.id, search, projectMatch, archived])}
+              project={project}
+              active={project.id === activeProjectId}
+              selectedId={project.id === activeProjectId ? selectedId : ''}
+              updates={updates[project.id] ?? noUpdates}
+              search={projectMatch ? '' : search}
+              filtering={!!search}
+              refreshVersion={revision}
+              archived={archived}
+              inactive={updatedAt >= 0 && updatedAt <= inactiveBefore}
+              preference={sidebarPreferences[project.id]}
+              onActivity={recordActivity}
+              {...props}
+            />
+          );
+        })}
+        {search && (
+          <p className="sidebar-search-empty conversation-empty">
+            No matching projects or conversations
+          </p>
+        )}
       </nav>
     </section>
   );
@@ -185,9 +203,11 @@ const ProjectCard = memo(function ProjectCard({
   project,
   active,
   search,
+  filtering,
+  refreshVersion,
   archived,
   inactive,
-  expandedByUser,
+  preference,
   selectedId,
   updates,
   disabled,
@@ -196,18 +216,23 @@ const ProjectCard = memo(function ProjectCard({
   onNew,
   onSelect,
   onUpdated,
-  onDisclosure,
+  onSidebarPreference,
+  onProjectUpdated,
   onActivity,
   onModalChange,
-}: Omit<Props, 'projects' | 'activeProjectId' | 'updates'> & {
+}: Omit<
+  Props,
+  'projects' | 'activeProjectId' | 'updates' | 'sidebarPreferences' | 'onRefreshProjects'
+> & {
   project: Project;
   active: boolean;
   search: string;
+  filtering: boolean;
+  refreshVersion: number;
   archived: boolean;
   inactive: boolean;
-  expandedByUser?: boolean;
+  preference?: ProjectSidebarPreference;
   updates: Summary[];
-  onDisclosure: (projectId: string, expanded: boolean) => void;
   onActivity: (projectId: string, updatedAt: number) => void;
 }) {
   const projectId = project.id;
@@ -216,10 +241,15 @@ const ProjectCard = memo(function ProjectCard({
   const [cursor, setCursor] = useState<string>();
   const [previous, setPrevious] = useState<(string | undefined)[]>([]);
   const [page, setPage] = useState<ConversationPage>({ data: [], nextCursor: null, scanned: 0 });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(filtering);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const [menu, setMenu] = useState('');
+  const [projectMenu, setProjectMenu] = useState(false);
+  const [projectEdit, setProjectEdit] = useState<{ original: string; name: string }>();
+  const [savingProject, setSavingProject] = useState(false);
+  const [projectError, setProjectError] = useState('');
+  const [copied, setCopied] = useState<{ id: string; fallback?: string }>();
   const [editing, setEditing] = useState('');
   const [name, setName] = useState('');
   const [pending, setPending] = useState('');
@@ -244,9 +274,21 @@ const ProjectCard = memo(function ProjectCard({
   const generation = useRef(0);
   const latestUpdates = useRef(updates);
   latestUpdates.current = updates;
+  const defaultExpanded =
+    !inactive || active || updates.some(isWorking) || page.data.some(isWorking);
+  const isExpanded = preference?.expanded ?? defaultExpanded;
+  const shouldLoad = filtering || archived || isExpanded;
+  const keepOpen = !!(filtering || archived || error || pending || confirmation || projectEdit);
+  const collapsed = !keepOpen && !isExpanded;
+  const seenRefresh = useRef(refreshVersion);
 
   useEffect(() => {
-    if (!projectId) return;
+    const force = seenRefresh.current !== refreshVersion;
+    seenRefresh.current = refreshVersion;
+    if (!shouldLoad && !force) {
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     const current = ++generation.current;
     const before = new Map(latestUpdates.current.map((row) => [row.id, signature(row)]));
@@ -259,7 +301,7 @@ const ProjectCard = memo(function ProjectCard({
       controller.signal,
     )
       .then((result) => {
-        if (current !== generation.current) return;
+        if (current !== generation.current || controller.signal.aborted) return;
         onActivity(projectId, result.latestConversationAt ?? 0);
         // A delayed list response must not undo metadata received over SSE in the meantime.
         const changed = latestUpdates.current.filter(
@@ -269,7 +311,7 @@ const ProjectCard = memo(function ProjectCard({
         for (const row of changed) {
           const index = data.findIndex((item) => item.id === row.id);
           if (index >= 0) data = data.map((item) => (item.id === row.id ? row : item));
-          else if (!cursor && !search && !archived) data = [row, ...data];
+          else if (!cursor) data = [row, ...data];
         }
         setPage({
           ...result,
@@ -286,7 +328,7 @@ const ProjectCard = memo(function ProjectCard({
         if (current === generation.current && !controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [projectId, search, archived, cursor, revision, onActivity]);
+  }, [projectId, search, archived, cursor, revision, refreshVersion, shouldLoad, onActivity]);
   useEffect(() => {
     const delta = updates.filter(
       (row) => row.projectId === projectId && priorUpdates.current.get(row.id) !== signature(row),
@@ -303,8 +345,7 @@ const ProjectCard = memo(function ProjectCard({
         if (index >= 0) {
           if (matches(row, archived, search)) data[index] = row;
           else data.splice(index, 1);
-        } else if (!cursor && !archived && !search && matches(row, archived, search))
-          data.unshift(row);
+        } else if (!cursor && matches(row, archived, search)) data.unshift(row);
       }
       return {
         ...old,
@@ -316,11 +357,43 @@ const ProjectCard = memo(function ProjectCard({
   }, [updates, projectId, archived, search, cursor, onActivity]);
 
   const refresh = () => {
+    if (!shouldLoad) onSidebarPreference(projectId, { expanded: true });
     setCursor(undefined);
     setPrevious([]);
     setRevision((v) => v + 1);
     setMenu('');
     setEditing('');
+  };
+  const renameProject = async () => {
+    if (!projectEdit || savingProject) return;
+    const name = projectEdit.name.trim();
+    if (!name || name === projectEdit.original) return;
+    setSavingProject(true);
+    setProjectError('');
+    try {
+      const updated = await request<Project>('/projects/' + encodeURIComponent(projectId), {
+        method: 'PUT',
+        body: JSON.stringify({ name, expectedName: projectEdit.original }),
+      });
+      onProjectUpdated(updated, projectEdit.original);
+      setProjectEdit(undefined);
+      setProjectMenu(false);
+      projectName.current?.focus();
+    } catch (error) {
+      setProjectError(message(error));
+    } finally {
+      setSavingProject(false);
+    }
+  };
+  const copyConversation = async (row: Summary) => {
+    const url = new URL(location.pathname, location.origin);
+    url.searchParams.set('conversation', row.id);
+    try {
+      await navigator.clipboard.writeText(url.href);
+      setCopied({ id: row.id });
+    } catch {
+      setCopied({ id: row.id, fallback: url.href });
+    }
   };
   const mutate = async (row: Summary, action: 'rename' | 'archive' | 'check') => {
     if (pending) return;
@@ -366,10 +439,6 @@ const ProjectCard = memo(function ProjectCard({
     setMenu('');
     setEditing('');
   };
-  const keepOpen = !!(search || archived || error || pending || confirmation);
-  const defaultExpanded =
-    !inactive || active || updates.some(isWorking) || page.data.some(isWorking);
-  const collapsed = !keepOpen && !(expandedByUser ?? defaultExpanded);
   const rows = collapsed
     ? noUpdates
     : page.data.filter((row) => row.projectId === projectId && matches(row, archived, search));
@@ -382,6 +451,15 @@ const ProjectCard = memo(function ProjectCard({
       data-project-id={projectId}
       aria-labelledby={'project-heading-' + projectId}
       aria-busy={loading}
+      hidden={
+        !!search &&
+        !loading &&
+        !error &&
+        !rows.length &&
+        !page.nextCursor &&
+        !previous.length &&
+        !projectEdit
+      }
     >
       <header className="project-card-header">
         <h2 id={'project-heading-' + projectId}>
@@ -389,16 +467,17 @@ const ProjectCard = memo(function ProjectCard({
             ref={projectName}
             className="project-card-name"
             aria-current={active ? 'true' : undefined}
+            aria-description={preference?.pinned ? 'Pinned project' : undefined}
             aria-controls={collapsed ? listId : undefined}
             aria-expanded={collapsed ? false : undefined}
             title={project.path}
             disabled={!collapsed && disabled}
             onClick={() => {
-              if (collapsed) onDisclosure(projectId, true);
+              if (collapsed) onSidebarPreference(projectId, { expanded: true });
               else onProject(projectId);
             }}
           >
-            {!collapsed && <Icon name="folder" size={16} />}
+            {!collapsed && <Icon name={preference?.pinned ? 'pin' : 'folder'} size={16} />}
             <span>{project.name}</span>
           </button>
         </h2>
@@ -413,6 +492,24 @@ const ProjectCard = memo(function ProjectCard({
             <Icon name="plus" size={16} />
           </button>
         )}
+        {!collapsed && (
+          <button
+            className="icon-button"
+            aria-label={'Project actions for ' + project.name}
+            aria-expanded={projectMenu}
+            title="Project actions"
+            disabled={savingProject}
+            onClick={() => {
+              setProjectMenu(!projectMenu);
+              setProjectEdit(undefined);
+              setProjectError('');
+              setMenu('');
+              setEditing('');
+            }}
+          >
+            <Icon name="more" size={16} />
+          </button>
+        )}
         {!collapsed && !keepOpen && !editing && (
           <button
             className="icon-button project-card-collapse"
@@ -421,7 +518,8 @@ const ProjectCard = memo(function ProjectCard({
             aria-expanded="true"
             onClick={() => {
               setMenu('');
-              onDisclosure(projectId, false);
+              setProjectMenu(false);
+              onSidebarPreference(projectId, { expanded: false });
               projectName.current?.focus();
             }}
           >
@@ -429,6 +527,74 @@ const ProjectCard = memo(function ProjectCard({
           </button>
         )}
       </header>
+      {projectMenu && (
+        <div
+          className="conversation-actions"
+          role="group"
+          aria-label={'Project actions: ' + project.name}
+        >
+          <button
+            disabled={savingProject}
+            onClick={() => {
+              setProjectEdit({ original: project.name, name: project.name });
+              setProjectError('');
+            }}
+          >
+            <Icon name="edit" size={12} />
+            Rename project
+          </button>
+          <button onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}>
+            <Icon name="pin" size={12} />
+            {preference?.pinned ? 'Unpin project' : 'Pin project'}
+          </button>
+        </div>
+      )}
+      {projectEdit && (
+        <form
+          className="conversation-rename"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void renameProject();
+          }}
+        >
+          <label htmlFor={'project-rename-' + projectId}>Project name</label>
+          <input
+            id={'project-rename-' + projectId}
+            value={projectEdit.name}
+            maxLength={80}
+            disabled={savingProject}
+            autoFocus
+            onChange={(event) => setProjectEdit({ ...projectEdit, name: event.target.value })}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && !savingProject) setProjectEdit(undefined);
+            }}
+          />
+          {projectError && (
+            <p className="error-text" role="alert">
+              {projectError}
+            </p>
+          )}
+          <div>
+            <button
+              type="button"
+              disabled={savingProject}
+              onClick={() => setProjectEdit(undefined)}
+            >
+              Cancel
+            </button>
+            <button
+              className="primary"
+              disabled={
+                savingProject ||
+                !projectEdit.name.trim() ||
+                projectEdit.name.trim() === projectEdit.original
+              }
+            >
+              {savingProject ? 'Saving…' : 'Save project name'}
+            </button>
+          </div>
+        </form>
+      )}
       {error && !confirmation && (
         <div className="conversation-error" role="alert">
           {error}
@@ -526,6 +692,8 @@ const ProjectCard = memo(function ProjectCard({
                     setMenu(menu === row.id ? '' : row.id);
                     setEditing('');
                     setError('');
+                    setCopied(undefined);
+                    if (!projectEdit) setProjectMenu(false);
                   }}
                 >
                   <Icon name="more" size={16} />
@@ -546,6 +714,10 @@ const ProjectCard = memo(function ProjectCard({
                   >
                     <Icon name="edit" size={12} />
                     Rename
+                  </button>
+                  <button onClick={() => void copyConversation(row)}>
+                    <Icon name="copy" size={12} />
+                    {copied?.id === row.id && !copied.fallback ? 'Link copied' : 'Copy link'}
                   </button>
                   {row.managementPending ? (
                     <button disabled={!!pending} onClick={() => void mutate(row, 'check')}>
@@ -572,6 +744,22 @@ const ProjectCard = memo(function ProjectCard({
                   )}
                 </div>
               )}
+              {menu === row.id &&
+                copied?.id === row.id &&
+                (copied.fallback ? (
+                  <label className="conversation-link">
+                    Conversation link
+                    <input
+                      value={copied.fallback}
+                      readOnly
+                      onFocus={(event) => event.target.select()}
+                    />
+                  </label>
+                ) : (
+                  <span className="visually-hidden" role="status">
+                    Conversation link copied
+                  </span>
+                ))}
               {editing === row.id && (
                 <form
                   className="conversation-rename"
