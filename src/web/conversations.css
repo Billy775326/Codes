@@ -73,7 +73,7 @@
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
   background: var(--field);
 }
 .project-card:has(.project-card-name[aria-current='true']) {
@@ -83,7 +83,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 3px;
+  padding: 2px;
 }
 .project-card-header h2 {
   flex: 1;
@@ -97,9 +97,9 @@
   width: 100%;
   min-width: 0;
   align-items: center;
-  gap: 7px;
-  padding: 7px;
-  min-height: 36px;
+  gap: 6px;
+  padding: 4px 6px;
+  min-height: 32px;
   border-radius: 5px;
   text-align: left;
 }
@@ -118,19 +118,11 @@
 .project-card-name:hover:not(:disabled) {
   background: var(--hover);
 }
-.project-conversations {
-  padding: 0 3px 3px;
-}
-.conversation-group h3 {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--muted);
-  padding: 12px 8px 5px;
-  margin: 0;
+.project-conversations:not(:empty) {
+  padding: 0 2px 2px;
 }
 .conversation-row {
-  border-radius: 7px;
-  margin: 2px 0;
+  border-radius: 5px;
 }
 .conversation-row.selected {
   background: var(--selected);
@@ -151,11 +143,12 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 5px;
+  gap: 2px;
   text-align: left;
   min-width: 0;
   flex: 1;
-  padding: 10px 8px;
+  min-height: 32px;
+  padding: 4px 6px;
   border-radius: 5px;
   color: var(--fg);
   font-size: 14px;
@@ -176,10 +169,10 @@
 .conversation-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 2px 6px;
   color: var(--muted);
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.3;
 }
 .conversation-title time {
   flex-shrink: 0;
@@ -239,8 +232,8 @@
 }
 .conversation-actions {
   display: flex;
-  gap: 7px;
-  padding: 2px 8px 10px;
+  gap: 5px;
+  padding: 1px 6px 5px;
   flex-wrap: wrap;
 }
 .conversation-actions button {
@@ -287,7 +280,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 17px;
+  padding: 4px 7px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 12px;
@@ -320,20 +313,12 @@
   padding: 5px 0 0;
   color: var(--fg);
 }
-.conversation-empty {
-  padding: 6px 10px;
-  text-align: left;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.8;
-}
-.conversation-empty span,
+.conversation-empty,
 .conversation-loading {
+  margin: 0;
+  padding: 3px 6px 5px;
   font-size: 12px;
   color: var(--muted);
-}
-.conversation-loading {
-  padding: 10px 8px;
 }
 .conversation-confirm p {
   overflow-wrap: anywhere;
@@ -378,7 +363,10 @@
 }
 @media (hover: none) {
   .project-card-name {
-    min-height: 40px;
+    min-height: 38px;
+  }
+  .conversations .thread-link {
+    min-height: 36px;
   }
   .conversation-menu-trigger {
     opacity: 1;

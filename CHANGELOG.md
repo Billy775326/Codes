@@ -51,6 +51,8 @@
 
 ### Changed
 
+- Use compact project cards with no date-group headings and less space between conversation rows.
+
 - Show all registered projects as sidebar cards with their own conversations and new-chat controls, using one shared search and archive filter.
 
 - Show completion status in the conversation list and add turn usage, average output speed and local completion time to the latest task summary when available.

@@ -6,7 +6,7 @@ The sidebar groups native conversations under every registered project. Each pro
 
 1. A shared conversation-view dropdown (Chats / Archived), Refresh, and title search apply across projects.
 2. Each project has a card with its name, directory tooltip, and a plus button to start a conversation there. Select the project name to restore its last view or select any conversation directly from its card. The current project and conversation are highlighted.
-3. Within each card, date groups show titles, timestamps, task outcomes, and queue conditions. Ready stays in the accessible description. Each card has its own native Previous / Next pagination. Secondary operations live in each conversation's actions menu.
+3. Each card lists conversations by latest update, with a compact timestamp, task outcome, and queue condition on each row. Ready stays in the accessible description. Each card has its own native Previous / Next pagination. Secondary operations live in each conversation's actions menu.
 4. The footer contains connection status, Settings, and Workspace actions. Workspace actions holds Add project, Reconnect updates, and Sign out. The empty workspace offers one Add project entry.
 
 Settings appears in the footer when navigation is open, and in the conversation header when it is closed. The layout removes duplicate connection controls and routine state labels without removing recovery actions or archived conversations.

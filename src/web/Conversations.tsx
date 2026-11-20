@@ -75,13 +75,12 @@ const signature = (row: Summary) =>
     row.expiredQuestion,
     row.forkedFromId,
   ]);
-function dayLabel(time: number) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  return time >= today.getTime() ? 'Today' : time >= yesterday.getTime() ? 'Yesterday' : 'Earlier';
-}
+const sidebarClock = new Intl.DateTimeFormat(undefined, {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+const sidebarDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 
 export const Conversations = memo(function Conversations({
   projects,
@@ -328,15 +327,11 @@ const ProjectCard = memo(function ProjectCard({
     setMenu('');
     setEditing('');
   };
-  const groups = page.data
-    .filter((row) => row.projectId === projectId && matches(row, archived, search))
-    .reduce<{ label: string; rows: Summary[] }[]>((all, row) => {
-      const label = dayLabel(row.updatedAt);
-      const group = all.find((item) => item.label === label);
-      if (group) group.rows.push(row);
-      else all.push({ label, rows: [row] });
-      return all;
-    }, []);
+  const rows = page.data.filter(
+    (row) => row.projectId === projectId && matches(row, archived, search),
+  );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return (
     <section
@@ -375,205 +370,191 @@ const ProjectCard = memo(function ProjectCard({
         </div>
       )}
       <div className="project-conversations">
-        {groups.map((group) => (
-          <section key={group.label} className="conversation-group">
-            <h3>{group.label}</h3>
-            {group.rows.map((row) => {
-              const status = conversationStatus(row);
-              const routine = status.tone === 'neutral' && row.state === 'idle';
-              const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt) : undefined;
-              const shortTime =
-                time &&
-                new Intl.DateTimeFormat(
-                  undefined,
-                  group.label === 'Today'
-                    ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
-                    : { month: 'short', day: 'numeric' },
-                ).format(row.updatedAt);
-              return (
-                <div
-                  key={row.id}
-                  className={'conversation-row ' + (row.id === selectedId ? 'selected' : '')}
-                  data-conversation-id={row.id}
-                  data-state={row.state}
+        {rows.map((row) => {
+          const status = conversationStatus(row);
+          const routine = status.tone === 'neutral' && row.state === 'idle';
+          const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt) : undefined;
+          const shortTime =
+            time &&
+            (row.updatedAt >= today.getTime() ? sidebarClock : sidebarDate).format(row.updatedAt);
+          return (
+            <div
+              key={row.id}
+              className={'conversation-row ' + (row.id === selectedId ? 'selected' : '')}
+              data-conversation-id={row.id}
+              data-state={row.state}
+            >
+              <div className="conversation-row-heading">
+                <button
+                  className={'thread-link ' + (row.id === selectedId ? 'active' : '')}
+                  aria-current={row.id === selectedId ? 'page' : undefined}
+                  disabled={disabled}
+                  onClick={() => onSelect(row.id, projectId)}
+                  title={row.title}
+                  aria-label={row.title}
+                  aria-describedby={
+                    'conversation-status-' +
+                    row.id +
+                    (time ? ' conversation-updated-' + row.id : '')
+                  }
                 >
-                  <div className="conversation-row-heading">
-                    <button
-                      className={'thread-link ' + (row.id === selectedId ? 'active' : '')}
-                      aria-current={row.id === selectedId ? 'page' : undefined}
-                      disabled={disabled}
-                      onClick={() => onSelect(row.id, projectId)}
-                      title={row.title}
-                      aria-label={row.title}
-                      aria-describedby={
-                        'conversation-status-' +
-                        row.id +
-                        (time ? ' conversation-updated-' + row.id : '')
+                  <span className="conversation-title">
+                    <span>{row.title}</span>
+                    {row.forkedFromId && (
+                      <span
+                        className="branch-mark"
+                        title="Conversation branch"
+                        aria-label="Conversation branch"
+                      >
+                        ⑂
+                      </span>
+                    )}
+                    {time && (
+                      <time
+                        id={'conversation-updated-' + row.id}
+                        dateTime={time.iso}
+                        title={'Updated: ' + time.full}
+                        aria-label={'Updated: ' + time.full}
+                      >
+                        {shortTime}
+                      </time>
+                    )}
+                  </span>
+                  <span
+                    className={
+                      'conversation-meta' + (routine && !status.queue ? ' is-routine' : '')
+                    }
+                    id={'conversation-status-' + row.id}
+                  >
+                    <span
+                      className={
+                        'conversation-status tone-' +
+                        status.tone +
+                        (routine ? ' visually-hidden' : '')
                       }
                     >
-                      <span className="conversation-title">
-                        <span>{row.title}</span>
-                        {row.forkedFromId && (
-                          <span
-                            className="branch-mark"
-                            title="Conversation branch"
-                            aria-label="Conversation branch"
-                          >
-                            ⑂
-                          </span>
-                        )}
-                        {time && (
-                          <time
-                            id={'conversation-updated-' + row.id}
-                            dateTime={time.iso}
-                            title={'Updated: ' + time.full}
-                            aria-label={'Updated: ' + time.full}
-                          >
-                            {shortTime}
-                          </time>
-                        )}
-                      </span>
+                      {status.label}
+                    </span>
+                    {status.queue && (
                       <span
                         className={
-                          'conversation-meta' + (routine && !status.queue ? ' is-routine' : '')
+                          'conversation-queue ' +
+                          (row.queueIssue === 'failed'
+                            ? 'tone-error'
+                            : row.queueIssue || row.queuePaused
+                              ? 'tone-attention'
+                              : '')
                         }
-                        id={'conversation-status-' + row.id}
                       >
-                        <span
-                          className={
-                            'conversation-status tone-' +
-                            status.tone +
-                            (routine ? ' visually-hidden' : '')
-                          }
-                        >
-                          {status.label}
-                        </span>
-                        {status.queue && (
-                          <span
-                            className={
-                              'conversation-queue ' +
-                              (row.queueIssue === 'failed'
-                                ? 'tone-error'
-                                : row.queueIssue || row.queuePaused
-                                  ? 'tone-attention'
-                                  : '')
-                            }
-                          >
-                            {status.queue}
-                          </span>
-                        )}
+                        {status.queue}
                       </span>
+                    )}
+                  </span>
+                </button>
+                <button
+                  className="icon-button conversation-menu-trigger"
+                  aria-label={'Actions for ' + row.title}
+                  aria-expanded={menu === row.id}
+                  disabled={!!pending}
+                  onClick={() => {
+                    setMenu(menu === row.id ? '' : row.id);
+                    setEditing('');
+                    setError('');
+                  }}
+                >
+                  <Icon name="more" size={16} />
+                </button>
+              </div>
+              {menu === row.id && (
+                <div
+                  className="conversation-actions"
+                  role="group"
+                  aria-label={'Conversation actions: ' + row.title}
+                >
+                  <button
+                    disabled={!!pending || row.managementPending}
+                    onClick={() => {
+                      setEditing(row.id);
+                      setName(row.title);
+                    }}
+                  >
+                    <Icon name="edit" size={12} />
+                    Rename
+                  </button>
+                  {row.managementPending ? (
+                    <button disabled={!!pending} onClick={() => void mutate(row, 'check')}>
+                      <Icon name="refresh" size={12} />
+                      Check status
                     </button>
+                  ) : (
                     <button
-                      className="icon-button conversation-menu-trigger"
-                      aria-label={'Actions for ' + row.title}
-                      aria-expanded={menu === row.id}
-                      disabled={!!pending}
-                      onClick={() => {
-                        setMenu(menu === row.id ? '' : row.id);
-                        setEditing('');
-                        setError('');
-                      }}
+                      disabled={!!pending || isWorking(row)}
+                      title={
+                        isWorking(row)
+                          ? 'Finish or stop the task, confirm its result, and remove queued messages first.'
+                          : undefined
+                      }
+                      onClick={() =>
+                        row.archived
+                          ? void mutate(row, 'archive')
+                          : (setConfirmation(row), setError(''))
+                      }
                     >
-                      <Icon name="more" size={16} />
+                      <Icon name={row.archived ? 'refresh' : 'archive'} size={12} />
+                      {row.archived ? 'Restore' : 'Archive'}
                     </button>
-                  </div>
-                  {menu === row.id && (
-                    <div
-                      className="conversation-actions"
-                      role="group"
-                      aria-label={'Conversation actions: ' + row.title}
-                    >
-                      <button
-                        disabled={!!pending || row.managementPending}
-                        onClick={() => {
-                          setEditing(row.id);
-                          setName(row.title);
-                        }}
-                      >
-                        <Icon name="edit" size={12} />
-                        Rename
-                      </button>
-                      {row.managementPending ? (
-                        <button disabled={!!pending} onClick={() => void mutate(row, 'check')}>
-                          <Icon name="refresh" size={12} />
-                          Check status
-                        </button>
-                      ) : (
-                        <button
-                          disabled={!!pending || isWorking(row)}
-                          title={
-                            isWorking(row)
-                              ? 'Finish or stop the task, confirm its result, and remove queued messages first.'
-                              : undefined
-                          }
-                          onClick={() =>
-                            row.archived
-                              ? void mutate(row, 'archive')
-                              : (setConfirmation(row), setError(''))
-                          }
-                        >
-                          <Icon name={row.archived ? 'refresh' : 'archive'} size={12} />
-                          {row.archived ? 'Restore' : 'Archive'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {editing === row.id && (
-                    <form
-                      className="conversation-rename"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (name.trim() && name.trim() !== row.title) void mutate(row, 'rename');
-                      }}
-                    >
-                      <label htmlFor={'rename-' + row.id}>Conversation title</label>
-                      <input
-                        id={'rename-' + row.id}
-                        aria-label="Conversation title"
-                        value={name}
-                        maxLength={80}
-                        disabled={!!pending}
-                        onChange={(e) => setName(e.target.value)}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') setEditing('');
-                        }}
-                      />
-                      <div>
-                        <button type="button" onClick={() => setEditing('')} disabled={!!pending}>
-                          Cancel
-                        </button>
-                        <button
-                          className="primary"
-                          disabled={!!pending || !name.trim() || name.trim() === row.title}
-                        >
-                          {pending ? 'Saving…' : 'Save name'}
-                        </button>
-                      </div>
-                    </form>
                   )}
                 </div>
-              );
-            })}
-          </section>
-        ))}
-        {!page.data.length && !loading && (
-          <div className="conversation-empty">
-            <Icon name={archived ? 'archive' : 'search'} size={22} />
-            <p>
-              {search
-                ? 'No matching titles in this portion.'
-                : archived
-                  ? 'No archived conversations.'
-                  : 'No conversations yet.'}
-            </p>
-            {page.nextCursor && <span>Continue to search earlier conversations.</span>}
-          </div>
+              )}
+              {editing === row.id && (
+                <form
+                  className="conversation-rename"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (name.trim() && name.trim() !== row.title) void mutate(row, 'rename');
+                  }}
+                >
+                  <label htmlFor={'rename-' + row.id}>Conversation title</label>
+                  <input
+                    id={'rename-' + row.id}
+                    aria-label="Conversation title"
+                    value={name}
+                    maxLength={80}
+                    disabled={!!pending}
+                    onChange={(e) => setName(e.target.value)}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setEditing('');
+                    }}
+                  />
+                  <div>
+                    <button type="button" onClick={() => setEditing('')} disabled={!!pending}>
+                      Cancel
+                    </button>
+                    <button
+                      className="primary"
+                      disabled={!!pending || !name.trim() || name.trim() === row.title}
+                    >
+                      {pending ? 'Saving…' : 'Save name'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          );
+        })}
+        {!rows.length && !loading && !error && (search || archived) && (
+          <p className="conversation-empty">
+            {search
+              ? page.nextCursor
+                ? 'No matches on this page'
+                : 'No matches'
+              : 'No archived chats'}
+          </p>
         )}
-        {loading && (
+        {loading && !rows.length && (
           <p className="conversation-loading" role="status">
-            Loading conversations…
+            Loading…
           </p>
         )}
       </div>
