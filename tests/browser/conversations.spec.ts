@@ -291,7 +291,7 @@ test('sidebar keeps task and paused queue status across selection, reload, theme
   await expect(row.locator('.conversation-queue')).toHaveText('1 in queue · Paused');
   for (const theme of ['light', 'dark']) {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await page.getByLabel('Theme', { exact: true }).selectOption(theme);
+    await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
     await page.keyboard.press('Escape');
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 844 });

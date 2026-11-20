@@ -50,7 +50,7 @@ for (const width of [1440, 320]) {
     );
     for (const theme of ['dark', 'light']) {
       await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-      await page.getByLabel('Theme').selectOption(theme);
+      await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
       await page.keyboard.press('Escape');
       await input.focus();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -68,7 +68,9 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
 }) => {
   await login(page);
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page.getByLabel('Send shortcut').selectOption('cmdIfMultiline');
+  await page
+    .getByRole('combobox', { name: 'Send shortcut', exact: true })
+    .selectOption('cmdIfMultiline');
   await page.keyboard.press('Escape');
   const input = page.getByLabel('Message Codex');
   await input.fill('One line');

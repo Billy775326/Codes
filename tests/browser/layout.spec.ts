@@ -75,14 +75,14 @@ test('edited-file cards open a focused review to the right of chat and preserve 
 test('workspace theme persists and follows system color preferences', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page.getByLabel('Theme').selectOption('light');
+  await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('light');
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'light');
   await page.keyboard.press('Escape');
   await page.screenshot({ path: 'test-results/ide-panel-light.png', fullPage: true });
   await page.reload();
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'light');
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page.getByLabel('Theme').selectOption('system');
+  await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('system');
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'dark');
   await page.emulateMedia({ colorScheme: 'light' });

@@ -47,7 +47,7 @@ for (const width of [1440, 390, 320]) {
     ).toBeFocused();
     for (const theme of ['light', 'dark']) {
       await navigation.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-      await page.getByLabel('Theme').selectOption(theme);
+      await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
       await page.keyboard.press('Escape');
       const visible = navigation.locator('.brand img:visible');
       await expect(visible).toHaveCount(1);

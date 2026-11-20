@@ -233,7 +233,7 @@ for (const width of [1440, 320, 390])
     await loadedImages(page, '.attachments img', 1);
     for (const theme of ['dark', 'light']) {
       await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-      await page.getByLabel('Theme').selectOption(theme);
+      await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
       await page.keyboard.press('Escape');
       await page
         .getByLabel('Message Codex')
