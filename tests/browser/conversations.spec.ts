@@ -16,7 +16,7 @@ async function create(page: Page, title: string) {
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
   await page.getByLabel('Message Codex').fill(title);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
 }
 async function rename(page: Page, old: string, title: string) {
   await page.getByRole('button', { name: 'Actions for ' + old, exact: true }).click();
@@ -166,7 +166,7 @@ test('another client sees metadata changes, and renaming never clears a live exe
     await owner.getByRole('button', { name: 'Actions for ' + newTitle, exact: true }).click();
     await expect(owner.getByRole('button', { name: 'Archive', exact: true })).toBeDisabled();
     await observer.getByRole('button', { name: 'Decline', exact: true }).click();
-    await expect(owner.getByText('Stopped', { exact: true })).toBeVisible();
+    await expect(owner.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
     await owner.getByRole('button', { name: 'Archive', exact: true }).click();
     await owner.getByRole('button', { name: 'Archive conversation', exact: true }).click();
     await expect(
@@ -322,7 +322,7 @@ test('sidebar keeps task and paused queue status across selection, reload, theme
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: 'Decline', exact: true }).click();
-  await expect(row.locator('.conversation-status')).toHaveText('Interrupted');
+  await expect(row.locator('.conversation-status')).toHaveText('Stopped');
   await expect(row.locator('.conversation-queue')).toHaveText('1 in queue · Paused');
   const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
   await queue.getByRole('button', { name: 'Remove', exact: true }).click();
@@ -340,7 +340,8 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   const row = page
     .locator('.conversation-row')
     .filter({ has: page.getByRole('button', { name: title, exact: true }) });
-  await expect(row.locator('.conversation-status')).toHaveText('Done');
+  await expect(row.locator('.conversation-status')).toBeVisible();
+  await expect(row.locator('.conversation-status')).toHaveText('Completed');
   // Close the single stream using the existing reconnect action, then hold its handshake.
   let release!: () => void;
   let captured!: () => void;
@@ -363,7 +364,7 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   await reconnectUpdates(page);
   await ready;
   await expect(page.getByRole('button', { name: 'Reconnect conversation updates' })).toBeVisible();
-  await expect(row.locator('.conversation-status')).toHaveText('Done');
+  await expect(row.locator('.conversation-status')).toHaveText('Completed');
   const list = page.waitForResponse(
     (response) => response.url().includes('/conversations?') && response.status() === 200,
   );
@@ -372,7 +373,7 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   await expect(page.locator('.connection')).toHaveText('Connected');
   await expect(page.getByRole('button', { name: 'Reconnect conversation updates' })).toHaveCount(0);
   await expect(page.getByLabel('Search conversations', { exact: true })).toHaveValue(title);
-  await expect(row.locator('.conversation-status')).toHaveText('Done');
+  await expect(row.locator('.conversation-status')).toHaveText('Completed');
   expect(
     await page.evaluate(
       () =>

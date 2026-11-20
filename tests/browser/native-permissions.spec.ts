@@ -28,7 +28,7 @@ test('native permission presets, approval callbacks and Files / Changes remain a
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Approve once', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Browse files', exact: true }).click();
   const panel = page.getByRole('complementary', { name: 'Project context', exact: true });
   await expect(panel.getByRole('button', { name: 'Files', exact: true })).toBeVisible();

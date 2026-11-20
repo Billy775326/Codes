@@ -26,7 +26,9 @@ test('an idle browser receives conversations created on another device without r
     await observer.locator('.thread-link').filter({ hasText: prompt }).click();
     await expect(observer.getByRole('button', { name: 'Approve once' })).toBeVisible();
     await observer.getByRole('button', { name: 'Decline', exact: true }).click();
-    await expect(originator.getByText('Stopped', { exact: true })).toBeVisible();
+    await expect(
+      originator.locator('.turn-status').getByText('Stopped', { exact: true }),
+    ).toBeVisible();
   } finally {
     await first.close();
     await second.close();
@@ -44,7 +46,7 @@ test('desktop layout, streamed response, reload, and file selection context', as
   await page.getByRole('button', { name: 'Close panel' }).click();
   const prompt = `Explain the selected function ${Date.now()}`;
   await send(page, prompt);
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await expect(page.getByTestId('message-assistant')).toContainText('simulated response');
   await page.reload();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
@@ -73,7 +75,7 @@ test('a phone can approve after the originating desktop page is closed', async (
   await expect(phone.getByRole('button', { name: 'Approve once' })).toBeVisible();
   await phone.screenshot({ path: 'test-results/mobile-approval.png', fullPage: true });
   await phone.getByRole('button', { name: 'Approve once' }).click();
-  await expect(phone.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(phone.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   expect(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await mobile.close();
 });
@@ -90,7 +92,9 @@ test('browser offline recovery preserves the active turn and draft without dupli
   await page.waitForTimeout(500);
   await context.setOffline(false);
   await page.getByRole('button', { name: 'Reconnect', exact: false }).count();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByLabel('Message Codex')).toHaveValue('A draft while Codex works');
   await page.reload();
@@ -110,7 +114,7 @@ test('a lost HTTP receipt is checked without resending the task', async ({ page 
   await expect.poll(() => intercepted).toBe(true);
   await expect(page.getByTestId('message-assistant')).toContainText('simulated response');
   await expect(page.getByTestId('message-user')).toHaveCount(1);
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
 });
@@ -119,9 +123,9 @@ test('stopping a turn cancels the work instead of only changing the button', asy
   await send(page, `[slow] Stop acceptance ${Date.now()}`);
   await expect(page.getByRole('button', { name: 'Stop task' })).toBeVisible();
   await page.getByRole('button', { name: 'Stop task' }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
 });
 test('bounded long history remains usable while typing and switching conversations', async ({
   page,

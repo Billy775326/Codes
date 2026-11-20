@@ -373,8 +373,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         threadId: thread.id,
         turnId: turn.id,
         tokenUsage: {
-          last: { totalTokens: 1200 },
-          total: { totalTokens: 3400 },
+          last: { totalTokens: 1200, outputTokens: 120 },
+          total: { totalTokens: 3400, outputTokens: 340 },
           modelContextWindow: 128000,
         },
       });

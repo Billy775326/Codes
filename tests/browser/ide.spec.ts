@@ -12,7 +12,7 @@ async function send(page: Page, text: string) {
 }
 async function stop(page: Page) {
   await page.getByRole('button', { name: 'Stop task' }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
 }
 
 test('native model, reasoning and Plan mode survive reconnect and expose real plan/context metadata', async ({
@@ -35,7 +35,7 @@ test('native model, reasoning and Plan mode survive reconnect and expose real pl
     model: 'simulated-model',
   });
   await expect(page.getByRole('region', { name: 'Task plan' })).toContainText('Propose a change');
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
   await page.getByRole('button', { name: 'Session status', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Session status' });
@@ -144,7 +144,7 @@ test('review uses native targets inline and in a separate conversation while pre
 }) => {
   await login(page);
   await send(page, 'Review source fixture ' + Date.now());
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   const source = await page.evaluate(() => localStorage.getItem('codes.thread'));
   await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
   await page.getByRole('button', { name: 'Review code', exact: true }).click();

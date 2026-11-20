@@ -5,9 +5,9 @@ const labels: Record<State, string> = {
   running: 'Running',
   waitingApproval: 'Needs approval',
   waitingInput: 'Needs answer',
-  completed: 'Done',
+  completed: 'Completed',
   failed: 'Failed',
-  interrupted: 'Interrupted',
+  interrupted: 'Stopped',
   unknown: 'Status unknown',
 };
 

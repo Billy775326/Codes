@@ -456,7 +456,8 @@
 .turn-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 2px 4px;
   color: #706d7c;
   font-size: 10px;
   margin-left: 41px;

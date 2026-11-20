@@ -33,7 +33,7 @@ async function login(page: Page) {
 async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   return (await page.evaluate(() => localStorage.getItem('codes.thread')))!;
 }
 async function permission(page: Page, name: string) {
@@ -180,7 +180,7 @@ test('changing future settings does not reconfigure the active task or existing 
     ),
   ).toEqual(['read-only', 'workspace-write']);
   await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
   await queue.getByRole('button', { name: 'Remove', exact: true }).first().click();
   await queue.getByRole('button', { name: 'Remove', exact: true }).first().click();
@@ -328,7 +328,7 @@ test('queued receipt checks preserve settings semantics across serialization and
     page.getByRole('region', { name: 'Queued messages', exact: true }).locator('li'),
   ).toHaveCount(1);
   await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   await page
     .getByRole('region', { name: 'Queued messages', exact: true })
     .getByRole('button', { name: 'Remove', exact: true })

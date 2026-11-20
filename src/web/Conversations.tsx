@@ -302,8 +302,7 @@ export const Conversations = memo(function Conversations({
             <h2>{group.label}</h2>
             {group.rows.map((row) => {
               const status = conversationStatus(row);
-              const routine =
-                status.tone === 'neutral' && ['idle', 'completed'].includes(row.state);
+              const routine = status.tone === 'neutral' && row.state === 'idle';
               const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt) : undefined;
               const shortTime =
                 time &&

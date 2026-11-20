@@ -64,6 +64,7 @@ export class Service {
   readonly modelSettings: ModelSettings;
   private sending = new Map<string, number>();
   private maintenance?: { expiresAt: number; timer: ReturnType<typeof setTimeout> };
+  private usageBaseline = new WeakMap<Thread, { turnId: string; total: number; output?: number }>();
   private terminals = new Map<string, State>();
   private metadataRevision = 0;
   private metadataRevisions = new Map<string, number>();
@@ -1972,17 +1973,49 @@ export class Service {
     if (event.method === 'thread/tokenUsage/updated') {
       const usage = z
         .object({
-          last: z.object({ totalTokens: z.number().int().nonnegative() }),
-          total: z.object({ totalTokens: z.number().int().nonnegative() }),
+          last: z.object({
+            totalTokens: z.number().int().nonnegative(),
+            outputTokens: z.number().int().nonnegative().optional(),
+          }),
+          total: z.object({
+            totalTokens: z.number().int().nonnegative(),
+            outputTokens: z.number().int().nonnegative().optional(),
+          }),
           modelContextWindow: z.number().int().positive().nullish(),
         })
         .safeParse(p.tokenUsage);
-      if (usage.success && typeof p.turnId === 'string') {
+      if (usage.success && typeof p.turnId === 'string' && p.turnId === thread.turnId) {
+        const { last, total, modelContextWindow } = usage.data;
+        if (last.totalTokens > total.totalTokens) return;
+        let baseline = this.usageBaseline.get(thread);
+        if (!baseline || baseline.turnId !== p.turnId) {
+          baseline = {
+            turnId: p.turnId,
+            total: total.totalTokens - last.totalTokens,
+            output:
+              total.outputTokens !== undefined &&
+              last.outputTokens !== undefined &&
+              last.outputTokens <= total.outputTokens
+                ? total.outputTokens - last.outputTokens
+                : undefined,
+          };
+          this.usageBaseline.set(thread, baseline);
+        }
+        const previous = thread.usage;
+        if (previous && previous.turnId === p.turnId && total.totalTokens < previous.totalTokens)
+          return;
         thread.usage = {
           turnId: p.turnId,
-          contextTokens: usage.data.last.totalTokens,
-          totalTokens: usage.data.total.totalTokens,
-          contextWindow: usage.data.modelContextWindow ?? undefined,
+          contextTokens: last.totalTokens,
+          totalTokens: total.totalTokens,
+          contextWindow: modelContextWindow ?? undefined,
+          turnTotalTokens: total.totalTokens - baseline.total,
+          turnOutputTokens:
+            total.outputTokens !== undefined &&
+            baseline.output !== undefined &&
+            total.outputTokens >= baseline.output
+              ? total.outputTokens - baseline.output
+              : undefined,
         };
         this.events.publish('state', { usage: thread.usage }, thread.id);
       }

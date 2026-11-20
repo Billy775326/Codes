@@ -85,7 +85,7 @@ test('image-only sends use small references and retain authenticated previews af
     { kind: 'image', id: expect.stringMatching(/^[a-f0-9]{64}\.png$/), name: 'synthetic.png' },
   ]);
   expect(JSON.stringify(body).length).toBeLessThan(1000);
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await loadedImages(page, '[data-testid="message-user"] img', 1);
   await expect(page.locator('.attachments img')).toHaveCount(0);
   await page.reload();
@@ -98,7 +98,7 @@ test('uploads block dispatch and switching conversations discards late upload re
   await login(page);
   await page.getByLabel('Message Codex').fill('Image upload scope fixture ' + Date.now());
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   let release!: () => void;
   const hold = new Promise<void>((resolve) => {
     release = resolve;
@@ -150,7 +150,7 @@ test('queued images keep their preview and can be steered without placeholder te
   await loadedImages(page, '[data-testid="message-user"] img', 1);
   await expect(page.locator('.attachments img')).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   await queue.getByRole('button', { name: 'Remove', exact: true }).click();
 });
 

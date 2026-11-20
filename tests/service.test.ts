@@ -1345,3 +1345,32 @@ it('drains existing tasks during maintenance and resumes queued work only when c
   expect(service.cancelMaintenance().maintenance).toBeUndefined();
   await until(() => service.store.operation(queued)?.state === 'completed');
 });
+
+it('reports turn usage from native cumulative counters without counting duplicate events', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[hold] Usage fixture', thread.settings);
+  await until(() => thread.usage?.turnOutputTokens === 120);
+  const turnId = thread.turnId;
+  const report = (eventTurn: string | undefined, totalTokens: number, outputTokens: number) =>
+    service.driver.emit('notification', {
+      method: 'thread/tokenUsage/updated',
+      params: {
+        threadId: thread.id,
+        turnId: eventTurn,
+        tokenUsage: {
+          last: { totalTokens: 100, outputTokens: 20 },
+          total: { totalTokens, outputTokens },
+        },
+      },
+    });
+  report(turnId, 3500, 360);
+  report(turnId, 3500, 360);
+  report('old-turn', 9500, 960);
+  report(turnId, 3400, 340);
+  expect(thread.usage).toMatchObject({
+    turnId,
+    totalTokens: 3500,
+    turnTotalTokens: 1300,
+    turnOutputTokens: 140,
+  });
+});

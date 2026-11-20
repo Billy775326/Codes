@@ -24,10 +24,18 @@ export function formatMessageTime(value: number, locale?: string, timeZone?: str
   }).format(date);
   return { short, full, iso: date.toISOString() };
 }
-export function MessageTime({ value, kind }: { value?: number; kind: 'started' | 'finished' }) {
+export function MessageTime({
+  value,
+  kind,
+  locale,
+}: {
+  value?: number;
+  kind: 'started' | 'finished';
+  locale?: string;
+}) {
   const formatted = useMemo(
-    () => (value === undefined ? undefined : formatMessageTime(value)),
-    [value],
+    () => (value === undefined ? undefined : formatMessageTime(value, locale)),
+    [value, locale],
   );
   if (!formatted) return null;
   const label = `Turn ${kind}: ${formatted.full}`;

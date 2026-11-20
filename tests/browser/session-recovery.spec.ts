@@ -9,7 +9,7 @@ async function signin(page: Page) {
 async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
 }
 async function expire(page: Page) {
   const r = await page.request.post('/api/logout', {
@@ -57,7 +57,7 @@ test('expired authentication while answering a question restores the pending req
   await expect(page.getByRole('button', { name: 'Submit answer', exact: true })).toBeEnabled();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep my next draft');
   await page.getByRole('button', { name: 'Submit answer', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep my next draft');
 });

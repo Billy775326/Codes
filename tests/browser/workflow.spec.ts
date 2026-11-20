@@ -61,7 +61,9 @@ test('structured questions preserve native options, free text, secret controls, 
     await expect(answered).toContainText('Answered');
     await expect(answered).toContainText('Use a small verified change');
     await expect(answered).not.toContainText('synthetic-private-answer');
-    await expect(originator.getByText('Completed', { exact: true })).toBeVisible();
+    await expect(
+      originator.locator('.turn-status').getByText('Completed', { exact: true }),
+    ).toBeVisible();
     await expect(
       originator.getByRole('button', { name: 'Submit answer', exact: true }),
     ).toHaveCount(0);
@@ -77,7 +79,7 @@ test('quoted replies remain ordinary editable drafts across conversation switchi
   await login(page);
   const prompt = 'Quoted message fixture ' + Date.now();
   await send(page, prompt);
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page
     .getByTestId('message-assistant')
     .last()
@@ -94,7 +96,7 @@ test('quoted replies remain ordinary editable drafts across conversation switchi
   await page.getByLabel('Message Codex').fill(quote + 'Explain the second step.');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByTestId('message-user')).toHaveCount(2);
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user').last()).toContainText(
     'Regarding this Codex reply:',
   );
@@ -142,7 +144,7 @@ test('queue controls retain full long messages, recover lost receipts, and pause
   await expect(queue.locator('li')).toHaveCount(1);
   await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Decline', exact: true }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await page.screenshot({ path: 'test-results/workflow-desktop-queue.png', fullPage: true });
   let release!: () => void;
@@ -164,7 +166,7 @@ test('queue controls retain full long messages, recover lost receipts, and pause
     { times: 1 },
   );
   await queue.getByRole('button', { name: 'Resume queue', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await expect(queue).toHaveCount(0);
   await expect(page.getByTestId('message-user')).toHaveCount(2);
   await expect(page.getByTestId('message-user').last()).toContainText(long + ' edited');
@@ -177,10 +179,10 @@ test('branching from a completed turn copies only earlier context and preserves 
 }) => {
   await login(page);
   await send(page, 'First fork fixture ' + Date.now());
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await send(page, 'Second fork fixture');
   await expect(page.getByTestId('message-assistant')).toHaveCount(2);
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   const source = await page.evaluate(() => localStorage.getItem('codes.thread'));
   await page
     .getByTestId('message-assistant')

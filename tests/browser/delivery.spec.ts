@@ -70,7 +70,7 @@ for (const width of [1440, 320])
     ).toBe(true);
     await page.screenshot({ path: `test-results/delivery-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-    await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+    await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   });
 test('a queue edit locks at dispatch and remains recoverable if the entry leaves the queue', async ({
   page,

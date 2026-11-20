@@ -1452,6 +1452,23 @@ function App() {
     (!!thread &&
       !thread.writerConflict &&
       ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
+  const finishedTurn = thread?.turns?.findLast(
+    (turn) =>
+      turn.id === thread.turnId &&
+      turn.status === thread.state &&
+      ['completed', 'interrupted', 'failed'].includes(thread.state),
+  );
+  const finishedUsage =
+    finishedTurn && thread?.usage?.turnId === finishedTurn.id ? thread.usage : undefined;
+  const duration =
+    finishedTurn?.durationMs ??
+    (finishedTurn?.completedAtMs !== undefined && finishedTurn.startedAtMs !== undefined
+      ? finishedTurn.completedAtMs - finishedTurn.startedAtMs
+      : undefined);
+  const averageTps =
+    duration && duration > 0 && finishedUsage?.turnOutputTokens !== undefined
+      ? (finishedUsage.turnOutputTokens * 1000) / duration
+      : undefined;
   const project =
     context?.project.id === contextProjectId
       ? context.project
@@ -2436,9 +2453,36 @@ function App() {
                 {thread && (
                   <div className={`turn-status ${thread.state}`}>
                     <span className={`status-dot ${thread.state}`} />
-                    {thread.state === 'running' && thread.compaction
-                      ? 'Compacting context…'
-                      : labels[thread.state]}
+                    <span>
+                      {thread.state === 'running' && thread.compaction
+                        ? 'Compacting context…'
+                        : labels[thread.state]}
+                    </span>
+                    {averageTps !== undefined && (
+                      <span title="Output tokens per second across the entire turn">
+                        · 平均{averageTps.toFixed(1)}TPS
+                      </span>
+                    )}
+                    {finishedUsage?.turnTotalTokens !== undefined && (
+                      <span>
+                        · 本轮
+                        {new Intl.NumberFormat('en', {
+                          notation: 'compact',
+                          maximumFractionDigits: 1,
+                        }).format(finishedUsage.turnTotalTokens)}{' '}
+                        tokens
+                      </span>
+                    )}
+                    {finishedTurn?.completedAtMs !== undefined && (
+                      <span>
+                        ·{' '}
+                        <MessageTime
+                          value={finishedTurn.completedAtMs}
+                          kind="finished"
+                          locale="zh-CN"
+                        />
+                      </span>
+                    )}
                     {thread.state === 'unknown' && (
                       <span> · Execution outcome needs confirmation.</span>
                     )}

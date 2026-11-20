@@ -96,7 +96,7 @@ test('light theme reaches sign-in and portaled archive dialogs', async ({ page }
   const title = 'Shared theme fixture ' + Date.now();
   await page.getByLabel('Message Codex').fill(title);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Actions for ' + title, exact: true }).click();
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Archive this conversation?', exact: true });
@@ -123,7 +123,7 @@ test('a phone archive confirmation owns the modal while navigation stays inert',
   const title = 'Phone modal priority ' + Date.now();
   await page.getByLabel('Message Codex').fill(title);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await page.getByRole('button', { name: 'Actions for ' + title, exact: true }).click();
   await page.getByRole('button', { name: 'Archive', exact: true }).click();

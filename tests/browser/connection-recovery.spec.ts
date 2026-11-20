@@ -10,7 +10,7 @@ async function fixture(page: Page) {
   await page.getByLabel('Message Codex').fill(title);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   const operationId = (await sent).postDataJSON().operationId as string;
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   const id = await page.evaluate(() => localStorage.getItem('codes.thread')!);
   return { id, operationId, title };
 }

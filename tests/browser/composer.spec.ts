@@ -91,7 +91,7 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
   await input.fill('Waiting follow-up');
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   await page.getByRole('button', { name: 'Decline', exact: true }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toHaveAttribute(
     'title',
     /Enter to queue/,

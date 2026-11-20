@@ -16,6 +16,8 @@ Workspace text, line spacing and controls use larger fixed defaults. Older saved
 
 The first user message shows the native turn's start time below its bubble; the final reply's action row shows the native finish time. Dates use the browser's local timezone. Hover for the full date, seconds and timezone; the HTML timestamp also retains its UTC instant. These are turn timestamps, not invented per-item send times. Intermediate activity and same-turn follow-ups have no independent timestamp unless the protocol supplies one. Missing native times leave no placeholder or reserved row.
 
+The latest finished task shows its final status, average output tokens per second across the turn, turn token usage and native completion time when available. The rate includes tool and waiting time. Turn usage is derived from the live native counters, so older or reloaded runtime history may only show the recorded time and status. The sidebar displays the conversation’s latest task status.
+
 ## Scroll through conversation history
 
 The conversation is one continuous timeline. Scrolling near the top loads an older native page; scrolling near the bottom fetches newer pages when they have left the display cache. The visible turn stays anchored while pages are inserted or removed. Mouse wheels, touch scrolling, keyboard scrolling and scrollbar dragging share the same pagination path. **Load earlier messages** and the newer-page fallback remain available for explicit loading or retry; **Back to latest** is an optional jump, rather than a required mode switch.

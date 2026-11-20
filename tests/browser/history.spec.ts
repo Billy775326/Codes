@@ -18,7 +18,7 @@ async function fixture(page: Page) {
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByLabel('Message Codex').fill('Synthetic latest navigation fixture');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   const base: Snapshot = await page.evaluate(async () =>
     (await fetch('/api/threads/' + localStorage.getItem('codes.thread') + '/snapshot')).json(),
   );
@@ -70,7 +70,9 @@ for (const width of [1440, 390])
     await expect(page.getByRole('status', { name: 'Conversation position' })).toContainText(
       'New activity',
     );
-    await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+    await expect(
+      page.locator('.turn-status').getByText('Completed', { exact: true }),
+    ).toBeVisible();
     const back = page.getByRole('button', { name: 'Back to latest messages', exact: true });
     const bounds = await back.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -167,7 +169,7 @@ test('sending from an older window returns to the live reply and keeps the new t
   await page.getByLabel('Message Codex').fill('Continue from the latest native turn');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Conversation position' })).toHaveCount(0);
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await expect(
     page.getByTestId('message-user').filter({ hasText: 'Continue from the latest native turn' }),
   ).toHaveCount(1);

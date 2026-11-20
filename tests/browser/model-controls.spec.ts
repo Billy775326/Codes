@@ -65,7 +65,9 @@ for (const viewport of [
       mode: 'plan',
       fast: true,
     });
-    await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+    await expect(
+      page.locator('.turn-status').getByText('Completed', { exact: true }),
+    ).toBeVisible();
     await page.reload();
     await expect(picker).toContainText('High');
     await picker.click();

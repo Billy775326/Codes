@@ -31,7 +31,7 @@ test('Code questions suggest without sending, support radio keys and keep the ne
   await expect(card.getByRole('radio', { name: /^Explain first/ })).toBeChecked();
   await page.getByLabel('Message Codex').fill('Keep my next draft');
   await card.getByRole('button', { name: 'Submit answer', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   expect(answers).toEqual([expect.objectContaining({ answers: { direction: 'Explain first' } })]);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep my next draft');
   await expect(page.getByTestId('message-user')).toHaveCount(1);
@@ -52,7 +52,7 @@ test('Plan questions remain required, and custom text equal to an option stays v
   );
   await expect(card.getByRole('radio', { name: /^Continue/ })).not.toBeChecked();
   await card.getByRole('button', { name: 'Submit answer', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
 });
 test('a phone can explicitly skip an optional question without sending another turn', async ({
   page,
@@ -65,7 +65,7 @@ test('a phone can explicitly skip an optional question without sending another t
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/ide-details-phone-question.png', fullPage: true });
   await card.getByRole('button', { name: 'Skip question', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Answer questions' })).toHaveCount(0);
 });
@@ -74,7 +74,7 @@ test('file previews show per-file counts, line numbers, layouts and safe literal
 }) => {
   await login(page);
   await send(page, '[changes] Detailed patch fixture ' + Date.now());
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Review changes', exact: true }).click();
   const panel = page.locator('.context-panel');
   await expect(panel.locator('.diff-overview')).toContainText('2 files');
@@ -103,10 +103,10 @@ test('file previews show per-file counts, line numbers, layouts and safe literal
 test('earlier turn changes remain inspectable after a later turn and reload', async ({ page }) => {
   await login(page);
   await send(page, '[changes] [repeated-edits] Earlier patch fixture ' + Date.now());
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await send(page, 'A later turn without file edits');
   await expect(page.getByTestId('message-assistant')).toHaveCount(2);
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Review changes', exact: true }).click();
   const panel = page.locator('.context-panel');
@@ -122,7 +122,7 @@ test('long patches use bounded line windows and fit phone screens', async ({ pag
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await send(page, '[changes] [large-patch] Window fixture ' + Date.now());
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Review changes', exact: true }).click();
   const panel = page.locator('.context-panel');
   const added = panel.getByRole('region', { name: 'Changes in new-file.txt', exact: true });
@@ -140,7 +140,7 @@ test('oversized patches disclose truncation and proposed file patches can be dec
 }) => {
   await login(page);
   await send(page, '[changes] [truncated-patch] Truncated fixture ' + Date.now());
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Review changes', exact: true }).click();
   await expect(page.locator('.context-panel')).toContainText('This change preview is incomplete');
   await page.getByRole('button', { name: 'Close panel', exact: true }).click();
@@ -151,5 +151,5 @@ test('oversized patches disclose truncation and proposed file patches can be dec
   ).toBeVisible();
   await expect(approval).toContainText('example.ts');
   await approval.getByRole('button', { name: 'Decline', exact: true }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
 });

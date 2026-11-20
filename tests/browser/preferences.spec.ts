@@ -6,7 +6,9 @@ async function fixture(page: Page, text = 'Settings dialog fixture') {
   await page.getByLabel('Message Codex').fill(text);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   if (!text.includes('[slow]'))
-    await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+    await expect(
+      page.locator('.turn-status').getByText('Completed', { exact: true }),
+    ).toBeVisible();
 }
 for (const width of [1440, 320]) {
   test(`settings keep close controls visible and keyboard focus contained at ${width}px`, async ({
@@ -161,7 +163,9 @@ test('opening and changing settings keeps the active task subscription and draft
   await page.getByLabel('Follow-up behavior').selectOption('steer');
   await expect.poll(async () => (await reply.innerText()).length).toBeGreaterThan(initialLength);
   // The simulator emits about 45 chunks at 150 ms each in slow mode.
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.keyboard.press('Escape');
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft for the next turn');
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).toBe(id);

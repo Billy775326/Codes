@@ -13,9 +13,9 @@ it.each<[State, string]>([
   ['running', 'Running'],
   ['waitingApproval', 'Needs approval'],
   ['waitingInput', 'Needs answer'],
-  ['completed', 'Done'],
+  ['completed', 'Completed'],
   ['failed', 'Failed'],
-  ['interrupted', 'Interrupted'],
+  ['interrupted', 'Stopped'],
   ['unknown', 'Status unknown'],
 ])('labels %s without inferring a different task state', (state, label) => {
   expect(conversationStatus({ ...row, state }).label).toBe(label);

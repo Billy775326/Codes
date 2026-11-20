@@ -92,6 +92,8 @@ test('checking availability after a writer is released does not replay the task'
     .thread;
   expect(snapshot.pending).toBeFalsy();
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true }).last()).toBeVisible();
+  await expect(
+    page.locator('.turn-status').getByText('Completed', { exact: true }).last(),
+  ).toBeVisible();
   expect(sends).toBe(2);
 });

@@ -147,5 +147,5 @@ test('phone drawers own focus and attaching context returns to the running conve
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the running follow-up');
   await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
 });

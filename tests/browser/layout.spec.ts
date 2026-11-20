@@ -41,7 +41,7 @@ test('edited-file cards open a focused review to the right of chat and preserve 
   await login(page);
   await page.getByLabel('Message Codex').fill('[changes] Layout fixture');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   const edits = page.getByRole('region', { name: 'Edited files', exact: true });
   await expect(edits).toContainText('Edited 2 files');
   await edits.getByRole('button', { name: /example.ts/ }).click();
@@ -131,7 +131,7 @@ for (const width of [1440, 820, 390, 320]) {
     );
     await page.getByRole('button', { name: 'Stop task', exact: true }).click();
     await interrupted;
-    await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+    await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Message Codex')).toHaveValue('Next draft');
   });
 }

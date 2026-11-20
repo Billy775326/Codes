@@ -7,7 +7,7 @@ async function fixture(page: Page, count: number) {
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByLabel('Message Codex').fill('Synthetic command grouping fixture');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   const base: Snapshot = await page.evaluate(async () => {
     const id = localStorage.getItem('codes.thread');
     return (await fetch('/api/threads/' + id + '/snapshot')).json();
@@ -343,6 +343,35 @@ test.describe('native message timestamps', () => {
     await page.locator('.work-history-toggle').click();
     await expect(page.locator('.work-history time')).toHaveCount(0);
     await page.screenshot({ path: 'test-results/native-message-times.png', fullPage: true });
+  });
+  test('shows turn-scoped completion metrics in a compact line', async ({ page }) => {
+    const { base } = await fixture(page, 2);
+    const id = base.thread.turnId!;
+    base.thread.turns = [
+      {
+        id,
+        status: 'completed',
+        durationMs: 10000,
+        completedAtMs: Date.parse('2026-11-20T02:13:00Z'),
+      },
+    ];
+    base.thread.usage = {
+      turnId: id,
+      contextTokens: 1200,
+      totalTokens: 48000000,
+      turnTotalTokens: 24000000,
+      turnOutputTokens: 357,
+    };
+    await reconnectUpdates(page);
+    const summary = page.locator('.turn-status.completed');
+    await expect(summary).toContainText('Completed');
+    await expect(summary).toContainText('平均35.7TPS');
+    await expect(summary).toContainText('本轮24M tokens');
+    await expect(summary.locator('time')).toHaveText('11月20日 10:13');
+    base.thread.usage.turnId = 'another-turn';
+    await reconnectUpdates(page);
+    await expect(summary).not.toContainText('TPS');
+    await expect(summary).not.toContainText('tokens');
   });
   test('omits unknown legacy times and does not assign the turn start to same-turn follow-ups', async ({
     page,

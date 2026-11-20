@@ -20,7 +20,7 @@ for (const width of [1440, 390])
     const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
     await expect(queue.locator('li')).toHaveCount(1);
     await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-    await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+    await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
     await queue.getByRole('button', { name: 'Resume queue', exact: true }).click();
     await expect(page.getByTestId('message-user')).toHaveCount(2);
     await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
@@ -36,7 +36,7 @@ for (const width of [1440, 390])
     await expect(queue).toContainText('Remaining waiting message');
     await expect(queue).not.toContainText('Queued delivery');
     await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-    await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
+    await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
     await expect(queue.locator('li')).toHaveCount(1);
     await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeVisible();
     await expect(page.getByTestId('message-user')).toHaveCount(2);

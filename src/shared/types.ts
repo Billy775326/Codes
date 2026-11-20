@@ -120,7 +120,14 @@ export interface Thread extends Summary {
   steering?: (Operation & { text: string })[];
   /** Native progress only; does not end the turn or release its execution lease. */
   compaction?: { id: string; turnId: string };
-  usage?: { turnId: string; contextTokens: number; totalTokens: number; contextWindow?: number };
+  usage?: {
+    turnId: string;
+    contextTokens: number;
+    totalTokens: number;
+    contextWindow?: number;
+    turnTotalTokens?: number;
+    turnOutputTokens?: number;
+  };
   plan?: { explanation?: string; steps: { step: string; status: string }[] };
   queue?: QueueState;
   pending?: { id: string; text: string; state: string; kind?: 'send' | 'review'; turnId?: string };

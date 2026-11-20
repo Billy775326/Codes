@@ -51,6 +51,8 @@
 
 ### Changed
 
+- Show completion status in the conversation list and add turn usage, average output speed and local completion time to the latest task summary when available.
+
 - Retain lightweight project + conversation navigation: show a directory label for one project, a selector for multiple projects, and one empty-state Add project action. Remember each project's last conversation/new-draft view while retaining independent text drafts, settings and background execution.
 
 - Organize navigation around project context, a conversation-view dropdown, compact status-aware rows, and workspace controls. Preserve archive and recovery actions without duplicate controls.
