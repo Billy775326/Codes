@@ -128,7 +128,11 @@ export const Conversations = memo(function Conversations({
     );
   const inactiveBefore = Date.now() - inactiveProjectAgeMs;
   return (
-    <section className="conversations" aria-label="Conversation management">
+    <section
+      className="conversations"
+      aria-label="Conversation management"
+      data-live={props.connection === 'Connected'}
+    >
       <div className="conversation-controls">
         <select
           aria-label="Conversation view"

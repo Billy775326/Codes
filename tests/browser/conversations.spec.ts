@@ -330,6 +330,58 @@ test('sidebar keeps task and paused queue status across selection, reload, theme
   await expect(row.locator('.conversation-queue')).toHaveCount(0);
 });
 
+test('the running dot pulses only while live updates and motion are enabled', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await login(page);
+  const title = '[hold] Sidebar running indicator ' + Date.now();
+  await page.getByLabel('Message Codex').fill(title);
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  const status = page
+    .locator('.conversation-row')
+    .filter({ has: page.getByRole('button', { name: title, exact: true }) })
+    .locator('.conversation-status');
+  const animation = () =>
+    status.evaluate((element) => getComputedStyle(element, '::before').animationName);
+  await expect(status).toHaveText('Running');
+  await expect.poll(animation).toBe('pulse');
+
+  let resume!: () => void;
+  const reconnect = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  await page.route(
+    '**/api/threads/*/snapshot',
+    async (route) => {
+      await reconnect;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  try {
+    await reconnectUpdates(page);
+    await expect(status).toHaveText('Running');
+    await expect.poll(animation).toBe('none');
+  } finally {
+    resume();
+  }
+  await expect.poll(animation).toBe('pulse');
+
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
+  await expect(status).toBeVisible();
+  await expect.poll(animation).toBe('pulse');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(animation).toBe('none');
+  await expect(status).toHaveText('Running');
+
+  await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
+  await page.getByRole('button', { name: 'Stop task', exact: true }).click();
+  await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await expect(status).toHaveText('Stopped');
+  await expect.poll(animation).toBe('none');
+});
+
 test('sidebar preserves search and statuses while disconnected and reconciles its page on reconnect', async ({
   page,
 }) => {

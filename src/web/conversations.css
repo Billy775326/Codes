@@ -208,6 +208,11 @@
 .conversation-status.tone-running {
   color: var(--link);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .conversations[data-live='true'] .conversation-row[data-state='running'] .tone-running::before {
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+}
 .conversation-status.tone-attention {
   color: var(--status-attention);
 }

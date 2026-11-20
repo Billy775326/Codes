@@ -53,6 +53,7 @@
 
 ### Changed
 
+- Pulse the sidebar dot for running conversations while live updates are connected. Keep it static when reconnecting or when reduced motion is enabled.
 - Remove the separate status line at the bottom of the conversation timeline.
 - Open one composer attachment menu to upload local text files or images, or to choose files from the current project.
 - Restore sidebar order and folded cards at first paint, and show a conversation loading state while reopening saved chats.
