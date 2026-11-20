@@ -10,6 +10,48 @@ type RenderMessage = (
   changes?: Message,
   timestamp?: number,
 ) => ReactNode;
+const isActivity = (item: Message) => item.kind === 'command' || item.kind === 'tool';
+
+function ActivityGroup({ items, render }: { items: Message[]; render: RenderMessage }) {
+  const [open, setOpen] = useState(false);
+  const counts = commandCounts(items);
+  return (
+    <details className="activity-group" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>
+        <Icon name="terminal" size={14} />
+        <span>
+          {items.length} {items.length === 1 ? 'activity' : 'activities'}
+        </span>
+        <span className="work-history-status">
+          {!!counts.completed && <span>{counts.completed} completed</span>}
+          {!!counts.failed && <span className="work-history-failed">{counts.failed} failed</span>}
+          {!!counts.running && <span>{counts.running} running</span>}
+          {!!counts.stopped && <span>{counts.stopped} stopped</span>}
+          {!!counts.unknown && <span>{counts.unknown} status unavailable</span>}
+        </span>
+        <Icon name="chevron" size={12} />
+      </summary>
+      {open && items.map((item) => <Fragment key={item.id}>{render(item, false)}</Fragment>)}
+    </details>
+  );
+}
+
+function WorkItems({ items, render }: { items: Message[]; render: RenderMessage }) {
+  const runs: Message[][] = [];
+  for (const item of items) {
+    const previous = runs.at(-1);
+    if (isActivity(item) && previous && isActivity(previous[0]!)) previous.push(item);
+    else runs.push([item]);
+  }
+  return runs.map((run) =>
+    isActivity(run[0]!) ? (
+      <ActivityGroup key={run[0]!.id} items={run} render={render} />
+    ) : (
+      <Fragment key={run[0]!.id}>{render(run[0]!, false)}</Fragment>
+    ),
+  );
+}
+
 function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
   const [choice, setChoice] = useState<boolean>();
   const open = choice ?? turn.active;
@@ -38,7 +80,7 @@ function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
   }
   if (!segments.length && elapsed !== undefined) segments.push([]);
   const disclosure = (items: Message[], index: number) => {
-    const tools = items.filter((item) => item.kind === 'command' || item.kind === 'tool');
+    const tools = items.filter(isActivity);
     const counts = commandCounts(tools);
     return (
       <section className="work-history" key={index}>
@@ -67,7 +109,7 @@ function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
           </span>
         </button>
         <div id={`work-${turn.id}-${index}`} hidden={!open} className="work-history-items">
-          {open && items.map((item) => <Fragment key={item.id}>{render(item, false)}</Fragment>)}
+          {open && <WorkItems items={items} render={render} />}
           {open && !items.length && (
             <p className="work-history-empty">No additional activity in the loaded history.</p>
           )}

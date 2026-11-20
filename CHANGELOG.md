@@ -83,6 +83,8 @@
 
 ### Fixed
 
+- Keep terminal activities collapsed in groups when opening a turn’s work history.
+
 - Explain when a pending Codex question expired after a runtime restart and keep the task result check available.
 
 - Show native questions and imported answers inside their conversation turns, where they remain visible when work history is collapsed.

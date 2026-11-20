@@ -73,6 +73,13 @@ test('the whole work history defaults collapsed with final answer, edits and one
   await group.getByRole('button', { name: /Worked for|Working|Work history/ }).focus();
   await page.keyboard.press('Enter');
   await expect(group.locator('.work-history-toggle')).toHaveAttribute('aria-expanded', 'true');
+  const activities = group.locator('.activity-group');
+  await expect(activities).not.toHaveAttribute('open', '');
+  await expect(activities.locator('summary')).toContainText('31 activities');
+  await expect(page.getByText('Inspecting the workspace.', { exact: true })).toBeVisible();
+  await expect(page.locator('.tool')).toHaveCount(0);
+  await activities.locator('summary').focus();
+  await page.keyboard.press('Enter');
   await expect(page.locator('.tool')).toHaveCount(31);
   await expect(page.locator('.tool pre')).toHaveCount(0);
   await page.locator('.tool > summary').first().click();
@@ -106,7 +113,7 @@ test('one action row belongs to the last reply and intermediate prose does not r
   await page.locator('.work-history-toggle').click();
   await expect(progress).toBeVisible();
   const prose = await progress.locator('.prose').boundingBox();
-  const activity = await page.locator('.tool').first().boundingBox();
+  const activity = await page.locator('.activity-group').first().boundingBox();
   expect(activity!.y - (prose!.y + prose!.height)).toBeLessThanOrEqual(16);
   await final.getByRole('button', { name: 'Reply', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toHaveValue(
@@ -144,6 +151,9 @@ test('command status and appended entries update without opening a collapsed run
   ).toContainText('Worked for 2m 5s');
   await expect(page.locator('.tool')).toHaveCount(0);
   await group.getByRole('button', { name: /Worked for|Working|Work history/ }).click();
+  const activities = group.locator('.activity-group');
+  await expect(page.locator('.tool')).toHaveCount(0);
+  await activities.locator('summary').click();
   await expect(page.locator('.tool')).toHaveCount(3);
   base.thread.messages.splice(5, 0, { ...added, id: 'fixture-last', status: 'failed' });
   await reconnectUpdates(page);
@@ -176,6 +186,8 @@ test('running work opens, completion collapses untouched history, and manual cho
   const toggle = page.locator('.work-history-toggle');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByText('Inspecting the workspace.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Used GitHub: search', { exact: true })).toHaveCount(0);
+  await page.locator('.activity-group > summary').click();
   await expect(page.getByText('Used GitHub: search', { exact: true })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Reply actions', exact: true })).toHaveCount(0);
   base.thread.state = 'completed';

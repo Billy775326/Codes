@@ -1057,6 +1057,30 @@
 .app .work-history-items > :last-child {
   margin-bottom: 0;
 }
+.app .activity-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0 0 12px;
+}
+.app .activity-group > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.app .activity-group > summary > svg {
+  flex-shrink: 0;
+}
+.app .activity-group[open] > summary > svg:last-child {
+  transform: rotate(90deg);
+}
+.app .activity-group > .tool {
+  margin-inline: 12px;
+}
 .app .work-history-empty {
   color: var(--muted);
   font-size: 14px;
