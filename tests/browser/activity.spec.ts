@@ -311,7 +311,7 @@ for (const width of [1440, 320])
   });
 
 test.describe('native message timestamps', () => {
-  test.use({ timezoneId: 'Asia/Shanghai', locale: 'en-US' });
+  test.use({ timezoneId: 'Asia/Shanghai', locale: 'zh-CN' });
   test('shows local native start and finish times with exact instants and no intermediate timestamps', async ({
     page,
   }) => {
@@ -332,10 +332,10 @@ test.describe('native message timestamps', () => {
       .filter({ hasText: 'Final response stays visible.' });
     const finalTime = final.locator('.message-footer time');
     await expect(userTime).toHaveAttribute('datetime', '2026-11-18T03:12:00.000Z');
-    await expect(userTime).toContainText('11:12');
+    await expect(userTime).toHaveText('Nov 18, 11:12');
     await expect(userTime).toHaveAttribute('title', /Turn started:.*2026.*GMT\+8/);
     await expect(finalTime).toHaveAttribute('datetime', '2026-11-18T03:14:05.000Z');
-    await expect(finalTime).toContainText('11:14');
+    await expect(finalTime).toHaveText('Nov 18, 11:14');
     await expect(finalTime).toHaveAttribute('title', /Turn finished:.*11:14:05.*GMT\+8/);
     const actions = await final.locator('.message-actions').boundingBox();
     const timestamp = await finalTime.boundingBox();
@@ -366,10 +366,10 @@ test.describe('native message timestamps', () => {
     const summary = footer.locator('.turn-status.completed');
     await expect(footer.getByRole('group', { name: 'Reply actions' })).toBeVisible();
     await expect(summary).toContainText('Completed');
-    await expect(summary).toContainText('平均35.7TPS');
-    await expect(summary).toContainText('本轮24M tokens');
+    await expect(summary).toContainText('Avg 35.7 TPS');
+    await expect(summary).toContainText('24M tokens');
     await expect(footer.locator('time')).toHaveCount(1);
-    await expect(summary.locator('time')).toHaveText('11月20日 10:13');
+    await expect(summary.locator('time')).toHaveText('Nov 20, 10:13');
     await expect(page.locator('.turn-status.completed')).toHaveCount(1);
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -390,12 +390,12 @@ test.describe('native message timestamps', () => {
     };
     await reconnectUpdates(page);
     const earlier = footer.locator('.reply-completion');
-    await expect(earlier).toContainText('本轮24M tokens');
-    await expect(earlier.locator('time')).toHaveText('11月20日 10:13');
+    await expect(earlier).toContainText('24M tokens');
+    await expect(earlier.locator('time')).toHaveText('Nov 20, 10:13');
     await expect(footer.locator('time')).toHaveCount(1);
     await expect(page.locator('.turn-status.running')).toHaveText('Working');
     await page.reload();
-    await expect(earlier).toContainText('本轮24M tokens');
+    await expect(earlier).toContainText('24M tokens');
   });
   test('omits unknown legacy times and does not assign the turn start to same-turn follow-ups', async ({
     page,

@@ -76,12 +76,12 @@ const signature = (row: Summary) =>
     row.expiredQuestion,
     row.forkedFromId,
   ]);
-const sidebarClock = new Intl.DateTimeFormat(undefined, {
+const sidebarClock = new Intl.DateTimeFormat('en-US', {
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
 });
-const sidebarDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+const sidebarDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 
 export const Conversations = memo(function Conversations({
   projects,

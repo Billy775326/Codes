@@ -38,13 +38,13 @@ export function TurnResult({
       <span>{outcomeLabel[status]}</span>
       {rate !== undefined && (
         <span title="Output tokens per second across the entire turn">
-          · 平均{rate.toFixed(1)}TPS
+          · Avg {rate.toFixed(1)} TPS
         </span>
       )}
-      {usage && <span>· 本轮{compactTokens.format(usage.totalTokens)} tokens</span>}
+      {usage && <span>· {compactTokens.format(usage.totalTokens)} tokens</span>}
       {showTime && turn?.completedAtMs !== undefined && (
         <span>
-          · <MessageTime value={turn.completedAtMs} kind="finished" locale="zh-CN" />
+          · <MessageTime value={turn.completedAtMs} kind="finished" />
         </span>
       )}
     </div>

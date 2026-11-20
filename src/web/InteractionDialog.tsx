@@ -491,14 +491,14 @@ export function StatusDialog({
         <dt>Latest context usage</dt>
         <dd>
           {usage
-            ? usage.contextTokens.toLocaleString() +
+            ? usage.contextTokens.toLocaleString('en-US') +
               (usage.contextWindow
-                ? ' / ' + usage.contextWindow.toLocaleString() + ' tokens'
+                ? ' / ' + usage.contextWindow.toLocaleString('en-US') + ' tokens'
                 : ' tokens; window unknown')
             : 'Not reported'}
         </dd>
         <dt>Cumulative usage</dt>
-        <dd>{usage ? usage.totalTokens.toLocaleString() + ' tokens' : 'Not reported'}</dd>
+        <dd>{usage ? usage.totalTokens.toLocaleString('en-US') + ' tokens' : 'Not reported'}</dd>
         <dt>Maintenance</dt>
         <dd>
           {system?.maintenance

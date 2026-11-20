@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-/** Native turn timing, formatted in the browser's local timezone. */
-export function formatMessageTime(value: number, locale?: string, timeZone?: string) {
+/** Native turn timing in English and the browser's local timezone by default. */
+export function formatMessageTime(value: number, locale = 'en-US', timeZone?: string) {
   const date = new Date(value);
   if (!Number.isFinite(value) || !Number.isFinite(date.getTime())) return;
   const short = new Intl.DateTimeFormat(locale, {
@@ -24,18 +24,10 @@ export function formatMessageTime(value: number, locale?: string, timeZone?: str
   }).format(date);
   return { short, full, iso: date.toISOString() };
 }
-export function MessageTime({
-  value,
-  kind,
-  locale,
-}: {
-  value?: number;
-  kind: 'started' | 'finished';
-  locale?: string;
-}) {
+export function MessageTime({ value, kind }: { value?: number; kind: 'started' | 'finished' }) {
   const formatted = useMemo(
-    () => (value === undefined ? undefined : formatMessageTime(value, locale)),
-    [value, locale],
+    () => (value === undefined ? undefined : formatMessageTime(value)),
+    [value],
   );
   if (!formatted) return null;
   const label = `Turn ${kind}: ${formatted.full}`;
