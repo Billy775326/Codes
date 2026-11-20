@@ -42,7 +42,7 @@
 .app .composer-attachment-menu .panel-menu-content {
   left: 0;
   right: auto;
-  width: min(224px, calc(100vw - 48px));
+  width: min(198px, calc(100vw - 48px));
   padding: 5px;
 }
 .app .permission-menu {
@@ -61,7 +61,7 @@
 .app .permission-menu .panel-menu-content {
   left: 0;
   right: auto;
-  width: 310px;
+  width: 264px;
   max-width: calc(100vw - 48px);
 }
 .app .permission-menu [role='group'] {
@@ -89,6 +89,15 @@
 }
 .app .model-menu {
   max-width: 260px;
+}
+.app .model-menu .model-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.app .model-menu .model-field select {
+  max-width: 62%;
 }
 .app .model-menu summary {
   min-height: 36px;
@@ -187,9 +196,8 @@
   }
   .app .composer-toolbar .permission-menu .panel-menu-content {
     left: 8px;
-    right: 8px;
-    width: auto;
-    max-width: none;
+    right: auto;
+    width: min(264px, calc(100% - 16px));
   }
   .app .composer-toolbar .plan-mode {
     grid-column: 3;
@@ -200,10 +208,6 @@
   }
   .app .composer-toolbar .model-menu summary > span {
     max-width: 100%;
-  }
-  .app .composer-toolbar .model-menu .panel-menu-content {
-    left: 8px;
-    right: 8px;
   }
 }
 @media (max-width: 700px) {

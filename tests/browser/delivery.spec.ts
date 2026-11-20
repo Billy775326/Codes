@@ -36,7 +36,7 @@ for (const width of [1440, 320])
     await expect(page.getByRole('dialog', { name: 'Interaction settings' })).toContainText(
       'Sent history is not edited in place',
     );
-    await page.getByLabel('Follow-up behavior').selectOption('steer');
+    await page.getByLabel('Follow-up delivery').selectOption('steer');
     await page.keyboard.press('Escape');
     await page.getByLabel('Message Codex').fill('Do this in the next turn');
     await expect(

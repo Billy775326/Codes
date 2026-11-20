@@ -25,12 +25,15 @@ for (const width of [1440, 390, 320]) {
     await expect(
       page.getByRole('button', { name: 'Interaction settings', exact: true }),
     ).toHaveCount(1);
-    await expect(navigation.getByLabel('Conversation view', { exact: true })).toHaveValue('chats');
-    await navigation.getByLabel('Conversation view', { exact: true }).selectOption('archived');
-    await expect(navigation.getByLabel('Conversation view', { exact: true })).toHaveValue(
-      'archived',
-    );
-    await navigation.getByLabel('Conversation view', { exact: true }).selectOption('chats');
+    const view = navigation.getByLabel('Conversation view', { exact: true });
+    await expect(view).toHaveValue('chats');
+    const chatsWidth = (await view.boundingBox())!.width;
+    await view.selectOption('archived');
+    await expect(view).toHaveValue('archived');
+    const archiveWidth = (await view.boundingBox())!.width;
+    expect(archiveWidth).toBeGreaterThan(chatsWidth);
+    expect(archiveWidth).toBeLessThan(125);
+    await view.selectOption('chats');
     await navigation.getByRole('button', { name: 'Workspace actions', exact: true }).click();
     const menu = navigation.getByRole('dialog', { name: 'Workspace actions', exact: true });
     for (const name of ['Add project', 'Reconnect updates', 'Sign out'])
@@ -44,7 +47,7 @@ for (const width of [1440, 390, 320]) {
     ).toBeFocused();
     for (const theme of ['light', 'dark']) {
       await navigation.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-      await page.getByLabel('Workspace theme').selectOption(theme);
+      await page.getByLabel('Theme').selectOption(theme);
       await page.keyboard.press('Escape');
       const visible = navigation.locator('.brand img:visible');
       await expect(visible).toHaveCount(1);

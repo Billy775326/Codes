@@ -31,9 +31,14 @@ for (const width of [1440, 320]) {
     await page.keyboard.press('Tab');
     await expect(close).toBeFocused();
     await dialog.getByLabel('Chat text size').selectOption('20');
+    const themeSelect = dialog.getByLabel('Theme', { exact: true });
+    await expect(themeSelect).toBeVisible();
+    const themeBounds = await themeSelect.boundingBox();
+    expect(themeBounds!.width).toBeLessThan(125);
+    expect(themeBounds!.height).toBeGreaterThanOrEqual(width === 320 ? 44 : 40);
     for (const theme of ['light', 'dark']) {
-      await dialog.getByLabel('Workspace theme').selectOption(theme);
-      await dialog.getByLabel('Review delivery preference').selectOption('detached');
+      await themeSelect.selectOption(theme);
+      await dialog.getByLabel('Review location').selectOption('detached');
       await dialog.getByText('Editing and shortcuts', { exact: true }).click();
       await expect(dialog).toContainText('Sent history is not edited in place');
       const box = await dialog.boundingBox();
@@ -79,9 +84,9 @@ test('font previews and chat typography persist alongside legacy interaction pre
   await page.getByLabel('Message Codex').fill('Preserve draft across font changes');
   const sidebarWidth = (await page.locator('.sidebar').boundingBox())!.width;
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await expect(page.getByLabel('Follow-up behavior')).toHaveValue('steer');
-  await expect(page.getByLabel('Enter behavior')).toHaveValue('cmdAlways');
-  await expect(page.getByLabel('Review delivery preference')).toHaveValue('detached');
+  await expect(page.getByLabel('Follow-up delivery')).toHaveValue('steer');
+  await expect(page.getByLabel('Send shortcut')).toHaveValue('cmdAlways');
+  await expect(page.getByLabel('Review location')).toHaveValue('detached');
   await page.getByLabel('Chat text size').selectOption('20');
   await page.getByLabel('Code text size').selectOption('16');
   const preview = page.getByRole('region', { name: 'Text preview', exact: true });
@@ -102,7 +107,7 @@ test('font previews and chat typography persist alongside legacy interaction pre
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
   await expect(page.getByLabel('Chat text size')).toHaveValue('20');
   await expect(page.getByLabel('Code text size')).toHaveValue('16');
-  await expect(page.getByLabel('Follow-up behavior')).toHaveValue('steer');
+  await expect(page.getByLabel('Follow-up delivery')).toHaveValue('steer');
   await page.getByLabel('Chat text size').selectOption('');
   await page.getByLabel('Code text size').selectOption('');
   await page.keyboard.press('Escape');
@@ -130,7 +135,7 @@ test('a failed preference save is visible while current-session changes apply', 
     };
   });
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page.getByLabel('Workspace theme').selectOption('light');
+  await page.getByLabel('Theme').selectOption('light');
   const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
   await expect(dialog.getByRole('alert')).toHaveText(
     'Changes apply now, but this browser could not save them.',
@@ -160,7 +165,7 @@ test('opening and changing settings keeps the active task subscription and draft
       writes++;
   });
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page.getByLabel('Follow-up behavior').selectOption('steer');
+  await page.getByLabel('Follow-up delivery').selectOption('steer');
   await expect.poll(async () => (await reply.innerText()).length).toBeGreaterThan(initialLength);
   // The simulator emits about 45 chunks at 150 ms each in slow mode.
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible({

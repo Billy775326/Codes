@@ -53,6 +53,7 @@
 
 ### Changed
 
+- Use shorter setting labels and fit dropdowns to their selected values in Settings, the composer, and the conversation sidebar. Expose permission preset names and descriptions separately to assistive technology.
 - Render Codex replies as Markdown as they stream, with bounded parsing for long replies and image and HTML previews available when the reply finishes.
 - Pulse the sidebar dot for running conversations while live updates are connected. Keep it static when reconnecting or when reduced motion is enabled.
 - Remove the separate status line at the bottom of the conversation timeline.

@@ -32,13 +32,15 @@
 .interaction-dialog select,
 .interaction-dialog input {
   display: block;
-  width: 100%;
   margin-top: 8px;
   padding: 10px;
   border: 1px solid var(--line);
   background: var(--panel, #1b1c21);
   color: inherit;
   border-radius: 6px;
+}
+.interaction-dialog input {
+  width: 100%;
 }
 .interaction-dialog p {
   line-height: 1.7;

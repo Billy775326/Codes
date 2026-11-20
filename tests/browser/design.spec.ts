@@ -87,7 +87,7 @@ test('composer commands retain focus and permissions without dispatching a task'
 test('light theme reaches sign-in and portaled archive dialogs', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page.getByLabel('Workspace theme').selectOption('light');
+  await page.getByLabel('Theme').selectOption('light');
   await page.keyboard.press('Escape');
   const title = 'Shared theme fixture ' + Date.now();
   await page.getByLabel('Message Codex').fill(title);

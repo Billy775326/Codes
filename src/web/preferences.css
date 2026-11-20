@@ -2,7 +2,7 @@
   z-index: 80;
 }
 .app .preferences-dialog {
-  width: 660px;
+  width: 560px;
   max-height: min(800px, calc(100dvh - 40px));
   display: flex;
   flex-direction: column;
@@ -53,8 +53,9 @@
   min-width: 0;
 }
 .app .preferences-dialog .preference-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 240px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 12px;
   align-items: center;
   margin: 0 0 16px;
@@ -70,7 +71,6 @@
   margin: 0;
   min-height: 40px;
   font-size: 14px;
-  width: 100%;
   min-width: 0;
   background: var(--field);
 }
@@ -214,7 +214,6 @@
     padding: 16px;
   }
   .app .preferences-dialog .preference-row {
-    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
   .app .preferences-dialog select {

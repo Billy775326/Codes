@@ -30,8 +30,11 @@ for (const viewport of [
         requests++;
     });
     await picker.click();
+    const mode = page.getByLabel('Task mode', { exact: true });
+    const executionWidth = (await mode.boundingBox())!.width;
     await page.getByLabel('Reasoning effort', { exact: true }).selectOption('high');
-    await page.getByLabel('Task mode', { exact: true }).selectOption('plan');
+    await mode.selectOption('plan');
+    expect((await mode.boundingBox())!.width).toBeLessThan(executionWidth);
     await page.getByRole('switch', { name: 'Fast mode', exact: true }).check();
     await expect(page.getByLabel('Reasoning effort', { exact: true })).toHaveValue('high');
     for (const locator of [

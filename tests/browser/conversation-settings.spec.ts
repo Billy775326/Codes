@@ -372,7 +372,7 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
     for (const theme of ['dark', 'light']) {
-      await page.getByLabel('Workspace theme', { exact: true }).selectOption(theme);
+      await page.getByLabel('Theme', { exact: true }).selectOption(theme);
       for (const name of [
         'Default permissions',
         'Default model',

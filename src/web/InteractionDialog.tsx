@@ -119,9 +119,9 @@ export function PreferencesDialog({
         <section className="preferences-section" aria-labelledby="preferences-appearance">
           <h3 id="preferences-appearance">Appearance</h3>
           <label className="preference-row">
-            <span className="preference-description">Workspace theme</span>
+            <span className="preference-description">Theme</span>
             <select
-              aria-label="Workspace theme"
+              aria-label="Theme"
               value={value.theme ?? 'dark'}
               onChange={(event) =>
                 change({ ...value, theme: event.target.value as Preferences['theme'] })
@@ -256,36 +256,36 @@ export function PreferencesDialog({
         <section className="preferences-section" aria-labelledby="preferences-interaction">
           <h3 id="preferences-interaction">Interaction</h3>
           <label className="preference-row">
-            <span className="preference-description">Follow-up behavior</span>
+            <span className="preference-description">Follow-up delivery</span>
             <select
-              aria-label="Follow-up behavior"
+              aria-label="Follow-up delivery"
               value={value.followUp}
               onChange={(event) =>
                 change({ ...value, followUp: event.target.value as Preferences['followUp'] })
               }
             >
-              <option value="queue">Queue for the next turn</option>
-              <option value="steer">Add to the current task</option>
+              <option value="queue">Queue for next turn</option>
+              <option value="steer">Add to running task</option>
             </select>
           </label>
           <label className="preference-row">
-            <span className="preference-description">Enter behavior</span>
+            <span className="preference-description">Send shortcut</span>
             <select
-              aria-label="Enter behavior"
+              aria-label="Send shortcut"
               value={value.enter}
               onChange={(event) =>
                 change({ ...value, enter: event.target.value as Preferences['enter'] })
               }
             >
-              <option value="enter">Enter sends</option>
+              <option value="enter">Enter</option>
               <option value="cmdIfMultiline">Multiline: Ctrl/Cmd+Enter</option>
-              <option value="cmdAlways">Always Ctrl/Cmd+Enter</option>
+              <option value="cmdAlways">Ctrl/Cmd+Enter</option>
             </select>
           </label>
           <label className="preference-row">
-            <span className="preference-description">Review delivery</span>
+            <span className="preference-description">Review location</span>
             <select
-              aria-label="Review delivery preference"
+              aria-label="Review location"
               value={value.review}
               onChange={(event) =>
                 change({ ...value, review: event.target.value as Preferences['review'] })
@@ -405,9 +405,9 @@ export function ReviewDialog({
           </label>
         )}
         <label>
-          Review delivery
+          Review location
           <select
-            aria-label="Review delivery"
+            aria-label="Review location"
             value={delivery}
             disabled={busy}
             onChange={(e) => setDelivery(e.target.value as Preferences['review'])}

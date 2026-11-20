@@ -11,11 +11,11 @@ test('workspace defaults to persistent navigation, retains drafts through histor
   page,
 }) => {
   await login(page);
-  await expect(page.getByLabel('Search projects and conversations', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Search projects and chats', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'New conversation' })).toBeVisible();
   await page.getByLabel('Message Codex').fill('Unsent panel draft');
   await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
-  await expect(page.getByLabel('Search projects and conversations', { exact: true })).toBeHidden();
+  await expect(page.getByLabel('Search projects and chats', { exact: true })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Unsent panel draft');
@@ -75,14 +75,14 @@ test('edited-file cards open a focused review to the right of chat and preserve 
 test('workspace theme persists and follows system color preferences', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page.getByLabel('Workspace theme').selectOption('light');
+  await page.getByLabel('Theme').selectOption('light');
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'light');
   await page.keyboard.press('Escape');
   await page.screenshot({ path: 'test-results/ide-panel-light.png', fullPage: true });
   await page.reload();
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'light');
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page.getByLabel('Workspace theme').selectOption('system');
+  await page.getByLabel('Theme').selectOption('system');
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'dark');
   await page.emulateMedia({ colorScheme: 'light' });

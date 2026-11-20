@@ -352,7 +352,7 @@ for (const width of [1440, 320])
     await page.keyboard.press('Escape');
     for (const theme of ['dark', 'light']) {
       await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-      await page.getByLabel('Workspace theme').selectOption(theme);
+      await page.getByLabel('Theme').selectOption(theme);
       await page.keyboard.press('Escape');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,

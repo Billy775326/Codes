@@ -94,6 +94,7 @@ select {
   color: inherit;
   border: 0;
   cursor: pointer;
+  field-sizing: content;
   max-width: 100%;
 }
 select option {

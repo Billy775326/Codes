@@ -579,8 +579,9 @@
   color: var(--muted);
 }
 .app .panel-menu-content select {
-  width: 100%;
-  max-width: none;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border);
   padding: 7px;
   background: var(--field);
@@ -1064,9 +1065,8 @@
     max-width: 200px;
   }
   .app .composer-toolbar .model-menu .panel-menu-content {
-    left: 8px;
     right: 8px;
-    width: auto;
+    width: min(272px, calc(100% - 16px));
   }
   .app .composer-dispatch-actions {
     grid-column: 3;

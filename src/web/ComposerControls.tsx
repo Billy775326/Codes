@@ -87,6 +87,8 @@ export function ComposerControls({
             <button
               key={preset.id}
               type="button"
+              aria-label={preset.label}
+              aria-description={preset.description}
               aria-pressed={settings.permission === preset.id}
               disabled={disabled || (preset.id === 'auto-review' && !autoReviewReady)}
               data-close-menu
@@ -175,8 +177,7 @@ export function ModelSettingsFields({
     ) ?? (!settings.model && !resolvedModel ? models.find((entry) => entry.isDefault) : undefined);
   return (
     <>
-      {' '}
-      <label>
+      <label className="model-field">
         Model
         <select
           aria-label={defaults ? 'Default model' : 'Model'}
@@ -192,7 +193,7 @@ export function ModelSettingsFields({
           }
           disabled={disabled}
         >
-          <option value="">Default model</option>
+          <option value="">Default</option>
           {settings.model && !models.some((entry) => entry.id === settings.model) && (
             <option value={settings.model}>{settings.model}</option>
           )}
@@ -203,7 +204,7 @@ export function ModelSettingsFields({
           ))}
         </select>
       </label>
-      <label>
+      <label className="model-field">
         Reasoning effort
         <select
           ref={effortControl}
@@ -213,8 +214,7 @@ export function ModelSettingsFields({
           onChange={(event) => change({ ...settings, effort: event.target.value || undefined })}
         >
           <option value="">
-            Model default
-            {selectedModel ? ' · ' + selectedModel.defaultReasoningEffort : ''}
+            Default{selectedModel ? ' (' + selectedModel.defaultReasoningEffort + ')' : ''}
           </option>
           {settings.effort &&
             !selectedModel?.supportedReasoningEfforts.some(
@@ -231,8 +231,8 @@ export function ModelSettingsFields({
           ))}
         </select>
       </label>
-      <label>
-        Mode
+      <label className="model-field">
+        Task mode
         <select
           aria-label={defaults ? 'Default task mode' : 'Task mode'}
           value={settings.mode ?? 'default'}

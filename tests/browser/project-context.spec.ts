@@ -118,7 +118,7 @@ test('projects restore their last conversation and draft without cancelling runn
   await expect(cardB.getByRole('button', { name: second.title, exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Codex permissions', exact: true }).click();
-  await page.getByRole('button', { name: /^Ask for approval Edit/ }).click();
+  await page.getByRole('button', { name: 'Ask for approval', exact: true }).click();
   await page.getByLabel('Message Codex').fill('[hold] Project task');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
@@ -309,7 +309,7 @@ test('project cards follow conversation recency across live updates and search',
       ids,
     );
   await expect.poll(order).toEqual([b.id, a.id, empty.id]);
-  const search = page.getByLabel('Search projects and conversations', { exact: true });
+  const search = page.getByLabel('Search projects and chats', { exact: true });
   await search.fill(second.title);
   await expect(projectCard(page, a.id)).toBeHidden();
   await expect.poll(order).toEqual([b.id, a.id, empty.id]);
@@ -428,13 +428,13 @@ test('project management and conversation links survive reload and keep the veri
   ).toBeVisible();
   expect(requests).not.toContain(listPath);
 
-  const search = page.getByLabel('Search projects and conversations');
+  const search = page.getByLabel('Search projects and chats');
   await search.fill(renamed.toUpperCase());
   await expect(card.getByRole('button', { name: second.title, exact: true })).toBeVisible();
   await expect(projectCard(page, a.id)).toBeHidden();
   await search.fill('no match ' + randomUUID());
   await expect(card).toBeHidden();
-  await page.getByRole('button', { name: 'Clear conversation search' }).click();
+  await page.getByRole('button', { name: 'Clear search' }).click();
   await expect(projectName).toHaveAttribute('aria-expanded', 'false');
 
   await projectName.click();

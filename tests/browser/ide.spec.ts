@@ -83,7 +83,7 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
     for (const entry of await page.getByTestId('message-user').all())
       await expect(entry).toHaveAttribute('data-turn-id', turnId!);
     await page.getByRole('button', { name: 'Interaction settings' }).click();
-    await page.getByLabel('Follow-up behavior').selectOption('steer');
+    await page.getByLabel('Follow-up delivery').selectOption('steer');
     await page.keyboard.press('Escape');
     await page.route(
       '**/api/threads/*/steer',
@@ -115,8 +115,8 @@ test('queue/steer inversion, multiline Enter preferences, and Ctrl+N preserve th
 }) => {
   await login(page);
   await page.getByRole('button', { name: 'Interaction settings' }).click();
-  await page.getByLabel('Enter behavior').selectOption('cmdIfMultiline');
-  await page.getByLabel('Follow-up behavior').selectOption('steer');
+  await page.getByLabel('Send shortcut').selectOption('cmdIfMultiline');
+  await page.getByLabel('Follow-up delivery').selectOption('steer');
   await page.keyboard.press('Escape');
   await send(page, '[slow] Inverted queue fixture ' + Date.now());
   await page.getByLabel('Message Codex').fill('Queue with reverse shortcut');
@@ -136,7 +136,7 @@ test('queue/steer inversion, multiline Enter preferences, and Ctrl+N preserve th
   await expect(page.getByTestId('message-user')).toHaveCount(0);
   await page.reload();
   await page.getByRole('button', { name: 'Interaction settings' }).click();
-  await expect(page.getByLabel('Enter behavior')).toHaveValue('cmdIfMultiline');
+  await expect(page.getByLabel('Send shortcut')).toHaveValue('cmdIfMultiline');
 });
 
 test('review uses native targets inline and in a separate conversation while preserving the source', async ({
@@ -156,7 +156,7 @@ test('review uses native targets inline and in a separate conversation while pre
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).toBe(source);
   await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
   await page.getByRole('button', { name: 'Review code', exact: true }).click();
-  await page.getByLabel('Review delivery', { exact: true }).selectOption('detached');
+  await page.getByLabel('Review location', { exact: true }).selectOption('detached');
   await page.getByRole('button', { name: 'Start review', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('Simulated review:', { exact: false })).toContainText(

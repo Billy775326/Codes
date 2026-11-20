@@ -158,14 +158,14 @@ export const Conversations = memo(function Conversations({
         <div className="conversation-search">
           <Icon name="search" size={14} />
           <input
-            aria-label="Search projects and conversations"
+            aria-label="Search projects and chats"
             placeholder="Search projects and chats"
             value={query}
             maxLength={120}
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
-            <button aria-label="Clear conversation search" onClick={() => setQuery('')}>
+            <button aria-label="Clear search" onClick={() => setQuery('')}>
               <Icon name="close" size={13} />
             </button>
           )}
