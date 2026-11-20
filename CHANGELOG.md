@@ -85,6 +85,8 @@
 
 ### Fixed
 
+- Keep recorded token usage and completion metrics beside the original reply’s actions across later turns and service restarts.
+
 - Show optional questions, simultaneous approval and answer requests, responses being submitted, context compaction and expired questions in the conversation sidebar.
 
 - Keep terminal activities collapsed in groups when opening a turn’s work history.

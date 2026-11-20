@@ -3,12 +3,14 @@ import type { Message, TurnInfo } from '../shared/types';
 import { groupTurns, commandCounts, workDuration, type TurnActivity } from './activity';
 import { Icon } from './primitives';
 import { MessageTime } from './MessageTime';
+import { isTurnOutcome, TurnResult, type TurnOutcome } from './TurnResult';
 
 type RenderMessage = (
   item: Message,
   finalReply: boolean,
   changes?: Message,
   timestamp?: number,
+  completion?: ReactNode,
 ) => ReactNode;
 const isActivity = (item: Message) => item.kind === 'command' || item.kind === 'tool';
 
@@ -52,7 +54,17 @@ function WorkItems({ items, render }: { items: Message[]; render: RenderMessage 
   );
 }
 
-function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
+function Turn({
+  turn,
+  render,
+  completion,
+  showStandaloneTime,
+}: {
+  turn: TurnActivity;
+  render: RenderMessage;
+  completion?: ReactNode;
+  showStandaloneTime: boolean;
+}) {
   const [choice, setChoice] = useState<boolean>();
   const open = choice ?? turn.active;
   const [now, setNow] = useState(Date.now);
@@ -138,11 +150,12 @@ function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
             item === last && !turn.active,
             item === last ? turn.changes : undefined,
             item === last ? turn.info?.completedAtMs : undefined,
+            item === last ? completion : undefined,
           )}
         </Fragment>
       ))}
       {!last && turn.changes && render(turn.changes, false)}
-      {!last && turn.info?.completedAtMs !== undefined && (
+      {!last && showStandaloneTime && turn.info?.completedAtMs !== undefined && (
         <div className="message-footer">
           <MessageTime value={turn.info.completedAtMs} kind="finished" />
         </div>
@@ -155,16 +168,49 @@ export function Transcript({
   messages,
   turns,
   activeIds,
+  result,
   render,
 }: {
   messages: Message[];
   turns?: TurnInfo[];
   activeIds?: string[];
+  result?: { status: TurnOutcome; turn?: TurnInfo };
   render: RenderMessage;
 }) {
   const entries = useMemo(
     () => groupTurns(messages, turns, activeIds),
     [messages, turns, activeIds],
   );
-  return entries.map((turn) => <Turn key={turn.id} turn={turn} render={render} />);
+  const currentTurn = result?.turn && entries.find((turn) => turn.id === result.turn?.id);
+  const currentInReply = !!(currentTurn?.replies.length && result?.turn?.usage);
+  return (
+    <>
+      {entries.map((turn) => {
+        const info = turn.info;
+        const completion =
+          turn === currentTurn && currentInReply && result ? (
+            <TurnResult status={result.status} turn={result.turn} current />
+          ) : !turn.active && info?.usage && isTurnOutcome(info.status) ? (
+            <TurnResult status={info.status} turn={info} />
+          ) : undefined;
+        return (
+          <Turn
+            key={turn.id}
+            turn={turn}
+            render={render}
+            completion={completion}
+            showStandaloneTime={turn !== currentTurn}
+          />
+        );
+      })}
+      {result && !currentInReply && (
+        <TurnResult
+          status={result.status}
+          turn={result.turn}
+          current
+          showTime={!currentTurn?.replies.length}
+        />
+      )}
+    </>
+  );
 }

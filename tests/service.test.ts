@@ -1418,3 +1418,35 @@ it('publishes both pending interactions and the response phase in sidebar summar
     thread.id,
   );
 });
+
+it('restores usage for the original completed turn after another turn and a service restart', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codes-turn-usage-'));
+  const open = () =>
+    new Service(
+      new Store(directory),
+      new Driver('mock', { stateFile: join(directory, 'history.json') }),
+    );
+  let service = open();
+  cleanup.push(async () => {
+    await service.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const project = await service.addProject(directory, 'Usage fixture');
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  const first = await service.send(thread.id, randomUUID(), 'First measured turn', thread.settings);
+  await until(() => thread.state === 'completed');
+  const turnId = first.turnId!;
+  expect(thread.turns?.find((turn) => turn.id === turnId)?.usage).toEqual({
+    totalTokens: 1200,
+    outputTokens: 120,
+  });
+  await service.send(thread.id, randomUUID(), 'Second measured turn', thread.settings);
+  await until(() => thread.state === 'completed' && thread.turnId !== turnId);
+  await service.close();
+  service = open();
+  const { turns } = await service.history(thread.id);
+  expect(turns.find((turn) => turn.id === turnId)?.usage).toEqual({
+    totalTokens: 1200,
+    outputTokens: 120,
+  });
+});

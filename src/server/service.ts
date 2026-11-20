@@ -17,6 +17,7 @@ import {
   limits,
   sameSettings,
   type Thread,
+  type TurnInfo,
   type Settings,
   type Message,
   type Action,
@@ -965,7 +966,7 @@ export class Service {
               : latest?.status === 'inProgress'
                 ? 'unknown'
                 : 'idle') as State,
-          turns: turns.map(nativeTurn),
+          turns: this.store.attachTurnUsage(id, turns.map(nativeTurn)),
         };
       }
       if (pageLimit === 1 || turns.length <= 1)
@@ -2049,7 +2050,18 @@ export class Service {
               ? total.outputTokens - baseline.output
               : undefined,
         };
-        this.events.publish('state', { usage: thread.usage }, thread.id);
+        const finished = thread.turns?.find(
+          (turn) => turn.id === p.turnId && terminal(turn.status),
+        );
+        if (finished) this.recordTurnUsage(thread, finished);
+        this.events.publish(
+          'state',
+          {
+            usage: thread.usage,
+            ...(finished ? { turns: thread.turns } : {}),
+          },
+          thread.id,
+        );
       }
       return;
     }
@@ -2141,6 +2153,8 @@ export class Service {
     if (event.method === 'turn/started' || event.method === 'turn/completed') {
       if (!record(p.turn) || typeof p.turn.id !== 'string') return;
       const info = nativeTurn(p.turn);
+      if (event.method === 'turn/completed' && terminal(info.status))
+        this.recordTurnUsage(thread, info);
       const previous = thread.turns?.find((turn) => turn.id === info.id);
       thread.turns = [
         ...(thread.turns ?? []).filter((turn) => turn.id !== info.id),
@@ -2203,6 +2217,15 @@ export class Service {
       thread.updatedAt = Date.now();
       this.boundary(thread);
     }
+  }
+  private recordTurnUsage(thread: Thread, turn: TurnInfo) {
+    const usage = thread.usage;
+    if (!usage || usage.turnId !== turn.id || usage.turnTotalTokens === undefined) return;
+    turn.usage = {
+      totalTokens: usage.turnTotalTokens,
+      outputTokens: usage.turnOutputTokens ?? turn.usage?.outputTokens,
+    };
+    this.store.saveTurnUsage(thread.id, turn.id, turn.usage);
   }
   private clearCompaction(thread: Thread, status: 'interrupted' | 'failed' | 'unknown') {
     if (!thread.compaction) return;

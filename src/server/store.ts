@@ -2,11 +2,21 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, chmodSync, openSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Operation, Project, Settings, SettingsProfile, Summary } from '../shared/types.js';
+import type {
+  Operation,
+  Project,
+  Settings,
+  SettingsProfile,
+  Summary,
+  TurnInfo,
+  TurnUsage,
+} from '../shared/types.js';
 import { sameSettings } from '../shared/types.js';
 import { settingsSchema, settingsProfileSchema } from '../shared/settings.js';
 import { AppError } from '../shared/errors.js';
 import { QueueStore, queueSchema } from './queue-store.js';
+
+const retainedTurnUsage = 1000;
 
 export class Store {
   readonly db: DatabaseSync;
@@ -71,6 +81,13 @@ export class Store {
       INSERT OR IGNORE INTO setting_profiles SELECT 'thread:'||id,0,settings FROM threads;`);
     this.db.exec(`CREATE TABLE IF NOT EXISTS waiting_question_operations (
       operation_id TEXT PRIMARY KEY REFERENCES operations(id) ON DELETE CASCADE
+    );`);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS turn_usage (
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      turn_id TEXT NOT NULL,
+      total_tokens INTEGER NOT NULL,
+      output_tokens INTEGER,
+      PRIMARY KEY (thread_id, turn_id)
     );`);
     this.queue = new QueueStore(this.db);
     this.queue.recover();
@@ -228,6 +245,48 @@ export class Store {
         error: row.error ?? undefined,
         resultId: row.result_id ?? undefined,
       }
+    );
+  }
+  saveTurnUsage(threadId: string, turnId: string, usage: TurnUsage) {
+    this.db
+      .prepare(
+        `INSERT INTO turn_usage VALUES (?, ?, ?, ?)
+      ON CONFLICT(thread_id, turn_id) DO UPDATE SET
+        total_tokens=excluded.total_tokens,
+        output_tokens=coalesce(excluded.output_tokens, output_tokens)`,
+      )
+      .run(threadId, turnId, usage.totalTokens, usage.outputTokens ?? null);
+    this.db
+      .prepare(
+        `DELETE FROM turn_usage WHERE rowid IN (
+      SELECT rowid FROM turn_usage WHERE thread_id=? ORDER BY rowid DESC LIMIT -1 OFFSET ?
+    )`,
+      )
+      .run(threadId, retainedTurnUsage);
+  }
+  attachTurnUsage(threadId: string, turns: TurnInfo[]) {
+    if (!turns.length) return turns;
+    const rows = this.db
+      .prepare(
+        `SELECT turn_id, total_tokens, output_tokens FROM turn_usage
+      WHERE thread_id=? AND turn_id IN (${turns.map(() => '?').join(',')})`,
+      )
+      .all(threadId, ...turns.map((turn) => turn.id)) as {
+      turn_id: string;
+      total_tokens: number;
+      output_tokens: number | null;
+    }[];
+    const usage = new Map(
+      rows.map((row) => [
+        row.turn_id,
+        {
+          totalTokens: row.total_tokens,
+          outputTokens: row.output_tokens ?? undefined,
+        },
+      ]),
+    );
+    return turns.map((turn) =>
+      usage.has(turn.id) ? { ...turn, usage: usage.get(turn.id) } : turn,
     );
   }
   markWaitingQuestion(operationId: string, waiting: boolean) {

@@ -1167,6 +1167,18 @@
 .app .message-footer .message-actions {
   margin-top: 0;
 }
+.app .message-footer .turn-status {
+  margin: 0;
+}
+.app .reply-completion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  color: var(--muted);
+  font-size: 12.1px;
+}
+
 .app .message-time {
   color: var(--muted);
   font-size: 12px;

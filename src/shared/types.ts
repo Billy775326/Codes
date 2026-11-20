@@ -102,6 +102,10 @@ export interface Summary {
     | 'compacting';
   expiredQuestion?: boolean;
 }
+export interface TurnUsage {
+  totalTokens: number;
+  outputTokens?: number;
+}
 export interface TurnInfo {
   id: string;
   status?: string;
@@ -109,6 +113,7 @@ export interface TurnInfo {
   startedAtMs?: number;
   completedAtMs?: number;
   durationMs?: number;
+  usage?: TurnUsage;
 }
 export interface Thread extends Summary {
   /** The last explicit resume was refused by another native writer; history is still readable. */
