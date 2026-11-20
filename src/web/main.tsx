@@ -132,6 +132,7 @@ const MessageView = memo(function MessageView({
   actions = false,
   changes,
   timestamp,
+  completion,
 }: {
   onReply?: (item: Message) => void;
   onFork?: (item: Message) => void;
@@ -143,6 +144,7 @@ const MessageView = memo(function MessageView({
   actions?: boolean;
   changes?: Message;
   timestamp?: number;
+  completion?: React.ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState('');
@@ -241,7 +243,9 @@ const MessageView = memo(function MessageView({
         )}
         {!streaming &&
           item.kind !== 'user' &&
-          ((actions && item.turnId && (onReply || onFork)) || timestamp !== undefined) && (
+          ((actions && item.turnId && (onReply || onFork)) ||
+            timestamp !== undefined ||
+            completion) && (
             <div className="message-footer">
               {actions && !streaming && item.turnId && (onReply || onFork) && (
                 <div className="message-actions" role="group" aria-label="Reply actions">
@@ -288,7 +292,7 @@ const MessageView = memo(function MessageView({
                   )}
                 </div>
               )}
-              <MessageTime value={timestamp} kind="finished" />
+              {completion ?? <MessageTime value={timestamp} kind="finished" />}
             </div>
           )}
       </div>
@@ -1452,12 +1456,12 @@ function App() {
     (!!thread &&
       !thread.writerConflict &&
       ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
-  const finishedTurn = thread?.turns?.findLast(
-    (turn) =>
-      turn.id === thread.turnId &&
-      turn.status === thread.state &&
-      ['completed', 'interrupted', 'failed'].includes(thread.state),
-  );
+  const terminalTask = !!thread && ['completed', 'interrupted', 'failed'].includes(thread.state);
+  const finishedTurn = terminalTask
+    ? thread.turns?.findLast(
+        (turn) => turn.id === thread.turnId && (!turn.status || turn.status === thread.state),
+      )
+    : undefined;
   const finishedUsage =
     finishedTurn && thread?.usage?.turnId === finishedTurn.id ? thread.usage : undefined;
   const duration =
@@ -1469,6 +1473,37 @@ function App() {
     duration && duration > 0 && finishedUsage?.turnOutputTokens !== undefined
       ? (finishedUsage.turnOutputTokens * 1000) / duration
       : undefined;
+  const taskStatus = thread && (
+    <div className={`turn-status ${thread.state}`}>
+      <span className={`status-dot ${thread.state}`} />
+      <span>
+        {thread.state === 'running' && thread.compaction
+          ? 'Compacting context…'
+          : labels[thread.state]}
+      </span>
+      {averageTps !== undefined && (
+        <span title="Output tokens per second across the entire turn">
+          · 平均{averageTps.toFixed(1)}TPS
+        </span>
+      )}
+      {finishedUsage?.turnTotalTokens !== undefined && (
+        <span>
+          · 本轮
+          {new Intl.NumberFormat('en', {
+            notation: 'compact',
+            maximumFractionDigits: 1,
+          }).format(finishedUsage.turnTotalTokens)}{' '}
+          tokens
+        </span>
+      )}
+      {finishedTurn?.completedAtMs !== undefined && (
+        <span>
+          · <MessageTime value={finishedTurn.completedAtMs} kind="finished" locale="zh-CN" />
+        </span>
+      )}
+      {thread.state === 'unknown' && <span> · Execution outcome needs confirmation.</span>}
+    </div>
+  );
   const project =
     context?.project.id === contextProjectId
       ? context.project
@@ -2324,7 +2359,10 @@ function App() {
                     messages={transcriptMessages}
                     turns={visibleTurns}
                     activeIds={activeTurnIds}
-                    render={(m, finalReply, changes, timestamp) => {
+                    completion={
+                      terminalTask ? { turnId: finishedTurn?.id, content: taskStatus } : undefined
+                    }
+                    render={(m, finalReply, changes, timestamp, completion) => {
                       if (m.kind === 'question') {
                         const action = inlineQuestions.get(m.id);
                         if (action && ['pending', 'responding'].includes(action.status))
@@ -2367,6 +2405,7 @@ function App() {
                           actions={finalReply}
                           changes={changes}
                           timestamp={timestamp}
+                          completion={completion}
                           onReview={reviewMessage}
                           onReply={thread.archived ? undefined : reply}
                           onFork={
@@ -2450,44 +2489,7 @@ function App() {
                     </ol>
                   </section>
                 )}
-                {thread && (
-                  <div className={`turn-status ${thread.state}`}>
-                    <span className={`status-dot ${thread.state}`} />
-                    <span>
-                      {thread.state === 'running' && thread.compaction
-                        ? 'Compacting context…'
-                        : labels[thread.state]}
-                    </span>
-                    {averageTps !== undefined && (
-                      <span title="Output tokens per second across the entire turn">
-                        · 平均{averageTps.toFixed(1)}TPS
-                      </span>
-                    )}
-                    {finishedUsage?.turnTotalTokens !== undefined && (
-                      <span>
-                        · 本轮
-                        {new Intl.NumberFormat('en', {
-                          notation: 'compact',
-                          maximumFractionDigits: 1,
-                        }).format(finishedUsage.turnTotalTokens)}{' '}
-                        tokens
-                      </span>
-                    )}
-                    {finishedTurn?.completedAtMs !== undefined && (
-                      <span>
-                        ·{' '}
-                        <MessageTime
-                          value={finishedTurn.completedAtMs}
-                          kind="finished"
-                          locale="zh-CN"
-                        />
-                      </span>
-                    )}
-                    {thread.state === 'unknown' && (
-                      <span> · Execution outcome needs confirmation.</span>
-                    )}
-                  </div>
-                )}
+                {!terminalTask && taskStatus}
               </>
             )}
           </div>

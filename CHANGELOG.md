@@ -51,6 +51,8 @@
 
 ### Changed
 
+- Put task completion metrics beside the final reply’s actions in place of the standalone finish time.
+
 - Show completion status in the conversation list and add turn usage, average output speed and local completion time to the latest task summary when available.
 
 - Retain lightweight project + conversation navigation: show a directory label for one project, a selector for multiple projects, and one empty-state Add project action. Remember each project's last conversation/new-draft view while retaining independent text drafts, settings and background execution.

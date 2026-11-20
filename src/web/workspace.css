@@ -1167,6 +1167,9 @@
 .app .message-footer .message-actions {
   margin-top: 0;
 }
+.app .message-footer .turn-status {
+  margin: 0;
+}
 .app .message-time {
   color: var(--muted);
   font-size: 12px;

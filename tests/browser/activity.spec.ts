@@ -336,7 +336,8 @@ test.describe('native message timestamps', () => {
     await expect(userTime).toHaveAttribute('title', /Turn started:.*2026.*GMT\+8/);
     await expect(finalTime).toHaveAttribute('datetime', '2026-11-18T03:14:05.000Z');
     await expect(finalTime).toContainText('11:14');
-    await expect(finalTime).toHaveAttribute('title', /Turn finished:.*11:14:05.*GMT\+8/);
+    await expect(finalTime).toHaveAttribute('title', /Turn finished:.*11:14:05/);
+    await expect(finalTime).toHaveAttribute('title', /GMT\+8/);
     const actions = await final.locator('.message-actions').boundingBox();
     const timestamp = await finalTime.boundingBox();
     expect(Math.abs(actions!.y - timestamp!.y)).toBeLessThan(8);
@@ -344,7 +345,9 @@ test.describe('native message timestamps', () => {
     await expect(page.locator('.work-history time')).toHaveCount(0);
     await page.screenshot({ path: 'test-results/native-message-times.png', fullPage: true });
   });
-  test('shows turn-scoped completion metrics in a compact line', async ({ page }) => {
+  test('puts the completion summary beside reply actions and falls back for a turn without a reply', async ({
+    page,
+  }) => {
     const { base } = await fixture(page, 2);
     const id = base.thread.turnId!;
     base.thread.turns = [
@@ -363,15 +366,32 @@ test.describe('native message timestamps', () => {
       turnOutputTokens: 357,
     };
     await reconnectUpdates(page);
-    const summary = page.locator('.turn-status.completed');
+    const footer = page
+      .getByTestId('message-assistant')
+      .filter({ hasText: 'Final response stays visible.' })
+      .locator('.message-footer');
+    const summary = footer.locator('.turn-status.completed');
+    await expect(footer.getByRole('group', { name: 'Reply actions' })).toBeVisible();
+    await expect(page.locator('.turn-status.completed')).toHaveCount(1);
+    await expect(footer.locator('time')).toHaveCount(1);
     await expect(summary).toContainText('Completed');
     await expect(summary).toContainText('平均35.7TPS');
     await expect(summary).toContainText('本轮24M tokens');
     await expect(summary.locator('time')).toHaveText('11月20日 10:13');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(summary).toBeVisible();
+    expect(await footer.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     base.thread.usage.turnId = 'another-turn';
     await reconnectUpdates(page);
     await expect(summary).not.toContainText('TPS');
     await expect(summary).not.toContainText('tokens');
+
+    base.thread.messages = base.thread.messages.filter((item) => item.phase !== 'final_answer');
+    await reconnectUpdates(page);
+    await expect(summary).toHaveCount(0);
+    const fallback = page.locator('.turn .turn-status.completed');
+    await expect(fallback).toHaveCount(1);
+    await expect(fallback.locator('time')).toHaveText('11月20日 10:13');
   });
   test('omits unknown legacy times and does not assign the turn start to same-turn follow-ups', async ({
     page,
