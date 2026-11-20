@@ -1,15 +1,14 @@
 # Project and conversation navigation
 
-**Status: adopted design.** Codes retains the project + conversation architecture. This supersedes the earlier proposal to remove the project selector and unify all directories into one conversation list.
+**Status: adopted design.** Codes retains the project + conversation architecture. The sidebar gives each registered directory its own project card and conversation list.
 
 A project is an existing server directory. A conversation owns its native history, task, approvals, queue, draft, and saved model/permission choices. Files and Changes follow the selected conversation's verified project. Projects provide directory context; Codex permission presets continue to govern filesystem and network access.
 
 ## Layout and navigation
 
-- One project: show its directory name with the full path in the tooltip. There is no one-option selector.
-- Multiple projects: keep a compact Project selector above New conversation. Adding a directory stays in Workspace actions. An empty installation has one Add project action.
+- The sidebar shows a card for each project, with the full directory path in the tooltip and a plus button to start a conversation in that project. Adding a directory stays in Workspace actions. An empty installation has one Add project action.
 - Each project retains its last conversation or explicit New conversation view in this browser. Switching back restores that view. Text drafts remain project-scoped before creation and conversation-scoped afterward. Conversation settings remain on the server; project switching does not inherit another conversation's permissions.
-- The project view contains its native conversation list, title search, Chats / Archived view, status/recovery actions and cursor pagination. It does not load other projects' transcripts in the background.
+- Project cards share title search and the Chats / Archived view, and each card has its own cursor pagination and status actions. Other projects’ conversations load only their list metadata in the background.
 - Switching projects or conversations closes previews, cancels stale file/history reads, and clears unsent attachment selections. Background tasks and queues continue on the server.
 
 Browser navigation metadata uses `codes.project-views`, bounded to 20 projects. Existing `codes.project`, `codes.thread`, project drafts and conversation drafts remain readable. A bad remembered conversation cannot silently redirect an explicit project selection to another directory. The user can start a fresh conversation in the selected project.

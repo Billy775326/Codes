@@ -339,7 +339,7 @@ export class Service {
     this.publishSummary(this.store.thread(id)!);
     this.events.publish('state', { state: next }, id);
   }
-  private withSidebarActivity<T extends Summary>(summary: T): T {
+  withSidebarActivity<T extends Summary>(summary: T): T {
     const thread = this.cache.get(summary.id);
     const actions = thread?.actions.filter((action) => action.status === 'pending') ?? [];
     const questions = actions.filter((action) => action.kind === 'questions');

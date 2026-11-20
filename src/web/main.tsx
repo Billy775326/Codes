@@ -321,7 +321,7 @@ function App() {
     return { projectId, threadId };
   });
   const { projectId, threadId } = selection;
-  const [threads, setThreads] = useState<Summary[]>([]);
+  const [threads, setThreads] = useState<Record<string, Summary[]>>({});
   const [context, setContext] = useState<ProjectContext>();
   const [thread, setThread] = useState<Thread>();
   const contextProjectId = threadId ? (thread?.id === threadId ? thread.projectId : '') : projectId;
@@ -682,8 +682,55 @@ function App() {
       setMaintenanceBusy(false);
     }
   };
+  const conversationUpdated = useCallback((value: Summary, updateThread = true) => {
+    const {
+      id,
+      projectId,
+      title,
+      state,
+      updatedAt,
+      archived,
+      managementPending,
+      executionPending,
+      forkedFromId,
+      queueCount,
+      queuePaused,
+      queueIssue,
+      executionUnknown,
+      sidebarActivity,
+      expiredQuestion,
+    } = value;
+    const summary: Summary = {
+      id,
+      projectId,
+      title,
+      state,
+      updatedAt,
+      archived,
+      managementPending,
+      executionPending,
+      forkedFromId,
+      queueCount,
+      queuePaused,
+      queueIssue,
+      executionUnknown,
+      sidebarActivity,
+      expiredQuestion,
+    };
+    setThreads((byProject) => ({
+      ...byProject,
+      [projectId]: [summary, ...(byProject[projectId] ?? []).filter((row) => row.id !== id)].slice(
+        0,
+        200,
+      ),
+    }));
+    if (updateThread)
+      setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
+  }, []);
   useEffect(() => {
-    setThreads([]);
+    if (auth !== 'ready') setThreads({});
+  }, [auth]);
+  useEffect(() => {
     setThread((current) =>
       current?.projectId === projectId && current.id === threadId ? current : undefined,
     );
@@ -694,16 +741,6 @@ function App() {
     setFile(undefined);
     setAttachments([]);
     save('codes.project', projectId);
-    if (!projectId || auth !== 'ready' || !threadId) return;
-    const controller = new AbortController();
-    void request<Summary[]>(`/projects/${projectId}/threads`, {}, controller.signal)
-      .then((list) => {
-        setThreads(list);
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) notice(e);
-      });
-    return () => controller.abort();
   }, [projectId, auth]);
   useEffect(() => {
     if (!projectId || threadId || auth !== 'ready') return;
@@ -721,15 +758,10 @@ function App() {
     if (!projectId || threadId || auth !== 'ready') return;
     const stream = new Feed<{ threads: Summary[]; cursor: { seq: number; epoch: string } }>(
       projectId,
-      (snapshot) => setThreads(snapshot.threads),
+      (snapshot) => setThreads((byProject) => ({ ...byProject, [projectId]: snapshot.threads })),
       (event) => {
-        if (event.kind === 'summary') {
-          const summary = event.data as Summary;
-          if (summary.projectId === projectId)
-            setThreads((list) =>
-              [summary, ...list.filter((x) => x.id !== summary.id)].slice(0, 200),
-            );
-        } else if (event.kind === 'defaults') defaultSettings.sync(event.data as SettingsProfile);
+        if (event.kind === 'summary') conversationUpdated(event.data as Summary, false);
+        else if (event.kind === 'defaults') defaultSettings.sync(event.data as SettingsProfile);
         else if (event.kind === 'runtime') setSystem(event.data as System);
       },
       connectionStatus,
@@ -778,40 +810,6 @@ function App() {
     },
     [returnToLatest],
   );
-  const conversationUpdated = useCallback((value: Summary) => {
-    const {
-      id,
-      projectId,
-      title,
-      state,
-      updatedAt,
-      archived,
-      managementPending,
-      executionPending,
-      forkedFromId,
-      queueCount,
-      queuePaused,
-      queueIssue,
-      executionUnknown,
-    } = value;
-    const summary: Summary = {
-      id,
-      projectId,
-      title,
-      state,
-      updatedAt,
-      archived,
-      managementPending,
-      executionPending,
-      forkedFromId,
-      queueCount,
-      queuePaused,
-      queueIssue,
-      executionUnknown,
-    };
-    setThreads((list) => [summary, ...list.filter((row) => row.id !== summary.id)].slice(0, 200));
-    setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
-  }, []);
   useEffect(() => {
     if (auth !== 'ready') return;
     queueRevision.current++;
@@ -873,9 +871,7 @@ function App() {
         return;
       }
       if (e.kind === 'summary') {
-        const summary = e.data as Summary;
-        if (summary.projectId === projectRef.current)
-          setThreads((list) => [summary, ...list.filter((x) => x.id !== summary.id)].slice(0, 200));
+        conversationUpdated(e.data as Summary, false);
         return;
       }
       if (e.threadId !== threadId) return;
@@ -1251,19 +1247,27 @@ function App() {
       setBusy(false);
     }
   };
-  const newThread = () => {
-    select('');
-    requestAnimationFrame(() => composer.current?.focus());
-    save('codes.new-settings.' + projectId, '');
-    setNewSettings(defaultSettings.saved?.settings ?? { permission: 'read-only' });
-    setError('');
-  };
-  const changeProject = (id: string) => {
-    if (!threadId || thread?.projectId === projectId) remember(projectId, threadId);
-    select(views.current[id] || '', id, true);
-    setPanel(null);
-    setError('');
-  };
+  const newThreadIn = useCallback(
+    (owner: string) => {
+      select('', owner);
+      requestAnimationFrame(() => composer.current?.focus());
+      save('codes.new-settings.' + owner, '');
+      setNewSettings(defaultSettings.saved?.settings ?? { permission: 'read-only' });
+      setError('');
+    },
+    [select, defaultSettings.saved],
+  );
+  const newThread = () => newThreadIn(projectId);
+  const verifiedProject = thread?.projectId;
+  const changeProject = useCallback(
+    (id: string) => {
+      if (!threadId || verifiedProject === projectId) remember(projectId, threadId);
+      select(views.current[id] || '', id, true);
+      setPanel(null);
+      setError('');
+    },
+    [projectId, select, threadId, verifiedProject],
+  );
   const send = async () => {
     if (draft.trimStart().startsWith('/')) {
       runCommand(draft.trim());
@@ -1297,7 +1301,7 @@ function App() {
         id = created.id;
         save('codes.new-settings.' + projectId, '');
         save(`codes.draft.${id}`, threadRef.current === origin ? draftValue.current : draft);
-        setThreads((list) => [created, ...list]);
+        conversationUpdated(created);
         select(id);
         setThread(created);
       }
@@ -1947,57 +1951,15 @@ function App() {
             <Icon name="close" />
           </button>
         </div>
-        {!!projects.length && (
-          <section className="workspace-project" aria-label="Project context">
-            {projects.length === 1 ? (
-              <div
-                className="project-current"
-                role="group"
-                aria-label="Current project"
-                title={projects[0]!.path}
-              >
-                <Icon name="folder" />
-                <span>{projects[0]!.name}</span>
-              </div>
-            ) : (
-              <label
-                className="project-select"
-                title={projects.find((entry) => entry.id === projectId)?.path}
-              >
-                <Icon name="folder" />
-                <select
-                  aria-label="Project"
-                  disabled={busy}
-                  value={projectId}
-                  onChange={(event) => changeProject(event.target.value)}
-                >
-                  {!projectId && <option value="">Choose a project</option>}
-                  {projects.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </section>
-        )}
-        <button
-          aria-label="New conversation"
-          className="new-conversation"
-          disabled={busy || !projectId}
-          title="New conversation"
-          onClick={newThread}
-        >
-          <Icon name="plus" size={16} />
-          New conversation
-        </button>
         <Conversations
-          projectId={projectId}
+          projects={projects}
+          activeProjectId={projectId}
           selectedId={threadId}
           updates={threads}
           connection={connection}
           disabled={busy}
+          onProject={changeProject}
+          onNew={newThreadIn}
           onSelect={select}
           onUpdated={conversationUpdated}
           onModalChange={setConversationModalOpen}

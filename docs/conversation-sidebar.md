@@ -1,13 +1,13 @@
 # Conversation sidebar
 
-The sidebar manages native conversations for the selected project. Each project remembers its last conversation or explicit new-draft view in this browser; switching retains independent conversation text drafts and server-backed settings. See [directory ownership and recovery](session-navigation-proposal.md). It uses the existing task state, durable execution receipts and FIFO queue, with a lightweight metadata projection. It does not introduce a second execution state machine.
+The sidebar groups native conversations under every registered project. Each project remembers its last conversation or explicit new-draft view in this browser; switching retains independent conversation text drafts and server-backed settings. See [directory ownership and recovery](session-navigation-proposal.md). It uses the existing task state, durable execution receipts and FIFO queue, with a lightweight metadata projection. It does not introduce a second execution state machine.
 
 ## Layout
 
-1. Project directory label for a single project, or a compact Project selector for multiple directories, followed by New conversation. Add project stays in Workspace actions; an empty installation has one direct Add project entry.
-2. A conversation-view dropdown (Chats / Archived) with Refresh, followed by title search.
-3. Date groups with title and update time on one row. Running, approval, question, failure, interrupted and uncertain states have a second line. Routine Ready / Done states stay in the accessible description. Queue conditions remain visible. Secondary operations live in each conversation's actions menu.
-4. Native Previous / Next pagination when needed. The footer contains connection status, Settings, and Workspace actions. Workspace actions holds Add project, Reconnect updates and Sign out; the empty conversation area offers the single Add project entry when no project is registered. An interrupted connection exposes one direct reconnect button.
+1. A shared conversation-view dropdown (Chats / Archived), Refresh, and title search apply across projects.
+2. Each project has a card with its name, directory tooltip, and a plus button to start a conversation there. Select the project name to restore its last view or select any conversation directly from its card. The current project and conversation are highlighted.
+3. Within each card, date groups show titles, timestamps, task outcomes, and queue conditions. Ready stays in the accessible description. Each card has its own native Previous / Next pagination. Secondary operations live in each conversation's actions menu.
+4. The footer contains connection status, Settings, and Workspace actions. Workspace actions holds Add project, Reconnect updates, and Sign out. The empty workspace offers one Add project entry.
 
 Settings appears in the footer when navigation is open, and in the conversation header when it is closed. The layout removes duplicate connection controls and routine state labels without removing recovery actions or archived conversations.
 
@@ -15,14 +15,14 @@ Search uses native cursors, including conversations beyond the local 200-summary
 
 ## State sources and precedence
 
-| Source                                             | Visible state                                                                           | Behavior                                                                           |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Unknown send/review/steer receipt or queue outcome | Check result                                                                            | Takes precedence over terminal labels; never automatically resends                 |
-| Pending archive receipt                            | Check archive                                                                           | Rename/archive controls remain protected; Check status queries native evidence     |
-| Pending execution with a non-active saved state    | Confirming result                                                                       | Does not present saved completion as a confirmed new result                        |
-| Task state                                         | Ready, Running, Needs approval, Needs answer, Done, Failed, Interrupted, Status unknown | Task and interaction lifecycle updates remain authoritative for owned executions   |
-| Queue aggregate                                    | Count, Paused, Failed, Check result                                                     | Displayed alongside task state; sent/completed/cancelled entries excluded          |
-| Browser connection                                 | Connection status                                                                       | Separate from execution state; disconnect does not mean task failure or completion |
+| Source                                             | Visible state                                                                            | Behavior                                                                           |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Unknown send/review/steer receipt or queue outcome | Check result                                                                             | Takes precedence over terminal labels; never automatically resends                 |
+| Pending archive receipt                            | Check archive                                                                            | Rename/archive controls remain protected; Check status queries native evidence     |
+| Pending execution with a non-active saved state    | Confirming result                                                                        | Does not present saved completion as a confirmed new result                        |
+| Task state                                         | Ready, Running, Needs approval, Needs answer, Completed, Failed, Stopped, Status unknown | Task and interaction lifecycle updates remain authoritative for owned executions   |
+| Queue aggregate                                    | Count, Paused, Failed, Check result                                                      | Displayed alongside task state; sent/completed/cancelled entries excluded          |
+| Browser connection                                 | Connection status                                                                        | Separate from execution state; disconnect does not mean task failure or completion |
 
 The SQLite summary projection reads only aggregate queue/receipt metadata, never queued message bodies. Optional summary fields are additive; schema 4 and stored settings/history remain unchanged. Queue counts include waiting, dispatching and uncertain-delivery entries; confirmed deliveries leave the visible queue while their execution receipts are retained. An empty paused queue has no queue badge.
 
@@ -30,7 +30,7 @@ Native `thread/list` observations and `thread/status/changed` update known conve
 
 Opening an imported conversation records its history-established state in the summary, so refreshing the list cannot return it to an older idle/unknown label. Unfinished receipts stay unknown, and concurrent title/archive changes are retained.
 
-A lifecycle revision prevents a native list response captured before a newer event from overwriting it. The browser likewise merges metadata received while its list request was in flight. Queue changes publish the same summary projection and refresh the cached snapshot. A ready connection re-reads the current list page, retaining search and cursor, to recover updates missed beyond event replay. This uses the existing single project-or-thread subscription; it does not add a second stream.
+A lifecycle revision prevents a native list response captured before a newer event from overwriting it. The browser likewise merges metadata received while its list request was in flight. Queue changes publish the same summary projection and refresh the cached snapshot. A ready connection refreshes each card’s displayed page with its search and cursor. Cards share a budget of four concurrent list reads. Summary events update the owning project through the existing single project-or-thread subscription, including while another project is selected.
 
 ## Interaction and verification
 

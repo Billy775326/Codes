@@ -17,7 +17,7 @@ This document separates proposed implementation work from acceptance of existing
 
 R1 and R2 remain the recommended next engineering steps because recovery and responsiveness are the main reasons for this project. The current limits already bound many resources; extending them must retain those bounds.
 
-**R5 directory ownership and recovery are implemented with the project + conversation layout retained.** Single-project navigation is a label, multiple directories use a selector, project views remember the last conversation, and missing directories expose explicit recovery while retaining history and queued work. Registration rename/removal remains outside this change. See [project navigation and its verification boundaries](session-navigation-proposal.md).
+**R5 directory ownership and recovery are implemented with the project + conversation layout retained.** Each directory has a sidebar card with its own conversations, project views remember the last conversation, and missing directories expose explicit recovery while retaining history and queued work. Registration rename/removal remains outside this change. See [project navigation and its verification boundaries](session-navigation-proposal.md).
 
 ## Existing behavior still requiring acceptance
 

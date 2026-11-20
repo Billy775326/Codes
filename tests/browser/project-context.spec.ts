@@ -1,3 +1,4 @@
+import { openProject, projectCard } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,7 +12,7 @@ async function login(page: Page) {
   await expect(page.locator('.connection')).toHaveText('Connected');
 }
 async function navigation(page: Page) {
-  if (!(await page.getByLabel('Project', { exact: true }).isVisible()))
+  if (!(await page.locator('.project-card-name[aria-current="true"]').isVisible()))
     await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
 }
 async function fixture(page: Page) {
@@ -81,7 +82,10 @@ for (const width of [1440, 390])
       await page.reload();
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
       await navigation(page);
-      await expect(page.getByLabel('Project', { exact: true })).toHaveValue(b.id);
+      await expect(projectCard(page, b.id).locator('.project-card-name')).toHaveAttribute(
+        'aria-current',
+        'true',
+      );
       if (width < 1100)
         await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
       await page.getByRole('button', { name: 'Browse files', exact: true }).click();
@@ -108,6 +112,11 @@ test('projects restore their last conversation and draft without cancelling runn
   );
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(first.title);
+  const cardA = projectCard(page, a.id);
+  const cardB = projectCard(page, b.id);
+  await expect(cardA.getByRole('button', { name: first.title, exact: true })).toBeVisible();
+  await expect(cardB.getByRole('button', { name: second.title, exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Codex permissions', exact: true }).click();
   await page.getByRole('button', { name: /^Ask for approval Edit/ }).click();
   await page.getByLabel('Message Codex').fill('[hold] Project task');
@@ -117,10 +126,13 @@ test('projects restore their last conversation and draft without cancelling runn
   await page.getByLabel('Message Codex').fill('Waiting in project A');
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   await page.getByLabel('Message Codex').fill('Draft A stays here');
-  await page.getByLabel('Project', { exact: true }).selectOption(b.id);
-  await page.locator('.thread-link').filter({ hasText: second.title }).click();
+  await cardB.getByRole('button', { name: second.title, exact: true }).click();
+  await expect(cardB.locator('.project-card-name')).toHaveAttribute('aria-current', 'true');
+  await expect(
+    cardA.locator('[data-conversation-id="' + first.id + '"] .conversation-status'),
+  ).toHaveText('Running');
   await page.getByLabel('Message Codex').fill('Draft B stays here');
-  await page.getByLabel('Project', { exact: true }).selectOption(a.id);
+  await openProject(page, a.id);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft A stays here');
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
     'Ask for approval',
@@ -131,7 +143,7 @@ test('projects restore their last conversation and draft without cancelling runn
   expect(
     after.thread.queue.items.some((entry: { state: string }) => entry.state === 'queued'),
   ).toBe(true);
-  await page.getByLabel('Project', { exact: true }).selectOption(b.id);
+  await openProject(page, b.id);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft B stays here');
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
@@ -141,10 +153,29 @@ test('projects restore their last conversation and draft without cancelling runn
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft B stays here');
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
   await page.getByLabel('Message Codex').fill('New draft B');
-  await page.getByLabel('Project', { exact: true }).selectOption(a.id);
-  await page.getByLabel('Project', { exact: true }).selectOption(b.id);
+  await openProject(page, a.id);
+  await openProject(page, b.id);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('New conversation');
   await expect(page.getByLabel('Message Codex')).toHaveValue('New draft B');
+  await openProject(page, a.id);
+  await cardB.getByRole('button', { name: 'New conversation in ' + b.name, exact: true }).click();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('New draft B');
+  const additional = 'Additional conversation in project B';
+  await page.getByLabel('Message Codex').fill(additional);
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(additional);
+  await expect(cardB.getByRole('button', { name: additional, exact: true })).toBeVisible();
+  await expect(cardB.getByRole('button', { name: second.title, exact: true })).toBeVisible();
+  await expect(cardA.getByRole('button', { name: additional, exact: true })).toHaveCount(0);
+  const stopped = await page.request.post('/api/threads/' + first.id + '/interrupt', {
+    data: {},
+    headers: { Origin: origin },
+  });
+  expect(stopped.ok()).toBe(true);
+  await expect(
+    cardA.locator('[data-conversation-id="' + first.id + '"] .conversation-status'),
+  ).toHaveText('Stopped');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(additional);
 });
 test('a stale remembered conversation cannot silently switch away from an explicitly chosen project', async ({
   page,
@@ -161,9 +192,12 @@ test('a stale remembered conversation cannot silently switch away from an explic
   );
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
-  await page.getByLabel('Project', { exact: true }).selectOption(a.id);
+  await openProject(page, a.id);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('New conversation');
-  await expect(page.getByLabel('Project', { exact: true })).toHaveValue(a.id);
+  await expect(projectCard(page, a.id).locator('.project-card-name')).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
   await expect(
     page.getByText('The saved conversation belongs to another project. Choose a conversation.', {
       exact: true,
@@ -247,7 +281,7 @@ test('missing directories preserve history and block execution until explicit re
     await rename(path + '-moved', path);
   }
 });
-test('one project uses a directory label and an empty installation has one add-project entry', async ({
+test('one project uses a project card and an empty installation has one add-project entry', async ({
   page,
 }) => {
   let empty = false;
@@ -262,7 +296,9 @@ test('one project uses a directory label and an empty installation has one add-p
     });
   });
   await login(page);
-  await expect(page.getByLabel('Current project', { exact: true })).toHaveText('sample-project');
+  await expect(page.locator('.project-card-name[aria-current="true"]')).toHaveText(
+    'sample-project',
+  );
   await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Add project', exact: true })).toBeVisible();

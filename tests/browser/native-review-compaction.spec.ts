@@ -97,6 +97,8 @@ for (const width of [1440, 390])
       const sidebarStatus = page.locator('.conversation-row.selected .conversation-status');
       await expect(sidebarStatus).toHaveText('Compacting context');
       const id = await page.evaluate(() => localStorage.getItem('codes.thread'));
+      const during = await (await page.request.get('/api/threads/' + id + '/snapshot')).json();
+      expect(during.thread.sidebarActivity).toBe('compacting');
       await page.reload();
       await expect(page.locator('.turn-status')).toHaveText('Compacting context…');
       await expect(sidebarStatus).toHaveText('Compacting context');

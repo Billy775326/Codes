@@ -20,27 +20,6 @@
   align-items: center;
   padding: 0 23px;
 }
-.project-select {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0 15px;
-  padding: 10px 11px;
-  background: #ffffff03;
-  border: 1px solid #ffffff0b;
-  border-radius: 7px;
-  color: #babac4;
-}
-.project-select select {
-  width: 100%;
-  font-size: 12px;
-  font-weight: 500;
-  outline-offset: 9px;
-}
-.project-select svg {
-  color: #8d829f;
-  flex-shrink: 0;
-}
 .new-thread {
   margin: 13px 15px 0;
   display: flex;

@@ -492,10 +492,11 @@ export async function application(
             return json(response, await service.checkManagement(id));
           if (segments[3] === 'snapshot' && method === 'GET') {
             const thread = await service.read(id);
+            // Cached history stays readable while native execution is offline.
+            const context = await service.projectContext(thread.projectId);
             return json(response, {
-              thread,
-              // Cached history stays readable while native execution is offline.
-              context: await service.projectContext(thread.projectId),
+              thread: service.withSidebarActivity(thread),
+              context,
               cursor: { seq: service.events.seq, epoch: service.events.epoch },
             });
           }

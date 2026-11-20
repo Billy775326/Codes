@@ -37,11 +37,7 @@ for (const width of [1440, 320]) {
         centers.push(box!.y + box!.height / 2);
       }
     expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(2);
-    await expect(
-      page
-        .getByLabel('Project', { exact: true })
-        .or(page.getByLabel('Current project', { exact: true })),
-    ).toHaveCount(1);
+    await expect(page.locator('.project-card-name[aria-current="true"]')).toHaveCount(1);
     await expect(page.locator('#message-delivery-help')).toBeHidden();
     await expect(input).toHaveAccessibleDescription(/Send starts a new turn/);
     await input.fill(Array.from({ length: 24 }, (_, i) => 'Synthetic draft line ' + i).join('\n'));

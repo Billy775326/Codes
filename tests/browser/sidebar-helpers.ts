@@ -9,3 +9,17 @@ export async function reconnectUpdates(page: Page) {
   await expect(menu).toBeFocused();
   if (opened) await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
 }
+
+export function projectCard(page: Page, id: string) {
+  return page.locator('[data-project-id="' + id + '"]');
+}
+
+export function activeProjectCard(page: Page) {
+  return page.locator('.project-card').filter({
+    has: page.locator('.project-card-name[aria-current="true"]'),
+  });
+}
+
+export async function openProject(page: Page, id: string) {
+  await projectCard(page, id).locator('.project-card-name').click();
+}

@@ -1,4 +1,4 @@
-import { reconnectUpdates } from './sidebar-helpers';
+import { activeProjectCard, projectCard, reconnectUpdates } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 const token = 'test-only-browser-token-not-a-real-secret';
 async function login(page: Page) {
@@ -93,46 +93,37 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
     return fixture;
   });
   await page.reload();
-  await page.getByLabel('Project', { exact: true }).selectOption(fixture.id);
-  await expect(page.locator('.thread-link')).toHaveCount(30);
+  const card = projectCard(page, fixture.id);
+  await expect(card.locator('.thread-link')).toHaveCount(30);
   await expect(
-    page.getByRole('button', { name: 'Fixture conversation 249', exact: true }),
+    card.getByRole('button', { name: 'Fixture conversation 249', exact: true }),
   ).toBeVisible();
   for (let i = 0; i < 8; i++) {
-    await page.getByRole('button', { name: 'Next conversation page' }).click();
-    await expect(page.locator('.conversation-pagination')).toContainText('Page ' + (i + 2));
-    await expect(page.getByRole('navigation', { name: 'Conversations' })).toHaveAttribute(
-      'aria-busy',
-      'false',
-    );
+    await card.getByRole('button', { name: 'Next conversation page' }).click();
+    await expect(card.locator('.conversation-pagination')).toContainText('Page ' + (i + 2));
+    await expect(card).toHaveAttribute('aria-busy', 'false');
   }
-  await expect(page.locator('.thread-link')).toHaveCount(10);
+  await expect(card.locator('.thread-link')).toHaveCount(10);
   await expect(
-    page.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
+    card.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Previous conversation page' }).click();
-  await expect(page.locator('.conversation-pagination')).toContainText('Page 8');
+  await card.getByRole('button', { name: 'Previous conversation page' }).click();
+  await expect(card.locator('.conversation-pagination')).toContainText('Page 8');
   await page.getByLabel('Search conversations', { exact: true }).fill('FIXTURE CONVERSATION 0');
   // Searches scan at most four native pages per request. Continue through sparse results.
-  await expect(page.getByRole('navigation', { name: 'Conversations' })).toHaveAttribute(
-    'aria-busy',
-    'false',
-  );
-  await expect(page.locator('.conversation-pagination')).toContainText('Page 1');
+  await expect(card).toHaveAttribute('aria-busy', 'false');
+  await expect(card.locator('.conversation-pagination')).toContainText('Page 1');
   for (
     let i = 0;
     i < 2 &&
-    !(await page.getByRole('button', { name: 'Fixture conversation 0', exact: true }).count());
+    !(await card.getByRole('button', { name: 'Fixture conversation 0', exact: true }).count());
     i++
   ) {
-    await page.getByRole('button', { name: 'Next conversation page' }).click();
-    await expect(page.getByRole('navigation', { name: 'Conversations' })).toHaveAttribute(
-      'aria-busy',
-      'false',
-    );
+    await card.getByRole('button', { name: 'Next conversation page' }).click();
+    await expect(card).toHaveAttribute('aria-busy', 'false');
   }
   await expect(
-    page.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
+    card.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
   ).toBeVisible();
 });
 test('another client sees metadata changes, and renaming never clears a live execution receipt', async ({
@@ -211,10 +202,7 @@ test('a delayed list response cannot undo a title already received through live 
   await login(page);
   const title = 'List race fixture ' + Date.now();
   await create(page, title);
-  await expect(page.getByRole('navigation', { name: 'Conversations' })).toHaveAttribute(
-    'aria-busy',
-    'false',
-  );
+  await expect(activeProjectCard(page)).toHaveAttribute('aria-busy', 'false');
   let captured!: () => void;
   let release!: () => void;
   const ready = new Promise<void>((resolve) => {
@@ -223,8 +211,9 @@ test('a delayed list response cannot undo a title already received through live 
   const paused = new Promise<void>((resolve) => {
     release = resolve;
   });
+  const owner = await page.evaluate(() => localStorage.getItem('codes.project'));
   await page.route(
-    '**/api/projects/*/conversations?**',
+    '**/api/projects/' + owner + '/conversations?**',
     async (route) => {
       const response = await route.fetch();
       captured();
@@ -250,10 +239,7 @@ test('a delayed list response cannot undo a title already received through live 
   } finally {
     release();
   }
-  await expect(page.getByRole('navigation', { name: 'Conversations' })).toHaveAttribute(
-    'aria-busy',
-    'false',
-  );
+  await expect(activeProjectCard(page)).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
 });

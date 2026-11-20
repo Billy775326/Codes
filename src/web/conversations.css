@@ -63,13 +63,65 @@
   color: var(--fg);
   font-size: 13px;
 }
-.conversations nav {
-  padding: 0 10px;
+.project-cards {
+  padding: 0 10px 10px;
   flex: 1;
   overflow: auto;
   min-height: 0;
 }
-.conversation-group h2 {
+.project-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--field);
+}
+.project-card:has(.project-card-name[aria-current='true']) {
+  border-color: color-mix(in srgb, var(--link) 45%, var(--line));
+}
+.project-card-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+}
+.project-card-header h2 {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+.project-card-name {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 7px;
+  min-height: 36px;
+  border-radius: 5px;
+  text-align: left;
+}
+.project-card-name svg,
+.project-card-new {
+  flex-shrink: 0;
+}
+.project-card-name svg {
+  color: var(--muted);
+}
+.project-card-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-card-name:hover:not(:disabled) {
+  background: var(--hover);
+}
+.project-conversations {
+  padding: 0 3px 3px;
+}
+.conversation-group h3 {
   font-size: 12px;
   font-weight: 400;
   color: var(--muted);
@@ -269,8 +321,8 @@
   color: var(--fg);
 }
 .conversation-empty {
-  padding: 30px 15px;
-  text-align: center;
+  padding: 6px 10px;
+  text-align: left;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.8;
@@ -325,6 +377,9 @@
   color: #c1acd8;
 }
 @media (hover: none) {
+  .project-card-name {
+    min-height: 40px;
+  }
   .conversation-menu-trigger {
     opacity: 1;
   }

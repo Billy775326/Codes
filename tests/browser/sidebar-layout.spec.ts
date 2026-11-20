@@ -21,7 +21,7 @@ for (const width of [1440, 390, 320]) {
       width < 700
         ? page.getByRole('dialog', { name: 'Workspace navigation', exact: true })
         : sidebar;
-    await expect(navigation.getByRole('region', { name: 'Project context' })).toBeVisible();
+    await expect(navigation.locator('.project-card-name[aria-current="true"]')).toBeVisible();
     await expect(
       page.getByRole('button', { name: 'Interaction settings', exact: true }),
     ).toHaveCount(1);
