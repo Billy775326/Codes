@@ -31,10 +31,10 @@ for (const width of [1440, 390])
   }) => {
     await page.setViewportSize({ width, height: 1000 });
     const source = await imported(page, 'busy');
-    await expect(page.getByTestId('message-user').last()).toContainText(
+    await expect(page.getByTestId('message-question').last()).toContainText(
       'Answer: Imported conversations only',
     );
-    await expect(page.getByTestId('message-user').last()).not.toContainText(
+    await expect(page.getByTestId('message-question').last()).not.toContainText(
       'send_user_message_question_reply',
     );
     await expect(page.getByRole('button', { name: 'Submit answer', exact: true })).toHaveCount(0);

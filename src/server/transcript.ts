@@ -10,12 +10,12 @@ const finiteTime = (value: unknown): value is number =>
   value <= Number.MAX_SAFE_INTEGER / 1000;
 
 /** Covro stored answered questions as a text envelope, not a live native callback. */
-function legacyAnswer(value: string): string {
+function legacyAnswer(value: string): Message['answeredQuestions'] {
   const match =
     /^\s*<send_user_message_question_reply>([\s\S]*)<\/send_user_message_question_reply>\s*$/.exec(
       value,
     );
-  if (!match || value.length > limits.item) return value;
+  if (!match || value.length > limits.item) return;
   try {
     const entries: unknown = JSON.parse(match[1]!);
     if (
@@ -27,12 +27,10 @@ function legacyAnswer(value: string): string {
           record(entry) && typeof entry.question === 'string' && typeof entry.answer === 'string',
       )
     )
-      return value;
-    return entries
-      .map((entry) => `Question: ${entry.question}\n\nAnswer: ${entry.answer}`)
-      .join('\n\n');
+      return;
+    return entries.map(({ question, answer }) => ({ question, answer }));
   } catch {
-    return value;
+    return;
   } // Ordinary text and malformed historical payloads stay readable.
 }
 
@@ -79,15 +77,20 @@ export function nativeMessage(
           : undefined,
       )
       .filter((entry: ImageAttachment | undefined): entry is ImageAttachment => !!entry);
+    const rawText = Array.isArray(raw.content)
+      ? content.map((x: any) => text(x?.text)).join('\n')
+      : text(raw.text);
+    const answeredQuestions = legacyAnswer(rawText);
     return {
       id: raw.id,
       turnId,
-      kind: 'user',
-      text: legacyAnswer(
-        Array.isArray(raw.content)
-          ? raw.content.map((x: any) => text(x?.text)).join('\n')
-          : text(raw.text),
-      ),
+      kind: answeredQuestions ? 'question' : 'user',
+      text: answeredQuestions
+        ? answeredQuestions
+            .map(({ question, answer }) => `Question: ${question}\n\nAnswer: ${answer}`)
+            .join('\n\n')
+        : rawText,
+      ...(answeredQuestions ? { answeredQuestions } : {}),
       clientId: typeof raw.clientId === 'string' ? raw.clientId : undefined,
       ...(images.length ? { images } : {}),
       ...(nativeImages.length > images.length

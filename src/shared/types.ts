@@ -36,7 +36,8 @@ export interface SettingsProfile {
 export interface Message {
   id: string;
   turnId: string;
-  kind: 'user' | 'assistant' | 'command' | 'change' | 'notice' | 'tool' | 'compaction';
+  kind: 'user' | 'assistant' | 'command' | 'change' | 'notice' | 'tool' | 'compaction' | 'question';
+  answeredQuestions?: { question: string; answer: string }[];
   phase?: 'commentary' | 'partial_answer' | 'final_answer';
   text: string;
   status?: string;
@@ -70,6 +71,8 @@ export interface Action {
   detail: string;
   decisions: string[];
   questions?: Question[];
+  afterMessageId?: string;
+  submittedAnswers?: Record<string, string>;
   /** Missing on older clients/requests: treat questions as required. */
   blocking?: boolean;
   files?: FileChange[];

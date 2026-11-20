@@ -21,8 +21,6 @@ function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
     return () => clearInterval(timer);
   }, [turn.active, turn.info?.startedAtMs]);
   const elapsed = workDuration(turn.info, turn.active ? now : undefined);
-  const tools = turn.work.filter((item) => item.kind === 'command' || item.kind === 'tool');
-  const counts = commandCounts(tools);
   const label = turn.active
     ? elapsed
       ? `Working · ${elapsed}`
@@ -31,6 +29,52 @@ function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
       ? `Worked for ${elapsed}`
       : 'Work history';
   const last = turn.replies.at(-1);
+  const segments: Message[][] = [];
+  for (const item of turn.work) {
+    const previous = segments.at(-1);
+    if (item.kind !== 'question' && previous && previous[0]?.kind !== 'question')
+      previous.push(item);
+    else segments.push([item]);
+  }
+  if (!segments.length && elapsed !== undefined) segments.push([]);
+  const disclosure = (items: Message[], index: number) => {
+    const tools = items.filter((item) => item.kind === 'command' || item.kind === 'tool');
+    const counts = commandCounts(tools);
+    return (
+      <section className="work-history" key={index}>
+        <button
+          className="work-history-toggle"
+          aria-expanded={open}
+          aria-controls={`work-${turn.id}-${index}`}
+          onClick={() => setChoice(!open)}
+        >
+          <span>{label}</span>
+          <Icon name="chevron" size={12} />
+          <span className="work-history-status">
+            {!!tools.length && (
+              <span>
+                {tools.length} {tools.length === 1 ? 'activity' : 'activities'}
+              </span>
+            )}
+            {!!counts.failed && <span className="work-history-failed">{counts.failed} failed</span>}
+            {!!counts.stopped && <span>{counts.stopped} stopped</span>}
+            {!!counts.running && <span>{counts.running} running</span>}
+            {!!counts.unknown && <span>{counts.unknown} status unavailable</span>}
+            {turn.info?.status === 'failed' && (
+              <span className="work-history-failed">Turn failed</span>
+            )}
+            {turn.info?.status === 'interrupted' && <span>Turn interrupted</span>}
+          </span>
+        </button>
+        <div id={`work-${turn.id}-${index}`} hidden={!open} className="work-history-items">
+          {open && items.map((item) => <Fragment key={item.id}>{render(item, false)}</Fragment>)}
+          {open && !items.length && (
+            <p className="work-history-empty">No additional activity in the loaded history.</p>
+          )}
+        </div>
+      </section>
+    );
+  };
   return (
     <section className="turn" data-turn-id={turn.id}>
       {turn.users.map((item, index) => (
@@ -38,42 +82,12 @@ function Turn({ turn, render }: { turn: TurnActivity; render: RenderMessage }) {
           {render(item, false, undefined, index === 0 ? turn.info?.startedAtMs : undefined)}
         </Fragment>
       ))}
-      {(turn.work.length > 0 || elapsed !== undefined) && (
-        <section className="work-history">
-          <button
-            className="work-history-toggle"
-            aria-expanded={open}
-            aria-controls={`work-${turn.id}`}
-            onClick={() => setChoice(!open)}
-          >
-            <span>{label}</span>
-            <Icon name="chevron" size={12} />
-            <span className="work-history-status">
-              {!!tools.length && (
-                <span>
-                  {tools.length} {tools.length === 1 ? 'activity' : 'activities'}
-                </span>
-              )}
-              {!!counts.failed && (
-                <span className="work-history-failed">{counts.failed} failed</span>
-              )}
-              {!!counts.stopped && <span>{counts.stopped} stopped</span>}
-              {!!counts.running && <span>{counts.running} running</span>}
-              {!!counts.unknown && <span>{counts.unknown} status unavailable</span>}
-              {turn.info?.status === 'failed' && (
-                <span className="work-history-failed">Turn failed</span>
-              )}
-              {turn.info?.status === 'interrupted' && <span>Turn interrupted</span>}
-            </span>
-          </button>
-          <div id={`work-${turn.id}`} hidden={!open} className="work-history-items">
-            {open &&
-              turn.work.map((item) => <Fragment key={item.id}>{render(item, false)}</Fragment>)}
-            {open && !turn.work.length && (
-              <p className="work-history-empty">No additional activity in the loaded history.</p>
-            )}
-          </div>
-        </section>
+      {segments.map((items, index) =>
+        items[0]?.kind === 'question' ? (
+          <Fragment key={items[0].id}>{render(items[0], false)}</Fragment>
+        ) : (
+          disclosure(items, index)
+        ),
       )}
       {turn.replies.map((item) => (
         <Fragment key={item.id}>

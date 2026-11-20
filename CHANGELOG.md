@@ -81,6 +81,8 @@
 
 ### Fixed
 
+- Show native questions and imported answers inside their conversation turns, where they remain visible when work history is collapsed.
+
 - Recognize native conversation writer contention when another client still owns an imported thread. Keep readable history and the prior task outcome, retain the unsent draft, and offer explicit availability checks or a separate branch without replaying rejected work.
 - Display answered Covro question envelopes as readable question/answer text while preserving native identity and stored history; old callback payloads are not live question forms.
 

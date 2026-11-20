@@ -1724,6 +1724,13 @@ export class Service {
       resolution,
     });
     if (existing) return existing;
+    if (action.kind === 'questions')
+      action.submittedAnswers = Object.fromEntries(
+        (action.questions ?? []).flatMap((q) => {
+          const answer = resolution.answers?.[q.id];
+          return !q.secret && typeof answer === 'string' ? [[q.id, answer]] : [];
+        }),
+      );
     action.status = 'responding';
     this.emitActions(action.threadId);
     try {
@@ -1804,7 +1811,9 @@ export class Service {
       'actions',
       this.cache
         .get(id)
-        ?.actions.filter((a) => a.status === 'pending' || a.status === 'responding') ?? [],
+        ?.actions.filter(
+          (a) => a.kind === 'questions' || a.status === 'pending' || a.status === 'responding',
+        ) ?? [],
       id,
     );
   }
@@ -2175,6 +2184,10 @@ export class Service {
       ),
       decisions: kind === 'permissions' ? ['accept', 'decline'] : ['accept', 'decline', 'cancel'],
       status: 'pending',
+      afterMessageId:
+        kind === 'questions'
+          ? thread.messages.findLast((item) => item.turnId === p.turnId)?.id
+          : undefined,
       blocking: kind === 'questions' ? p.isBlocking !== false : undefined,
       files: kind === 'file' ? thread.messages.find((m) => m.id === p.itemId)?.files : undefined,
       truncated:
@@ -2233,10 +2246,17 @@ export class Service {
       permissions: p.permissions,
     });
     thread.actions = thread.actions.filter(
-      (a) => a.status === 'pending' || a.status === 'responding',
+      (a) =>
+        a.status === 'pending' ||
+        a.status === 'responding' ||
+        (a.kind === 'questions' && a.turnId === thread.turnId),
     );
+    const settled = thread.actions.filter((a) => a.status === 'answered' || a.status === 'expired');
+    if (settled.length >= 32) thread.actions = thread.actions.filter((a) => a !== settled[0]);
     thread.actions.push(action);
-    thread.state = thread.actions.some((a) => a.kind !== 'questions')
+    thread.state = thread.actions.some(
+      (a) => a.kind !== 'questions' && ['pending', 'responding'].includes(a.status),
+    )
       ? 'waitingApproval'
       : 'waitingInput';
     this.boundary(thread);

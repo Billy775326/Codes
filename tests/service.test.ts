@@ -1266,11 +1266,11 @@ it('checks a released writer without sending the rejected task automatically', a
   ).rejects.toMatchObject({ code: 'THREAD_WRITER_BUSY' });
   const restored = await service.retryWriter(thread.id);
   expect(restored.writerConflict).toBe(false);
-  expect(restored.messages.filter((entry) => entry.kind === 'user')).toHaveLength(1);
+  expect(restored.messages.filter((entry) => entry.kind === 'user')).toHaveLength(0);
   expect(service.store.active(thread.id)).toBeUndefined();
   await service.send(thread.id, randomUUID(), 'Explicit new task', thread.settings);
   await until(() => thread.state === 'completed');
-  expect(thread.messages.filter((entry) => entry.kind === 'user')).toHaveLength(2);
+  expect(thread.messages.filter((entry) => entry.kind === 'user')).toHaveLength(1);
 });
 it('never selects a running turn as the ownership-recovery branch point', async () => {
   const { service, thread } = await fixture();

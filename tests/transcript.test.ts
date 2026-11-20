@@ -117,7 +117,7 @@ it('formats answered Covro question envelopes without creating live questions or
   expect(result).toMatchObject({
     id: 'reply',
     clientId: 'receipt',
-    kind: 'user',
+    kind: 'question',
     text: 'Question: Which scope?\n\nAnswer: Imported conversations only\n\nQuestion: Next step?\n\nAnswer: Keep\nall history',
   });
   expect(result?.text).not.toContain('opaque-private-id');

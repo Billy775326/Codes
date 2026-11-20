@@ -36,6 +36,8 @@ This is progress display, not browser-side context summarization, transcript del
 
 The native agent decides whether to call `request_user_input`. codes does not manufacture a question for every prompt or treat ordinary assistant prose as a structured request. Code-mode availability is enabled by default for the codes child process with the pinned CLI's `features.default_mode_request_user_input` setting. Set `CODES_CODE_QUESTIONS=0` before starting to retain Plan-only availability. Global Codex configuration is unchanged.
 
+Question cards appear inside the turn that requested input. When the runtime confirms a response, the card shows the answered state and any non-secret answers while that turn remains in the live cache. This live display is not a durable answer log. Imported Covro answer records appear in their stored turns as read-only cards.
+
 In Plan, questions are required. In Code, the native request can be optional. The UI follows the request's `isBlocking` field; requests without that field are conservatively treated as required. **Skip question** is available only for an optional request and sends an empty native answer map. No timer automatically chooses or submits an answer.
 
 1. Use **Answer questions** above the composer to focus the pending card.

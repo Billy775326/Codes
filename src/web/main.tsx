@@ -1474,6 +1474,26 @@ function App() {
     thread?.actions.filter(
       (action) => action.kind === 'questions' && ['pending', 'responding'].includes(action.status),
     ) ?? [];
+  const inlineQuestions = new Map(
+    thread?.actions
+      .filter((action) => action.kind === 'questions')
+      .map((action) => [action.id, action]),
+  );
+  const transcriptMessages = [...visibleMessages];
+  for (const action of [...inlineQuestions.values()].reverse()) {
+    const last = transcriptMessages.findLastIndex((item) => item.turnId === action.turnId);
+    if (last < 0 && !timelineLatest) continue;
+    const anchor = transcriptMessages.findLastIndex(
+      (item) => item.id === action.afterMessageId && item.turnId === action.turnId,
+    );
+    const at = anchor >= 0 ? anchor : last;
+    transcriptMessages.splice(at < 0 ? transcriptMessages.length : at + 1, 0, {
+      id: action.id,
+      kind: 'question',
+      turnId: action.turnId,
+      text: '',
+    });
+  }
   const openChangedFile = (path: string) => {
     const relative = path.startsWith((project?.path ?? '') + '/')
       ? path.slice(project!.path.length + 1)
@@ -2242,37 +2262,73 @@ function App() {
                 {thread && (
                   <Transcript
                     key={thread.id}
-                    messages={visibleMessages}
+                    messages={transcriptMessages}
                     turns={visibleTurns}
                     activeIds={activeTurnIds}
-                    render={(m, finalReply, changes, timestamp) => (
-                      <MessageView
-                        projectId={contextProjectId}
-                        key={m.id}
-                        item={m}
-                        actions={finalReply}
-                        changes={changes}
-                        timestamp={timestamp}
-                        onReview={reviewMessage}
-                        onReply={thread.archived ? undefined : reply}
-                        onFork={
-                          !active || m.turnId !== thread.turnId
-                            ? m.kind === 'assistant'
-                              ? branchMessage
+                    render={(m, finalReply, changes, timestamp) => {
+                      if (m.kind === 'question') {
+                        const action = inlineQuestions.get(m.id);
+                        if (action && ['pending', 'responding'].includes(action.status))
+                          return <Approval action={action} submit={submitAction} />;
+                        return (
+                          <section
+                            className="approval"
+                            aria-label="Codex question"
+                            data-testid="message-question"
+                          >
+                            <div className="approval-heading">
+                              <strong>Codex question</strong>
+                              <span className="badge">
+                                {action?.status === 'expired' ? 'Expired' : 'Answered'}
+                              </span>
+                            </div>
+                            {m.answeredQuestions?.map(({ question, answer }, index) => (
+                              <div key={index}>
+                                <strong>{question}</strong>
+                                <p>Answer: {answer}</p>
+                              </div>
+                            ))}
+                            {action?.questions?.map((question) => (
+                              <div key={question.id}>
+                                <strong>{question.question}</strong>
+                                {action.status === 'answered' &&
+                                  action.submittedAnswers?.[question.id] && (
+                                    <p>Answer: {action.submittedAnswers[question.id]}</p>
+                                  )}
+                              </div>
+                            ))}
+                          </section>
+                        );
+                      }
+                      return (
+                        <MessageView
+                          projectId={contextProjectId}
+                          key={m.id}
+                          item={m}
+                          actions={finalReply}
+                          changes={changes}
+                          timestamp={timestamp}
+                          onReview={reviewMessage}
+                          onReply={thread.archived ? undefined : reply}
+                          onFork={
+                            !active || m.turnId !== thread.turnId
+                              ? m.kind === 'assistant'
+                                ? branchMessage
+                                : undefined
                               : undefined
-                            : undefined
-                        }
-                        disabled={busy || forkBusy || thread.managementPending}
-                        streaming={
-                          m.kind === 'assistant' &&
-                          m.id === assistantTail.get(m.turnId) &&
-                          (m.turnId === thread.turnId ||
-                            (thread.pending?.kind === 'review' &&
-                              m.turnId === thread.pending.turnId)) &&
-                          ['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
-                        }
-                      />
-                    )}
+                          }
+                          disabled={busy || forkBusy || thread.managementPending}
+                          streaming={
+                            m.kind === 'assistant' &&
+                            m.id === assistantTail.get(m.turnId) &&
+                            (m.turnId === thread.turnId ||
+                              (thread.pending?.kind === 'review' &&
+                                m.turnId === thread.pending.turnId)) &&
+                            ['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
+                          }
+                        />
+                      );
+                    }}
                   />
                 )}
                 {history && !timelineLatest && (
@@ -2307,7 +2363,11 @@ function App() {
                     />
                   )}
                 {thread?.actions
-                  .filter((a) => a.status === 'pending' || a.status === 'responding')
+                  .filter(
+                    (a) =>
+                      a.kind !== 'questions' &&
+                      (a.status === 'pending' || a.status === 'responding'),
+                  )
                   .map((action) => (
                     <Approval key={action.id} action={action} submit={submitAction} />
                   ))}

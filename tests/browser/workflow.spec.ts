@@ -26,7 +26,7 @@ test('structured questions preserve native options, free text, secret controls, 
     const prompt = '[question] [multiple] Workflow ' + Date.now();
     await send(originator, prompt);
     await expect(
-      originator.getByRole('button', { name: 'Submit answer', exact: true }),
+      originator.locator('.turn').getByRole('button', { name: 'Submit answer', exact: true }),
     ).toBeDisabled();
     await expect(
       originator.getByText('Continue with the proposed direction.', { exact: true }),
@@ -57,6 +57,10 @@ test('structured questions preserve native options, free text, secret controls, 
       fullPage: true,
     });
     await observer.getByRole('button', { name: 'Submit answer', exact: true }).click();
+    const answered = originator.locator('.turn').getByLabel('Codex question');
+    await expect(answered).toContainText('Answered');
+    await expect(answered).toContainText('Use a small verified change');
+    await expect(answered).not.toContainText('synthetic-private-answer');
     await expect(originator.getByText('Completed', { exact: true })).toBeVisible();
     await expect(
       originator.getByRole('button', { name: 'Submit answer', exact: true }),
