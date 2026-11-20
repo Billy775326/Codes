@@ -22,7 +22,7 @@ export function ControlTooltip() {
     const hide = () => {
       cancelOpening();
       clearTimeout(closing);
-      tooltip.hidden = true;
+      if (!tooltip.hidden) tooltip.hidden = true;
       control = null;
     };
     const find = (target: EventTarget | null) =>
@@ -97,6 +97,7 @@ export function ControlTooltip() {
     workspace.addEventListener('focusin', focusIn, options);
     workspace.addEventListener('focusout', focusOut, options);
     workspace.addEventListener('pointerdown', hide, options);
+    workspace.addEventListener('click', hide, { ...options, capture: true });
     window.addEventListener('keydown', escape, { ...options, capture: true });
     window.addEventListener('scroll', hide, { ...options, capture: true, passive: true });
     window.addEventListener('resize', hide, options);

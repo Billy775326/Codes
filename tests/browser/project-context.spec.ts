@@ -391,8 +391,10 @@ test('project management and conversation links survive reload and keep the veri
 
   const actions = (name: string) =>
     card.getByRole('button', { name: 'Project actions for ' + name, exact: true });
+  const projectMenu = (name: string) =>
+    card.getByRole('group', { name: 'Project actions: ' + name, exact: true });
   await actions(b.name).click();
-  await card.getByRole('button', { name: 'Rename project', exact: true }).click();
+  await projectMenu(b.name).getByRole('button', { name: 'Rename', exact: true }).click();
   const renamed = 'zz Sidebar ' + randomUUID();
   await card.getByLabel('Project name', { exact: true }).fill('  ' + renamed + '  ');
   await card.getByRole('button', { name: 'Save project name', exact: true }).click();
@@ -407,7 +409,7 @@ test('project management and conversation links survive reload and keep the veri
   expect(owned.thread.projectId).toBe(b.id);
 
   await actions(renamed).click();
-  await card.getByRole('button', { name: 'Pin project', exact: true }).click();
+  await projectMenu(renamed).getByRole('button', { name: 'Pin', exact: true }).click();
   const firstCard = page
     .getByRole('navigation', { name: 'Conversations' })
     .locator('.project-card')
@@ -450,6 +452,6 @@ test('project management and conversation links survive reload and keep the veri
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
   await expect(projectName).toHaveAttribute('aria-current', 'true');
   await actions(renamed).click();
-  await card.getByRole('button', { name: 'Unpin project', exact: true }).click();
+  await projectMenu(renamed).getByRole('button', { name: 'Unpin', exact: true }).click();
   await expect(projectName).not.toHaveAttribute('aria-description', 'Pinned project');
 });

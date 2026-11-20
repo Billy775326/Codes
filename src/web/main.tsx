@@ -1654,10 +1654,12 @@ function App() {
     (preferences.enter === 'cmdIfMultiline' && draft.includes('\n'))
       ? 'Ctrl/Cmd+Enter'
       : 'Enter';
-  const deliveryShortcut =
-    shortcut +
-    ' to ' +
-    (active || thread?.queue?.items.length ? (deliveryMode === 'steer' ? 'add' : 'queue') : 'send');
+  const followUpHint =
+    deliveryMode === 'steer'
+      ? 'Add to current task'
+      : !active || thread?.queue?.paused
+        ? 'Add to waiting queue'
+        : 'Queue for next turn';
   const commands = [
     {
       name: '/model',
@@ -2819,7 +2821,7 @@ function App() {
                   <button
                     className="queue-send"
                     aria-label={deliveryMode === 'steer' ? 'Add to current task' : 'Queue message'}
-                    title={deliveryHelp + ' ' + deliveryShortcut}
+                    data-tooltip={followUpHint + ' · ' + shortcut}
                     aria-describedby="message-delivery-help"
                     disabled={deliveryMode === 'steer' ? addBlocked : queueBlocked}
                     onClick={() => followUp()}
@@ -2834,7 +2836,8 @@ function App() {
                   <button
                     className="stop-button"
                     aria-label="Stop task"
-                    title="Stop the current task and pause queued work; completed file changes remain"
+                    data-tooltip="Stop current task and pause queue"
+                    aria-description="Stop the current task and pause queued work. Completed file changes remain."
                     disabled={
                       busy ||
                       !thread?.turnId ||

@@ -25,15 +25,24 @@ for (const width of [1440, 390, 320]) {
     await expect(
       page.getByRole('button', { name: 'Interaction settings', exact: true }),
     ).toHaveCount(1);
-    const view = navigation.getByLabel('Conversation view', { exact: true });
-    await expect(view).toHaveValue('chats');
+    const view = navigation.getByRole('button', { name: 'Archived conversations', exact: true });
+    await expect(view).toHaveAttribute('aria-pressed', 'false');
+    await expect(view).toHaveText('');
     const chatsWidth = (await view.boundingBox())!.width;
-    await view.selectOption('archived');
-    await expect(view).toHaveValue('archived');
+    await view.click();
+    await expect(view).toHaveAttribute('aria-pressed', 'true');
+    await expect(view).toHaveText('Archived');
     const archiveWidth = (await view.boundingBox())!.width;
     expect(archiveWidth).toBeGreaterThan(chatsWidth);
     expect(archiveWidth).toBeLessThan(125);
-    await view.selectOption('chats');
+    if (width === 1440) {
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Shift+Tab');
+      await expect(view).toBeFocused();
+      await expect(page.locator('.control-tooltip')).toHaveText('Back to chats');
+      await page.keyboard.press('Enter');
+    } else await view.click();
+    await expect(view).toHaveAttribute('aria-pressed', 'false');
     await navigation.getByRole('button', { name: 'Workspace actions', exact: true }).click();
     const menu = navigation.getByRole('dialog', { name: 'Workspace actions', exact: true });
     for (const name of ['Add project', 'Reconnect updates', 'Sign out'])

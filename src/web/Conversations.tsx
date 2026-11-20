@@ -134,14 +134,16 @@ export const Conversations = memo(function Conversations({
       data-live={props.connection === 'Connected'}
     >
       <div className="conversation-controls">
-        <select
-          aria-label="Conversation view"
-          value={archived ? 'archived' : 'chats'}
-          onChange={(event) => setArchived(event.target.value === 'archived')}
+        <button
+          className={'icon-button archive-toggle' + (archived ? ' selected' : '')}
+          aria-label="Archived conversations"
+          aria-pressed={archived}
+          data-tooltip={archived ? 'Back to chats' : 'Show archived chats'}
+          onClick={() => setArchived((value) => !value)}
         >
-          <option value="chats">Chats</option>
-          <option value="archived">Archived</option>
-        </select>
+          <Icon name="archive" size={16} />
+          {archived && <span>Archived</span>}
+        </button>
         <button
           className="icon-button"
           aria-label="Refresh conversations"
@@ -546,11 +548,11 @@ const ProjectCard = memo(function ProjectCard({
             }}
           >
             <Icon name="edit" size={12} />
-            Rename project
+            Rename
           </button>
           <button onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}>
             <Icon name="pin" size={12} />
-            {preference?.pinned ? 'Unpin project' : 'Pin project'}
+            {preference?.pinned ? 'Unpin' : 'Pin'}
           </button>
         </div>
       )}

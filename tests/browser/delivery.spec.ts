@@ -41,9 +41,12 @@ for (const width of [1440, 320])
       .selectOption('steer');
     await page.keyboard.press('Escape');
     await page.getByLabel('Message Codex').fill('Do this in the next turn');
-    await expect(
-      page.getByRole('button', { name: 'Add to current task', exact: true }),
-    ).toBeEnabled();
+    const addNow = page.getByRole('button', { name: 'Add to current task', exact: true });
+    await expect(addNow).toBeEnabled();
+    await addNow.hover();
+    const hint = page.locator('.control-tooltip');
+    await expect(hint).toContainText('Add to current task');
+    await expect(hint).toBeVisible();
     await expect(page.locator('#message-delivery-help')).toContainText(
       'Accepted additions cannot be edited',
     );

@@ -89,13 +89,19 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
   await input.fill('Waiting follow-up');
-  await page.getByRole('button', { name: 'Queue message', exact: true }).click();
+  const queue = page.getByRole('button', { name: 'Queue message', exact: true });
+  await queue.hover();
+  await expect(tooltip).toHaveText('Queue for next turn · Enter');
+  await expect(tooltip).toBeVisible();
+  await page.getByRole('button', { name: 'Stop task', exact: true }).hover();
+  await expect(tooltip).toHaveText('Stop current task and pause queue');
+  await expect(tooltip).toBeVisible();
+  await queue.click();
   await page.getByRole('button', { name: 'Decline', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toHaveAttribute(
-    'title',
-    /Enter to queue/,
-  );
+  await queue.hover();
+  await expect(tooltip).toHaveText('Add to waiting queue · Enter');
+  await expect(tooltip).toBeVisible();
   await expect(page.locator('#message-delivery-help')).toContainText('Waiting text stays editable');
 });
 

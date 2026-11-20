@@ -58,12 +58,13 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
-  await page.getByLabel('Conversation view', { exact: true }).selectOption('archived');
+  const archives = page.getByRole('button', { name: 'Archived conversations', exact: true });
+  await archives.click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Restore conversation', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).not.toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-  await page.getByLabel('Conversation view', { exact: true }).selectOption('chats');
+  await archives.click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await page.screenshot({
     path: 'test-results/conversation-management-desktop.png',

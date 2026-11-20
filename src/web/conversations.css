@@ -53,14 +53,10 @@
   gap: 8px;
   padding: 0 10px;
 }
-.conversation-controls select {
-  flex: 0 1 auto;
-  min-width: 0;
-  min-height: 36px;
-  padding: 6px 9px;
-  border: 0;
-  background: transparent;
-  color: var(--fg);
+.app .conversation-controls .archive-toggle[aria-pressed='true'] {
+  width: auto;
+  gap: 6px;
+  padding-inline: 8px;
   font-size: 13px;
 }
 .project-cards {
