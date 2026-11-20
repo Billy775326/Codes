@@ -114,6 +114,7 @@ const save = (key: string, value: string) => {
 };
 const draftKey = (projectId: string, threadId: string) =>
   'codes.draft.' + (threadId || 'new.' + projectId);
+const streamBatchMs = 96;
 const sameQueueDraft = (a: QueuePayload, b: QueuePayload) =>
   a.text === b.text &&
   sameSettings(a.settings, b.settings) &&
@@ -226,16 +227,17 @@ const MessageView = memo(function MessageView({
           </p>
         )}
         <div className="prose">
-          {streaming ? (
-            <div className="stream-text">
-              {item.text}
-              <span className="caret" />
-            </div>
-          ) : item.kind === 'assistant' ? (
-            <AnswerMarkdown text={item.text} projectId={projectId} projectPath={projectPath} />
+          {item.kind === 'assistant' ? (
+            <AnswerMarkdown
+              text={item.text}
+              projectId={projectId}
+              projectPath={projectPath}
+              streaming={streaming}
+            />
           ) : (
             <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
           )}
+          {streaming && <span className="caret" aria-hidden="true" />}
         </div>
         {changes && (
           <ChangeSummary
@@ -926,7 +928,7 @@ function App() {
       if (e.kind === 'text') {
         const d = e.data as { id: string; delta: string };
         deltas.set(d.id, (deltas.get(d.id) ?? '') + d.delta);
-        flushTimer ??= setTimeout(flush, 32);
+        flushTimer ??= setTimeout(flush, streamBatchMs);
         return;
       }
       flush();

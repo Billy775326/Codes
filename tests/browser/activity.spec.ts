@@ -55,6 +55,23 @@ async function fixture(page: Page, count: number) {
   await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
   return { base, commands };
 }
+test('a streaming Codex reply renders Markdown before the task finishes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await page.getByLabel('Message Codex').fill('[hold] Stream Markdown fixture');
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  const reply = page.getByTestId('message-assistant');
+  await expect(reply.getByRole('heading', { name: 'A clear path forward' })).toBeVisible();
+  await expect(reply.locator('strong')).toHaveText('simulated response');
+  await expect(reply.getByRole('listitem')).toHaveCount(3);
+  const stop = page.getByRole('button', { name: 'Stop task', exact: true });
+  await expect(stop).toBeEnabled();
+  await stop.click();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(reply.getByRole('heading', { name: 'A clear path forward' })).toBeVisible();
+});
+
 test('answers and project files preview raster images and isolated static HTML', async ({
   page,
 }) => {
@@ -72,7 +89,12 @@ test('answers and project files preview raster images and isolated static HTML',
   await writeFile(join(project.path, imageName), imagePng);
   await writeFile(join(project.path, htmlName), html);
   const reply = base.thread.messages.find((message) => message.phase === 'final_answer')!;
-  reply.text = '![Generated plot](./' + imageName + ')\n\n```html\n' + html + '\n```';
+  reply.text =
+    '| Output | Format |\n| --- | --- |\n| Plot | `png` |\n\n![Generated plot](./' +
+    imageName +
+    ')\n\n```html\n' +
+    html +
+    '\n```';
   let externalResponses = 0;
   page.on('response', (response) => {
     if (new URL(response.url()).pathname === '/preview-external-test') externalResponses++;
@@ -90,6 +112,9 @@ test('answers and project files preview raster images and isolated static HTML',
       )
       .toBeGreaterThan(0);
   await expectImage('Generated plot');
+  await expect(
+    preview.getByRole('table').getByRole('columnheader', { name: 'Format' }),
+  ).toBeVisible();
   await expect(preview.locator('pre')).toContainText('<script>');
   await preview.getByText('Preview HTML', { exact: true }).click();
   const frame = preview.frameLocator('iframe[title="HTML preview"]');

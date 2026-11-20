@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { projectImageType, projectImageUrl } from '../shared/images';
@@ -93,19 +93,25 @@ const PreviewCodeBlock: Components['pre'] = ({ node, children, ...props }) => {
   );
 };
 
-export function AnswerMarkdown({
+const liveMarkdownLimit = 24 * 1024;
+
+export const AnswerMarkdown = memo(function AnswerMarkdown({
   text,
   projectId,
   projectPath,
+  streaming = false,
 }: {
   text: string;
   projectId: string;
   projectPath?: string;
+  streaming?: boolean;
 }) {
   const components = useMemo<Components>(
     () => ({
-      pre: PreviewCodeBlock,
+      pre: streaming ? undefined : PreviewCodeBlock,
       img: ({ node: _node, src, alt, ...props }) => {
+        // A partial image target can change as more of the message arrives.
+        if (streaming) return alt ? <span>{alt}</span> : null;
         const path = imagePath(src, projectPath);
         if (!path || !projectId) return <img src={src} alt={alt} {...props} />;
         const preview = projectImageUrl(projectId, path);
@@ -131,14 +137,18 @@ export function AnswerMarkdown({
         );
       },
     }),
-    [projectId, projectPath],
+    [projectId, projectPath, streaming],
   );
+  if (streaming && text.length > liveMarkdownLimit)
+    return <div className="stream-text">{text}</div>;
   return (
     <>
       <Markdown remarkPlugins={[remarkGfm]} components={components}>
         {text}
       </Markdown>
-      {/^(?:\s*<!doctype\s+html\b|\s*<html[\s>])/i.test(text) && <HtmlPreview html={text} />}
+      {!streaming && /^(?:\s*<!doctype\s+html\b|\s*<html[\s>])/i.test(text) && (
+        <HtmlPreview html={text} />
+      )}
     </>
   );
-}
+});

@@ -53,6 +53,7 @@
 
 ### Changed
 
+- Render Codex replies as Markdown as they stream, with bounded parsing for long replies and image and HTML previews available when the reply finishes.
 - Pulse the sidebar dot for running conversations while live updates are connected. Keep it static when reconnecting or when reduced motion is enabled.
 - Remove the separate status line at the bottom of the conversation timeline.
 - Open one composer attachment menu to upload local text files or images, or to choose files from the current project.
