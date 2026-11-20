@@ -11,6 +11,8 @@ export interface Project {
   id: string;
   name: string;
   path: string;
+  /** Sidebar bootstrap timestamp in milliseconds. Zero means no known conversations. */
+  latestConversationAt?: number;
 }
 export interface DirectoryStatus {
   available: boolean;

@@ -30,7 +30,7 @@ Native `thread/list` observations and `thread/status/changed` update known conve
 
 Opening an imported conversation records its history-established state in the summary, so refreshing the list cannot return it to an older idle/unknown label. Unfinished receipts stay unknown, and concurrent title/archive changes are retained.
 
-A lifecycle revision prevents a native list response captured before a newer event from overwriting it. The browser likewise merges metadata received while its list request was in flight. Queue changes publish the same summary projection and refresh the cached snapshot. A ready connection refreshes each card’s displayed page with its search and cursor. Cards share a budget of four concurrent list reads. Summary events update the owning project through the existing single project-or-thread subscription, including while another project is selected.
+A lifecycle revision prevents a native list response captured before a newer event from overwriting it. The browser likewise merges metadata received while its list request was in flight. The initial project list includes saved conversation activity so card order and folding are available before the first native list reads finish. Queue changes publish the same summary projection and refresh the cached snapshot. A ready connection refreshes each card’s displayed page with its search and cursor. Cards share a budget of four concurrent list reads. Summary events update the owning project through the existing single project-or-thread subscription, including while another project is selected.
 
 ## Interaction and verification
 

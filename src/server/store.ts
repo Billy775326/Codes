@@ -99,6 +99,15 @@ export class Store {
   projects(): Project[] {
     return this.db.prepare('SELECT * FROM projects ORDER BY name').all() as unknown as Project[];
   }
+  projectsWithActivity(): Project[] {
+    return this.db
+      .prepare(
+        `SELECT p.*, coalesce(
+          (SELECT max(t.updated_at) FROM threads t WHERE t.project_id=p.id), 0
+        ) AS latestConversationAt FROM projects p ORDER BY p.name`,
+      )
+      .all() as unknown as Project[];
+  }
   latestConversationAt(projectId: string) {
     const row = this.db
       .prepare('SELECT max(updated_at) AS updatedAt FROM threads WHERE project_id=?')

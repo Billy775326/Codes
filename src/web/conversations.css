@@ -317,8 +317,7 @@
   padding: 5px 0 0;
   color: var(--fg);
 }
-.conversation-empty,
-.conversation-loading {
+.conversation-empty {
   margin: 0;
   padding: 3px 6px 5px;
   font-size: 12px;

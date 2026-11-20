@@ -21,5 +21,11 @@ export function activeProjectCard(page: Page) {
 }
 
 export async function openProject(page: Page, id: string) {
-  await projectCard(page, id).locator('.project-card-name').click();
+  const name = projectCard(page, id).locator('.project-card-name');
+  if ((await name.getAttribute('aria-expanded')) === 'false') {
+    await name.click();
+    await expect(name).not.toHaveAttribute('aria-expanded', 'false');
+  }
+  await name.click();
+  await expect(name).toHaveAttribute('aria-current', 'true');
 }

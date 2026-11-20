@@ -51,6 +51,7 @@
 
 ### Changed
 
+- Restore sidebar order and folded cards at first paint, and show a conversation loading state while reopening saved chats.
 - Use compact project cards with no date-group headings and less space between conversation rows.
 - Move projects with recently updated conversations to the top of the sidebar, including live updates from other projects. Keep empty projects at the bottom.
 - Show only the name for empty projects and projects inactive for three days by default. Open a project card to see its conversations, and search across collapsed cards.

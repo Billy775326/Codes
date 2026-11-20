@@ -2032,7 +2032,7 @@ function App() {
         inert={modalOpen || (narrow && (sidebar || !!panel)) || undefined}
       >
         <WorkspaceHeader
-          title={thread?.title ?? 'New conversation'}
+          title={loadingConversation ? 'Conversation' : (thread?.title ?? 'New conversation')}
           projectName={project?.name}
           sidebarOpen={sidebar}
           connection={connection}
@@ -2049,7 +2049,7 @@ function App() {
               setPanel(panel === kind ? null : kind);
           }}
           onDraft={changeDraft}
-          showStarters={!thread?.messages.length && !active}
+          showStarters={!loadingConversation && !thread?.messages.length && !active}
         />
         {system?.runtime === 'mock' && (
           <div className="simulation-strip">Simulation · No model or command execution</div>

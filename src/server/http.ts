@@ -223,7 +223,7 @@ export async function application(
           return json(response, service.saveDefaultSettings(input.revision, input.settings));
         }
         if (url.pathname === '/api/projects' && method === 'GET')
-          return json(response, service.store.projects());
+          return json(response, service.store.projectsWithActivity());
         if (url.pathname === '/api/projects' && method === 'POST') {
           const p = z
             .object({

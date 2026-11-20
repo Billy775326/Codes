@@ -325,8 +325,33 @@ test('project cards follow conversation recency across live updates and search',
   expect(sent.ok()).toBe(true);
   await expect.poll(order).toEqual([a.id, b.id, empty.id]);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
-  await page.reload();
-  await expect.poll(order).toEqual([a.id, b.id, empty.id]);
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(
+    (url) =>
+      url.pathname === '/api/threads/' + second.id + '/snapshot' ||
+      /^\/api\/projects\/[^/]+\/conversations$/.test(url.pathname),
+    async (route) => {
+      await hold;
+      await route.continue();
+    },
+  );
+  try {
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Conversation');
+    await expect(page.getByRole('status', { name: 'Conversation loading' })).toBeVisible();
+    await expect.poll(order).toEqual([a.id, b.id, empty.id]);
+    await expect(projectCard(page, empty.id).locator('.project-card-name')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await expect(cards.getByText('Loading…', { exact: true })).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
 });
 test('one project uses a project card and an empty installation has one add-project entry', async ({
   page,

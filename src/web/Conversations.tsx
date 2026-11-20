@@ -110,12 +110,17 @@ export const Conversations = memo(function Conversations({
     return () => clearTimeout(timer);
   }, [query, search]);
   if (!projects.length) return null;
-  const orderedProjects = projects.toSorted(
-    (a, b) =>
-      (activity[b.id] ?? 0) - (activity[a.id] ?? 0) ||
-      a.name.localeCompare(b.name) ||
-      a.id.localeCompare(b.id),
-  );
+  const orderedProjects = projects
+    .map((project) => ({
+      project,
+      updatedAt: Math.max(activity[project.id] ?? -1, project.latestConversationAt ?? -1),
+    }))
+    .sort(
+      (a, b) =>
+        b.updatedAt - a.updatedAt ||
+        a.project.name.localeCompare(b.project.name) ||
+        a.project.id.localeCompare(b.project.id),
+    );
   const inactiveBefore = Date.now() - inactiveProjectAgeMs;
   return (
     <section className="conversations" aria-label="Conversation management">
@@ -155,7 +160,7 @@ export const Conversations = memo(function Conversations({
         </div>
       </div>
       <nav className="project-cards" aria-label="Conversations">
-        {orderedProjects.map((project) => (
+        {orderedProjects.map(({ project, updatedAt }) => (
           <ProjectCard
             key={JSON.stringify([project.id, search, archived, revision])}
             project={project}
@@ -164,7 +169,7 @@ export const Conversations = memo(function Conversations({
             updates={updates[project.id] ?? noUpdates}
             search={search}
             archived={archived}
-            inactive={(activity[project.id] ?? Infinity) <= inactiveBefore}
+            inactive={updatedAt >= 0 && updatedAt <= inactiveBefore}
             expandedByUser={projectDisclosure[project.id]}
             onDisclosure={changeDisclosure}
             onActivity={recordActivity}
@@ -611,11 +616,6 @@ const ProjectCard = memo(function ProjectCard({
                 ? 'No matches on this page'
                 : 'No matches'
               : 'No archived chats'}
-          </p>
-        )}
-        {!collapsed && loading && !rows.length && (
-          <p className="conversation-loading" role="status">
-            Loading…
           </p>
         )}
       </div>

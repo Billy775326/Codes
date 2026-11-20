@@ -50,7 +50,14 @@ test('expired authentication while answering a question restores the pending req
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Submit answer', exact: true })).toBeEnabled();
   await page.getByLabel('Message Codex').fill('Keep my next draft');
-  await expire(page);
+  await page.route(
+    '**/api/actions/*',
+    async (route) => {
+      await expire(page);
+      await route.continue();
+    },
+    { times: 1 },
+  );
   await page.getByRole('button', { name: 'Submit answer', exact: true }).click();
   await expect(page.getByLabel('Workspace access token')).toBeEnabled();
   await signin(page);
