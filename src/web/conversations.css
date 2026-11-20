@@ -104,8 +104,12 @@
   text-align: left;
 }
 .project-card-name svg,
-.project-card-new {
+.project-card-new,
+.project-card-collapse {
   flex-shrink: 0;
+}
+.project-card-collapse svg {
+  transform: rotate(90deg);
 }
 .project-card-name svg {
   color: var(--muted);

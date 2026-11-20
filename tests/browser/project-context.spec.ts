@@ -289,7 +289,7 @@ test('project cards follow conversation recency across live updates and search',
   const path = join(a.path, 'conversation-fixtures', 'empty-' + randomUUID());
   await mkdir(path);
   const added = await page.request.post('/api/projects', {
-    data: { path, name: 'AA Empty project' },
+    data: { path, name: 'zz 0 Empty project' },
     headers: { Origin: origin },
   });
   expect(added.ok()).toBe(true);

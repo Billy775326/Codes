@@ -24,6 +24,7 @@ interface Props {
 
 const noUpdates: Summary[] = [];
 const maxProjectReads = 4;
+const inactiveProjectAgeMs = 3 * 24 * 60 * 60 * 1000;
 let projectReads = 0;
 const waitingReads: (() => void)[] = [];
 
@@ -94,10 +95,14 @@ export const Conversations = memo(function Conversations({
   const [archived, setArchived] = useState(false);
   const [revision, setRevision] = useState(0);
   const [activity, setActivity] = useState<Record<string, number>>({});
+  const [projectDisclosure, setProjectDisclosure] = useState<Record<string, boolean>>({});
   const recordActivity = useCallback((projectId: string, updatedAt: number) => {
     setActivity((previous) =>
-      updatedAt > (previous[projectId] ?? 0) ? { ...previous, [projectId]: updatedAt } : previous,
+      updatedAt > (previous[projectId] ?? -1) ? { ...previous, [projectId]: updatedAt } : previous,
     );
+  }, []);
+  const changeDisclosure = useCallback((projectId: string, expanded: boolean) => {
+    setProjectDisclosure((previous) => ({ ...previous, [projectId]: expanded }));
   }, []);
   useEffect(() => {
     if (query.trim() === search) return;
@@ -111,6 +116,7 @@ export const Conversations = memo(function Conversations({
       a.name.localeCompare(b.name) ||
       a.id.localeCompare(b.id),
   );
+  const inactiveBefore = Date.now() - inactiveProjectAgeMs;
   return (
     <section className="conversations" aria-label="Conversation management">
       <div className="conversation-controls">
@@ -158,6 +164,9 @@ export const Conversations = memo(function Conversations({
             updates={updates[project.id] ?? noUpdates}
             search={search}
             archived={archived}
+            inactive={(activity[project.id] ?? Infinity) <= inactiveBefore}
+            expandedByUser={projectDisclosure[project.id]}
+            onDisclosure={changeDisclosure}
             onActivity={recordActivity}
             {...props}
           />
@@ -172,6 +181,8 @@ const ProjectCard = memo(function ProjectCard({
   active,
   search,
   archived,
+  inactive,
+  expandedByUser,
   selectedId,
   updates,
   disabled,
@@ -180,6 +191,7 @@ const ProjectCard = memo(function ProjectCard({
   onNew,
   onSelect,
   onUpdated,
+  onDisclosure,
   onActivity,
   onModalChange,
 }: Omit<Props, 'projects' | 'activeProjectId' | 'updates'> & {
@@ -187,10 +199,15 @@ const ProjectCard = memo(function ProjectCard({
   active: boolean;
   search: string;
   archived: boolean;
+  inactive: boolean;
+  expandedByUser?: boolean;
   updates: Summary[];
+  onDisclosure: (projectId: string, expanded: boolean) => void;
   onActivity: (projectId: string, updatedAt: number) => void;
 }) {
   const projectId = project.id;
+  const listId = 'project-conversations-' + projectId;
+  const projectName = useRef<HTMLButtonElement>(null);
   const [cursor, setCursor] = useState<string>();
   const [previous, setPrevious] = useState<(string | undefined)[]>([]);
   const [page, setPage] = useState<ConversationPage>({ data: [], nextCursor: null, scanned: 0 });
@@ -344,9 +361,13 @@ const ProjectCard = memo(function ProjectCard({
     setMenu('');
     setEditing('');
   };
-  const rows = page.data.filter(
-    (row) => row.projectId === projectId && matches(row, archived, search),
-  );
+  const keepOpen = !!(search || archived || error || pending || confirmation);
+  const defaultExpanded =
+    !inactive || active || updates.some(isWorking) || page.data.some(isWorking);
+  const collapsed = !keepOpen && !(expandedByUser ?? defaultExpanded);
+  const rows = collapsed
+    ? noUpdates
+    : page.data.filter((row) => row.projectId === projectId && matches(row, archived, search));
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -360,25 +381,48 @@ const ProjectCard = memo(function ProjectCard({
       <header className="project-card-header">
         <h2 id={'project-heading-' + projectId}>
           <button
+            ref={projectName}
             className="project-card-name"
             aria-current={active ? 'true' : undefined}
+            aria-controls={collapsed ? listId : undefined}
+            aria-expanded={collapsed ? false : undefined}
             title={project.path}
-            disabled={disabled}
-            onClick={() => onProject(projectId)}
+            disabled={!collapsed && disabled}
+            onClick={() => {
+              if (collapsed) onDisclosure(projectId, true);
+              else onProject(projectId);
+            }}
           >
-            <Icon name="folder" size={16} />
+            {!collapsed && <Icon name="folder" size={16} />}
             <span>{project.name}</span>
           </button>
         </h2>
-        <button
-          className="icon-button project-card-new"
-          aria-label={active ? 'New conversation' : 'New conversation in ' + project.name}
-          title={'New conversation in ' + project.name}
-          disabled={disabled}
-          onClick={() => onNew(projectId)}
-        >
-          <Icon name="plus" size={16} />
-        </button>
+        {!collapsed && (
+          <button
+            className="icon-button project-card-new"
+            aria-label={active ? 'New conversation' : 'New conversation in ' + project.name}
+            title={'New conversation in ' + project.name}
+            disabled={disabled}
+            onClick={() => onNew(projectId)}
+          >
+            <Icon name="plus" size={16} />
+          </button>
+        )}
+        {!collapsed && !keepOpen && !editing && (
+          <button
+            className="icon-button project-card-collapse"
+            aria-label={'Collapse ' + project.name}
+            aria-controls={listId}
+            aria-expanded="true"
+            onClick={() => {
+              setMenu('');
+              onDisclosure(projectId, false);
+              projectName.current?.focus();
+            }}
+          >
+            <Icon name="chevron" size={14} />
+          </button>
+        )}
       </header>
       {error && !confirmation && (
         <div className="conversation-error" role="alert">
@@ -386,7 +430,7 @@ const ProjectCard = memo(function ProjectCard({
           <button onClick={refresh}>Refresh list</button>
         </div>
       )}
-      <div className="project-conversations">
+      <div className="project-conversations" id={listId} hidden={collapsed}>
         {rows.map((row) => {
           const status = conversationStatus(row);
           const routine = status.tone === 'neutral' && row.state === 'idle';
@@ -569,13 +613,13 @@ const ProjectCard = memo(function ProjectCard({
               : 'No archived chats'}
           </p>
         )}
-        {loading && !rows.length && (
+        {!collapsed && loading && !rows.length && (
           <p className="conversation-loading" role="status">
             Loading…
           </p>
         )}
       </div>
-      {(page.nextCursor || previous.length > 0) && (
+      {!collapsed && (page.nextCursor || previous.length > 0) && (
         <div className="conversation-pagination">
           <button
             aria-label="Previous conversation page"

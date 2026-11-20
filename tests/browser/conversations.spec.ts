@@ -94,7 +94,13 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
   });
   await page.reload();
   const card = projectCard(page, fixture.id);
+  const projectName = card.getByRole('button', { name: fixture.name, exact: true });
+  await expect(projectName).toHaveAttribute('aria-expanded', 'false');
+  await expect(card.getByRole('button')).toHaveCount(1);
+  await expect(card.locator('.thread-link')).toHaveCount(0);
+  await projectName.press('Enter');
   await expect(card.locator('.thread-link')).toHaveCount(30);
+  await expect(card.locator('h3')).toHaveCount(0);
   await expect(
     card.getByRole('button', { name: 'Fixture conversation 249', exact: true }),
   ).toBeVisible();
@@ -109,6 +115,9 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
   ).toBeVisible();
   await card.getByRole('button', { name: 'Previous conversation page' }).click();
   await expect(card.locator('.conversation-pagination')).toContainText('Page 8');
+  await card.getByRole('button', { name: 'Collapse ' + fixture.name, exact: true }).click();
+  await expect(projectName).toHaveAttribute('aria-expanded', 'false');
+  await expect(projectName).toBeFocused();
   await page.getByLabel('Search conversations', { exact: true }).fill('FIXTURE CONVERSATION 0');
   // Searches scan at most four native pages per request. Continue through sparse results.
   await expect(card).toHaveAttribute('aria-busy', 'false');
@@ -125,6 +134,8 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
   await expect(
     card.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Clear conversation search' }).click();
+  await expect(projectName).toHaveAttribute('aria-expanded', 'false');
 });
 test('another client sees metadata changes, and renaming never clears a live execution receipt', async ({
   browser,
