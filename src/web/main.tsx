@@ -80,16 +80,6 @@ import './workspace.css';
 import './preferences.css';
 import './composer.css';
 
-const labels: Record<string, string> = {
-  idle: 'Ready',
-  running: 'Working',
-  waitingApproval: 'Needs approval',
-  waitingInput: 'Needs your input',
-  completed: 'Completed',
-  interrupted: 'Stopped',
-  failed: 'Failed',
-  unknown: 'Check result',
-};
 const saved = (key: string) => {
   try {
     return localStorage.getItem(key) ?? '';
@@ -2424,19 +2414,6 @@ function App() {
                       ))}
                     </ol>
                   </section>
-                )}
-                {thread && !taskResult && (
-                  <div className={`turn-status ${thread.state}`}>
-                    <span className={`status-dot ${thread.state}`} />
-                    <span>
-                      {thread.state === 'running' && thread.compaction
-                        ? 'Compacting context…'
-                        : labels[thread.state]}
-                    </span>
-                    {thread.state === 'unknown' && (
-                      <span> · Execution outcome needs confirmation.</span>
-                    )}
-                  </div>
                 )}
               </>
             )}

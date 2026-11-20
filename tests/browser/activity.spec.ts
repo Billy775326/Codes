@@ -460,7 +460,8 @@ test.describe('native message timestamps', () => {
     await expect(earlier).toContainText('24M tokens');
     await expect(earlier.locator('time')).toHaveText('Nov 20, 10:13');
     await expect(footer.locator('time')).toHaveCount(1);
-    await expect(page.locator('.turn-status.running')).toHaveText('Working');
+    await expect(page.locator('.turn-status.running')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeVisible();
     await page.reload();
     await expect(earlier).toContainText('24M tokens');
   });

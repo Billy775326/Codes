@@ -46,29 +46,6 @@
   overflow: auto;
   flex: 1;
 }
-.status-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #6b6c77;
-  display: inline-block;
-  flex-shrink: 0;
-}
-.status-dot.running {
-  background: #ae9cff;
-  box-shadow: 0 0 8px #ae9cff77;
-}
-.status-dot.waitingApproval,
-.status-dot.waitingInput,
-.status-dot.unknown {
-  background: #d7af70;
-}
-.status-dot.completed {
-  background: #739e86;
-}
-.status-dot.failed {
-  background: #d57c82;
-}
 .attention {
   margin-left: auto;
   font-size: 10px;
@@ -441,7 +418,6 @@
   font-size: 10px;
   margin-left: 41px;
 }
-.turn-status.unknown,
 .turn-status.failed {
   color: #be9c80;
 }

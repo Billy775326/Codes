@@ -52,6 +52,7 @@
 
 ### Changed
 
+- Remove the separate status line at the bottom of the conversation timeline.
 - Open one composer attachment menu to upload local text files or images, or to choose files from the current project.
 - Restore sidebar order and folded cards at first paint, and show a conversation loading state while reopening saved chats.
 - Use compact project cards with no date-group headings and less space between conversation rows.
