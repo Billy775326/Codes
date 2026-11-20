@@ -11,7 +11,7 @@ import type {
   TurnInfo,
   TurnUsage,
 } from '../shared/types.js';
-import { sameSettings } from '../shared/types.js';
+import { limits, sameSettings } from '../shared/types.js';
 import { settingsSchema, settingsProfileSchema } from '../shared/settings.js';
 import { AppError } from '../shared/errors.js';
 import { QueueStore, queueSchema } from './queue-store.js';
@@ -90,6 +90,12 @@ export class Store {
       output_tokens INTEGER,
       PRIMARY KEY (thread_id, turn_id)
     );`);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS uploaded_files (
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      PRIMARY KEY (project_id, id)
+    );`);
     this.queue = new QueueStore(this.db);
     this.queue.recover();
     this.db.exec(
@@ -113,6 +119,25 @@ export class Store {
       .prepare('SELECT max(updated_at) AS updatedAt FROM threads WHERE project_id=?')
       .get(projectId) as { updatedAt: number | null };
     return row.updatedAt ?? undefined;
+  }
+  saveUploadedFile(projectId: string, content: string) {
+    const id = createHash('sha256').update(content).digest('hex');
+    const result = this.db
+      .prepare(
+        `INSERT INTO uploaded_files (project_id,id,content)
+        SELECT ?,?,? WHERE (SELECT count(*) FROM uploaded_files) < ?
+        ON CONFLICT(project_id,id) DO NOTHING`,
+      )
+      .run(projectId, id, content, limits.uploadedFiles);
+    if (!result.changes && this.uploadedFile(projectId, id) === undefined)
+      throw new AppError('FILE_STORAGE_FULL', 'Uploaded file storage is full.', 413);
+    return id;
+  }
+  uploadedFile(projectId: string, id: string) {
+    const row = this.db
+      .prepare('SELECT content FROM uploaded_files WHERE project_id=? AND id=?')
+      .get(projectId, id) as { content: string } | undefined;
+    return row?.content;
   }
   settingsProfile(id?: string): SettingsProfile {
     if (id && !this.thread(id))

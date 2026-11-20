@@ -13,17 +13,25 @@ import { limits } from '../shared/types.js';
 import { Service } from './service.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
 
+const sha256 = /^[a-f0-9]{64}$/;
 const fileAttachment = z
   .object({
     kind: z.literal('file').optional(),
     path: z.string().min(1).max(1024),
-    sha: z.string().regex(/^[a-f0-9]{64}$/),
+    sha: z.string().regex(sha256),
     fromLine: z.number().int().positive(),
     toLine: z.number().int().positive(),
   })
   .strict();
 const attachment = z.union([
   fileAttachment,
+  z
+    .object({
+      kind: z.literal('uploaded-file'),
+      id: z.string().regex(sha256),
+      name: z.string().min(1).max(160),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('image'),
@@ -135,7 +143,7 @@ export async function application(
     const expiry = cookie ? sessions.get(cookie) : undefined;
     return !!expiry && expiry > Date.now();
   };
-  let imageUploads = 0;
+  let attachmentUploads = 0;
   server.on('request', (request, response) => {
     response.setHeader('x-content-type-options', 'nosniff');
     response.setHeader('referrer-policy', 'no-referrer');
@@ -239,7 +247,8 @@ export async function application(
           const projectId = segments[2];
           if (segments[3] === 'context' && method === 'GET')
             return json(response, await service.projectContext(projectId));
-          if (segments[3] === 'images') {
+          if (segments[3] === 'images' || segments[3] === 'uploaded-files') {
+            const image = segments[3] === 'images';
             service.project(projectId);
             if (method === 'POST' && !segments[4]) {
               try {
@@ -249,49 +258,63 @@ export async function application(
                 throw error;
               }
               const contentType = request.headers['content-type'] ?? '';
-              if (!imageTypes.includes(contentType as (typeof imageTypes)[number]))
-                throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP image.', 415);
-              if (Number(request.headers['content-length'] ?? 0) > imageLimits.bytes) {
+              if (image && !imageTypes.includes(contentType as (typeof imageTypes)[number])) {
                 request.resume();
-                throw new AppError('IMAGE_LIMIT', 'Images must be at most 8 MiB.', 413);
+                throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP image.', 415);
               }
-              if (imageUploads >= 4) {
+              const maxBytes = image ? imageLimits.bytes : limits.uploadedFile;
+              const limitError = image
+                ? new AppError('IMAGE_LIMIT', 'Images must be at most 8 MiB.', 413)
+                : new AppError('FILE_LIMIT', 'Text files must be at most 64 KiB.', 413);
+              if (Number(request.headers['content-length'] ?? 0) > maxBytes) {
+                request.resume();
+                throw limitError;
+              }
+              if (attachmentUploads >= 4) {
                 request.resume();
                 throw new AppError(
-                  'IMAGE_UPLOAD_BUSY',
-                  'Image uploads are busy. Try again shortly.',
+                  image ? 'IMAGE_UPLOAD_BUSY' : 'FILE_UPLOAD_BUSY',
+                  'Attachment uploads are busy. Try again shortly.',
                   429,
                 );
               }
-              imageUploads++;
+              attachmentUploads++;
               try {
                 const chunks: Buffer[] = [];
                 let bytes = 0;
                 for await (const chunk of request) {
                   bytes += chunk.length;
-                  if (bytes > imageLimits.bytes)
-                    throw new AppError('IMAGE_LIMIT', 'Images must be at most 8 MiB.', 413);
+                  if (bytes > maxBytes) throw limitError;
                   chunks.push(chunk);
                 }
                 const encodedName = z
                   .string()
                   .max(1500)
-                  .parse(request.headers['x-image-name'] ?? 'Image');
+                  .parse(
+                    request.headers[image ? 'x-image-name' : 'x-file-name'] ??
+                      (image ? 'Image' : 'File'),
+                  );
                 let name: string;
                 try {
                   name = decodeURIComponent(encodedName);
                 } catch {
-                  throw new AppError('IMAGE_NAME', 'Invalid image filename.');
+                  throw new AppError(
+                    image ? 'IMAGE_NAME' : 'FILE_NAME',
+                    'Invalid attachment filename.',
+                  );
                 }
+                const buffer = Buffer.concat(chunks);
                 return json(
                   response,
-                  await service.images.save(projectId, Buffer.concat(chunks), name, contentType),
+                  image
+                    ? await service.images.save(projectId, buffer, name, contentType)
+                    : service.uploadFile(projectId, buffer, name),
                 );
               } finally {
-                imageUploads--;
+                attachmentUploads--;
               }
             }
-            if (method === 'GET' && segments[4] && !segments[5]) {
+            if (image && method === 'GET' && segments[4] && !segments[5]) {
               const image = await service.images.file(projectId, segments[4]);
               response.writeHead(200, {
                 'content-type': image.contentType,
@@ -301,7 +324,7 @@ export async function application(
               await pipeline(createReadStream(image.path), response);
               return;
             }
-            throw new AppError('NOT_FOUND', 'Image endpoint not found.', 404);
+            throw new AppError('NOT_FOUND', 'Attachment endpoint not found.', 404);
           }
           if (segments[3] === 'snapshot' && method === 'GET') {
             await service.list(projectId);

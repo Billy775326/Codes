@@ -28,17 +28,22 @@
   padding: 6px 10px 10px;
   border: 0;
 }
-.app .composer-attachment-controls > .icon-button {
+.app .composer-attachment-menu > summary {
   width: 36px;
   height: 36px;
   min-width: 36px;
   padding: 8px;
   border-radius: 7px;
 }
-.composer-attachment-controls {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+.app .composer-attachment-menu > summary[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+.app .composer-attachment-menu .panel-menu-content {
+  left: 0;
+  right: auto;
+  width: min(224px, calc(100vw - 48px));
+  padding: 5px;
 }
 .app .permission-menu {
   position: relative;
@@ -166,7 +171,7 @@
   border-radius: 8px;
 }
 @container (max-width: 460px) {
-  .composer-attachment-controls {
+  .composer-attachment-menu {
     grid-column: 1;
     grid-row: 1;
   }
@@ -205,14 +210,14 @@
   .app .composer textarea {
     font-size: 16px;
   }
-  .app .composer-attachment-controls > .icon-button,
+  .app .composer-attachment-menu > summary,
   .app .composer-toolbar > select,
   .app .model-menu summary,
   .app .permission-menu summary,
   .app .composer-dispatch-actions > button {
     min-height: 40px;
   }
-  .app .composer-attachment-controls > .icon-button,
+  .app .composer-attachment-menu > summary,
   .app .composer-dispatch-actions > button {
     height: 40px;
   }
@@ -391,7 +396,14 @@
   color: var(--fg);
   border: 1px solid var(--border);
 }
-.image-upload-status {
+.attachments .attachment-name {
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-upload-status {
   margin: 6px 14px;
   color: var(--muted);
   font-size: 12px;

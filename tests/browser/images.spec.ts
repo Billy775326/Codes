@@ -8,7 +8,7 @@ async function login(page: Page) {
   await expect(page.locator('.connection')).toHaveText('Connected');
 }
 async function choose(page: Page, name = 'synthetic.png') {
-  await page.getByLabel('Choose images', { exact: true }).setInputFiles({
+  await page.getByLabel('Choose local files', { exact: true }).setInputFiles({
     name,
     mimeType: 'image/png',
     buffer: imagePng,
@@ -28,6 +28,49 @@ async function loadedImages(page: Page, selector: string, count: number) {
     )
     .toBe(true);
 }
+
+test('the plus menu attaches a local text file and a file from the project', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  const trigger = page.getByRole('button', { name: 'Attach files', exact: true });
+  await expect(page.getByRole('button', { name: 'Attach image', exact: true })).toHaveCount(0);
+  await trigger.click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Upload from device', exact: true }).click();
+  await (
+    await chooser
+  ).setFiles({
+    name: 'device-notes.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Local attachment test content'),
+  });
+  await expect(
+    page.getByRole('button', { name: 'Remove device-notes.txt', exact: true }),
+  ).toBeVisible();
+  await trigger.click();
+  await page.getByRole('button', { name: 'Browse project files', exact: true }).click();
+  await page.getByRole('button', { name: 'example.ts', exact: true }).click();
+  await page.getByRole('button', { name: 'Attach file', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
+  const sending = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith('/send'),
+  );
+  await page.getByLabel('Message Codex').fill('Read both attachments');
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  const body = (await sending).postDataJSON();
+  expect(body.attachments).toEqual([
+    {
+      kind: 'uploaded-file',
+      id: expect.stringMatching(/^[a-f0-9]{64}$/),
+      name: 'device-notes.txt',
+    },
+    { path: 'example.ts', fromLine: 1, toLine: expect.any(Number), sha: expect.any(String) },
+  ]);
+  expect(JSON.stringify(body)).not.toContain('Local attachment test content');
+  await expect(page.getByTestId('message-user')).toContainText('Local attachment test content');
+  await expect(page.getByTestId('message-user')).toContainText('export function hello');
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
+});
 
 test('real clipboard image paste and ordinary text paste preserve the draft without sending', async ({
   page,
@@ -159,7 +202,7 @@ test('image validation and the four-attachment limit leave the existing draft us
 }) => {
   await login(page);
   await page.getByLabel('Message Codex').fill('Retain this text');
-  await page.getByLabel('Choose images', { exact: true }).setInputFiles({
+  await page.getByLabel('Choose local files', { exact: true }).setInputFiles({
     name: 'invalid.png',
     mimeType: 'image/png',
     buffer: Buffer.from('<svg/>'),
@@ -168,7 +211,7 @@ test('image validation and the four-attachment limit leave the existing draft us
     page.getByText('Choose a valid PNG, JPEG, or WebP image.', { exact: true }),
   ).toBeVisible();
   await expect(page.locator('.attachments img')).toHaveCount(0);
-  await page.getByLabel('Choose images', { exact: true }).setInputFiles(
+  await page.getByLabel('Choose local files', { exact: true }).setInputFiles(
     Array.from({ length: 4 }, (_, index) => ({
       name: `synthetic-${index}.png`,
       mimeType: 'image/png',
@@ -176,9 +219,9 @@ test('image validation and the four-attachment limit leave the existing draft us
     })),
   );
   await loadedImages(page, '.attachments img', 4);
-  await expect(page.getByRole('button', { name: 'Attach image', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Remove image: synthetic-0.png', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Attach image', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeEnabled();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Retain this text');
 });
 
@@ -198,7 +241,7 @@ for (const width of [1440, 320, 390])
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
-      for (const name of ['Attach image', 'Send message', 'Model and reasoning']) {
+      for (const name of ['Attach files', 'Send message', 'Model and reasoning']) {
         const button = page.getByRole('button', { name, exact: true });
         await button.scrollIntoViewIfNeeded();
         const bounds = await button.boundingBox();

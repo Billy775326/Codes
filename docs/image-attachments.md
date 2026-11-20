@@ -1,8 +1,8 @@
-# Image attachments
+# Composer attachments
 
-Paste an image into **Message Codex**, or use **Attach image** to choose files. The composer shows a thumbnail with an action to remove it. Clicking a thumbnail opens the original in an authenticated browser tab. Ordinary text paste continues to work.
+Open the composer **+** menu. **Upload from device** accepts UTF-8 text files and PNG, JPEG, or WebP images. **Browse project files** opens the current project's read-only text browser, where you can attach a whole file or a line selection. The composer displays file names and image thumbnails with removal actions. You can also paste images directly into **Message Codex**. Clicking a thumbnail opens the original in an authenticated browser tab.
 
-Images upload separately from task dispatch. Pasting never sends a task. Send, Queue, and Add now wait until uploads finish; Stop remains available. A message can contain only images, or text and images together. Uploads are cancelled when the project, conversation, or signed-in state changes; a late response cannot attach an image to another conversation. As with existing file attachments, unsent attachments clear when switching conversations or reloading; browser text drafts retain their existing persistence behavior.
+Uploads are separate from task dispatch. Send, Queue, and Add now wait until uploads finish; Stop remains available. Attach text files as context for a message. An image can be sent with or without a caption. Uploads are cancelled when the project, conversation, or signed-in state changes, so a late response cannot attach a file to another conversation. Unsent attachments clear when switching conversations or reloading; browser text drafts retain their existing persistence behavior.
 
 Waiting messages retain their image references and preview. Editing a waiting message changes only its text, preserving attachments and task settings; image-only messages can keep an empty caption. Removing an image from the composer does not remove it from already submitted tasks or history. Unconfirmed task receipts still require checking before another submission; an upload failure does not mean a task was sent.
 
@@ -16,12 +16,17 @@ Waiting messages retain their image references and preview. Editing a waiting me
 | Image dimensions                                | 24 megapixels        |
 | Uploads in flight per server                    | 4                    |
 | Stored images across all projects               | 512 files or 128 MiB |
+| UTF-8 text file uploaded from device            | 64 KiB per file      |
+| Stored text uploads across all projects         | 512 files            |
+| Prompt and combined text context                | 100,000 bytes        |
 
 The server checks binary signatures, image header dimensions, and declared MIME type before admission. This is header validation, not a full pixel decode. Browsers and the native runtime can still reject malformed compressed pixel data. SVG, GIF, arbitrary remote URLs, and base64 image fields in task JSON are not accepted.
 
 The selected model must advertise image input through native model metadata. An unsupported model produces a recoverable error before native task dispatch; the unsent draft and its attachments remain available for correction. The model, reasoning effort, permissions, and mode otherwise follow the existing task settings.
 
 ## Storage, protocol, and compatibility
+
+Text uploads are stored by content digest in the project's private SQLite data. Send, Queue, and Add now pass a project-scoped reference and expand the text when the task is dispatched. Project files are checked against their saved digest on dispatch. Queued uploads remain available after restart; retain the database backup for older entries. Codes adds the upload table to schema 4 on startup.
 
 The server stores bytes under `images/<project-id>/<sha256>.<extension>` inside `CODES_DATA_DIR`, using private project directories and files. Identical uploads within one project share a file. Admission and writes are serialized, temporary files are replaced atomically, and capacity is bounded. The authenticated, project-scoped preview endpoint streams bytes with `Cache-Control: private,no-store` and backpressure. Image buffers and data URLs are not included in conversation snapshots or replay events.
 

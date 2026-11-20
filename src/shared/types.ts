@@ -167,7 +167,12 @@ export interface ImageAttachment {
   id: string;
   name: string;
 }
-export type Attachment = FileAttachment | ImageAttachment;
+export interface UploadedFileAttachment {
+  kind: 'uploaded-file';
+  id: string;
+  name: string;
+}
+export type Attachment = FileAttachment | ImageAttachment | UploadedFileAttachment;
 export interface FileContent {
   path: string;
   text: string;
@@ -201,6 +206,8 @@ export interface Snapshot {
 export const limits = {
   body: 256 * 1024,
   file: 256 * 1024,
+  uploadedFile: 64 * 1024,
+  uploadedFiles: 512,
   item: 128 * 1024,
   events: 512,
   eventBytes: 1024 * 1024,

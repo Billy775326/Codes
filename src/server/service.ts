@@ -22,6 +22,7 @@ import {
   type Message,
   type Action,
   type Attachment,
+  type UploadedFileAttachment,
   type FileContent,
   type State,
   type Summary,
@@ -31,6 +32,16 @@ import {
 
 const text = (value: unknown, maximum: number = limits.item) =>
   typeof value === 'string' ? value.slice(0, maximum) : '';
+function decodeFileText(bytes: Buffer) {
+  let content: string;
+  try {
+    content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new AppError('BINARY_FILE', 'Only UTF-8 text files are supported.');
+  }
+  if (content.includes('\0')) throw new AppError('BINARY_FILE', 'Only text files are supported.');
+  return content;
+}
 const terminal = (status: unknown) =>
   ['completed', 'failed', 'interrupted'].includes(String(status));
 function state(raw: any): State {
@@ -1366,6 +1377,17 @@ export class Service {
         images.push({ type: 'localImage', path: image.path });
         continue;
       }
+      if (attachment.kind === 'uploaded-file') {
+        const content = this.store.uploadedFile(projectId, attachment.id);
+        if (content === undefined)
+          throw new AppError(
+            'FILE_NOT_FOUND',
+            'The uploaded file is unavailable. Attach it again.',
+            404,
+          );
+        context += `\n\nUploaded file context ${JSON.stringify({ name: attachment.name })}:\n${content}`;
+        continue;
+      }
       const file = await this.file(projectId, attachment.path);
       if (file.sha !== attachment.sha)
         throw new AppError(
@@ -2451,6 +2473,23 @@ export class Service {
       : 'waitingInput';
     this.boundary(thread);
   }
+  uploadFile(projectId: string, bytes: Buffer, name: string): UploadedFileAttachment {
+    if (!bytes.length || bytes.length > limits.uploadedFile)
+      throw new AppError(
+        'FILE_LIMIT',
+        'Choose a non-empty UTF-8 text file of at most 64 KiB.',
+        413,
+      );
+    const content = decodeFileText(bytes);
+    return {
+      kind: 'uploaded-file',
+      id: this.store.saveUploadedFile(projectId, content),
+      name:
+        basename(name.replaceAll('\\', '/'))
+          .replace(/[\x00-\x1f\x7f]/g, '')
+          .slice(0, 160) || 'File',
+    };
+  }
   async file(projectId: string, path: string): Promise<FileContent> {
     const absolute = await this.safePath(projectId, path);
     const info = await stat(absolute).catch((error) => this.fileError(projectId, error));
@@ -2459,13 +2498,7 @@ export class Service {
     const bytes = await readFile(absolute).catch((error) => this.fileError(projectId, error));
     if (bytes.length > limits.file)
       throw new AppError('FILE_LIMIT', 'This file grew beyond the 256 KB limit.');
-    let content: string;
-    try {
-      content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    } catch {
-      throw new AppError('BINARY_FILE', 'Only UTF-8 text files are supported.');
-    }
-    if (content.includes('\0')) throw new AppError('BINARY_FILE', 'Only text files are supported.');
+    const content = decodeFileText(bytes);
     return {
       path,
       text: content,

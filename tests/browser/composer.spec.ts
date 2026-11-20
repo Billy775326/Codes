@@ -24,12 +24,12 @@ for (const width of [1440, 320]) {
     const selectors =
       width > 460
         ? [
-            '.composer-attachment-controls > .icon-button',
-            '.composer-toolbar > select',
+            '.composer-attachment-menu > summary',
+            '.permission-menu > summary',
             '.model-menu > summary',
             '.send-button',
           ]
-        : ['.composer-attachment-controls > .icon-button', '.composer-toolbar > select'];
+        : ['.composer-attachment-menu > summary', '.permission-menu > summary'];
     const centers: number[] = [];
     for (const selector of selectors)
       for (const control of await page.locator(selector).all()) {

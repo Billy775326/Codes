@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type ChangeEvent } from 'react';
 import { imageLimits, imageTypes } from '../shared/images';
-import type { ImageAttachment } from '../shared/types';
+import { limits, type ImageAttachment, type UploadedFileAttachment } from '../shared/types';
 import { ApiError, request } from './api';
 
-export function useImageAttachments({
+export function useLocalAttachments({
   projectId,
   scope,
   count,
@@ -15,7 +15,7 @@ export function useImageAttachments({
   scope: string;
   count: number;
   disabled: boolean;
-  attach: (image: ImageAttachment) => void;
+  attach: (attachment: ImageAttachment | UploadedFileAttachment) => void;
   error: (value: unknown) => void;
 }) {
   const picker = useRef<HTMLInputElement>(null);
@@ -30,16 +30,23 @@ export function useImageAttachments({
       requests.current.clear();
     };
   }, [scope, disabled]);
-  const upload = async (files: File[]) => {
+  const upload = (files: File[]) => {
     const owner = current.current;
     if (owner.disabled || !owner.projectId) return;
     for (const file of files) {
-      if (!imageTypes.includes(file.type as (typeof imageTypes)[number])) {
+      const image = file.type.startsWith('image/');
+      if (image && !imageTypes.includes(file.type as (typeof imageTypes)[number])) {
         owner.error(new Error('Choose a PNG, JPEG, or WebP image.'));
         continue;
       }
-      if (!file.size || file.size > imageLimits.bytes) {
-        owner.error(new Error('Images must be at most 8 MiB.'));
+      if (!file.size || file.size > (image ? imageLimits.bytes : limits.uploadedFile)) {
+        owner.error(
+          new Error(
+            image
+              ? 'Images must be at most 8 MiB.'
+              : 'Choose a non-empty UTF-8 text file of at most 64 KiB.',
+          ),
+        );
         continue;
       }
       if (current.current.count + requests.current.size >= imageLimits.attachments) {
@@ -47,29 +54,30 @@ export function useImageAttachments({
         break;
       }
       const controller = new AbortController();
+      const name = file.name.slice(0, 160).replace(/[\uD800-\uDBFF]$/, '');
       requests.current.add(controller);
       setPending(requests.current.size);
-      void request<ImageAttachment>(
-        `/projects/${owner.projectId}/images`,
+      void request<ImageAttachment | UploadedFileAttachment>(
+        `/projects/${owner.projectId}/${image ? 'images' : 'uploaded-files'}`,
         {
           method: 'POST',
           body: file,
           headers: {
-            'content-type': file.type,
-            'x-image-name': encodeURIComponent(file.name.slice(0, 160)),
+            'content-type': image ? file.type : 'application/octet-stream',
+            [image ? 'x-image-name' : 'x-file-name']: encodeURIComponent(name),
           },
         },
         controller.signal,
       )
-        .then((image) => {
+        .then((attachment) => {
           if (!controller.signal.aborted && current.current.scope === owner.scope)
-            current.current.attach(image);
+            current.current.attach(attachment);
         })
         .catch((value) => {
           if (!controller.signal.aborted && current.current.scope === owner.scope)
             current.current.error(
               value instanceof ApiError && value.uncertain
-                ? new Error('Image upload was not confirmed. Paste it again; no task was sent.')
+                ? new Error('Upload was not confirmed. Select the file or paste the image again.')
                 : value,
             );
         })
@@ -86,12 +94,12 @@ export function useImageAttachments({
     );
     if (!files.length) return;
     if (!event.clipboardData.getData('text/plain')) event.preventDefault();
-    void upload(files);
+    upload(files);
   };
   const choose = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = '';
-    void upload(files);
+    upload(files);
   };
   return { picker, pending, paste, choose };
 }

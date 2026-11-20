@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -446,6 +446,44 @@ it('sends small JSON with an exact length without introducing a compressed strea
   expect(result.headers['content-encoding']).toBeUndefined();
   expect(result.headers['content-length']).toBe(String(result.bytes.length));
   expect(JSON.parse(result.bytes.toString()).runtime).toBe('mock');
+});
+
+it('validates local text uploads and only resolves their references in the owning project', async () => {
+  const project = await service.addProject(directory);
+  const upload = (body: string | Uint8Array<ArrayBuffer>, session = cookie) =>
+    fetch(origin + '/api/projects/' + project.id + '/uploaded-files', {
+      method: 'POST',
+      headers: { origin, cookie: session, 'x-file-name': 'notes.txt' },
+      body,
+    });
+  expect((await upload('private text', '')).status).toBe(401);
+  expect((await upload(Uint8Array.of(255, 0))).status).toBe(400);
+  expect((await upload('x'.repeat(65537))).status).toBe(413);
+  const response = await upload('private text');
+  expect(response.status).toBe(200);
+  const attachment = await response.json();
+  expect(attachment).toEqual({
+    kind: 'uploaded-file',
+    id: expect.stringMatching(/^[a-f0-9]{64}$/),
+    name: 'notes.txt',
+  });
+  expect(await (await upload('private text')).json()).toEqual(attachment);
+  const otherDirectory = join(directory, 'other');
+  await mkdir(otherDirectory);
+  const other = await service.addProject(otherDirectory);
+  const thread = await service.create(other.id);
+  const sent = await fetch(origin + '/api/threads/' + thread.id + '/send', {
+    method: 'POST',
+    headers: { origin, cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      operationId: randomUUID(),
+      text: 'Read this file',
+      settings: { permission: 'read-only' },
+      attachments: [attachment],
+    }),
+  });
+  expect(sent.status).toBe(404);
+  expect((await sent.json()).error.code).toBe('FILE_NOT_FOUND');
 });
 
 it('uploads images separately from JSON, protects reads and dispatches image-only input by small references', async () => {

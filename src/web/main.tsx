@@ -1,9 +1,10 @@
 import { projectViews, rememberProject } from './project-navigation';
 import { sameSettings } from '../shared/types';
+import { imageLimits } from '../shared/images';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
-import { useImageAttachments } from './useImageAttachments';
+import { useLocalAttachments } from './useLocalAttachments';
 import { chatFontSizes, codeFontSizes } from './font-sizes';
 import React, {
   memo,
@@ -20,7 +21,6 @@ import remarkGfm from 'remark-gfm';
 import type {
   Action,
   Attachment,
-  ImageAttachment,
   SettingsProfile,
   Envelope,
   FileContent,
@@ -574,26 +574,34 @@ function App() {
       setError(message(e));
     }
   }, []);
-  const images = useImageAttachments({
+  const attachmentsUnavailable =
+    auth !== 'ready' ||
+    !contextReady ||
+    directoryBlocked ||
+    !!thread?.archived ||
+    !!thread?.managementPending;
+  const localAttachments = useLocalAttachments({
     projectId: contextProjectId,
     scope: auth + ':' + projectId + ':' + threadId,
     count: attachments.length,
-    disabled:
-      auth !== 'ready' ||
-      !contextReady ||
-      directoryBlocked ||
-      !!thread?.archived ||
-      !!thread?.managementPending,
-    attach: (image: ImageAttachment) => {
+    disabled: attachmentsUnavailable,
+    attach: (attachment) => {
       draftRevision.current++;
       setAttachments((list) =>
-        list.length >= 4 || list.some((entry) => entry.kind === 'image' && entry.id === image.id)
+        list.length >= imageLimits.attachments ||
+        list.some(
+          (entry) => 'id' in entry && entry.kind === attachment.kind && entry.id === attachment.id,
+        )
           ? list
-          : [...list, image],
+          : [...list, attachment],
       );
     },
     error: notice,
   });
+  const attachmentBlocked =
+    attachmentsUnavailable ||
+    !!localAttachments.pending ||
+    attachments.length >= imageLimits.attachments;
   const hasInput = !!draft.trim() || attachments.some((entry) => entry.kind === 'image');
   const connectionStatus = useCallback((status: string) => {
     setConnection(status);
@@ -1111,7 +1119,7 @@ function App() {
     if (
       !threadId ||
       busy ||
-      images.pending ||
+      localAttachments.pending ||
       settingsBlocked ||
       !!thread?.writerConflict ||
       !hasInput ||
@@ -1275,7 +1283,7 @@ function App() {
     }
     if (
       busy ||
-      images.pending ||
+      localAttachments.pending ||
       settingsBlocked ||
       !!thread?.writerConflict ||
       queueRequest ||
@@ -1445,12 +1453,12 @@ function App() {
     if (window.innerWidth <= 1099) setPanel(null);
     requestAnimationFrame(() => composer.current?.focus());
   };
-  const attach = () => {
-    if (!file || !contextReady || directoryBlocked || attachments.length >= 4) return;
+  const attachProjectFile = (fromLine: number, toLine: number) => {
+    if (!file || attachmentBlocked) return;
     draftRevision.current++;
     setAttachments((list) => [
-      ...list.filter((x) => x.kind === 'image' || x.path !== file.path),
-      { path: file.path, sha: file.sha, fromLine: Math.min(...range), toLine: Math.max(...range) },
+      ...list.filter((entry) => !('path' in entry) || entry.path !== file.path),
+      { path: file.path, sha: file.sha, fromLine, toLine },
     ]);
     returnToComposer();
   };
@@ -1562,7 +1570,7 @@ function App() {
     settingsBlocked ||
     !!system?.maintenance ||
     !!thread?.writerConflict ||
-    !!images.pending ||
+    !!localAttachments.pending ||
     !!steerReceipt ||
     !!queueRequest ||
     !hasInput ||
@@ -2621,11 +2629,18 @@ function App() {
                       }}
                     />
                   ) : (
-                    <span key={a.path}>
+                    <span key={a.kind === 'uploaded-file' ? a.id : a.path}>
                       <Icon name="file" size={13} />
-                      {a.path}:{a.fromLine}–{a.toLine}
+                      <span
+                        className="attachment-name"
+                        title={a.kind === 'uploaded-file' ? a.name : a.path}
+                      >
+                        {a.kind === 'uploaded-file'
+                          ? a.name
+                          : `${a.path}:${a.fromLine}–${a.toLine}`}
+                      </span>
                       <button
-                        aria-label={`Remove ${a.path}`}
+                        aria-label={`Remove ${a.kind === 'uploaded-file' ? a.name : a.path}`}
                         onClick={() => {
                           draftRevision.current++;
                           setAttachments((list) => list.filter((x) => x !== a));
@@ -2638,9 +2653,9 @@ function App() {
                 )}
               </div>
             )}
-            {!!images.pending && (
-              <p className="image-upload-status" role="status">
-                Uploading {images.pending} image(s)…
+            {!!localAttachments.pending && (
+              <p className="attachment-upload-status" role="status">
+                Uploading {localAttachments.pending} attachment(s)…
               </p>
             )}
             {threadId && conversationSettings.saving && (
@@ -2657,7 +2672,7 @@ function App() {
               </p>
             )}
             <textarea
-              onPaste={images.paste}
+              onPaste={localAttachments.paste}
               aria-label="Message Codex"
               aria-describedby="message-delivery-help"
               aria-keyshortcuts={shortcut === 'Enter' ? 'Enter' : 'Control+Enter Meta+Enter'}
@@ -2704,43 +2719,33 @@ function App() {
               }}
             />
             <div className="composer-toolbar">
-              <div className="composer-attachment-controls">
-                <button
-                  className="icon-button"
-                  aria-label="Attach file context"
-                  onClick={() => setPanel('files')}
-                  disabled={!contextReady || directoryBlocked}
-                >
-                  <Icon name="plus" size={17} />
-                </button>
-
+              <PanelMenu
+                label="Attach files"
+                className="composer-attachment-menu"
+                disabled={attachmentBlocked}
+                trigger={<Icon name="plus" size={17} />}
+              >
                 <button
                   type="button"
-                  className="icon-button"
-                  aria-label="Attach image"
-                  title="Attach image"
-                  disabled={
-                    !contextReady ||
-                    directoryBlocked ||
-                    !!thread?.archived ||
-                    !!thread?.managementPending ||
-                    !!images.pending ||
-                    attachments.length >= 4
-                  }
-                  onClick={() => images.picker.current?.click()}
+                  data-close-menu
+                  onClick={() => localAttachments.picker.current?.click()}
                 >
-                  <Icon name="image" size={17} />
+                  <Icon name="file" size={16} />
+                  Upload from device
                 </button>
-                <input
-                  hidden
-                  ref={images.picker}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  multiple
-                  aria-label="Choose images"
-                  onChange={images.choose}
-                />
-              </div>
+                <button type="button" data-close-menu onClick={() => setPanel('files')}>
+                  <Icon name="folder" size={16} />
+                  Browse project files
+                </button>
+              </PanelMenu>
+              <input
+                hidden
+                ref={localAttachments.picker}
+                type="file"
+                multiple
+                aria-label="Choose local files"
+                onChange={localAttachments.choose}
+              />
               <ComposerControls
                 ref={composerControls}
                 settings={settings}
@@ -3086,26 +3091,15 @@ function App() {
                       Lines {Math.min(...range)}–{Math.max(...range)}
                     </span>
                     <button
-                      onClick={() => {
-                        if (file) {
-                          draftRevision.current++;
-                          setAttachments((list) => [
-                            ...list.filter(
-                              (entry) => entry.kind === 'image' || entry.path !== file.path,
-                            ),
-                            { path: file.path, sha: file.sha, fromLine: 1, toLine: file.lines },
-                          ]);
-                          returnToComposer();
-                        }
-                      }}
-                      disabled={!contextReady || directoryBlocked || attachments.length >= 4}
+                      onClick={() => attachProjectFile(1, file.lines)}
+                      disabled={attachmentBlocked}
                     >
                       Attach file
                     </button>
                     <button
                       className="primary"
-                      onClick={attach}
-                      disabled={!contextReady || directoryBlocked || attachments.length >= 4}
+                      onClick={() => attachProjectFile(Math.min(...range), Math.max(...range))}
+                      disabled={attachmentBlocked}
                     >
                       Attach selection
                     </button>
