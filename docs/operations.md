@@ -8,6 +8,10 @@ Open **Session status** and choose **Prepare maintenance**. Codes stops admittin
 
 An authenticated operator can also POST `{"action":"start"}` or `{"action":"cancel"}` to `/api/maintenance` and read `maintenance.ready` and `maintenance.expiresAt` from `GET /api/system`. Recheck readiness and the expiration immediately before switching. This control gates task admission in the current process. The operator still owns backup, restart and verification.
 
+Record when the old process reaches `maintenance.ready`, when the new build starts, and when it passes verification. This distinguishes a drain timeout from a failure to verify an already switched build. If verification stops after startup, confirm the running build and process before attempting another restart.
+
+After the new HTTP listener accepts authenticated requests, call `GET /api/models` first to initialize the Codex runtime without sending a model prompt. Then check `GET /api/system` for the expected runtime, CLI version and `ready` state. Reading `/api/system` alone can keep reporting `not_started` on a cold process. Verify the database, authenticated endpoints, event stream and browser after the runtime is ready.
+
 ## Persistent state
 
 `CODES_DATA_DIR` contains a SQLite database, WAL files, the workspace access token, and a PID lock. Mock mode also stores synthetic history there. The directory defaults to `.local` and is ignored by Git.
