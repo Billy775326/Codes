@@ -1,4 +1,5 @@
 import { chatFontSizes, codeFontSizes } from './font-sizes';
+import { defaultBrowserPreferences, type Preferences } from './browser-preferences';
 import { ModelSettingsFields } from './ComposerControls';
 import { permissionPresets } from '../shared/permissions';
 import type { Model } from '../shared/types';
@@ -80,13 +81,56 @@ export function InteractionDialog({
     </div>
   );
 }
-export interface Preferences {
-  followUp: 'queue' | 'steer';
-  enter: 'enter' | 'cmdIfMultiline' | 'cmdAlways';
-  review: 'inline' | 'detached';
-  theme?: 'dark' | 'light' | 'system';
-  chatFontSize?: number;
-  codeFontSize?: number;
+function ResetSettings({
+  label,
+  detail,
+  reset,
+  disabled,
+}: {
+  label: string;
+  detail: string;
+  reset: () => void;
+  disabled?: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const dismiss = () => {
+    setConfirming(false);
+    trigger.current?.focus();
+  };
+  return (
+    <div className="preferences-reset">
+      <button
+        ref={trigger}
+        type="button"
+        aria-expanded={confirming}
+        disabled={disabled}
+        onClick={() => setConfirming(!confirming)}
+      >
+        {label}
+      </button>
+      {confirming && (
+        <div role="group" aria-label={label + ' confirmation'}>
+          <p>{detail}</p>
+          <div className="preferences-reset-actions">
+            <button type="button" onClick={dismiss} autoFocus>
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                reset();
+                dismiss();
+              }}
+            >
+              Confirm reset
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 export function PreferencesDialog({
   value,
@@ -122,7 +166,7 @@ export function PreferencesDialog({
             <span className="preference-description">Theme</span>
             <select
               aria-label="Theme"
-              value={value.theme ?? 'dark'}
+              value={value.theme}
               onChange={(event) =>
                 change({ ...value, theme: event.target.value as Preferences['theme'] })
               }
@@ -240,6 +284,12 @@ export function PreferencesDialog({
                   disabled={defaults.loading}
                 />
               </div>
+              <ResetSettings
+                label="Reset new conversation defaults"
+                detail="Restore Read only, the native model and reasoning defaults, Execution mode, and Standard speed for future conversations."
+                disabled={defaults.loading || defaults.conflict}
+                reset={() => defaults.change({ permission: 'read-only' })}
+              />
             </>
           )}
           {defaults.loading && <p role="status">Loading defaults…</p>}
@@ -295,6 +345,16 @@ export function PreferencesDialog({
               <option value="detached">Separate conversation</option>
             </select>
           </label>
+          <label className="preference-row">
+            <span>Scroll with replies</span>
+            <input
+              className="preference-checkbox"
+              type="checkbox"
+              role="switch"
+              checked={value.autoScroll}
+              onChange={(event) => change({ ...value, autoScroll: event.target.checked })}
+            />
+          </label>
           <details className="preferences-help">
             <summary>Editing and shortcuts</summary>
             <p>
@@ -311,11 +371,19 @@ export function PreferencesDialog({
         </section>
       </div>
       <div className="preferences-footer">
-        {saveError ? (
-          <span className="preferences-save-error" role="alert">
-            {saveError}
-          </span>
-        ) : null}
+        {saveError && (
+          <div className="preferences-save-error">
+            <span role="alert">{saveError}</span>
+            <button type="button" onClick={() => change(value)}>
+              Retry save
+            </button>
+          </div>
+        )}
+        <ResetSettings
+          label="Reset browser settings"
+          detail="Restore theme, text sizes, and interaction preferences in this browser."
+          reset={() => change(defaultBrowserPreferences)}
+        />
         <button
           className="preferences-done"
           type="button"

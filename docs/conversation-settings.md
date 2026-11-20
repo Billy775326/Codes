@@ -4,6 +4,8 @@ Permissions and **Model and reasoning** belong to the selected conversation. A c
 
 Use **Interaction settings → New conversation defaults** for the starting permissions, model, reasoning effort, mode, and Fast setting of subsequent normal conversations. Defaults are shared by this single-owner workspace. Existing conversations retain their own settings. The initial default remains Read only, with the native default model/effort, Execution, and Standard speed. Changing these preferences does not edit global Codex configuration.
 
+**Reset new conversation defaults** restores that initial workspace profile through the same save and revision checks. **Reset browser settings** restores appearance and interaction preferences for the current browser. These include **Scroll with replies**, which is enabled by default. Turn it off to keep the current reading position as new text arrives, and use **Back to latest** for a manual jump. **Retry save** saves the current browser preferences again after a storage error.
+
 The New conversation action starts with the current saved defaults. Before a conversation has been created, its text and customized settings are browser-only, project-scoped drafts; up to 20 new-draft setting records are retained. Reload restores that draft choice. Once created, conversation settings are server-backed. Branches retain their existing Read only starting policy, and reviews retain their native read-only execution policy.
 
 ## Approve for me

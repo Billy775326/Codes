@@ -152,6 +152,22 @@ test('new-conversation defaults persist on the server and leave an existing conv
       observer.getByRole('button', { name: 'Model and reasoning', exact: true }),
     ).toContainText('Low');
     await expect(observer.getByTestId('message-user')).toHaveCount(0);
+    await observer.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    const resetScope = observer.getByRole('region', {
+      name: 'New conversation defaults',
+      exact: true,
+    });
+    await resetScope
+      .getByRole('button', { name: 'Reset new conversation defaults', exact: true })
+      .click();
+    await resetScope.getByRole('button', { name: 'Confirm reset', exact: true }).click();
+    await expect
+      .poll(async () => (await (await page.request.get('/api/settings/defaults')).json()).settings)
+      .toEqual({ permission: 'read-only' });
+    expect(await profile(page, id)).toEqual(previous);
+    await expect(
+      page.getByRole('button', { name: 'Codex permissions', exact: true }),
+    ).toContainText('Read only');
   } finally {
     await other.close();
   }

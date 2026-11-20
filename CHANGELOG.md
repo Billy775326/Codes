@@ -8,6 +8,7 @@
 
 ### Added
 
+- Turn off automatic scrolling as replies arrive, retry a failed browser settings save, and separately restore browser settings and new-conversation defaults.
 - Rename and pin projects from their sidebar cards, remember each card's open state, search by project or conversation name, and copy direct links from conversation actions.
 - Preview project PNG, JPEG, and WebP files in Files or through Markdown image references. Open a sandboxed visual preview for HTML source files and HTML in Codex replies.
 - Prepare maintenance from Session status to pause new tasks and queue dispatch while existing work finishes. The pause expires after five minutes and can be canceled.

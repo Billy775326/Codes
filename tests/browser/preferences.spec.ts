@@ -132,15 +132,18 @@ test('font previews and chat typography persist alongside legacy interaction pre
   ).toBe('15px');
   await expect(page.getByLabel('Message Codex')).toHaveValue('Preserve draft across font changes');
 });
-test('a failed preference save is visible while current-session changes apply', async ({
+test('a failed browser preference save keeps the current choice available to retry', async ({
   page,
 }) => {
   await fixture(page);
   await page.evaluate(() => {
     const original = Storage.prototype.setItem;
+    let fail = true;
     Storage.prototype.setItem = function (key, value) {
-      if (key === 'codes.preferences')
+      if (key === 'codes.preferences' && fail) {
+        fail = false;
         throw new DOMException('Synthetic storage failure', 'QuotaExceededError');
+      }
       original.call(this, key, value);
     };
   });
@@ -151,9 +154,88 @@ test('a failed preference save is visible while current-session changes apply', 
     'Changes apply now, but this browser could not save them.',
   );
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'light');
+  await dialog.getByRole('button', { name: 'Retry save', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page.reload();
-  await expect(page.locator('.app')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('.app')).toHaveAttribute('data-theme', 'light');
+});
+
+test('browser settings can be reset without changing workspace defaults or the draft', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await fixture(page);
+  const before = await (await page.request.get('/api/settings/defaults')).json();
+  await page.getByLabel('Message Codex').fill('Keep this settings reset draft');
+  const settings = page.getByRole('button', { name: 'Interaction settings', exact: true });
+  await settings.click();
+  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const theme = dialog.getByRole('combobox', { name: 'Theme', exact: true });
+  const autoScroll = dialog.getByRole('switch', { name: 'Scroll with replies', exact: true });
+  await theme.selectOption('light');
+  await dialog.getByLabel('Chat text size').selectOption('20');
+  await autoScroll.uncheck();
+  await page.reload();
+  await settings.click();
+  await expect(autoScroll).not.toBeChecked();
+  const reset = dialog.getByRole('button', { name: 'Reset browser settings', exact: true });
+  await reset.click();
+  const confirmation = dialog.getByRole('group', { name: 'Reset browser settings confirmation' });
+  const cancel = confirmation.getByRole('button', { name: 'Cancel', exact: true });
+  await expect(cancel).toBeFocused();
+  await cancel.click();
+  await expect(reset).toBeFocused();
+  await expect(theme).toHaveValue('light');
+  await reset.click();
+  await confirmation.getByRole('button', { name: 'Confirm reset', exact: true }).click();
+  await expect(theme).toHaveValue('dark');
+  await expect(dialog.getByLabel('Chat text size')).toHaveValue('');
+  await expect(autoScroll).toBeChecked();
+  expect(await (await page.request.get('/api/settings/defaults')).json()).toEqual(before);
+  await page.reload();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this settings reset draft');
+  await settings.click();
+  await expect(theme).toHaveValue('dark');
+  await expect(autoScroll).toBeChecked();
+});
+
+test('turning off reply scrolling preserves the reading position and keeps a manual jump', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 480 });
+  await fixture(page);
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  await dialog.getByLabel('Chat text size').selectOption('24');
+  await dialog.getByRole('switch', { name: 'Scroll with replies', exact: true }).uncheck();
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByLabel('Message Codex').fill('[slow] Test reading a stationary transcript');
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  const transcript = page.locator('.conversation');
+  const position = () => transcript.evaluate((element) => element.scrollTop);
+  await expect(
+    page
+      .getByTestId('message-assistant')
+      .filter({ has: page.locator('.caret') })
+      .getByRole('heading', { name: 'A clear path forward' }),
+  ).toBeVisible();
+  const back = page.getByRole('button', { name: 'Back to latest messages', exact: true });
+  await expect(back).toBeVisible();
+  const before = await position();
+  await expect(
+    page.locator('.turn-status').getByText('Completed', { exact: true }).last(),
+  ).toBeVisible({ timeout: 15_000 });
+  expect(Math.abs((await position()) - before)).toBeLessThan(2);
+  await back.click();
+  await expect(back).toHaveCount(0);
+  await expect
+    .poll(() =>
+      transcript.evaluate((element) => {
+        return element.scrollHeight - element.scrollTop - element.clientHeight;
+      }),
+    )
+    .toBeLessThan(5);
 });
 test('opening and changing settings keeps the active task subscription and draft', async ({
   page,

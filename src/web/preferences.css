@@ -150,21 +150,56 @@
 }
 .preferences-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   flex: 0 0 auto;
-  gap: 16px;
+  gap: 8px 16px;
   padding: 12px 20px;
   border-top: 1px solid var(--line);
 }
-.preferences-scope,
 .preferences-save-error {
+  flex-basis: 100%;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--muted);
-}
-.preferences-save-error {
   color: #d19292;
+}
+.preferences-save-error button {
+  margin-inline-start: 6px;
+}
+.preferences-reset > button,
+.preferences-reset-actions > button,
+.preferences-save-error button {
+  min-height: var(--control-size);
+  padding: 4px 8px;
+  border-radius: 5px;
+  color: var(--link);
+}
+.preferences-reset > button:hover,
+.preferences-reset-actions > button:hover,
+.preferences-save-error button:hover {
+  background: var(--hover);
+}
+.preferences-reset {
+  margin-top: 8px;
+}
+.preferences-footer .preferences-reset {
+  margin-top: 0;
+}
+.preferences-reset p {
+  margin: 4px 8px;
+}
+.preferences-reset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.app .preferences-dialog .preference-checkbox {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--link);
 }
 .app[data-theme='light'] .preferences-save-error {
   color: #a13535;

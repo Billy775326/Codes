@@ -12,7 +12,7 @@ import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
 import { AnswerMarkdown, HtmlPreview, ProjectImagePreview } from './ContentPreview';
 import { useLocalAttachments } from './useLocalAttachments';
-import { chatFontSizes, codeFontSizes } from './font-sizes';
+import { readBrowserPreferences, type Preferences } from './browser-preferences';
 import React, {
   memo,
   useCallback,
@@ -74,7 +74,6 @@ import {
   PreferencesDialog,
   ReviewDialog,
   StatusDialog,
-  type Preferences,
 } from './InteractionDialog';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
 import { WorkspaceHeader } from './WorkspaceHeader';
@@ -360,24 +359,15 @@ function App() {
   const [autoReviewReady, setAutoReviewReady] = useState(false);
   const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
-  const [preferences, setPreferences] = useState<Preferences>(() => {
-    try {
-      const value = JSON.parse(saved('codes.preferences') || '{}');
-      return {
-        followUp: ['steer', 'interrupt'].includes(value.followUp) ? 'steer' : 'queue',
-        enter: ['enter', 'cmdIfMultiline', 'cmdAlways'].includes(value.enter)
-          ? value.enter
-          : 'enter',
-        review: value.review === 'detached' ? 'detached' : 'inline',
-        theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
-        chatFontSize: chatFontSizes.includes(value.chatFontSize) ? value.chatFontSize : undefined,
-        codeFontSize: codeFontSizes.includes(value.codeFontSize) ? value.codeFontSize : undefined,
-      };
-    } catch {
-      return { followUp: 'queue', enter: 'enter', review: 'inline' };
-    }
-  });
+  const [preferences, setPreferences] = useState(() =>
+    readBrowserPreferences(saved('codes.preferences')),
+  );
   const [preferencesError, setPreferencesError] = useState('');
+  const changePreferences = (value: Preferences) => {
+    setPreferences(value);
+    const stored = save('codes.preferences', JSON.stringify(value));
+    setPreferencesError(stored ? '' : 'Changes apply now, but this browser could not save them.');
+  };
   const [steerReceipt, setSteerReceipt] = useState<{
     operationId: string;
     text: string;
@@ -451,11 +441,7 @@ function App() {
     window.matchMedia('(prefers-color-scheme: dark)').matches,
   );
   const theme =
-    preferences.theme === 'system'
-      ? prefersDark
-        ? 'dark'
-        : 'light'
-      : (preferences.theme ?? 'dark');
+    preferences.theme === 'system' ? (prefersDark ? 'dark' : 'light') : preferences.theme;
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
@@ -517,6 +503,7 @@ function App() {
     undefined,
   );
   const follow = useRef(true);
+  const positionedConversation = useRef<string | undefined>(undefined);
   const historyRead = useRef<AbortController | undefined>(undefined);
   const scrollPosition = useRef(0);
   const touchPosition = useRef<number | undefined>(undefined);
@@ -1077,9 +1064,25 @@ function App() {
     }
   }, [visibleMessages, threadId]);
   useEffect(() => {
-    if (timelineLatest && follow.current && transcript.current)
-      transcript.current.scrollTop = transcript.current.scrollHeight;
-  }, [visibleMessages, thread?.actions, thread?.state, timelineLatest]);
+    const element = transcript.current;
+    if (!timelineLatest || !element) return;
+    const current = thread?.id === threadId ? threadId : undefined;
+    const opened = current !== positionedConversation.current;
+    positionedConversation.current = current;
+    if (follow.current && (preferences.autoScroll || opened)) {
+      element.scrollTop = element.scrollHeight;
+    } else if (!preferences.autoScroll) {
+      setAtLatest(element.scrollHeight - element.scrollTop - element.clientHeight < 100);
+    }
+  }, [
+    visibleMessages,
+    thread?.actions,
+    thread?.state,
+    thread?.id,
+    threadId,
+    timelineLatest,
+    preferences.autoScroll,
+  ]);
   useEffect(() => {
     if (!contextReady || directoryBlocked || panel !== 'files') return;
     const controller = new AbortController();
@@ -2898,13 +2901,7 @@ function App() {
           }}
           saveError={preferencesError}
           close={() => setDialog(undefined)}
-          change={(value) => {
-            setPreferences(value);
-            const stored = save('codes.preferences', JSON.stringify(value));
-            setPreferencesError(
-              stored ? '' : 'Changes apply now, but this browser could not save them.',
-            );
-          }}
+          change={changePreferences}
         />
       )}
       {dialog === 'review' && (
