@@ -145,7 +145,7 @@ export const Conversations = memo(function Conversations({
         <button
           className="icon-button"
           aria-label="Refresh conversations"
-          title="Refresh conversations"
+          data-tooltip=""
           onClick={() => {
             onRefreshProjects();
             setRevision((value) => value + 1);
@@ -165,7 +165,7 @@ export const Conversations = memo(function Conversations({
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
-            <button aria-label="Clear search" onClick={() => setQuery('')}>
+            <button aria-label="Clear search" data-tooltip="" onClick={() => setQuery('')}>
               <Icon name="close" size={13} />
             </button>
           )}
@@ -489,11 +489,11 @@ const ProjectCard = memo(function ProjectCard({
           <button
             className="icon-button project-card-new"
             aria-label={active ? 'New conversation' : 'New conversation in ' + project.name}
-            title={'New conversation in ' + project.name}
+            data-tooltip={'New conversation in ' + project.name}
             disabled={disabled}
             onClick={() => onNew(projectId)}
           >
-            <Icon name="plus" size={16} />
+            <Icon name="newchat" size={16} />
           </button>
         )}
         {!collapsed && (
@@ -501,7 +501,7 @@ const ProjectCard = memo(function ProjectCard({
             className="icon-button"
             aria-label={'Project actions for ' + project.name}
             aria-expanded={projectMenu}
-            title="Project actions"
+            data-tooltip=""
             disabled={savingProject}
             onClick={() => {
               setProjectMenu(!projectMenu);
@@ -518,6 +518,7 @@ const ProjectCard = memo(function ProjectCard({
           <button
             className="icon-button project-card-collapse"
             aria-label={'Collapse ' + project.name}
+            data-tooltip=""
             aria-controls={listId}
             aria-expanded="true"
             onClick={() => {
@@ -690,6 +691,7 @@ const ProjectCard = memo(function ProjectCard({
                 <button
                   className="icon-button conversation-menu-trigger"
                   aria-label={'Actions for ' + row.title}
+                  data-tooltip=""
                   aria-expanded={menu === row.id}
                   disabled={!!pending}
                   onClick={() => {
@@ -720,7 +722,7 @@ const ProjectCard = memo(function ProjectCard({
                     Rename
                   </button>
                   <button onClick={() => void copyConversation(row)}>
-                    <Icon name="copy" size={12} />
+                    <Icon name="link" size={12} />
                     {copied?.id === row.id && !copied.fallback ? 'Link copied' : 'Copy link'}
                   </button>
                   {row.managementPending ? (
@@ -815,6 +817,7 @@ const ProjectCard = memo(function ProjectCard({
         <div className="conversation-pagination">
           <button
             aria-label="Previous conversation page"
+            data-tooltip=""
             disabled={!previous.length || loading}
             onClick={back}
           >
@@ -823,6 +826,7 @@ const ProjectCard = memo(function ProjectCard({
           <span>Page {previous.length + 1}</span>
           <button
             aria-label="Next conversation page"
+            data-tooltip=""
             disabled={!page.nextCursor || loading}
             onClick={next}
           >

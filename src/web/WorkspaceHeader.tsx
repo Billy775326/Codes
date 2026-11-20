@@ -32,10 +32,10 @@ export function WorkspaceHeader(props: Props) {
         <button
           className="icon-button"
           aria-label="Open navigation"
-          title="Open navigation"
+          data-tooltip=""
           onClick={props.onNavigation}
         >
-          <Icon name="menu" size={17} />
+          <Icon name="sidebar" size={17} />
         </button>
       )}
       <div className="breadcrumb">
@@ -63,6 +63,7 @@ export function WorkspaceHeader(props: Props) {
         <PanelMenu
           label="Conversation actions"
           className="conversation-menu"
+          iconOnly
           trigger={<Icon name="more" size={17} />}
         >
           {props.showStarters &&
@@ -80,7 +81,7 @@ export function WorkspaceHeader(props: Props) {
             Review code
           </button>
           <button data-close-menu onClick={props.onStatus}>
-            <Icon name="terminal" size={14} />
+            <Icon name="activity" size={14} />
             Session status
           </button>
         </PanelMenu>
@@ -88,27 +89,25 @@ export function WorkspaceHeader(props: Props) {
           aria-label="Browse files"
           disabled={!props.hasProject || props.busy}
           aria-pressed={props.panel === 'files'}
-          title="Browse files"
+          data-tooltip=""
           className={'icon-button ' + (props.panel === 'files' ? 'selected' : '')}
           onClick={() => props.onPanel('files')}
         >
-          <Icon name="file" size={16} />
-          <span className="header-action-label">Files</span>
+          <Icon name="folder" size={17} />
         </button>
         <button
           aria-label="Review changes"
           aria-pressed={props.panel === 'diff'}
-          title="Review changes"
+          data-tooltip=""
           className={'icon-button ' + (props.panel === 'diff' ? 'selected' : '')}
           onClick={() => props.onPanel('diff')}
         >
-          <Icon name="review" size={16} />
-          <span className="header-action-label">Changes</span>
+          <Icon name="diff" size={17} />
         </button>
         {!props.sidebarOpen && (
           <button
             aria-label="Interaction settings"
-            title="Settings"
+            data-tooltip=""
             className="icon-button"
             onClick={props.onSettings}
           >
@@ -118,7 +117,7 @@ export function WorkspaceHeader(props: Props) {
         {!props.sidebarOpen && (
           <button
             aria-label="New conversation"
-            title="New conversation"
+            data-tooltip=""
             className="icon-button"
             disabled={props.busy}
             onClick={props.onNewConversation}

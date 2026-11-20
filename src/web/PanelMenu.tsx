@@ -9,6 +9,7 @@ export function PanelMenu({
   controller,
   className = '',
   disabled = false,
+  iconOnly = false,
 }: {
   label: string;
   trigger: ReactNode;
@@ -17,6 +18,7 @@ export function PanelMenu({
   controller?: RefObject<HTMLDetailsElement | null>;
   className?: string;
   disabled?: boolean;
+  iconOnly?: boolean;
 }) {
   const local = useRef<HTMLDetailsElement>(null);
   const ref = controller ?? local;
@@ -45,7 +47,8 @@ export function PanelMenu({
       <summary
         role="button"
         aria-label={label}
-        title={description ? label + ': ' + description : label}
+        data-tooltip={iconOnly ? '' : undefined}
+        title={iconOnly ? undefined : description ? label + ': ' + description : label}
         aria-description={description}
         aria-disabled={disabled || undefined}
         onClick={(event) => {

@@ -20,7 +20,7 @@ export function ChangeSummary({
   return (
     <section className="edit-summary" aria-label="Edited files">
       <div className="edit-summary-heading">
-        <Icon name="review" size={15} />
+        <Icon name="diff" size={15} />
         <div>
           <strong>
             Edited {count} {count === 1 ? 'file' : 'files'}

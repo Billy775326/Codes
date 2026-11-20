@@ -76,6 +76,7 @@ import {
   StatusDialog,
 } from './InteractionDialog';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
+import { ControlTooltip } from './ControlTooltip';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import './foundation.css';
 import './interactions.css';
@@ -254,7 +255,7 @@ const MessageView = memo(function MessageView({
                 <div className="message-actions" role="group" aria-label="Reply actions">
                   <button
                     aria-label="Copy message"
-                    title="Copy message"
+                    data-tooltip=""
                     onClick={() => {
                       void navigator.clipboard
                         ?.writeText(item.text)
@@ -2004,7 +2005,12 @@ function App() {
       >
         <div className="sidebar-brand">
           <Brand />
-          <button className="icon-button" aria-label="Close navigation" onClick={closeNavigation}>
+          <button
+            className="icon-button"
+            aria-label="Close navigation"
+            data-tooltip=""
+            onClick={closeNavigation}
+          >
             <Icon name="close" />
           </button>
         </div>
@@ -2039,7 +2045,7 @@ function App() {
               <button
                 className="icon-button"
                 aria-label="Reconnect conversation updates"
-                title="Reconnect"
+                data-tooltip=""
                 onClick={() => setRetry((n) => n + 1)}
               >
                 <Icon name="refresh" size={16} />
@@ -2048,15 +2054,17 @@ function App() {
           </div>
           <div className="workspace-actions">
             <button
-              className="workspace-settings"
+              className="icon-button"
               aria-label="Interaction settings"
+              data-tooltip=""
               onClick={() => setDialog('preferences')}
             >
-              <Icon name="settings" size={16} /> Settings
+              <Icon name="settings" size={16} />
             </button>
             <PanelMenu
               label="Workspace actions"
               className="workspace-menu"
+              iconOnly
               trigger={<Icon name="more" size={16} />}
             >
               {!!projects.length && (
@@ -2764,6 +2772,7 @@ function App() {
                 label="Attach files"
                 className="composer-attachment-menu"
                 disabled={attachmentBlocked}
+                iconOnly
                 trigger={<Icon name="plus" size={17} />}
               >
                 <button
@@ -2771,7 +2780,7 @@ function App() {
                   data-close-menu
                   onClick={() => localAttachments.picker.current?.click()}
                 >
-                  <Icon name="file" size={16} />
+                  <Icon name="upload" size={16} />
                   Upload from device
                 </button>
                 <button type="button" data-close-menu onClick={() => setPanel('files')}>
@@ -2809,17 +2818,13 @@ function App() {
                 {(active || !!thread?.queue?.items.length) && (
                   <button
                     className="queue-send"
-                    aria-label={
-                      active && preferences.followUp === 'steer'
-                        ? 'Add to current task'
-                        : 'Queue message'
-                    }
+                    aria-label={deliveryMode === 'steer' ? 'Add to current task' : 'Queue message'}
                     title={deliveryHelp + ' ' + deliveryShortcut}
                     aria-describedby="message-delivery-help"
                     disabled={deliveryMode === 'steer' ? addBlocked : queueBlocked}
                     onClick={() => followUp()}
                   >
-                    <Icon name="plus" size={14} />
+                    <Icon name={deliveryMode === 'steer' ? 'steer' : 'queue'} size={15} />
                     <span className="action-label">
                       {deliveryMode === 'steer' ? 'Add now' : 'Queue'}
                     </span>
@@ -2849,12 +2854,12 @@ function App() {
                   <button
                     className="send-button"
                     aria-label="Send message"
-                    title={deliveryHelp + ' ' + deliveryShortcut}
+                    aria-describedby="message-delivery-help"
+                    data-tooltip={'Send message · ' + shortcut}
                     onClick={() => void send()}
                     disabled={deliveryBlocked || !!receipt || !!thread?.queue?.items.length}
                   >
                     <Icon name="arrow" size={18} />
-                    <span className="action-label">Send</span>
                   </button>
                 )}
               </div>
@@ -3002,7 +3007,12 @@ function App() {
                 Changes{thread?.diff && <i />}
               </button>
             </div>
-            <button className="icon-button" aria-label="Close panel" onClick={() => setPanel(null)}>
+            <button
+              className="icon-button"
+              aria-label="Close panel"
+              data-tooltip=""
+              onClick={() => setPanel(null)}
+            >
               <Icon name="close" size={16} />
             </button>
           </div>
@@ -3042,7 +3052,7 @@ function App() {
                 />
               ) : (
                 <div className="panel-empty">
-                  <Icon name="review" size={30} />
+                  <Icon name="diff" size={30} />
                   <h3>No changes to review</h3>
                   <p>
                     Changes from the current turn
@@ -3195,6 +3205,7 @@ function App() {
           </form>
         </InteractionDialog>
       )}
+      <ControlTooltip />
     </div>
   );
 }

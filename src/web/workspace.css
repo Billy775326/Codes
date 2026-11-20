@@ -68,6 +68,7 @@
 }
 .workspace-connection {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 8px;
   justify-content: space-between;
@@ -82,16 +83,6 @@
   font-size: 12.1px;
   color: var(--muted);
   margin-right: 8px;
-}
-.header-action-label {
-  font-size: 13.2px;
-}
-.app .top-actions .icon-button:has(.header-action-label) {
-  width: auto;
-  padding: 6px 8px;
-  gap: 6px;
-  display: flex;
-  align-items: center;
 }
 .app .topbar {
   height: 56px;
@@ -823,9 +814,6 @@
   .app .context-panel {
     width: 100%;
   }
-  .header-action-label {
-    display: none;
-  }
   .header-connection {
     display: block;
     width: 6px;
@@ -838,10 +826,6 @@
   }
   .header-connection.connected {
     background: #81a888;
-  }
-  .app .top-actions .icon-button:has(.header-action-label) {
-    width: var(--control-size);
-    padding: 5px;
   }
   .app .topbar {
     display: grid;
@@ -1191,6 +1175,9 @@
 }
 
 .workspace-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 12px;
   border-top: 1px solid var(--line);
 }
@@ -1198,21 +1185,6 @@
   display: flex;
   align-items: center;
   gap: 4px;
-}
-.workspace-settings {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  min-height: var(--control-size);
-  padding: 6px 4px;
-  text-align: left;
-  border-radius: 5px;
-  color: var(--muted);
-}
-.workspace-settings:hover {
-  color: var(--fg);
-  background: var(--hover);
 }
 .workspace-menu > summary {
   display: flex;

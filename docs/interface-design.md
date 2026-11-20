@@ -35,6 +35,8 @@ Each design decision must improve the task flow, reduce maintenance ambiguity, a
 
 Keep approval questions, permission boundaries, task errors, unknown outcomes, archive state, and explicit recovery actions visible when they affect the next operation. Do not replace those states with decorative success labels or silently resend a task.
 
+Workspace tools such as Files, Changes, Settings, and Send use familiar icons and precise accessible names. Their shared hint appears on mouse hover and keyboard focus, and Escape dismisses it. Menus use text for touched or clicked choices. Selected permissions, model and reasoning, Queue, Add now, and Stop retain visible labels.
+
 ## Validation boundaries
 
 Browser regressions cover desktop and narrow layouts, both themes, keyboard navigation, project/conversation switching, drafts, popup hit targets, approval/question flows, queues, stopping, reconnection, and paginated history. The design-specific suite checks the shared modal, local-command focus, retained starter actions, and theme inheritance.

@@ -6,6 +6,40 @@ async function login(page: Page) {
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
 }
 
+test('compact tools retain precise names and show hints on hover and keyboard focus', async ({
+  page,
+}) => {
+  await login(page);
+  const files = page.getByRole('button', { name: 'Browse files', exact: true });
+  const changes = page.getByRole('button', { name: 'Review changes', exact: true });
+  const settings = page.getByRole('button', { name: 'Interaction settings', exact: true });
+  const send = page.getByRole('button', { name: 'Send message', exact: true });
+  for (const control of [files, changes, settings, send]) {
+    await expect(control).toBeVisible();
+    await expect(control).toHaveText('');
+  }
+  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
+    'Read only',
+  );
+  const tooltip = page.locator('.control-tooltip');
+  await files.hover();
+  await expect(tooltip).toHaveText('Browse files');
+  await expect(tooltip).toBeVisible();
+  await tooltip.hover();
+  await expect(tooltip).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(tooltip).toBeHidden();
+
+  await files.focus();
+  await page.keyboard.press('Tab');
+  await expect(changes).toBeFocused();
+  await expect(tooltip).toHaveText('Review changes');
+  await expect(tooltip).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(changes).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('complementary', { name: 'Project context' })).toBeVisible();
+});
+
 for (const width of [1440, 320]) {
   test(`one workspace heading and project dialog preserve keyboard access at ${width}px`, async ({
     page,

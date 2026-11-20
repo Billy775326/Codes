@@ -179,6 +179,10 @@
   padding: 7px 10px;
   border-radius: 8px;
 }
+.app .composer-dispatch-actions > .send-button {
+  width: var(--control-size);
+  padding: 0;
+}
 @container (max-width: 460px) {
   .composer-attachment-menu {
     grid-column: 1;
