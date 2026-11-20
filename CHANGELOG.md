@@ -81,6 +81,8 @@
 
 ### Fixed
 
+- Explain when a pending Codex question expired after a runtime restart and keep the task result check available.
+
 - Show native questions and imported answers inside their conversation turns, where they remain visible when work history is collapsed.
 
 - Recognize native conversation writer contention when another client still owns an imported thread. Keep readable history and the prior task outcome, retain the unsent draft, and offer explicit availability checks or a separate branch without replaying rejected work.

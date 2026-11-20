@@ -686,6 +686,7 @@ export class Service {
     const metadata = this.store.thread(id)!;
     const thread: Thread = {
       ...metadata,
+      expiredQuestion: this.store.hasExpiredQuestion(id),
       state: metadata.executionPending ? 'unknown' : page.state,
       messages: page.messages,
       turns: page.turns,
@@ -1769,6 +1770,10 @@ export class Service {
     thread.queue = this.store.queue.state(thread.id);
   }
   private boundary(thread: Thread) {
+    thread.expiredQuestion =
+      !thread.actions.some(
+        (a) => a.kind === 'questions' && (a.status === 'pending' || a.status === 'responding'),
+      ) && this.store.hasExpiredQuestion(thread.id);
     this.syncQueue(thread);
     thread.composerSettings = this.store.settingsProfile(thread.id);
     // Protect lifecycle state and first-prompt titles from older thread/list replies.
@@ -1794,6 +1799,7 @@ export class Service {
         steering: thread.steering,
         resolvedModel: thread.resolvedModel,
         writerConflict: thread.writerConflict ?? false,
+        expiredQuestion: thread.expiredQuestion,
       },
       id,
     );
@@ -1942,11 +1948,21 @@ export class Service {
       return;
     }
     if (event.method === 'serverRequest/resolved') {
+      let questionResolved = false;
       for (const entry of this.actions.values())
         if (entry.action.threadId === thread.id && entry.rpcId === p.requestId) {
+          questionResolved ||= entry.action.kind === 'questions';
           entry.action.status = 'answered';
           this.actions.delete(entry.action.id);
         }
+      if (
+        questionResolved &&
+        thread.pending &&
+        !thread.actions.some(
+          (a) => a.kind === 'questions' && (a.status === 'pending' || a.status === 'responding'),
+        )
+      )
+        this.store.markWaitingQuestion(thread.pending.id, false);
       this.emitActions(thread.id);
       if (['waitingInput', 'waitingApproval'].includes(thread.state)) {
         const remaining = thread.actions.filter(
@@ -2253,6 +2269,8 @@ export class Service {
     );
     const settled = thread.actions.filter((a) => a.status === 'answered' || a.status === 'expired');
     if (settled.length >= 32) thread.actions = thread.actions.filter((a) => a !== settled[0]);
+    if (kind === 'questions' && thread.pending)
+      this.store.markWaitingQuestion(thread.pending.id, true);
     thread.actions.push(action);
     thread.state = thread.actions.some(
       (a) => a.kind !== 'questions' && ['pending', 'responding'].includes(a.status),

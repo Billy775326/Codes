@@ -69,6 +69,9 @@ export class Store {
     this.db.exec(`CREATE TABLE IF NOT EXISTS setting_profiles (
       scope TEXT PRIMARY KEY, revision INTEGER NOT NULL, settings TEXT NOT NULL);
       INSERT OR IGNORE INTO setting_profiles SELECT 'thread:'||id,0,settings FROM threads;`);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS waiting_question_operations (
+      operation_id TEXT PRIMARY KEY REFERENCES operations(id) ON DELETE CASCADE
+    );`);
     this.queue = new QueueStore(this.db);
     this.queue.recover();
     this.db.exec(
@@ -226,6 +229,24 @@ export class Store {
         resultId: row.result_id ?? undefined,
       }
     );
+  }
+  markWaitingQuestion(operationId: string, waiting: boolean) {
+    this.db
+      .prepare(
+        waiting
+          ? 'INSERT OR IGNORE INTO waiting_question_operations VALUES (?)'
+          : 'DELETE FROM waiting_question_operations WHERE operation_id=?',
+      )
+      .run(operationId);
+  }
+  hasExpiredQuestion(threadId: string) {
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM waiting_question_operations q
+      JOIN operations o ON o.id=q.operation_id
+      WHERE o.thread_id=? AND o.state='unknown' LIMIT 1`,
+      )
+      .get(threadId);
   }
   active(threadId: string) {
     const row = this.db

@@ -2553,10 +2553,19 @@ function App() {
           )}
           {(thread?.state === 'unknown' || (receipt && !thread?.pending)) && (
             <div className="recovery">
-              <span>A request may still be running. Check before continuing.</span>
+              <span>
+                {thread?.expiredQuestion
+                  ? 'The pending question expired when Codex stopped. Its answer can no longer be submitted. Check the task result before continuing.'
+                  : 'A request may still be running. Check before continuing.'}
+              </span>
               <button disabled={busy} onClick={() => void reconcile()}>
                 Check result
               </button>
+              {thread?.expiredQuestion && (
+                <button disabled={busy} onClick={() => void recoverBranch()}>
+                  Continue in branch
+                </button>
+              )}
             </div>
           )}
           {!queueEditing && draft.startsWith('/') && !draft.includes('\n') && (

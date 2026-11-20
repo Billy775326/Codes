@@ -262,6 +262,35 @@ async function until(predicate: () => boolean) {
     await new Promise((r) => setTimeout(r, 15));
   }
 }
+it('identifies an unanswered question after a service restart without replaying the turn', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codes-question-restart-'));
+  const open = () =>
+    new Service(
+      new Store(directory),
+      new Driver('mock', { stateFile: join(directory, 'history.json') }),
+    );
+  let service = open();
+  cleanup.push(async () => {
+    await service.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const project = await service.addProject(directory, 'Restart fixture');
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  await service.send(thread.id, randomUUID(), '[question]', { ...thread.settings, mode: 'plan' });
+  await until(() => thread.state === 'waitingInput');
+  const actionId = thread.actions[0]!.id;
+  expect(thread.expiredQuestion).toBe(false);
+  await service.close();
+  service = open();
+  const restored = await service.read(thread.id);
+  expect(restored).toMatchObject({ state: 'unknown', expiredQuestion: true, actions: [] });
+  await expect(
+    service.answer(actionId, randomUUID(), { answers: { direction: 'Continue' } }),
+  ).rejects.toMatchObject({ code: 'STALE_ACTION' });
+  await service.reconcile(thread.id);
+  expect(restored.expiredQuestion).toBe(true);
+  expect(restored.messages.filter((m) => m.kind === 'user')).toHaveLength(1);
+});
 it('lets optional Code questions be explicitly skipped and resumes the same native task', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[question]', thread.settings);
