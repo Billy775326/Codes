@@ -11,7 +11,7 @@ async function fixture(page: Page, text = 'Settings dialog fixture') {
       page.locator('.turn-status').getByText('Completed', { exact: true }),
     ).toBeVisible();
 }
-test('edits network settings on a narrow screen and shows the pending restart after reopening', async ({
+test('edits network settings and Cloudflare Access on a narrow screen', async ({
   page,
   baseURL,
 }) => {
@@ -34,7 +34,8 @@ test('edits network settings on a narrow screen and shows the pending restart af
   const save = dialog.getByRole('button', { name: 'Save network settings' });
   try {
     await expect(listenPort).toHaveValue(String(initial.active.port));
-    await expect(dialog.getByText('Local / Tailscale (local)', { exact: true })).toBeVisible();
+    const mode = dialog.getByLabel('Authentication mode');
+    await expect(mode).toHaveValue('local');
     await expect(save).toBeDisabled();
     await listenPort.fill('8787');
     await expect(addresses).toHaveValue('http://127.0.0.1:8787');
@@ -49,6 +50,26 @@ test('edits network settings on a narrow screen and shows the pending restart af
     await open();
     await expect(listenPort).toHaveValue('8787');
     await expect(dialog.getByRole('status')).toContainText(`port ${initial.active.port}`);
+    await mode.selectOption('cloudflare-access');
+    const team = 'https://example.cloudflareaccess.com';
+    const audience = 'a'.repeat(64);
+    await dialog.getByLabel('Cloudflare team URL').fill(team);
+    await dialog.getByLabel('Application Audience (AUD)').fill(audience);
+    await save.click();
+    await expect(dialog.getByRole('alert')).toContainText('All allowed addresses must use HTTPS');
+    await addresses.fill('https://codes.example.test');
+    await save.click();
+    await expect(save).toBeDisabled();
+    expect(await read()).toMatchObject({
+      restartRequired: true,
+      active: { authMode: 'local' },
+      settings: { authMode: 'cloudflare-access', issuer: team, audience },
+    });
+    await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
+    await open();
+    await expect(mode).toHaveValue('cloudflare-access');
+    await expect(dialog.getByLabel('Cloudflare team URL')).toHaveValue(team);
+    expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
   } finally {
     const current = await read();
     if (current.revision !== initial.revision) {

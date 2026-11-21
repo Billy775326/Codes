@@ -19,6 +19,9 @@ import { NetworkConfiguration } from './network-settings.js';
 const directory = resolve(process.env.CODES_DATA_DIR ?? '.local');
 mkdirSync(directory, { recursive: true, mode: 0o700 });
 const network = new NetworkConfiguration(directory, process.env);
+const dev = process.argv.includes('--dev');
+if (dev && network.active.authMode === 'cloudflare-access')
+  throw new Error('Cloudflare Access mode requires the built Codes server.');
 const { host, port, origins } = network.active;
 const address = host === 'localhost' ? (await lookup(host)).address : host;
 if (address !== '127.0.0.1' && address !== '::1')
@@ -65,7 +68,7 @@ if (process.env.CODES_PROJECT_ROOT) {
 const app = await application(service, {
   network,
   token,
-  dev: process.argv.includes('--dev'),
+  dev,
   test: process.env.CODES_TEST_MODE === '1',
 });
 app.server.listen(port, address, () => {

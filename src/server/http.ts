@@ -14,6 +14,8 @@ import { Service } from './service.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
 import type { NetworkConfiguration } from './network-settings.js';
+import type { JWTVerifyGetKey } from 'jose';
+import { cloudflareAuthenticator } from './cloudflare-access.js';
 
 const sha256 = /^[a-f0-9]{64}$/;
 const fileAttachment = z
@@ -121,10 +123,16 @@ export async function application(
     dev?: boolean;
     test?: boolean;
     staticDir?: string;
+    cloudflareKey?: JWTVerifyGetKey;
   },
 ) {
-  const origins = options.network.active.origins.map((origin) => new URL(origin));
-  const sessions = new Map<string, number>();
+  const active = options.network.active;
+  const origins = active.origins.map((origin) => new URL(origin));
+  const authenticateAccess =
+    active.authMode === 'cloudflare-access'
+      ? cloudflareAuthenticator(active, options.cloudflareKey)
+      : undefined;
+  const sessions = new Map<string, { expiry: number; subject: string | undefined }>();
   const attempts = new Map<string, { count: number; until: number }>();
   const server = createServer();
   const vite = options.dev
@@ -138,10 +146,10 @@ export async function application(
       .map((s) => s.trim())
       .find((s) => s.startsWith('codes_session='))
       ?.slice('codes_session='.length);
-  const authenticated = (request: IncomingMessage) => {
+  const authenticated = (request: IncomingMessage, subject: string | undefined) => {
     const cookie = sessionId(request);
-    const expiry = cookie ? sessions.get(cookie) : undefined;
-    return !!expiry && expiry > Date.now();
+    const session = cookie ? sessions.get(cookie) : undefined;
+    return !!session && session.expiry > Date.now() && session.subject === subject;
   };
   let attachmentUploads = 0;
   server.on('request', (request, response) => {
@@ -164,6 +172,10 @@ export async function application(
       const method = request.method;
       if (url.pathname.startsWith('/api/') && method !== 'GET' && !requestOrigin)
         throw new AppError('ORIGIN_DENIED', 'Request origin not allowed.', 403);
+      const access = authenticateAccess
+        ? await authenticateAccess(request.headers['cf-access-jwt-assertion'])
+        : undefined;
+      if (response.destroyed) return;
       if (url.pathname === '/api/login' && method === 'POST') {
         for (const [key, value] of attempts) if (value.until < Date.now()) attempts.delete(key);
         const ip = request.socket.remoteAddress ?? 'unknown';
@@ -185,10 +197,10 @@ export async function application(
           throw new AppError('AUTH_REQUIRED', 'The access token is incorrect.', 401);
         }
         attempts.delete(ip);
-        for (const [id, expiry] of sessions) if (expiry < Date.now()) sessions.delete(id);
+        for (const [id, session] of sessions) if (session.expiry < Date.now()) sessions.delete(id);
         if (sessions.size >= 32) sessions.delete(sessions.keys().next().value!);
         const session = randomBytes(32).toString('hex');
-        sessions.set(session, Date.now() + 12 * 3600_000);
+        sessions.set(session, { expiry: Date.now() + 12 * 3600_000, subject: access?.subject });
         response.setHeader(
           'set-cookie',
           `codes_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${requestOrigin?.protocol === 'https:' ? '; Secure' : ''}`,
@@ -196,7 +208,7 @@ export async function application(
         return json(response, { ok: true });
       }
       if (url.pathname.startsWith('/api/')) {
-        if (!authenticated(request))
+        if (!authenticated(request, access?.subject))
           throw new AppError('AUTH_REQUIRED', 'Sign in to your workspace.', 401);
         if (url.pathname === '/api/html-preview' && method === 'GET') {
           response.writeHead(200, {
@@ -655,9 +667,18 @@ export async function application(
           });
           response.flushHeaders();
           const expiry = setInterval(() => {
-            if (!authenticated(request)) response.end();
+            if (!authenticated(request, access?.subject)) response.end();
           }, 30_000);
-          response.once('close', () => clearInterval(expiry));
+          const accessExpiry = access
+            ? setTimeout(
+                () => response.end(),
+                Math.min(access.expiresAt - Date.now(), 12 * 3600_000),
+              )
+            : undefined;
+          response.once('close', () => {
+            clearInterval(expiry);
+            clearTimeout(accessExpiry);
+          });
           service.events.subscribe(
             id,
             Number(url.searchParams.get('after') ?? -1),
@@ -695,7 +716,11 @@ export async function application(
       };
       response.writeHead(200, {
         'content-type': mime[extname(file)] ?? 'application/octet-stream',
-        'cache-control': file.endsWith('index.html') ? 'no-cache' : 'public,max-age=3600',
+        'cache-control': authenticateAccess
+          ? 'private,no-store'
+          : file.endsWith('index.html')
+            ? 'no-cache'
+            : 'public,max-age=3600',
       });
       response.end(method === 'HEAD' ? undefined : bytes);
     })().catch((error: unknown) => {

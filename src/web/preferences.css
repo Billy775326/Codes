@@ -55,6 +55,11 @@
   gap: 12px;
   margin-bottom: 16px;
 }
+.network-access-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
 .app .network-settings :is(select, input, textarea) {
   display: block;
   width: 100%;
@@ -66,12 +71,10 @@
   resize: vertical;
   font-family: monospace;
 }
-.network-auth {
-  margin: 16px 0 0;
-}
-.network-auth dd {
-  margin: 4px 0 0;
-  font-weight: 600;
+.network-access-credentials {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
 }
 .network-actions {
   display: flex;
@@ -306,6 +309,9 @@
   .app .preferences-dialog select {
     min-height: 44px;
     font-size: 16px;
+  }
+  .network-access-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
   .preferences-done,
   .preferences-nav button,
