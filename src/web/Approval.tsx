@@ -66,9 +66,11 @@ export function Approval({
       )}
       {action.kind === 'questions' && (
         <p className="question-help">
-          {action.blocking === false
-            ? 'Codex asked for clarification. Submit your choices or skip this optional request.'
-            : 'Codex is waiting for your answers. Review each question before submitting.'}{' '}
+          {action.async
+            ? 'You can answer while Codex works or after it finishes.'
+            : action.blocking === false
+              ? 'Codex asked for clarification. Submit your choices or skip this optional request.'
+              : 'Codex is waiting for your answers. Review each question before submitting.'}{' '}
           A suggested choice is not sent until you submit.
         </p>
       )}
@@ -167,23 +169,25 @@ export function Approval({
                 Skip question
               </button>
             )}
-            <button
-              className="secondary"
-              disabled={disabled}
-              onClick={() => {
-                if (sending.current) return;
-                sending.current = true;
-                setBusy(true);
-                void post('/threads/' + action.threadId + '/interrupt')
-                  .catch((e) => setError(message(e)))
-                  .finally(() => {
-                    sending.current = false;
-                    setBusy(false);
-                  });
-              }}
-            >
-              Cancel task
-            </button>
+            {!action.async && (
+              <button
+                className="secondary"
+                disabled={disabled}
+                onClick={() => {
+                  if (sending.current) return;
+                  sending.current = true;
+                  setBusy(true);
+                  void post('/threads/' + action.threadId + '/interrupt')
+                    .catch((e) => setError(message(e)))
+                    .finally(() => {
+                      sending.current = false;
+                      setBusy(false);
+                    });
+                }}
+              >
+                Cancel task
+              </button>
+            )}
           </>
         ) : (
           action.decisions.map((decision) => (

@@ -129,3 +129,28 @@ it('formats answered Covro question envelopes without creating live questions or
   ])
     expect(nativeMessage({ id: 'raw', type: 'userMessage', text: input }, 't')?.text).toBe(input);
 });
+it('uses structured asynchronous questions and leaves question-like notices as text', () => {
+  const notice = {
+    id: 'call-1',
+    type: 'agentMessage',
+    text: 'Would you like to continue?',
+    delivery: 'async',
+  };
+  expect(nativeMessage(notice, 'turn')?.asyncQuestions).toBeUndefined();
+  expect(
+    nativeMessage(
+      {
+        ...notice,
+        questions: [{ title: 'Proceed?', options: ['Yes', 'No'] }],
+      },
+      'turn',
+    )?.asyncQuestions,
+  ).toEqual([
+    {
+      id: JSON.stringify(['request_user_input_async', 'call-1', 0]),
+      question: 'Proceed?',
+      allowOther: true,
+      options: [{ label: 'Yes' }, { label: 'No' }],
+    },
+  ]);
+});

@@ -2350,7 +2350,11 @@ function App() {
                             <div className="approval-heading">
                               <strong>Codex question</strong>
                               <span className="badge">
-                                {action?.status === 'expired' ? 'Expired' : 'Answered'}
+                                {action?.status === 'expired'
+                                  ? 'Expired'
+                                  : action?.skipped
+                                    ? 'Skipped'
+                                    : 'Answered'}
                               </span>
                             </div>
                             {m.answeredQuestions?.map(({ question, answer }, index) => (

@@ -28,7 +28,13 @@ function legacyAnswer(value: string): Message['answeredQuestions'] {
       )
     )
       return;
-    return entries.map(({ question, answer }) => ({ question, answer }));
+    return entries.map(({ questionItemId, question, answer }) => ({
+      ...(typeof questionItemId === 'string' && questionItemId.length <= 512
+        ? { questionItemId }
+        : {}),
+      question,
+      answer,
+    }));
   } catch {
     return;
   } // Ordinary text and malformed historical payloads stay readable.
@@ -98,16 +104,43 @@ export function nativeMessage(
         : {}),
     };
   }
-  if (raw.type === 'agentMessage')
+  if (raw.type === 'agentMessage') {
+    const asyncQuestions =
+      Array.isArray(raw.questions) &&
+      raw.questions.length > 0 &&
+      raw.questions.length <= 8 &&
+      raw.questions.every(
+        (question: unknown) =>
+          record(question) && typeof question.title === 'string' && question.title.trim(),
+      )
+        ? raw.questions.map((question: { title: string; options?: unknown }, index: number) => ({
+            id: JSON.stringify(['request_user_input_async', raw.id, index]),
+            question: text(question.title, 4000),
+            allowOther: true,
+            options: Array.isArray(question.options)
+              ? [
+                  ...new Set(
+                    question.options
+                      .filter((value): value is string => typeof value === 'string')
+                      .slice(0, 10)
+                      .map((value) => text(value, 1000))
+                      .filter(Boolean),
+                  ),
+                ].map((label) => ({ label }))
+              : undefined,
+          }))
+        : undefined;
     return {
       id: raw.id,
       turnId,
       kind: 'assistant',
       text: text(raw.text),
+      ...(asyncQuestions ? { asyncQuestions } : {}),
       ...(['commentary', 'partial_answer', 'final_answer'].includes(raw.phase)
         ? { phase: raw.phase }
         : {}),
     };
+  }
   if (raw.type === 'commandExecution')
     return {
       id: raw.id,

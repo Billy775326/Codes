@@ -464,6 +464,20 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           });
         }
       }
+      if (text.includes('[async-question]')) {
+        const question = {
+          id: 'call-' + randomUUID(),
+          type: 'agentMessage',
+          text: 'One decision can wait while I continue.',
+          delivery: 'async',
+          phase: 'commentary',
+          questions: [
+            { title: 'Which direction should I use?', options: ['Small change', 'Explain first'] },
+          ],
+        };
+        turn.items.push(question);
+        note('item/completed', { threadId: thread.id, turnId: turn.id, item: question });
+      }
       if (
         text.includes('[approve]') ||
         text.includes('[question]') ||

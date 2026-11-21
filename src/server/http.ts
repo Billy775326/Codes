@@ -556,7 +556,10 @@ export async function application(
             // Cached history stays readable while native execution is offline.
             const context = await service.projectContext(thread.projectId);
             return json(response, {
-              thread: service.withSidebarActivity(thread),
+              thread: {
+                ...service.withSidebarActivity(thread),
+                actions: service.conversationActions(id),
+              },
               context,
               cursor: { seq: service.events.seq, epoch: service.events.epoch },
             });

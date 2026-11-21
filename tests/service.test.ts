@@ -294,6 +294,67 @@ it('identifies an unanswered question after a service restart without replaying 
   expect(restored.expiredQuestion).toBe(true);
   expect(restored.messages.filter((m) => m.kind === 'user')).toHaveLength(1);
 });
+it('restores async question attention before opening the conversation and dismisses it without creating a turn', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codes-async-question-restart-'));
+  const open = () =>
+    new Service(
+      new Store(directory),
+      new Driver('mock', { stateFile: join(directory, 'history.json') }),
+    );
+  let service = open();
+  cleanup.push(async () => {
+    await service.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const project = await service.addProject(directory);
+  const thread = await service.create(project.id);
+  await service.send(thread.id, randomUUID(), '[async-question]', thread.settings);
+  await until(() => thread.state === 'completed');
+  const action = service.conversationActions(thread.id)[0]!;
+  expect(action).toMatchObject({ async: true, status: 'pending' });
+  await service.close();
+  service = open();
+  expect(service.summaries(project.id)).toContainEqual(
+    expect.objectContaining({
+      id: thread.id,
+      state: 'completed',
+      sidebarActivity: 'optionalInput',
+    }),
+  );
+  const receipt = randomUUID();
+  await service.answer(action.id, receipt, { decision: 'skip' });
+  await expect(service.answer(action.id, receipt, { decision: 'skip' })).resolves.toMatchObject({
+    id: receipt,
+    state: 'completed',
+  });
+  expect(service.summaries(project.id)[0]?.sidebarActivity).toBeUndefined();
+  const restored = await service.read(thread.id);
+  expect(restored.turns).toHaveLength(1);
+  expect(service.conversationActions(thread.id)[0]).toMatchObject({
+    status: 'answered',
+    skipped: true,
+  });
+});
+it('sends at most one async question reply to the running turn when two clients answer', async () => {
+  const { service, project, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[async-question] [hold]', thread.settings);
+  await until(() => service.conversationActions(thread.id).some((action) => action.async));
+  const action = service.conversationActions(thread.id)[0]!;
+  const turn = thread.turnId;
+  expect(thread.state).toBe('running');
+  const answers = { [action.questions![0]!.id]: 'Small change' };
+  const results = await Promise.allSettled([
+    service.answer(action.id, randomUUID(), { answers }),
+    service.answer(action.id, randomUUID(), { answers }),
+  ]);
+  expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+  expect(thread.turnId).toBe(turn);
+  expect(thread.state).toBe('running');
+  await until(() => service.conversationActions(thread.id)[0]?.status === 'answered');
+  expect(service.summaries(project.id)[0]?.sidebarActivity).toBeUndefined();
+  expect(thread.messages.filter((message) => message.answeredQuestions)).toHaveLength(1);
+  await service.interrupt(thread.id);
+});
 it('lets optional Code questions be explicitly skipped and resumes the same native task', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[question]', thread.settings);

@@ -10,6 +10,35 @@ async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
 }
+test('async questions stay in the original turn and show sidebar attention after the turn completes', async ({
+  page,
+}) => {
+  await login(page);
+  const prompt = '[async-question] Optional choice ' + Date.now();
+  await send(page, prompt);
+  const row = page.locator('.thread-link').filter({ hasText: prompt });
+  await expect(row).toContainText('Optional question');
+  const card = page.getByRole('region', { name: 'Codex question', exact: true });
+  await expect(card.getByRole('button', { name: 'Submit answer' })).toBeEnabled();
+  await expect(
+    page.locator('.turn').filter({ hasText: prompt }).getByRole('region', {
+      name: 'Codex question',
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(row).toContainText('Optional question');
+  await card.getByRole('radio', { name: 'Explain first' }).check();
+  await card.getByRole('button', { name: 'Submit answer' }).click();
+  await expect(row).not.toContainText('Optional question');
+  const original = page.locator('.turn').filter({ hasText: prompt });
+  await expect(original.getByRole('region', { name: 'Codex question' })).toContainText(
+    'Answer: Explain first',
+  );
+  await page.reload();
+  await expect(original.getByRole('region', { name: 'Codex question' })).toContainText('Answered');
+});
 test('structured questions preserve native options, free text, secret controls, and cross-client resolution', async ({
   browser,
 }) => {

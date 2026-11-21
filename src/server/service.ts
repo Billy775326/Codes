@@ -12,6 +12,7 @@ import { MessageQueue } from './message-queue.js';
 import { Images, validatedImageType } from './images.js';
 import { imageLimits, projectImageType } from '../shared/images.js';
 import { ModelSettings } from './model-settings.js';
+import { AsyncQuestions } from './async-questions.js';
 import { nativeMessage as item, nativeTurn } from './transcript.js';
 import { z } from 'zod';
 import { AppError, record } from '../shared/errors.js';
@@ -76,6 +77,7 @@ export class Service {
   private managing = new Set<string>();
   readonly queue: MessageQueue;
   readonly modelSettings: ModelSettings;
+  private readonly asyncQuestions: AsyncQuestions;
   private sending = new Map<string, number>();
   private maintenance?: { expiresAt: number; timer: ReturnType<typeof setTimeout> };
   private usageBaseline = new WeakMap<Thread, { turnId: string; total: number; output?: number }>();
@@ -91,6 +93,7 @@ export class Service {
     readonly driver: Driver,
   ) {
     this.images = new Images(store.directory);
+    this.asyncQuestions = new AsyncQuestions(store.db);
     this.modelSettings = new ModelSettings(driver);
     this.queue = new MessageQueue(
       store.queue,
@@ -383,10 +386,11 @@ export class Service {
     const thread = this.cache.get(summary.id);
     const actions = thread?.actions.filter((action) => action.status === 'pending') ?? [];
     const questions = actions.filter((action) => action.kind === 'questions');
+    const asyncInput = !summary.archived && this.asyncQuestions.hasOpen(summary.id);
     const approvals = actions.length > questions.length;
     let sidebarActivity: Summary['sidebarActivity'];
-    if (questions.length && approvals) sidebarActivity = 'approvalAndInput';
-    else if (questions.length)
+    if ((questions.length || asyncInput) && approvals) sidebarActivity = 'approvalAndInput';
+    else if (questions.length || asyncInput)
       sidebarActivity = questions.every((question) => question.blocking === false)
         ? 'optionalInput'
         : 'needsInput';
@@ -990,6 +994,13 @@ export class Service {
       const turns = direction === 'newer' ? page.data.slice() : page.data.slice().reverse();
       const messages = await hydrate(turns);
       if (messages) {
+        let questionChanged = false;
+        for (const message of messages)
+          if (this.asyncQuestions.observe(id, message)) questionChanged = true;
+        for (const turn of turns)
+          if (turn.status === 'failed' || turn.status === 'interrupted')
+            if (this.asyncQuestions.expireTurn(id, turn.id)) questionChanged = true;
+        if (questionChanged) this.publishQuestions(id);
         const latest = turns.at(-1);
         return {
           messages,
@@ -1821,6 +1832,7 @@ export class Service {
     operationId: string,
     resolution: { decision?: string; answers?: Record<string, string> },
   ) {
+    if (id.startsWith('async-')) return this.answerAsync(id, operationId, resolution);
     const receipt = this.store.existing(operationId, undefined, 'answer', { id, resolution });
     if (receipt) return receipt;
     const entry = this.actions.get(id);
@@ -1896,6 +1908,84 @@ export class Service {
       throw error;
     }
   }
+  private async answerAsync(
+    id: string,
+    operationId: string,
+    resolution: { decision?: string; answers?: Record<string, string> },
+  ) {
+    const action = this.asyncQuestions.action(id);
+    if (!action || this.store.thread(action.threadId)?.archived)
+      throw new AppError('STALE_ACTION', 'This question is unavailable.', 409);
+    const threadId = action.threadId;
+    if (resolution.decision === 'skip') {
+      const receipt = this.store.existing(operationId, threadId, 'async-skip', { id, resolution });
+      if (receipt) return receipt;
+      if (action.status !== 'pending' || Object.keys(resolution.answers ?? {}).length)
+        throw new AppError('STALE_ACTION', 'This question is already being handled.', 409);
+      this.store.db.exec('BEGIN IMMEDIATE');
+      try {
+        this.store.begin(operationId, threadId, 'async-skip', { id, resolution });
+        this.asyncQuestions.skip(id);
+        this.store.update(operationId, 'completed');
+        this.store.db.exec('COMMIT');
+      } catch (error) {
+        this.store.db.exec('ROLLBACK');
+        throw error;
+      }
+      this.publishQuestions(threadId);
+      return this.store.operation(operationId)!;
+    }
+    if (action.status !== 'pending')
+      throw new AppError('STALE_ACTION', 'This question is already being handled.', 409);
+    const thread = await this.read(threadId);
+    // Native history can contain an answer submitted by another client since our last event.
+    await this.history(threadId);
+    const current = this.asyncQuestions.action(id);
+    if (!current || current.status !== 'pending' || this.store.thread(threadId)?.archived)
+      throw new AppError('STALE_ACTION', 'This question is already being handled.', 409);
+    if (this.store.operation(operationId))
+      throw new AppError('OPERATION_CONFLICT', 'This answer operation already exists.', 409);
+    const answers = resolution.answers ?? {};
+    const questions = current.questions ?? [];
+    if (
+      resolution.decision ||
+      Object.keys(answers).length !== questions.length ||
+      questions.some((question) => !answers[question.id]?.trim())
+    )
+      throw new AppError('ANSWER_REQUIRED', 'Answer each remaining question before submitting.');
+    const replies = questions.map((question) => ({
+      questionItemId: question.id,
+      question: question.question,
+      answer: answers[question.id]!.trim(),
+    }));
+    const prompt =
+      '<send_user_message_question_reply>' +
+      JSON.stringify(replies) +
+      '</send_user_message_question_reply>';
+    if (prompt.length > 50_000)
+      throw new AppError('INVALID_ANSWER', 'Shorten the combined answers before submitting.');
+    if (['waitingInput', 'waitingApproval', 'unknown'].includes(thread.state))
+      throw new AppError(
+        'ANSWER_WAIT',
+        'Resolve the current task request or check its result before answering.',
+        409,
+      );
+    this.asyncQuestions.beginReply(id, operationId);
+    this.publishQuestions(threadId);
+    try {
+      if (thread.state === 'running' && thread.turnId)
+        return await this.steer(threadId, operationId, thread.turnId, prompt);
+      return await this.send(
+        threadId,
+        operationId,
+        prompt,
+        this.store.settingsProfile(threadId).settings,
+      );
+    } finally {
+      this.asyncQuestions.finishReply(id);
+      this.publishQuestions(threadId);
+    }
+  }
   private syncQueue(thread: Thread) {
     for (const entry of this.store.queue.inFlight(thread.id)) {
       const op = this.store.operation(entry.id);
@@ -1965,16 +2055,23 @@ export class Service {
     }
     this.queue.notify(id);
   }
-  private emitActions(id: string) {
-    this.events.publish(
-      'actions',
+  conversationActions(id: string) {
+    const native =
       this.cache
         .get(id)
         ?.actions.filter(
           (a) => a.kind === 'questions' || a.status === 'pending' || a.status === 'responding',
-        ) ?? [],
-      id,
-    );
+        ) ?? [];
+    return [...native, ...this.asyncQuestions.actions(id)];
+  }
+  private emitActions(id: string) {
+    this.events.publish('actions', this.conversationActions(id), id);
+  }
+  private publishQuestions(id: string) {
+    const summary = this.store.thread(id);
+    if (!summary) return;
+    this.publishSummary(summary);
+    this.emitActions(id);
   }
   private notification(event: any) {
     if (!record(event.params)) return;
@@ -2227,6 +2324,8 @@ export class Service {
       const review = pendingOperation && this.store.operation(pendingOperation.id);
       for (const raw of Array.isArray(p.turn.items) ? p.turn.items : [])
         this.applyItem(thread, raw, p.turn.id);
+      if (p.turn.status === 'failed' || p.turn.status === 'interrupted')
+        this.asyncQuestions.expireTurn(thread.id, p.turn.id);
       if (event.method === 'turn/started') {
         this.clearCompaction(thread, 'unknown');
         thread.turnId = p.turn.id;
@@ -2368,6 +2467,8 @@ export class Service {
       }
     }
     this.events.publish('item', message, thread.id);
+    if (lifecycle !== 'inProgress' && this.asyncQuestions.observe(thread.id, message))
+      this.publishQuestions(thread.id);
   }
   private request(event: any) {
     const p = event.params;

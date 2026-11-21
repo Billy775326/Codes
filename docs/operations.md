@@ -34,7 +34,7 @@ History remains readable. Codes reports this as `THREAD_WRITER_BUSY`, preserves 
 
 Do not delete an in-use lock or kill an unrelated client to make the error disappear. Native lock ownership is enforced by Codex, not by a second application lock. See the pinned [writer implementation](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/rollout/src/writer_lock.rs).
 
-Imported Covro answers may be stored in `send_user_message_question_reply` text envelopes. Codes formats well-formed, bounded envelopes as answered question/answer text for display. Native files, message/client IDs and malformed/ordinary text are preserved. These historical answers cannot restore a live callback from the old client; new Codes questions use native `item/tool/requestUserInput` callbacks.
+Imported Covro answers may be stored in `send_user_message_question_reply` text envelopes. Codes formats well-formed, bounded envelopes as answered question/answer text and matches them to structured asynchronous questions when native history supplies a question ID. Native `item/tool/requestUserInput` callbacks use their existing lifecycle. Questions delivered on agent messages stay in the original turn, with sidebar attention independent of task completion. Submitting an asynchronous answer adds it to the running turn or starts a follow-up in that conversation. Skip only ends local tracking.
 
 ## Project directory recovery
 

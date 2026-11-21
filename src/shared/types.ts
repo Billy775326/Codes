@@ -39,7 +39,9 @@ export interface Message {
   id: string;
   turnId: string;
   kind: 'user' | 'assistant' | 'command' | 'change' | 'notice' | 'tool' | 'compaction' | 'question';
-  answeredQuestions?: { question: string; answer: string }[];
+  answeredQuestions?: { questionItemId?: string; question: string; answer: string }[];
+  /** Nonblocking questions attached to a native agent message. */
+  asyncQuestions?: Question[];
   phase?: 'commentary' | 'partial_answer' | 'final_answer';
   text: string;
   status?: string;
@@ -69,6 +71,8 @@ export interface Action {
   threadId: string;
   turnId: string;
   kind: 'command' | 'file' | 'questions' | 'permissions';
+  async?: boolean;
+  skipped?: boolean;
   title: string;
   detail: string;
   decisions: string[];
