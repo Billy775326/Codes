@@ -107,6 +107,8 @@
 
 ### Fixed
 
+- Show readable answer previews in follow-up receipts and pending messages for asynchronous Codex questions.
+
 - Keep recorded token usage and completion metrics beside the original reply’s actions across later turns and service restarts.
 
 - Show optional questions, simultaneous approval and answer requests, responses being submitted, context compaction and expired questions in the conversation sidebar.

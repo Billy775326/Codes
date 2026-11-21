@@ -1,5 +1,6 @@
 import { limits, type Message, type TurnInfo, type ImageAttachment } from '../shared/types.js';
 import { record } from '../shared/errors.js';
+import { parseQuestionReplies } from '../shared/question-replies.js';
 import { fileChanges } from './file-changes.js';
 const text = (value: unknown, maximum: number = limits.item) =>
   typeof value === 'string' ? value.slice(0, maximum) : '';
@@ -8,37 +9,6 @@ const finiteTime = (value: unknown): value is number =>
   Number.isFinite(value) &&
   value >= 0 &&
   value <= Number.MAX_SAFE_INTEGER / 1000;
-
-/** Covro stored answered questions as a text envelope, not a live native callback. */
-function legacyAnswer(value: string): Message['answeredQuestions'] {
-  const match =
-    /^\s*<send_user_message_question_reply>([\s\S]*)<\/send_user_message_question_reply>\s*$/.exec(
-      value,
-    );
-  if (!match || value.length > limits.item) return;
-  try {
-    const entries: unknown = JSON.parse(match[1]!);
-    if (
-      !Array.isArray(entries) ||
-      !entries.length ||
-      entries.length > 8 ||
-      !entries.every(
-        (entry) =>
-          record(entry) && typeof entry.question === 'string' && typeof entry.answer === 'string',
-      )
-    )
-      return;
-    return entries.map(({ questionItemId, question, answer }) => ({
-      ...(typeof questionItemId === 'string' && questionItemId.length <= 512
-        ? { questionItemId }
-        : {}),
-      question,
-      answer,
-    }));
-  } catch {
-    return;
-  } // Ordinary text and malformed historical payloads stay readable.
-}
 
 /** Unknown native timing stays absent; never substitute browser load/arrival time. */
 export function nativeTurn(raw: any): TurnInfo {
@@ -86,7 +56,7 @@ export function nativeMessage(
     const rawText = Array.isArray(raw.content)
       ? content.map((x: any) => text(x?.text)).join('\n')
       : text(raw.text);
-    const answeredQuestions = legacyAnswer(rawText);
+    const answeredQuestions = parseQuestionReplies(rawText);
     return {
       id: raw.id,
       turnId,

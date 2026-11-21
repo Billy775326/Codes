@@ -6,6 +6,7 @@ import {
   type ProjectSidebarPreference,
 } from './project-navigation';
 import { sameSettings } from '../shared/types';
+import { messagePreviewText } from '../shared/question-replies';
 import { imageLimits, projectImageType } from '../shared/images';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
@@ -2434,7 +2435,7 @@ function App() {
                         id: thread.pending.id,
                         turnId: '',
                         kind: 'user',
-                        text: thread.pending.text,
+                        text: messagePreviewText(thread.pending.text ?? ''),
                       }}
                       streaming={false}
                     />

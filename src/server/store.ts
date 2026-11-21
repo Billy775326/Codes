@@ -12,6 +12,7 @@ import type {
   TurnUsage,
 } from '../shared/types.js';
 import { limits, sameSettings } from '../shared/types.js';
+import { messagePreviewText } from '../shared/question-replies.js';
 import { settingsSchema, settingsProfileSchema } from '../shared/settings.js';
 import { AppError } from '../shared/errors.js';
 import { QueueStore, queueSchema } from './queue-store.js';
@@ -374,10 +375,14 @@ export class Store {
   steers(threadId: string): (Operation & { text: string })[] {
     const rows = this.db
       .prepare(
-        "SELECT id,substr(pending_text,1,2000) AS pending_text FROM operations WHERE thread_id=? AND kind='steer' AND state IN ('dispatching','acknowledged','unknown') ORDER BY created_at LIMIT 10",
+        "SELECT id,pending_text FROM operations WHERE thread_id=? AND kind='steer' AND state IN ('dispatching','acknowledged','unknown') ORDER BY created_at LIMIT 10",
       )
       .all(threadId) as any[];
-    return rows.map((row) => ({ ...this.operation(row.id)!, text: row.pending_text ?? '' }));
+    return rows.map((row) => ({
+      ...this.operation(row.id)!,
+      // Decode the complete reply before applying the browser preview limit.
+      text: messagePreviewText(row.pending_text ?? '').slice(0, 2000),
+    }));
   }
   finishSteers(threadId: string, turnId: string) {
     this.db

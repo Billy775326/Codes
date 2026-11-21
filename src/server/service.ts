@@ -13,6 +13,7 @@ import { Images, validatedImageType } from './images.js';
 import { imageLimits, projectImageType } from '../shared/images.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
+import { encodeQuestionReplies } from '../shared/question-replies.js';
 import { nativeMessage as item, nativeTurn } from './transcript.js';
 import { z } from 'zod';
 import { AppError, record } from '../shared/errors.js';
@@ -1958,10 +1959,7 @@ export class Service {
       question: question.question,
       answer: answers[question.id]!.trim(),
     }));
-    const prompt =
-      '<send_user_message_question_reply>' +
-      JSON.stringify(replies) +
-      '</send_user_message_question_reply>';
+    const prompt = encodeQuestionReplies(replies);
     if (prompt.length > 50_000)
       throw new AppError('INVALID_ANSWER', 'Shorten the combined answers before submitting.');
     if (['waitingInput', 'waitingApproval', 'unknown'].includes(thread.state))

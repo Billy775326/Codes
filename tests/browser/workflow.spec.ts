@@ -39,6 +39,21 @@ test('async questions stay in the original turn and show sidebar attention after
   await page.reload();
   await expect(original.getByRole('region', { name: 'Codex question' })).toContainText('Answered');
 });
+test('an answer added to a running task displays answer text in its receipt', async ({ page }) => {
+  await login(page);
+  await send(page, '[async-question] [hold] Answer receipt fixture');
+  const card = page.getByRole('region', { name: 'Codex question', exact: true });
+  await card
+    .getByLabel('Which direction should I use?', { exact: true })
+    .fill('Explain first. ' + 'Additional detail. '.repeat(135));
+  await card.getByRole('button', { name: 'Submit answer' }).click();
+  const receipt = page.getByRole('region', { name: 'Immediate follow-ups' });
+  await expect(receipt).toContainText('Added to current task · Answer: Explain first');
+  await expect(receipt).not.toContainText(/send_user_message_question_reply|questionItemId/);
+  await expect(receipt.getByRole('button', { name: 'Check follow-up results' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Stop task', exact: true }).click();
+  await expect(receipt).toHaveCount(0);
+});
 test('structured questions preserve native options, free text, secret controls, and cross-client resolution', async ({
   browser,
 }) => {
