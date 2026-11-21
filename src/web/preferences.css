@@ -28,6 +28,58 @@
   color: var(--fg);
   background: var(--hover);
 }
+.preferences-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.preferences-nav button {
+  min-height: var(--control-size);
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.preferences-nav button:hover,
+.preferences-nav button[aria-pressed='true'] {
+  background: var(--hover);
+  color: var(--fg);
+}
+.preferences-nav button[aria-pressed='true'] {
+  font-weight: 600;
+}
+.network-listener {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.65fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.app .network-settings :is(select, input, textarea) {
+  display: block;
+  width: 100%;
+  min-height: var(--control-size);
+  margin: 6px 0 0;
+  background: var(--field);
+}
+.app .network-settings textarea {
+  resize: vertical;
+  font-family: monospace;
+}
+.network-auth {
+  margin: 16px 0 0;
+}
+.network-auth dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+.network-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
 .preferences-content {
   min-height: 0;
   overflow-y: auto;
@@ -256,6 +308,8 @@
     font-size: 16px;
   }
   .preferences-done,
+  .preferences-nav button,
+  .app .network-settings input,
   .preferences-dialog > .modal-heading button {
     min-height: 44px;
     min-width: 44px;

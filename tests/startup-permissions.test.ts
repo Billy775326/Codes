@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
+import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { createServer } from 'node:net';
 import { mkdtemp, mkdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -21,6 +22,107 @@ async function stop(child: ChildProcess) {
   child.kill('SIGTERM');
   await ended;
 }
+it('uses the saved port and allows local and HTTPS proxy origins after restart', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codes-network-startup-'));
+  const initialPort = await port();
+  let nextPort = await port();
+  while (nextPort === initialPort) nextPort = await port();
+  const local = (value: number) => `http://127.0.0.1:${value}`;
+  const proxy = 'https://codes.example.test';
+  const token = 'isolated-network-token-not-a-real-secret';
+  const env = {
+    ...process.env,
+    CODES_RUNTIME: 'mock',
+    CODES_DATA_DIR: directory,
+    CODES_PROJECT_ROOT: '',
+    CODES_HOST: '127.0.0.1',
+    CODES_PORT: String(initialPort),
+    CODES_PUBLIC_ORIGIN: local(initialPort),
+    CODES_ACCESS_TOKEN: token,
+  };
+  const path = '/api/settings/network';
+  let child: ChildProcess | undefined;
+  try {
+    for (const currentPort of [initialPort, nextPort]) {
+      child = spawn(process.execPath, ['--import', 'tsx', 'src/server/main.ts'], {
+        stdio: 'ignore',
+        env,
+      });
+      const base = local(currentPort);
+      await expect
+        .poll(
+          async () => {
+            if (child?.exitCode !== null) throw new Error('The isolated network server exited.');
+            try {
+              return (await fetch(base + path)).status;
+            } catch {
+              return 0;
+            }
+          },
+          { timeout: 5000 },
+        )
+        .toBe(401);
+      const response = await fetch(base + '/api/login', {
+        method: 'POST',
+        headers: { origin: base, 'content-type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      expect(response.status).toBe(200);
+      const cookie = response.headers.get('set-cookie')!.split(';')[0]!;
+      if (currentPort === initialPort) {
+        const saved = await fetch(base + path, {
+          method: 'PUT',
+          headers: { cookie, origin: base, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            revision: 0,
+            settings: {
+              host: '127.0.0.1',
+              port: nextPort,
+              origins: [local(nextPort), proxy],
+              authMode: 'local',
+            },
+          }),
+        });
+        expect(saved.status).toBe(200);
+        expect(await saved.json()).toMatchObject({
+          restartRequired: true,
+          active: { port: initialPort },
+        });
+      } else {
+        const state = await (await fetch(base + path, { headers: { cookie } })).json();
+        expect(state).toMatchObject({
+          restartRequired: false,
+          active: { port: nextPort, origins: [base, proxy] },
+        });
+        const proxiedLogin = (origin: string, host: string) =>
+          new Promise<IncomingMessage>((resolve, reject) => {
+            const request = httpRequest(
+              base + '/api/login',
+              { method: 'POST', headers: { origin, host, 'content-type': 'application/json' } },
+              (response) => {
+                response.resume();
+                resolve(response);
+              },
+            );
+            request.on('error', reject);
+            request.end(JSON.stringify({ token }));
+          });
+        const proxied = await proxiedLogin(proxy, 'codes.example.test');
+        expect(proxied.statusCode).toBe(200);
+        expect(proxied.headers['set-cookie']?.[0]).toContain('; Secure');
+        expect((await proxiedLogin(base, 'codes.example.test')).statusCode).toBe(403);
+        expect(
+          (await proxiedLogin('https://invalid.example.test', 'invalid.example.test')).statusCode,
+        ).toBe(403);
+      }
+      await stop(child);
+      child = undefined;
+    }
+  } finally {
+    if (child) await stop(child);
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 15_000);
 it('ignores retired global policy settings and preserves native permissions across restart', async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'codes-startup-policy-')));
   const root = join(directory, 'project-outside-retired-root'),

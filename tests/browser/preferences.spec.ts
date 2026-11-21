@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import type { NetworkSettingsSnapshot } from '../../src/shared/network-settings';
 async function fixture(page: Page, text = 'Settings dialog fixture') {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
@@ -10,6 +11,55 @@ async function fixture(page: Page, text = 'Settings dialog fixture') {
       page.locator('.turn-status').getByText('Completed', { exact: true }),
     ).toBeVisible();
 }
+test('edits network settings on a narrow screen and shows the pending restart after reopening', async ({
+  page,
+  baseURL,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  const settings = page.getByRole('button', { name: 'Interaction settings', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const open = async () => {
+    await settings.click();
+    await dialog.getByRole('button', { name: 'Network & access' }).click();
+  };
+  const path = '/api/settings/network';
+  const read = async (): Promise<NetworkSettingsSnapshot> => (await page.request.get(path)).json();
+  await open();
+  const initial = await read();
+  const listenPort = dialog.getByLabel('Listen port');
+  const addresses = dialog.getByLabel('Allowed addresses');
+  const save = dialog.getByRole('button', { name: 'Save network settings' });
+  try {
+    await expect(listenPort).toHaveValue(String(initial.active.port));
+    await expect(dialog.getByText('Local / Tailscale (local)', { exact: true })).toBeVisible();
+    await expect(save).toBeDisabled();
+    await listenPort.fill('8787');
+    await expect(addresses).toHaveValue('http://127.0.0.1:8787');
+    await addresses.fill('https://codes.example.test/path');
+    await save.click();
+    await expect(dialog.getByRole('alert')).toContainText('Allowed address 1');
+    await addresses.fill('http://127.0.0.1:8787\nhttps://codes.example.test');
+    await save.click();
+    await expect(dialog.getByRole('status')).toContainText('Restart Codes to apply');
+    expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
+    await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
+    await open();
+    await expect(listenPort).toHaveValue('8787');
+    await expect(dialog.getByRole('status')).toContainText(`port ${initial.active.port}`);
+  } finally {
+    const current = await read();
+    if (current.revision !== initial.revision) {
+      const restored = await page.request.put(path, {
+        headers: { origin: baseURL! },
+        data: { revision: current.revision, settings: initial.settings },
+      });
+      expect(restored.ok()).toBe(true);
+    }
+  }
+});
 for (const width of [1440, 320]) {
   test(`settings keep close controls visible and keyboard focus contained at ${width}px`, async ({
     page,

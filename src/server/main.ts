@@ -8,14 +8,21 @@ import {
   unlinkSync,
 } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import { resolve, join } from 'node:path';
 import { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Service } from './service.js';
 import { application } from './http.js';
+import { NetworkConfiguration } from './network-settings.js';
 
 const directory = resolve(process.env.CODES_DATA_DIR ?? '.local');
 mkdirSync(directory, { recursive: true, mode: 0o700 });
+const network = new NetworkConfiguration(directory, process.env);
+const { host, port, origins } = network.active;
+const address = host === 'localhost' ? (await lookup(host)).address : host;
+if (address !== '127.0.0.1' && address !== '::1')
+  throw new Error('The listen address must resolve to 127.0.0.1 or ::1.');
 const lock = join(directory, 'server.lock');
 if (existsSync(lock)) {
   const pid = Number(readFileSync(lock, 'utf8'));
@@ -37,15 +44,6 @@ if (!existsSync(tokenPath))
   writeFileSync(tokenPath, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
 const token = process.env.CODES_ACCESS_TOKEN ?? readFileSync(tokenPath, 'utf8').trim();
 if (token.length < 16) throw new Error('CODES_ACCESS_TOKEN must contain at least 16 characters.');
-const host = process.env.CODES_HOST ?? '127.0.0.1';
-const port = Number(process.env.CODES_PORT ?? 6670);
-if (!Number.isSafeInteger(port) || port < 1024 || port > 65535)
-  throw new Error('Choose a CODES_PORT between 1024 and 65535.');
-const origin = process.env.CODES_PUBLIC_ORIGIN ?? `http://127.0.0.1:${port}`;
-if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !origin.startsWith('https://'))
-  throw new Error(
-    'Remote access requires an HTTPS CODES_PUBLIC_ORIGIN and an authenticated reverse proxy.',
-  );
 const mode = process.env.CODES_RUNTIME ?? 'codex';
 if (mode !== 'mock' && mode !== 'codex') throw new Error('CODES_RUNTIME must be codex or mock.');
 if (process.env.CODES_CODE_QUESTIONS && !['0', '1'].includes(process.env.CODES_CODE_QUESTIONS))
@@ -65,15 +63,13 @@ if (process.env.CODES_PROJECT_ROOT) {
     await service.addProject(configured);
 }
 const app = await application(service, {
-  host,
-  port,
-  origin,
+  network,
   token,
   dev: process.argv.includes('--dev'),
   test: process.env.CODES_TEST_MODE === '1',
 });
-app.server.listen(port, host, () => {
-  console.log(`codes is ready at ${origin}`);
+app.server.listen(port, address, () => {
+  console.log(`codes is ready at ${origins.join(', ')}`);
   console.log(`Use the access token stored in ${tokenPath} to sign in.`);
   if (mode === 'mock')
     console.log('Simulation mode: no model requests or shell commands are executed.');

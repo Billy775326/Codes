@@ -7,6 +7,7 @@ import { permissionLabel } from '../shared/permissions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
 import { message } from './api';
+import { NetworkSettings } from './NetworkSettings';
 export function InteractionDialog({
   title,
   close,
@@ -157,8 +158,9 @@ export function PreferencesDialog({
     planReady: boolean;
   };
 }) {
-  return (
-    <InteractionDialog title="Interaction settings" close={close} className="preferences-dialog">
+  const [network, setNetwork] = useState(false);
+  const preferences = (
+    <>
       <div className="preferences-content">
         <section className="preferences-section" aria-labelledby="preferences-appearance">
           <h3 id="preferences-appearance">Appearance</h3>
@@ -393,6 +395,19 @@ export function PreferencesDialog({
           Done
         </button>
       </div>
+    </>
+  );
+  return (
+    <InteractionDialog title="Interaction settings" close={close} className="preferences-dialog">
+      <div className="preferences-nav" role="group" aria-label="Settings sections">
+        <button type="button" aria-pressed={!network} onClick={() => setNetwork(false)}>
+          Preferences
+        </button>
+        <button type="button" aria-pressed={network} onClick={() => setNetwork(true)}>
+          Network &amp; access
+        </button>
+      </div>
+      {network ? <NetworkSettings /> : preferences}
     </InteractionDialog>
   );
 }

@@ -10,6 +10,7 @@ import { Store } from '../src/server/store';
 import { Service } from '../src/server/service';
 import { Driver } from '../src/codex/driver';
 import { application } from '../src/server/http';
+import { NetworkConfiguration } from '../src/server/network-settings';
 let app: Awaited<ReturnType<typeof application>>;
 let directory: string;
 let service: Service;
@@ -105,7 +106,8 @@ beforeEach(async () => {
   const port = (reserve.address() as { port: number }).port;
   await new Promise<void>((yes) => reserve.close(() => yes()));
   origin = `http://127.0.0.1:${port}`;
-  app = await application(service, { host: '127.0.0.1', port, origin, token });
+  const network = new NetworkConfiguration(directory, { CODES_PORT: String(port) });
+  app = await application(service, { network, token });
   await new Promise<void>((yes) => app.server.listen(port, '127.0.0.1', yes));
   const login = await fetch(origin + '/api/login', {
     method: 'POST',
@@ -151,6 +153,53 @@ it('rejects cross-origin mutations and untrusted Host headers', async () => {
     req.end();
   });
   expect(status).toBe(403);
+});
+it('protects and validates pending network settings without changing the running listener', async () => {
+  const path = origin + '/api/settings/network';
+  const active = (await (await fetch(path, { headers: { cookie } })).json()).settings;
+  const put = (settings: unknown, headers: Record<string, string> = {}, revision = 0) =>
+    fetch(path, {
+      method: 'PUT',
+      headers: { cookie, origin, 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ revision, settings }),
+    });
+  expect((await fetch(path)).status).toBe(401);
+  expect((await put(active, { cookie: '' })).status).toBe(401);
+  const otherAllowedOrigin = origin.replace('127.0.0.1', 'localhost');
+  expect(active.origins).toContain(otherAllowedOrigin);
+  expect((await put(active, { origin: otherAllowedOrigin })).status).toBe(403);
+  for (const invalid of [
+    { host: '0.0.0.0' },
+    { port: 0 },
+    { port: 65536 },
+    { authMode: 'cloudflare' },
+    ...[
+      'https://example.test/path',
+      'https://example.test?',
+      'https://example.test#',
+      'https://test@example.test',
+      'https://*.example.test',
+      'ftp://example.test',
+    ].map((address) => ({ origins: [address] })),
+  ])
+    expect((await put({ ...active, ...invalid })).status).toBe(400);
+  const next = {
+    ...active,
+    host: '::1',
+    port: 8787,
+    origins: ['https://codes.example.test/', 'https://codes.example.test:443'],
+  };
+  const updated = await put(next);
+  expect(updated.status).toBe(200);
+  expect(await updated.json()).toEqual({
+    revision: 1,
+    active,
+    settings: { ...next, origins: ['https://codes.example.test'] },
+    restartRequired: true,
+  });
+  expect((await put(active)).status).toBe(409);
+  const canceled = await put(active, {}, 1);
+  expect(await canceled.json()).toMatchObject({ revision: 2, restartRequired: false });
 });
 it('revokes a signed-out session even if its cookie is replayed', async () => {
   expect(

@@ -13,6 +13,7 @@ import { limits } from '../shared/types.js';
 import { Service } from './service.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
+import type { NetworkConfiguration } from './network-settings.js';
 
 const sha256 = /^[a-f0-9]{64}$/;
 const fileAttachment = z
@@ -115,16 +116,14 @@ async function json(response: ServerResponse, data: unknown, status = 200) {
 export async function application(
   service: Service,
   options: {
-    host: string;
-    port: number;
-    origin: string;
+    network: NetworkConfiguration;
     token: string;
     dev?: boolean;
     test?: boolean;
     staticDir?: string;
   },
 ) {
-  const origin = new URL(options.origin);
+  const origins = options.network.active.origins.map((origin) => new URL(origin));
   const sessions = new Map<string, number>();
   const attempts = new Map<string, { count: number; until: number }>();
   const server = createServer();
@@ -155,15 +154,15 @@ export async function application(
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       );
     void (async () => {
-      if (request.headers.host !== origin.host)
-        throw new AppError('HOST_DENIED', 'Host not allowed.', 403);
-      const url = new URL(request.url ?? '/', options.origin);
+      const host = request.headers.host;
+      const hostOrigin = origins.find((origin) => origin.host === host);
+      if (!hostOrigin) throw new AppError('HOST_DENIED', 'Host not allowed.', 403);
+      const requestOrigin = origins.find(
+        (origin) => origin.host === host && origin.origin === request.headers.origin,
+      );
+      const url = new URL(request.url ?? '/', hostOrigin);
       const method = request.method;
-      if (
-        url.pathname.startsWith('/api/') &&
-        method !== 'GET' &&
-        request.headers.origin !== options.origin
-      )
+      if (url.pathname.startsWith('/api/') && method !== 'GET' && !requestOrigin)
         throw new AppError('ORIGIN_DENIED', 'Request origin not allowed.', 403);
       if (url.pathname === '/api/login' && method === 'POST') {
         for (const [key, value] of attempts) if (value.until < Date.now()) attempts.delete(key);
@@ -192,7 +191,7 @@ export async function application(
         sessions.set(session, Date.now() + 12 * 3600_000);
         response.setHeader(
           'set-cookie',
-          `codes_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${origin.protocol === 'https:' ? '; Secure' : ''}`,
+          `codes_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${requestOrigin?.protocol === 'https:' ? '; Secure' : ''}`,
         );
         return json(response, { ok: true });
       }
@@ -241,6 +240,10 @@ export async function application(
           const input = settingsProfileInput.parse(await body(request));
           return json(response, service.saveDefaultSettings(input.revision, input.settings));
         }
+        if (url.pathname === '/api/settings/network' && method === 'GET')
+          return json(response, options.network.snapshot());
+        if (url.pathname === '/api/settings/network' && method === 'PUT')
+          return json(response, options.network.save(await body(request)));
         if (url.pathname === '/api/projects' && method === 'GET')
           return json(response, service.store.projectsWithActivity());
         if (url.pathname === '/api/projects' && method === 'POST') {
