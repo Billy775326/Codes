@@ -72,7 +72,13 @@ Save, then restart Codes with the same data directory and sign in at the new add
 
 Codes stores the saved settings in `network-settings.json` in the private data directory. The saved settings take precedence over `CODES_HOST`, `CODES_PORT`, and `CODES_PUBLIC_ORIGIN`. If a saved setting prevents access, stop the service, move that file elsewhere as a backup, and restart with the desired environment values. Without a settings file, `CODES_PUBLIC_ORIGIN` still selects one exact browser origin. The defaults allow the local loopback origins on port 6670.
 
-All routes use the **Local / Tailscale** mode and the Codes access token. For tailnet access, have Tailscale Serve forward to the loopback listener and add its HTTPS origin. For a public hostname, put a Cloudflare Access self-hosted application in front of the tunnel and enable **Protect with Access** so the tunnel validates Access tokens before forwarding. Keep the Codes origin on loopback. [Cloudflare setup](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
+**Local / Tailscale** uses the Codes access token. For tailnet access, have Tailscale Serve forward to the loopback listener and add its HTTPS origin.
+
+### Cloudflare Access
+
+1. Create a self-hosted Access application for the entire public hostname and allow your identity. If using Cloudflare Tunnel, enable **Protect with Access** and keep the upstream on the Codes loopback listener. Preserve the public Host and the `Cf-Access-Jwt-Assertion` header when forwarding. [Cloudflare setup](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
+2. In **Settings → Network & access**, select **Cloudflare Access**, enter the team URL (`https://your-team.cloudflareaccess.com`) and the application's AUD tag from Cloudflare Zero Trust, and list the HTTPS origins covered by that application. [Find the AUD tag](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/#get-your-aud-tag)
+3. Save and restart the built Codes server. Open the public HTTPS origin, sign in through Access, and then enter your Codes token. Codes verifies the signed Access assertion on every request and closes event streams when its token expires. Use the recovery procedure above if you need to undo the change from the host.
 
 ### HTTPS reverse proxy
 

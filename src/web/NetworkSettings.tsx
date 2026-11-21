@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import { loopbackHosts, type NetworkSettingsSnapshot } from '../shared/network-settings';
+import {
+  loopbackHosts,
+  type NetworkSettingsSnapshot,
+  type NetworkSettings,
+} from '../shared/network-settings';
 import { ApiError, message, request } from './api';
 
 const path = '/settings/network';
@@ -29,6 +33,9 @@ export function NetworkSettings() {
   const [host, setHost] = useState<(typeof loopbackHosts)[number]>('127.0.0.1');
   const [port, setPort] = useState('');
   const [origins, setOrigins] = useState<string>();
+  const [authMode, setAuthMode] = useState<NetworkSettings['authMode']>('local');
+  const [issuer, setIssuer] = useState('');
+  const [audience, setAudience] = useState('');
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const [reloadRequired, setReloadRequired] = useState(false);
@@ -40,6 +47,9 @@ export function NetworkSettings() {
     setHost(next.settings.host);
     setPort(String(next.settings.port));
     setOrigins(undefined);
+    setAuthMode(next.settings.authMode);
+    setIssuer(next.settings.authMode === 'cloudflare-access' ? next.settings.issuer : '');
+    setAudience(next.settings.authMode === 'cloudflare-access' ? next.settings.audience : '');
   }
 
   useEffect(() => {
@@ -75,10 +85,15 @@ export function NetworkSettings() {
     );
 
   const addresses = origins ?? allowedAddresses(snapshot.settings, port);
+  const authChanged =
+    authMode !== snapshot.settings.authMode ||
+    (snapshot.settings.authMode === 'cloudflare-access' &&
+      (issuer !== snapshot.settings.issuer || audience !== snapshot.settings.audience));
   const changed =
     host !== snapshot.settings.host ||
     port !== String(snapshot.settings.port) ||
-    addresses !== snapshot.settings.origins.join('\n');
+    addresses !== snapshot.settings.origins.join('\n') ||
+    authChanged;
   async function save() {
     if (!snapshot || saving || !changed || reloadRequired) return;
     setSaving(true);
@@ -96,7 +111,7 @@ export function NetworkSettings() {
               .split(/\r?\n/)
               .map((line) => line.trim())
               .filter(Boolean),
-            authMode: 'local',
+            ...(authMode === 'cloudflare-access' ? { authMode, issuer, audience } : { authMode }),
           },
         }),
       });
@@ -147,29 +162,74 @@ export function NetworkSettings() {
           />
         </label>
       </div>
-      <label>
-        Allowed addresses
-        <textarea
-          rows={4}
-          value={addresses}
-          onChange={(event) => setOrigins(event.target.value)}
-          aria-describedby="network-address-help"
-          spellCheck={false}
-          required
-          disabled={saving}
-        />
-      </label>
-      <p className="preference-help" id="network-address-help">
-        One HTTP(S) origin per line, with scheme, hostname, and optional port.
-      </p>
-      <dl className="network-auth">
-        <dt>Authentication mode</dt>
-        <dd>Local / Tailscale (local)</dd>
-      </dl>
-      <p className="preference-help">
-        Codes listens on loopback and requires its access token. For a public hostname, use
-        Cloudflare Tunnel with Protect with Access.
-      </p>
+      <div className="network-access-fields">
+        <div>
+          <label>
+            Allowed addresses
+            <textarea
+              rows={4}
+              value={addresses}
+              onChange={(event) => setOrigins(event.target.value)}
+              aria-describedby="network-address-help"
+              spellCheck={false}
+              required
+              disabled={saving}
+            />
+          </label>
+          <p className="preference-help" id="network-address-help">
+            {authMode === 'cloudflare-access'
+              ? 'One HTTPS origin per line.'
+              : 'One HTTP(S) origin per line.'}{' '}
+            Use the scheme, hostname, and optional port.
+          </p>
+        </div>
+        <div>
+          <label>
+            Authentication mode
+            <select
+              value={authMode}
+              onChange={(event) => setAuthMode(event.target.value as NetworkSettings['authMode'])}
+              aria-describedby="network-auth-help"
+              disabled={saving}
+            >
+              <option value="local">Local / Tailscale (local)</option>
+              <option value="cloudflare-access">Cloudflare Access</option>
+            </select>
+          </label>
+          <p className="preference-help" id="network-auth-help">
+            {authMode === 'cloudflare-access'
+              ? 'Access sign-in is required on every address, followed by your Codes token.'
+              : 'Use your Codes token for local or tailnet access. Select Cloudflare Access for a public hostname.'}
+          </p>
+        </div>
+      </div>
+      {authMode === 'cloudflare-access' && (
+        <div className="network-access-credentials">
+          <label>
+            Cloudflare team URL
+            <input
+              type="url"
+              placeholder="https://your-team.cloudflareaccess.com"
+              value={issuer}
+              maxLength={128}
+              onChange={(event) => setIssuer(event.target.value)}
+              required
+              disabled={saving}
+            />
+          </label>
+          <label>
+            Application Audience (AUD)
+            <input
+              value={audience}
+              maxLength={64}
+              spellCheck={false}
+              onChange={(event) => setAudience(event.target.value)}
+              required
+              disabled={saving}
+            />
+          </label>
+        </div>
+      )}
       {snapshot.restartRequired ? (
         <p role="status">
           Saved. Restart Codes to apply. Currently listening on {snapshot.active.host}, port{' '}

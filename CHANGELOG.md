@@ -9,6 +9,7 @@
 ### Added
 
 - Show asynchronous Codex questions in the original turn and mark the corresponding conversation in the sidebar. Answer during the task or after it ends, or skip without stopping the task.
+- Choose Cloudflare Access in Network & access. Validate signed Access assertions before serving the workspace, retain Codes token sign-in, and close event streams when the Access token expires.
 - Configure the loopback listener, port, and allowed browser addresses in Network & access. Saved settings apply after restart. Keep Codes token sign-in for local, Tailscale, and Access-protected proxy entry points.
 - Turn off automatic scrolling as replies arrive, retry a failed browser settings save, and separately restore browser settings and new-conversation defaults.
 - Rename and pin projects from their sidebar cards, remember each card's open state, search by project or conversation name, and copy direct links from conversation actions.
