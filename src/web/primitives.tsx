@@ -32,6 +32,13 @@ const iconPaths: Record<string, React.ReactNode> = {
       <path d="M8 21h8m-4-4v4" />
     </>
   ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
+    </>
+  ),
+  moon: <path d="M20.5 15.2A8 8 0 0 1 8.8 3.5 8.9 8.9 0 1 0 20.5 15.2Z" />,
   branch: <path d="M6 3v12a4 4 0 0 0 4 4h5M6 8h8a4 4 0 0 0 4-4M3 3h6M15 1h6M15 16v6" />,
   reply: <path d="m9 5-6 6 6 6M3 11h10a7 7 0 0 1 7 7v2" />,
   search: (

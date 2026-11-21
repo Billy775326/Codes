@@ -2093,12 +2093,16 @@ function App() {
           projectName={project?.name}
           sidebarOpen={sidebar}
           connection={connection}
+          theme={theme}
           panel={panel}
           busy={busy}
           hasProject={contextReady && !directoryBlocked}
           onNavigation={() => setSidebar(true)}
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
+          onToggleTheme={() =>
+            changePreferences({ ...preferences, theme: theme === 'dark' ? 'light' : 'dark' })
+          }
           onReview={() => setDialog('review')}
           onStatus={() => setDialog('status')}
           onPanel={(kind) => {

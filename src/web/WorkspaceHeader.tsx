@@ -7,6 +7,7 @@ interface Props {
   projectName?: string;
   sidebarOpen: boolean;
   connection: string;
+  theme: 'dark' | 'light';
   panel: Panel | null;
   busy: boolean;
   hasProject: boolean;
@@ -14,6 +15,7 @@ interface Props {
   onNavigation: () => void;
   onNewConversation: () => void;
   onSettings: () => void;
+  onToggleTheme: () => void;
   onReview: () => void;
   onStatus: () => void;
   onPanel: (panel: Panel) => void;
@@ -103,6 +105,15 @@ export function WorkspaceHeader(props: Props) {
           onClick={() => props.onPanel('diff')}
         >
           <Icon name="diff" size={17} />
+        </button>
+        <button
+          type="button"
+          aria-label={props.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          data-tooltip=""
+          className="icon-button"
+          onClick={props.onToggleTheme}
+        >
+          <Icon name={props.theme === 'dark' ? 'sun' : 'moon'} size={17} />
         </button>
         {!props.sidebarOpen && (
           <button

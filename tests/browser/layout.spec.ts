@@ -89,6 +89,39 @@ test('workspace theme persists and follows system color preferences', async ({ p
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'light');
 });
 
+test('the toolbar switches theme, shares the settings choice, and fits at 320px', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await login(page);
+  const themeButton = (mode: 'light' | 'dark') =>
+    page.getByRole('button', { name: `Switch to ${mode} mode`, exact: true });
+  const workspace = page.locator('.app');
+  await page.getByLabel('Message Codex').fill('Keep the current draft');
+  await themeButton('light').hover();
+  await expect(page.locator('.control-tooltip')).toHaveText('Switch to light mode');
+  await themeButton('light').click();
+  await expect(workspace).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  const theme = page.getByRole('combobox', { name: 'Theme', exact: true });
+  await expect(theme).toHaveValue('light');
+  await theme.selectOption('system');
+  await expect(workspace).toHaveAttribute('data-theme', 'dark');
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.reload();
+  const light = themeButton('light');
+  await expect(light).toBeVisible();
+  const box = (await light.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(320);
+  await light.press('Enter');
+  await page.reload();
+  await expect(workspace).toHaveAttribute('data-theme', 'light');
+  await expect(themeButton('dark')).toBeVisible();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the current draft');
+});
+
 for (const width of [1440, 820, 390, 320]) {
   test(`chat composer and model popup fit ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width <= 390 ? 844 : 1000 });
