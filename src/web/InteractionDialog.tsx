@@ -8,6 +8,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
 import { message } from './api';
 import { NetworkSettings } from './NetworkSettings';
+import { RuntimeSettings } from './RuntimeSettings';
+import { NotificationSettings } from './NotificationSettings';
 export function InteractionDialog({
   title,
   close,
@@ -136,12 +138,14 @@ function ResetSettings({
 export function PreferencesDialog({
   value,
   change,
+  changeNotifications,
   close,
   saveError,
   defaults,
 }: {
   value: Preferences;
   change: (value: Preferences) => void;
+  changeNotifications: (enabled: boolean) => void;
   close: () => void;
   saveError?: string;
   defaults: {
@@ -158,7 +162,7 @@ export function PreferencesDialog({
     planReady: boolean;
   };
 }) {
-  const [network, setNetwork] = useState(false);
+  const [section, setSection] = useState<'preferences' | 'network' | 'runtime'>('preferences');
   const preferences = (
     <>
       <div className="preferences-content">
@@ -371,6 +375,7 @@ export function PreferencesDialog({
             </p>
           </details>
         </section>
+        <NotificationSettings enabled={value.notifications} change={changeNotifications} />
       </div>
       <div className="preferences-footer">
         {saveError && (
@@ -383,7 +388,7 @@ export function PreferencesDialog({
         )}
         <ResetSettings
           label="Reset browser settings"
-          detail="Restore theme, text sizes, and interaction preferences in this browser."
+          detail="Restore theme, text sizes, interaction and notification preferences in this browser."
           reset={() => change(defaultBrowserPreferences)}
         />
         <button
@@ -400,14 +405,35 @@ export function PreferencesDialog({
   return (
     <InteractionDialog title="Interaction settings" close={close} className="preferences-dialog">
       <div className="preferences-nav" role="group" aria-label="Settings sections">
-        <button type="button" aria-pressed={!network} onClick={() => setNetwork(false)}>
+        <button
+          type="button"
+          aria-pressed={section === 'preferences'}
+          onClick={() => setSection('preferences')}
+        >
           Preferences
         </button>
-        <button type="button" aria-pressed={network} onClick={() => setNetwork(true)}>
+        <button
+          type="button"
+          aria-pressed={section === 'network'}
+          onClick={() => setSection('network')}
+        >
           Network &amp; access
         </button>
+        <button
+          type="button"
+          aria-pressed={section === 'runtime'}
+          onClick={() => setSection('runtime')}
+        >
+          Runtime
+        </button>
       </div>
-      {network ? <NetworkSettings /> : preferences}
+      {section === 'network' ? (
+        <NetworkSettings />
+      ) : section === 'runtime' ? (
+        <RuntimeSettings />
+      ) : (
+        preferences
+      )}
     </InteractionDialog>
   );
 }

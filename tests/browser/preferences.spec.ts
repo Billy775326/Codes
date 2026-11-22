@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { NetworkSettingsSnapshot } from '../../src/shared/network-settings';
+import type { RuntimeSettingsSnapshot } from '../../src/shared/runtime-settings';
+import { readFile } from 'node:fs/promises';
 async function fixture(page: Page, text = 'Settings dialog fixture') {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
@@ -39,6 +41,31 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
     await expect(save).toBeDisabled();
     await listenPort.fill('8787');
     await expect(addresses).toHaveValue('http://127.0.0.1:8787');
+    const downloaded = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Export saved', exact: true }).click();
+    const exported = JSON.parse(await readFile((await (await downloaded).path())!, 'utf8'));
+    expect(exported).toEqual({
+      format: 'codes-network-settings',
+      version: 1,
+      settings: initial.settings,
+    });
+    const upload = dialog.getByLabel('Import network settings file');
+    const load = (value: object) =>
+      upload.setInputFiles({
+        name: 'network.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify(value)),
+      });
+    await load({ ...exported, unexpected: true });
+    await expect(dialog.getByRole('alert')).toContainText('Invalid network configuration');
+    await load({
+      ...exported,
+      settings: { ...initial.settings, port: 8788, origins: ['http://127.0.0.1:8788'] },
+    });
+    await expect(listenPort).toHaveValue('8788');
+    await expect(dialog.getByRole('status')).toContainText('Review it before saving');
+    expect((await read()).revision).toBe(initial.revision);
+    await listenPort.fill('8787');
     await addresses.fill('https://codes.example.test/path');
     await save.click();
     await expect(dialog.getByRole('alert')).toContainText('Allowed address 1');
@@ -80,6 +107,86 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
       expect(restored.ok()).toBe(true);
     }
   }
+});
+test('runtime settings save independently of the active configuration and survive reopening', async ({
+  page,
+  baseURL,
+}) => {
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const open = async () => {
+    await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Runtime', exact: true }).click();
+  };
+  const path = '/api/settings/runtime';
+  const get = async (): Promise<RuntimeSettingsSnapshot> => (await page.request.get(path)).json();
+  await open();
+  const initial = await get();
+  try {
+    const timeout = dialog.getByLabel('Native request timeout (milliseconds)');
+    await expect(timeout).toHaveValue(String(initial.active.requestTimeoutMs));
+    await expect(dialog.getByText('Data directory', { exact: true })).toBeVisible();
+    await dialog.getByRole('switch', { name: 'Codex questions in Code mode' }).uncheck();
+    await timeout.fill('45000');
+    await dialog.getByRole('button', { name: 'Save runtime settings' }).click();
+    await expect(dialog.getByRole('status')).toContainText('Restart Codes to apply');
+    expect(await get()).toMatchObject({
+      active: initial.active,
+      settings: { codeQuestions: false, requestTimeoutMs: 45000 },
+    });
+    await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
+    await open();
+    await expect(timeout).toHaveValue('45000');
+  } finally {
+    const current = await get();
+    const restored = await page.request.put(path, {
+      headers: { origin: baseURL! },
+      data: { revision: current.revision, settings: initial.settings },
+    });
+    expect(restored.ok()).toBe(true);
+  }
+});
+test('browser notifications are opt-in and use the open background connection', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const testWindow = window as typeof window & { reportedNotifications: string[] };
+    testWindow.reportedNotifications = [];
+    class TestNotification {
+      static permission = 'default';
+      static requestPermission() {
+        this.permission = 'granted';
+        return Promise.resolve(this.permission);
+      }
+      constructor(title: string) {
+        testWindow.reportedNotifications.push(title);
+      }
+    }
+    Object.defineProperty(window, 'Notification', { value: TestNotification });
+  });
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  const toggle = page.getByRole('switch', { name: 'Browser notifications' });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await page.getByRole('button', { name: 'Send test notification' }).click();
+  await expect(page.getByText('Test notification requested.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  await page.getByLabel('Message Codex').fill('[slow] Browser notification fixture');
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect
+    .poll(() => page.evaluate(() => (window as any).reportedNotifications), { timeout: 15_000 })
+    .toEqual(['Codes test notification', 'Codex task completed']);
 });
 for (const width of [1440, 320]) {
   test(`settings keep close controls visible and keyboard focus contained at ${width}px`, async ({

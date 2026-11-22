@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   loopbackHosts,
+  networkSettingsTransferSchema,
   type NetworkSettingsSnapshot,
   type NetworkSettings,
 } from '../shared/network-settings';
@@ -41,15 +42,22 @@ export function NetworkSettings() {
   const [reloadRequired, setReloadRequired] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [imported, setImported] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInput = useRef<HTMLInputElement>(null);
 
+  function setFields(settings: NetworkSettings, addresses?: string) {
+    setHost(settings.host);
+    setPort(String(settings.port));
+    setOrigins(addresses);
+    setAuthMode(settings.authMode);
+    setIssuer(settings.authMode === 'cloudflare-access' ? settings.issuer : '');
+    setAudience(settings.authMode === 'cloudflare-access' ? settings.audience : '');
+  }
   function populate(next: NetworkSettingsSnapshot) {
     setSnapshot(next);
-    setHost(next.settings.host);
-    setPort(String(next.settings.port));
-    setOrigins(undefined);
-    setAuthMode(next.settings.authMode);
-    setIssuer(next.settings.authMode === 'cloudflare-access' ? next.settings.issuer : '');
-    setAudience(next.settings.authMode === 'cloudflare-access' ? next.settings.audience : '');
+    setFields(next.settings);
+    setImported(false);
   }
 
   useEffect(() => {
@@ -94,8 +102,53 @@ export function NetworkSettings() {
     port !== String(snapshot.settings.port) ||
     addresses !== snapshot.settings.origins.join('\n') ||
     authChanged;
+  async function importConfiguration(file: File) {
+    if (saving || importing || reloadRequired) return;
+    setError('');
+    setImporting(true);
+    try {
+      if (file.size > 64 * 1024)
+        throw new Error('Choose a configuration file no larger than 64 KiB.');
+      let value: unknown;
+      try {
+        value = JSON.parse(await file.text());
+      } catch {
+        throw new Error('The selected file could not be read as JSON.');
+      }
+      const result = networkSettingsTransferSchema.safeParse(value);
+      if (!result.success)
+        throw new Error('Invalid network configuration. Choose a file exported from Codes.');
+      const { settings } = result.data;
+      setFields(settings, settings.origins.join('\n'));
+      setSaved(false);
+      setImported(true);
+    } catch (failure) {
+      setError(message(failure));
+    } finally {
+      setImporting(false);
+    }
+  }
+  function exportConfiguration() {
+    if (!snapshot) return;
+    const json =
+      JSON.stringify(
+        {
+          format: 'codes-network-settings',
+          version: 1,
+          settings: snapshot.settings,
+        },
+        null,
+        2,
+      ) + '\n';
+    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'codes-network-settings.json';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
   async function save() {
-    if (!snapshot || saving || !changed || reloadRequired) return;
+    if (!snapshot || saving || importing || !changed || reloadRequired) return;
     setSaving(true);
     setError('');
     setSaved(false);
@@ -230,6 +283,13 @@ export function NetworkSettings() {
           </label>
         </div>
       )}
+      {imported && (
+        <p role="status">
+          {changed
+            ? 'Configuration loaded into the form. Review it before saving.'
+            : 'Imported configuration matches the saved settings.'}
+        </p>
+      )}
       {snapshot.restartRequired ? (
         <p role="status">
           Saved. Restart Codes to apply. Currently listening on {snapshot.active.host}, port{' '}
@@ -240,6 +300,28 @@ export function NetworkSettings() {
       ) : null}
       {error && <p role="alert">{error}</p>}
       <div className="network-actions">
+        <input
+          ref={importInput}
+          aria-label="Import network settings file"
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (file) void importConfiguration(file);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => importInput.current?.click()}
+          disabled={saving || importing || reloadRequired}
+        >
+          Import configuration
+        </button>
+        <button type="button" onClick={exportConfiguration} disabled={saving}>
+          Export saved
+        </button>
         {reloadRequired && (
           <button type="button" onClick={loadAgain}>
             Reload settings
@@ -248,7 +330,7 @@ export function NetworkSettings() {
         <button
           className="preferences-done"
           type="submit"
-          disabled={!changed || saving || reloadRequired}
+          disabled={!changed || saving || importing || reloadRequired}
         >
           {saving ? 'Saving…' : 'Save network settings'}
         </button>

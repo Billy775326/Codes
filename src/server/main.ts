@@ -15,10 +15,12 @@ import { Store } from './store.js';
 import { Service } from './service.js';
 import { application } from './http.js';
 import { NetworkConfiguration } from './network-settings.js';
+import { RuntimeConfiguration } from './runtime-settings.js';
 
 const directory = resolve(process.env.CODES_DATA_DIR ?? '.local');
 mkdirSync(directory, { recursive: true, mode: 0o700 });
 const network = new NetworkConfiguration(directory, process.env);
+const runtime = new RuntimeConfiguration(directory, process.env);
 const dev = process.argv.includes('--dev');
 if (dev && network.active.authMode === 'cloudflare-access')
   throw new Error('Cloudflare Access mode requires the built Codes server.');
@@ -49,14 +51,13 @@ const token = process.env.CODES_ACCESS_TOKEN ?? readFileSync(tokenPath, 'utf8').
 if (token.length < 16) throw new Error('CODES_ACCESS_TOKEN must contain at least 16 characters.');
 const mode = process.env.CODES_RUNTIME ?? 'codex';
 if (mode !== 'mock' && mode !== 'codex') throw new Error('CODES_RUNTIME must be codex or mock.');
-if (process.env.CODES_CODE_QUESTIONS && !['0', '1'].includes(process.env.CODES_CODE_QUESTIONS))
-  throw new Error('CODES_CODE_QUESTIONS must be 0 or 1.');
 const service = new Service(
   new Store(directory),
   new Driver(mode, {
     binary: process.env.CODES_CODEX_BINARY,
     stateFile: join(directory, 'mock-history.json'),
-    codeQuestions: process.env.CODES_CODE_QUESTIONS !== '0',
+    codeQuestions: runtime.active.codeQuestions,
+    timeoutMs: runtime.active.requestTimeoutMs,
   }),
 );
 if (process.env.CODES_PROJECT_ROOT) {
@@ -67,6 +68,7 @@ if (process.env.CODES_PROJECT_ROOT) {
 }
 const app = await application(service, {
   network,
+  runtime,
   token,
   dev,
   test: process.env.CODES_TEST_MODE === '1',

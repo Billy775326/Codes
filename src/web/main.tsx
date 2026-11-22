@@ -14,6 +14,7 @@ import { ImageAttachmentView } from './ImageAttachments';
 import { AnswerMarkdown, HtmlPreview, ProjectImagePreview } from './ContentPreview';
 import { useLocalAttachments } from './useLocalAttachments';
 import { readBrowserPreferences, type Preferences } from './browser-preferences';
+import { ConversationNotifications, notificationAccess } from './browser-notifications';
 import React, {
   memo,
   useCallback,
@@ -365,8 +366,12 @@ function App() {
   const [preferences, setPreferences] = useState(() =>
     readBrowserPreferences(saved('codes.preferences')),
   );
+  const latestPreferences = useRef(preferences);
   const [preferencesError, setPreferencesError] = useState('');
+  const notifications = useMemo(() => new ConversationNotifications(), []);
+  const notifyInBackground = preferences.notifications && notificationAccess() === 'granted';
   const changePreferences = (value: Preferences) => {
+    latestPreferences.current = value;
     setPreferences(value);
     const stored = save('codes.preferences', JSON.stringify(value));
     setPreferencesError(stored ? '' : 'Changes apply now, but this browser could not save them.');
@@ -785,10 +790,17 @@ function App() {
     if (!projectId || threadId || auth !== 'ready') return;
     const stream = new Feed<{ threads: Summary[]; cursor: { seq: number; epoch: string } }>(
       projectId,
-      (snapshot) => setThreads((byProject) => ({ ...byProject, [projectId]: snapshot.threads })),
+      (snapshot) => {
+        if (notifyInBackground)
+          for (const row of snapshot.threads) notifications.observe(row, false);
+        setThreads((byProject) => ({ ...byProject, [projectId]: snapshot.threads }));
+      },
       (event) => {
-        if (event.kind === 'summary') conversationUpdated(event.data as Summary, false);
-        else if (event.kind === 'project') projectUpdated(event.data as Project);
+        if (event.kind === 'summary') {
+          const row = event.data as Summary;
+          if (notifyInBackground) notifications.observe(row, true);
+          conversationUpdated(row, false);
+        } else if (event.kind === 'project') projectUpdated(event.data as Project);
         else if (event.kind === 'defaults') defaultSettings.sync(event.data as SettingsProfile);
         else if (event.kind === 'runtime') setSystem(event.data as System);
       },
@@ -797,18 +809,18 @@ function App() {
       connectionFailure,
     );
     const focus = () => {
-      if (document.visibilityState === 'visible') void stream.connect();
+      if (notifyInBackground || document.visibilityState === 'visible') void stream.connect();
       else stream.suspend();
     };
     focus();
-    document.addEventListener('visibilitychange', focus);
+    if (!notifyInBackground) document.addEventListener('visibilitychange', focus);
     window.addEventListener('online', focus);
     return () => {
       stream.close();
       document.removeEventListener('visibilitychange', focus);
       window.removeEventListener('online', focus);
     };
-  }, [projectId, threadId, auth, retry]);
+  }, [projectId, threadId, auth, retry, notifyInBackground, notifications]);
   const select = useCallback(
     (id: string, owner = projectRef.current, restore = false) => {
       const changed = id !== threadRef.current || owner !== projectRef.current;
@@ -907,7 +919,9 @@ function App() {
         return;
       }
       if (e.kind === 'summary') {
-        conversationUpdated(e.data as Summary, false);
+        const row = e.data as Summary;
+        if (notifyInBackground) notifications.observe(row, true);
+        conversationUpdated(row, false);
         return;
       }
       if (e.kind === 'project') {
@@ -982,6 +996,7 @@ function App() {
         setThread({ ...snapshot.thread, messages: snapshot.thread.messages.slice(-historyLimit) });
         // Project summaries may arrive while subscriptions switch. The selected
         // snapshot is also the authoritative summary for the navigation list.
+        if (notifyInBackground) notifications.observe(snapshot.thread, false);
         conversationUpdated(snapshot.thread);
         conversationSettings.sync(snapshot.thread.composerSettings);
         void defaultSettings.refresh();
@@ -993,11 +1008,11 @@ function App() {
     );
     feed.current = stream;
     const focus = () => {
-      if (document.visibilityState === 'visible') void stream.connect();
+      if (notifyInBackground || document.visibilityState === 'visible') void stream.connect();
       else stream.suspend();
     };
     focus();
-    document.addEventListener('visibilitychange', focus);
+    if (!notifyInBackground) document.addEventListener('visibilitychange', focus);
     window.addEventListener('online', focus);
     return () => {
       stream.close();
@@ -1005,7 +1020,7 @@ function App() {
       document.removeEventListener('visibilitychange', focus);
       window.removeEventListener('online', focus);
     };
-  }, [threadId, projectId, retry, auth]);
+  }, [threadId, projectId, retry, auth, notifyInBackground, notifications]);
   useEffect(() => {
     if (
       auth !== 'ready' ||
@@ -2904,6 +2919,9 @@ function App() {
           saveError={preferencesError}
           close={() => setDialog(undefined)}
           change={changePreferences}
+          changeNotifications={(notifications) =>
+            changePreferences({ ...latestPreferences.current, notifications })
+          }
         />
       )}
       {dialog === 'review' && (

@@ -14,6 +14,7 @@ import { Service } from './service.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
 import type { NetworkConfiguration } from './network-settings.js';
+import type { RuntimeConfiguration } from './runtime-settings.js';
 import type { JWTVerifyGetKey } from 'jose';
 import { cloudflareAuthenticator } from './cloudflare-access.js';
 
@@ -119,6 +120,7 @@ export async function application(
   service: Service,
   options: {
     network: NetworkConfiguration;
+    runtime?: RuntimeConfiguration;
     token: string;
     dev?: boolean;
     test?: boolean;
@@ -256,6 +258,10 @@ export async function application(
           return json(response, options.network.snapshot());
         if (url.pathname === '/api/settings/network' && method === 'PUT')
           return json(response, options.network.save(await body(request)));
+        if (url.pathname === '/api/settings/runtime' && options.runtime) {
+          if (method === 'GET') return json(response, options.runtime.snapshot());
+          if (method === 'PUT') return json(response, options.runtime.save(await body(request)));
+        }
         if (url.pathname === '/api/projects' && method === 'GET')
           return json(response, service.store.projectsWithActivity());
         if (url.pathname === '/api/projects' && method === 'POST') {

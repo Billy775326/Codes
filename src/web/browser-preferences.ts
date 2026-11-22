@@ -6,6 +6,7 @@ export interface Preferences {
   review: 'inline' | 'detached';
   theme: 'dark' | 'light' | 'system';
   autoScroll: boolean;
+  notifications: boolean;
   chatFontSize?: number;
   codeFontSize?: number;
 }
@@ -16,6 +17,7 @@ export const defaultBrowserPreferences: Preferences = {
   review: 'inline',
   theme: 'dark',
   autoScroll: true,
+  notifications: false,
 };
 
 export function readBrowserPreferences(raw: string): Preferences {
@@ -27,6 +29,7 @@ export function readBrowserPreferences(raw: string): Preferences {
       review: value.review === 'detached' ? 'detached' : 'inline',
       theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
       autoScroll: value.autoScroll !== false,
+      notifications: value.notifications === true,
       chatFontSize: chatFontSizes.includes(value.chatFontSize) ? value.chatFontSize : undefined,
       codeFontSize: codeFontSizes.includes(value.codeFontSize) ? value.codeFontSize : undefined,
     };

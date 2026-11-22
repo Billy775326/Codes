@@ -72,6 +72,8 @@ Save, then restart Codes with the same data directory and sign in at the new add
 
 Codes stores the saved settings in `network-settings.json` in the private data directory. The saved settings take precedence over `CODES_HOST`, `CODES_PORT`, and `CODES_PUBLIC_ORIGIN`. If a saved setting prevents access, stop the service, move that file elsewhere as a backup, and restart with the desired environment values. Without a settings file, `CODES_PUBLIC_ORIGIN` still selects one exact browser origin. The defaults allow the local loopback origins on port 6670.
 
+**Export saved** downloads the listener addresses and authentication settings as a versioned Codes JSON file. **Import configuration** loads a Codes export into the editable form. Review the addresses and authentication, then explicitly save when ready. The export contains settings such as the Access team URL and AUD, with no workspace token or native credentials.
+
 **Local / Tailscale** uses the Codes access token. For tailnet access, have Tailscale Serve forward to the loopback listener and add its HTTPS origin.
 
 ### Cloudflare Access
@@ -94,6 +96,16 @@ npm start
 Configure the proxy upstream as `http://127.0.0.1:6670`, preserve `Host: codes.example.com`, disable response buffering for `/api/events`, and allow streaming connections to remain open. Terminate HTTPS at the proxy and restrict access to the intended owner. A browser write must use an allowed origin whose hostname and port match the request's Host header. Use a dedicated origin for Codes.
 
 Do not set a browser URL containing the access token. The login form exchanges it for an HttpOnly SameSite cookie; HTTPS origins add Secure. Sessions expire after 12 hours and are lost on service restart. Change the token in the private file or environment, then restart to revoke existing sessions. Logout invalidates its server-side session; an open event stream is closed within its next session check.
+
+## Runtime settings
+
+In **Settings → Runtime**, set the default native RPC deadline (1,000–300,000 ms) and whether native questions are available in Code mode. The form also shows the Codex executable and Codes data directory. Save and restart Codes to apply changes. `runtime-settings.json` in the private data directory takes precedence over `CODES_CODE_QUESTIONS` and `CODES_CODEX_REQUEST_TIMEOUT_MS`. Before a save, the defaults are Code-mode questions enabled and a 30,000 ms native request deadline. Operations with dedicated deadlines retain those deadlines.
+
+To recover from invalid runtime settings, stop Codes, move `runtime-settings.json` to a backup outside the active path, and restart with the desired environment values.
+
+## Browser notifications
+
+Enable **Browser notifications** in **Settings → Preferences** and allow the site to display notifications. Use **Send test notification** to verify delivery. With notifications enabled, an open background Codes tab keeps its existing event connection and can report completion, failure, stops, approvals and questions. Notification titles use generic text. Browser support requires a secure context, such as HTTPS or localhost. Delivery depends on the browser keeping the tab and connection active.
 
 ## When the page disconnects
 
@@ -123,7 +135,7 @@ An unknown result that cannot be proven terminal remains locked. Inspect the tas
 
 The UI distinguishes timeouts, unreachable requests, invalid API responses and HTTP/proxy failures. A failed snapshot shows its first error while bounded retry continues; Retry loading starts a fresh subscription. Read failures do not imply that a task was submitted. A failed write can still have executed, so Check result verifies its existing operation identity rather than resending it. On reconnect, proven completed or failed receipts can be cleared automatically. Unknown or absent receipts remain protected until checked; an absent receipt found by Check result also refreshes the selected conversation.
 
-Hidden tabs release their event connection and reconnect from a fresh snapshot on return. Native execution and server queues continue while hidden. This reduces HTTP/1 connection occupancy during ordinary tab switching; many simultaneously visible windows can still reach a browser's connection limit. Closing surplus windows or using an HTTPS reverse proxy with HTTP/2 can avoid that separate limit. A private Chrome diagnostic on this host reproduced saturation with six event streams and recovered ordinary requests after releasing one; that diagnostic does not establish the cause of every user connection failure.
+Hidden tabs release their event connection and reconnect from a fresh snapshot on return by default. Opting into browser notifications keeps the existing connection open. Native execution and server queues continue while hidden. This reduces HTTP/1 connection occupancy during ordinary tab switching; many simultaneously visible windows can still reach a browser's connection limit. Closing surplus windows or using an HTTPS reverse proxy with HTTP/2 can avoid that separate limit. A private Chrome diagnostic on this host reproduced saturation with six event streams and recovered ordinary requests after releasing one; that diagnostic does not establish the cause of every user connection failure.
 
 ### Small API responses work but conversation history stalls
 

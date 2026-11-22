@@ -39,6 +39,8 @@ it('uses the saved port and allows local and HTTPS proxy origins after restart',
     CODES_PORT: String(initialPort),
     CODES_PUBLIC_ORIGIN: local(initialPort),
     CODES_ACCESS_TOKEN: token,
+    CODES_CODE_QUESTIONS: '1',
+    CODES_CODEX_REQUEST_TIMEOUT_MS: '23000',
   };
   const path = '/api/settings/network';
   let child: ChildProcess | undefined;
@@ -69,7 +71,31 @@ it('uses the saved port and allows local and HTTPS proxy origins after restart',
       });
       expect(response.status).toBe(200);
       const cookie = response.headers.get('set-cookie')!.split(';')[0]!;
+      const runtimePath = base + '/api/settings/runtime';
+      const runtime = await (await fetch(runtimePath, { headers: { cookie } })).json();
       if (currentPort === initialPort) {
+        expect((await fetch(runtimePath)).status).toBe(401);
+        expect(runtime).toMatchObject({
+          active: { codeQuestions: true, requestTimeoutMs: 23000 },
+          restartRequired: false,
+        });
+        const saveRuntime = (requestTimeoutMs: number) =>
+          fetch(runtimePath, {
+            method: 'PUT',
+            headers: { cookie, origin: base, 'content-type': 'application/json' },
+            body: JSON.stringify({
+              revision: 0,
+              settings: { codeQuestions: false, requestTimeoutMs },
+            }),
+          });
+        expect((await saveRuntime(100)).status).toBe(400);
+        const updatedRuntime = await saveRuntime(45000);
+        expect(updatedRuntime.status).toBe(200);
+        expect(await updatedRuntime.json()).toMatchObject({
+          restartRequired: true,
+          active: runtime.active,
+        });
+        expect((await saveRuntime(46000)).status).toBe(409);
         const saved = await fetch(base + path, {
           method: 'PUT',
           headers: { cookie, origin: base, 'content-type': 'application/json' },
@@ -89,6 +115,13 @@ it('uses the saved port and allows local and HTTPS proxy origins after restart',
           active: { port: initialPort },
         });
       } else {
+        expect(runtime).toMatchObject({
+          active: { codeQuestions: false, requestTimeoutMs: 45000 },
+          restartRequired: false,
+        });
+        expect(
+          await (await fetch(base + '/api/system', { headers: { cookie } })).json(),
+        ).toMatchObject({ codeQuestions: false });
         const state = await (await fetch(base + path, { headers: { cookie } })).json();
         expect(state).toMatchObject({
           restartRequired: false,
