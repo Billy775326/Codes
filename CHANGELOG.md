@@ -111,6 +111,8 @@
 
 ### Fixed
 
+- Wrap long diff lines and hunk headers within both Changes layouts while keeping line numbers and before/after columns aligned.
+
 - Wrap long source lines inside Files so their full text is readable on desktop and phones while preserving source line numbers and selection.
 
 - Explain when an HTML entry page needs JavaScript to render instead of opening a blank static preview. Keep the source available in Files.

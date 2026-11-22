@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import type { Snapshot } from '../../src/shared/types';
 async function login(page: Page) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
@@ -125,6 +126,59 @@ test('earlier turn changes remain inspectable after a later turn and reload', as
   await expect(panel).toContainText('Native edit sequence');
   await edits.last().locator('.diff-file-toggle').click();
   await expect(edits.last()).toContainText('Greetings');
+});
+test('long patch text wraps in Unified and Side by side on desktop and phones', async ({
+  page,
+}) => {
+  const removed = `    const previous = "${'previous'.repeat(48)}";`;
+  const added = `    const current = "${'current'.repeat(48)}";`;
+  const hunk = `@@ -123456 +654321 @@ ${'Long hunk description '.repeat(15)}`;
+  await login(page);
+  await send(page, 'Synthetic long diff fixture');
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
+  await page.route('**/api/threads/*/snapshot', async (route) => {
+    const response = await route.fetch();
+    const base: Snapshot = await response.json();
+    base.thread.diff = [
+      'diff --git a/example.ts b/example.ts',
+      '--- a/example.ts',
+      '+++ b/example.ts',
+      hunk,
+      `-${removed}`,
+      `+${added}`,
+    ].join('\n');
+    await route.fulfill({ json: base });
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+  const panel = page.locator('.context-panel');
+  const file = panel.getByRole('region', { name: 'Changes in example.ts', exact: true });
+  const patch = file.getByLabel('Patch for example.ts', { exact: true });
+  await expect(patch).toBeVisible();
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const layout of ['Unified', 'Side by side']) {
+      await panel.getByRole('button', { name: layout, exact: true }).click();
+      const shape = await patch.evaluate((element) => {
+        const wrappedRows = Array.from(element.querySelectorAll('code'), (code) => {
+          const range = document.createRange();
+          range.selectNodeContents(code.lastChild!);
+          return new Set(Array.from(range.getClientRects(), (rect) => rect.top)).size;
+        });
+        return { overflow: element.scrollWidth - element.clientWidth, wrappedRows };
+      });
+      expect(shape.overflow).toBe(0);
+      expect(shape.wrappedRows.every((rows) => rows > 1)).toBe(true);
+      await expect(patch.locator('.line-number').filter({ hasText: /^123456$/ })).toBeVisible();
+      await expect(patch.locator('.line-number').filter({ hasText: /^654321$/ })).toBeVisible();
+      await expect(patch.locator('code').filter({ hasText: /const previous/ })).toContainText(
+        removed.trim(),
+      );
+      await expect(patch.locator('code').filter({ hasText: /const current/ })).toContainText(
+        added.trim(),
+      );
+    }
+  }
 });
 test('long patches use bounded line windows and fit phone screens', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

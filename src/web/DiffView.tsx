@@ -132,6 +132,12 @@ const FileDiff = memo(function FileDiff({
             aria-label={'Patch for ' + file.path}
           >
             <table className="diff-table">
+              <colgroup>
+                <col className="diff-line-gutter" />
+                {layout === 'split' && <col />}
+                <col className="diff-line-gutter" />
+                <col />
+              </colgroup>
               <tbody>
                 {layout === 'unified'
                   ? file.lines.slice(start, start + diffLimits.window).map((line, i) => (
@@ -178,7 +184,7 @@ const FileDiff = memo(function FileDiff({
                     )}
                 {!count && (
                   <tr>
-                    <td colSpan={4} className="diff-no-lines">
+                    <td colSpan={layout === 'split' ? 4 : 3} className="diff-no-lines">
                       No patch lines are available in this preview.
                     </td>
                   </tr>
