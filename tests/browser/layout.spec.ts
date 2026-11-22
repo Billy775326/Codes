@@ -108,6 +108,13 @@ test('the toolbar switches theme, shares the settings choice, and fits at 320px'
   await theme.selectOption('system');
   await expect(workspace).toHaveAttribute('data-theme', 'dark');
   await page.keyboard.press('Escape');
+  await themeButton('light').hover();
+  await expect(page.locator('.control-tooltip')).toHaveText('Switch to light mode');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(themeButton('dark')).toBeVisible();
+  await expect(page.locator('.control-tooltip')).toHaveText('Switch to dark mode');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('.control-tooltip')).toHaveText('Switch to light mode');
   await page.setViewportSize({ width: 320, height: 640 });
   await page.reload();
   const light = themeButton('light');
@@ -120,6 +127,33 @@ test('the toolbar switches theme, shares the settings choice, and fits at 320px'
   await expect(workspace).toHaveAttribute('data-theme', 'light');
   await expect(themeButton('dark')).toBeVisible();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the current draft');
+});
+
+test('the theme shortcut renders the light palette under Chromium auto-darkening', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setAutoDarkModeOverride', { enabled: true });
+  await login(page);
+  await page.getByRole('button', { name: 'Switch to light mode', exact: true }).click();
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Switch to dark mode', exact: true }),
+  ).toBeVisible();
+  const screenshot = await page.locator('.topbar').screenshot();
+  const background = await page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = 'data:image/png;base64,' + base64;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d')!;
+    context.drawImage(image, 0, 0);
+    return Array.from(context.getImageData(2, 2, 1, 1).data).slice(0, 3);
+  }, screenshot.toString('base64'));
+  expect(background).toEqual([250, 250, 250]);
 });
 
 for (const width of [1440, 820, 390, 320]) {

@@ -111,6 +111,8 @@
 
 ### Fixed
 
+- Keep the light palette visible when Chrome auto-darkening is enabled with a dark system preference. Update the open theme shortcut tooltip when the system theme changes.
+
 - Keep the Codes wordmark and sidebar search placeholder readable on dark backgrounds, including when browser colors differ from the app theme.
 
 - Wrap long diff lines and hunk headers within both Changes layouts while keeping line numbers and before/after columns aligned.

@@ -14,12 +14,16 @@ export function ControlTooltip() {
     let control: HTMLElement | null = null;
     let opening: ReturnType<typeof setTimeout> | undefined;
     let closing: ReturnType<typeof setTimeout>;
+    const labels = new MutationObserver(() => {
+      if (control && !tooltip.hidden) render(control);
+    });
 
     const cancelOpening = () => {
       clearTimeout(opening);
       opening = undefined;
     };
     const hide = () => {
+      labels.disconnect();
       cancelOpening();
       clearTimeout(closing);
       if (!tooltip.hidden) tooltip.hidden = true;
@@ -27,6 +31,27 @@ export function ControlTooltip() {
     };
     const find = (target: EventTarget | null) =>
       target instanceof Element ? target.closest<HTMLElement>('[data-tooltip]') : null;
+    const render = (target: HTMLElement) => {
+      const label = target.dataset.tooltip || target.getAttribute('aria-label');
+      if (!label || !target.getClientRects().length || target.closest('[inert]')) {
+        hide();
+        return;
+      }
+      tooltip.textContent = label;
+      tooltip.hidden = false;
+      const bounds = target.getBoundingClientRect();
+      const width = tooltip.offsetWidth;
+      const height = tooltip.offsetHeight;
+      const below = bounds.bottom + gap;
+      const above = bounds.top - height - gap;
+      const top = below + height <= innerHeight - margin ? below : above;
+      tooltip.style.top = Math.max(margin, top) + 'px';
+      tooltip.style.left =
+        Math.max(
+          margin,
+          Math.min(bounds.left + (bounds.width - width) / 2, innerWidth - width - margin),
+        ) + 'px';
+    };
     const show = (target: HTMLElement, delay: number) => {
       clearTimeout(closing);
       if (control === target && (!tooltip.hidden || (opening !== undefined && delay > 0))) return;
@@ -34,25 +59,9 @@ export function ControlTooltip() {
       control = target;
       opening = setTimeout(() => {
         opening = undefined;
-        const label = target.dataset.tooltip || target.getAttribute('aria-label');
-        if (!label || !target.getClientRects().length || target.closest('[inert]')) {
-          hide();
-          return;
-        }
-        tooltip.textContent = label;
-        tooltip.hidden = false;
-        const bounds = target.getBoundingClientRect();
-        const width = tooltip.offsetWidth;
-        const height = tooltip.offsetHeight;
-        const below = bounds.bottom + gap;
-        const above = bounds.top - height - gap;
-        const top = below + height <= innerHeight - margin ? below : above;
-        tooltip.style.top = Math.max(margin, top) + 'px';
-        tooltip.style.left =
-          Math.max(
-            margin,
-            Math.min(bounds.left + (bounds.width - width) / 2, innerWidth - width - margin),
-          ) + 'px';
+        render(target);
+        if (!tooltip.hidden)
+          labels.observe(target, { attributeFilter: ['aria-label', 'data-tooltip'] });
       }, delay);
     };
     const pointerOver = (event: PointerEvent) => {
