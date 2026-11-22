@@ -108,6 +108,40 @@ test('folder navigation clears stale rows and previews, and failed directory rea
   await expect(page.getByText('Late file', { exact: true })).toHaveCount(0);
 });
 
+test('long source lines wrap inside Files at desktop and phone widths', async ({ page }) => {
+  const attribute = `    <meta name="viewport" content="width=device-width, initial-scale=1" data-fixture="${'token_'.repeat(85)}" />`;
+  await page.route('**/api/projects/*/file?path=example.ts', (route) =>
+    route.fulfill({
+      json: { path: 'example.ts', text: `first\n${attribute}\nlast`, sha: 'fixture', lines: 3 },
+    }),
+  );
+  await openFiles(page);
+  await page.getByRole('button', { name: 'example.ts', exact: true }).click();
+  const lines = page.getByRole('group', { name: 'File lines' });
+  const wrappedLine = lines.getByRole('button').nth(1);
+  await expect(wrappedLine).toBeVisible();
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 800 });
+    const shape = await wrappedLine.locator('code').evaluate((element) => {
+      const scroller = element.closest('.file-preview-scroll')!;
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const boxes = [...range.getClientRects()];
+      return {
+        wrappedRows: new Set(boxes.map((box) => box.top)).size,
+        overflow: scroller.scrollWidth - scroller.clientWidth,
+        text: element.textContent,
+      };
+    });
+    expect(shape.wrappedRows).toBeGreaterThan(1);
+    expect(shape.overflow).toBe(0);
+    expect(shape.text).toBe(attribute);
+    await expect(lines.getByRole('button')).toHaveCount(3);
+  }
+  await wrappedLine.click();
+  await expect(page.getByText('Lines 2–2', { exact: true })).toBeVisible();
+});
+
 test('long source files render one page of selectable lines at a time', async ({ page }) => {
   const lines = Array.from({ length: 411 }, (_, index) => `Example line ${index + 1}`);
   let first = true;

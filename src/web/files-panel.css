@@ -132,29 +132,30 @@
   padding: 8px;
 }
 .file-lines {
-  min-width: max-content;
   padding-block: 4px;
 }
 .file-lines button {
-  display: flex;
+  display: grid;
+  grid-template-columns: 6ch minmax(0, 1fr);
+  align-items: start;
   width: 100%;
   gap: 12px;
   padding: 0 10px;
   text-align: left;
   font: 12px/22px var(--font-code);
-  white-space: pre;
 }
 .file-lines button:hover {
   background: var(--hover);
 }
 .file-lines button > span {
-  min-width: 40px;
   color: var(--muted);
   text-align: right;
   user-select: none;
 }
 .file-lines code {
   font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .file-state {
   display: flex;
