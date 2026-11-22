@@ -124,14 +124,6 @@
   }
 }
 
-.selection-toolbar {
-  flex-wrap: wrap;
-}
-.selection-toolbar > button {
-  font-size: 11px;
-  padding: 8px;
-}
-
 .project-dialog form {
   display: grid;
   margin-top: 18px;

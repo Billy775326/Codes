@@ -134,6 +134,7 @@ test('answers and project files preview raster images and isolated static HTML',
   const files = page.locator('.context-panel');
   await files.getByRole('button', { name: imageName, exact: true }).click();
   await expectImage(imageName);
+  await files.getByRole('button', { name: 'Back to files', exact: true }).click();
   await files.getByRole('button', { name: htmlName, exact: true }).click();
   await expect(files.locator('.file-lines')).toContainText('<h1');
   await files.getByText('Preview HTML', { exact: true }).click();

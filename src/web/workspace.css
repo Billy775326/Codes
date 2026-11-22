@@ -41,7 +41,8 @@
   display: none;
 }
 .app.has-panel {
-  grid-template-columns: minmax(440px, 1fr) minmax(320px, min(44vw, 640px));
+  --context-width: min(44vw, 640px);
+  grid-template-columns: minmax(440px, 1fr) minmax(320px, var(--context-width));
 }
 .app.has-panel .main {
   grid-column: 1;
@@ -58,7 +59,11 @@
   box-shadow: none;
 }
 .app.history-open.has-panel {
-  grid-template-columns: 260px minmax(380px, 1fr) minmax(320px, min(38vw, 560px));
+  --context-width: min(38vw, 560px);
+  grid-template-columns: 260px minmax(380px, 1fr) minmax(320px, var(--context-width));
+}
+.app.has-panel.files-open {
+  --context-width: min(32vw, 460px);
 }
 .app.history-open.has-panel .main {
   grid-column: 2;
@@ -733,27 +738,6 @@
 .app .diff-table .meta {
   color: var(--muted);
   background: var(--hover);
-}
-.app .file-lines button {
-  color: var(--fg);
-}
-.app .file-lines button.highlighted {
-  background: var(--selected);
-}
-.app .file-title,
-.app .file-breadcrumb,
-.app .file-list {
-  border-color: var(--line);
-}
-.app .file-title span {
-  color: var(--muted);
-}
-.app .file-title,
-.app .file-list button.active {
-  background: var(--selected);
-}
-.app .file-list {
-  max-height: 180px;
 }
 .app .slash-commands {
   background: var(--popup);

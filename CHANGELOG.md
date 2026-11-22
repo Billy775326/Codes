@@ -111,6 +111,8 @@
 
 ### Fixed
 
+- Give Files a full-height folder list, a focused preview on narrow screens, and paged source lines for large files. Clear stale entries and previews during navigation and offer local retry for failed reads.
+
 - Keep resolved Codex questions in their original turns when viewing paginated conversation history.
 
 - Show readable answer previews in follow-up receipts and pending messages for asynchronous Codex questions.

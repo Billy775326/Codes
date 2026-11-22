@@ -1,0 +1,218 @@
+.files-panel,
+.file-directory,
+.file-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.file-directory[hidden] {
+  display: none;
+}
+.has-file-preview .file-directory {
+  flex: 0 1 auto;
+  max-height: min(35%, 240px);
+}
+.file-location,
+.file-title {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 2px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.file-breadcrumb {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: auto hidden;
+  scrollbar-width: thin;
+}
+.file-breadcrumb > span {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  max-width: 100%;
+  color: var(--muted);
+}
+.file-breadcrumb button,
+.file-breadcrumb [aria-current] {
+  display: block;
+  max-width: 180px;
+  padding: 5px 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.file-breadcrumb button:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.file-breadcrumb [aria-current] {
+  color: var(--fg);
+  font-weight: 600;
+}
+.file-breadcrumb :focus-visible,
+.file-list :focus-visible,
+.file-lines :focus-visible {
+  outline-offset: -2px;
+}
+.file-list,
+.file-preview-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.file-list {
+  padding: 4px;
+}
+.file-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 29px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  text-align: left;
+  font-size: 13px;
+}
+.file-entry:hover {
+  background: var(--hover);
+}
+.file-entry[aria-current],
+.file-lines button[aria-pressed='true'] {
+  background: var(--selected);
+}
+.files-panel svg {
+  flex-shrink: 0;
+}
+.file-entry svg,
+.file-title > svg {
+  color: var(--muted);
+}
+.file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-directory:not([hidden]) + .file-preview {
+  border-top: 1px solid var(--line);
+}
+.file-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.file-read-only {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.file-preview-back svg,
+.file-pages button:first-child svg {
+  transform: rotate(180deg);
+}
+.file-preview-scroll {
+  background: var(--panel);
+}
+.file-preview-scroll > .html-preview,
+.file-image {
+  padding: 8px;
+}
+.file-lines {
+  min-width: max-content;
+  padding-block: 4px;
+}
+.file-lines button {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  padding: 0 10px;
+  text-align: left;
+  font: 12px/22px var(--font-code);
+  white-space: pre;
+}
+.file-lines button:hover {
+  background: var(--hover);
+}
+.file-lines button > span {
+  min-width: 40px;
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+}
+.file-lines code {
+  font: inherit;
+}
+.file-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.file-state[role='alert'] {
+  color: var(--status-error);
+}
+.file-state button,
+.selection-toolbar button {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.file-pages,
+.selection-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.file-pages {
+  justify-content: center;
+  padding-block: 0;
+}
+.selection-toolbar {
+  flex-wrap: wrap;
+}
+.selection-toolbar > span {
+  margin-right: auto;
+}
+.selection-toolbar button {
+  font-size: 12px;
+  color: var(--fg);
+}
+.selection-toolbar .primary {
+  color: var(--primary-ink);
+}
+@media (max-width: 1099px) {
+  .file-entry {
+    min-height: 38px;
+  }
+  .selection-toolbar button {
+    min-height: var(--control-size);
+  }
+  .file-lines button {
+    line-height: 28px;
+  }
+}

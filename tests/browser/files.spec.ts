@@ -1,0 +1,147 @@
+import { expect, test, type Page } from '@playwright/test';
+
+async function openFiles(page: Page) {
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+}
+
+for (const width of [1440, 320]) {
+  test(`Files gives the list and preview usable space at ${width}px`, async ({ page }) => {
+    const narrow = width === 320;
+    await page.setViewportSize({ width, height: narrow ? 570 : 850 });
+    await page.emulateMedia({ colorScheme: narrow ? 'light' : 'dark' });
+    const extraFiles = Array.from({ length: 40 }, (_, index) => {
+      const name = `fixture-${index}.txt`;
+      return { name, path: name, directory: false };
+    });
+    await page.route('**/api/projects/*/files?*', async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ json: [...(await response.json()), ...extraFiles] });
+    });
+    await openFiles(page);
+    const panel = page.locator('.context-panel');
+    const list = panel.locator('.file-list');
+    const entry = list.getByRole('button', { name: 'example.ts', exact: true });
+    await expect(entry).toBeVisible();
+    expect((await list.boundingBox())!.height).toBeGreaterThan(300);
+    await entry.click();
+    const preview = panel.getByRole('region', { name: 'File preview' });
+    await expect(preview).toContainText('export function hello');
+    const attach = preview.getByRole('button', { name: 'Attach selection' });
+    await expect(attach).toBeInViewport();
+    const close = preview.getByRole('button', {
+      name: narrow ? 'Back to files' : 'Close file preview',
+    });
+    if (narrow) {
+      await expect(list).toBeHidden();
+      await expect(close).toBeFocused();
+    } else {
+      expect((await list.boundingBox())!.height).toBeLessThan(
+        (await preview.boundingBox())!.height,
+      );
+      await expect(entry).toHaveAttribute('aria-current', 'true');
+    }
+    await close.click();
+    await expect(preview).toHaveCount(0);
+    await expect(entry).toBeFocused();
+    expect((await list.boundingBox())!.height).toBeGreaterThan(300);
+  });
+}
+
+test('folder navigation clears stale rows and previews, and failed directory reads can be retried', async ({
+  page,
+}) => {
+  const folder = 'conversation-fixtures';
+  let releaseFile!: () => void;
+  let releaseDirectory!: () => void;
+  const fileGate = new Promise<void>((resolve) => {
+    releaseFile = resolve;
+  });
+  const directoryGate = new Promise<void>((resolve) => {
+    releaseDirectory = resolve;
+  });
+  let directoryReads = 0;
+  await page.route('**/api/projects/*/file?path=example.ts', async (route) => {
+    await fileGate;
+    await route.fulfill({ json: { path: 'example.ts', text: 'Late file', sha: 'old', lines: 1 } });
+  });
+  await page.route('**/api/projects/*/files?*', async (route) => {
+    const path = new URL(route.request().url()).searchParams.get('path');
+    if (path !== folder) return route.continue();
+    if (++directoryReads === 1) {
+      await directoryGate;
+      return route.fulfill({
+        status: 404,
+        json: { error: { code: 'FILE_NOT_FOUND', message: 'The directory could not be read.' } },
+      });
+    }
+    return route.fulfill({ json: [{ directory: true, name: 'nested', path: `${folder}/nested` }] });
+  });
+  await openFiles(page);
+  const files = page.getByRole('region', { name: 'Project files', exact: true });
+  const original = files.getByRole('button', { name: 'example.ts', exact: true });
+  const started = page.waitForRequest('**/api/projects/*/file?path=example.ts');
+  await original.click();
+  await started;
+  try {
+    await files.getByRole('button', { name: folder, exact: true }).click();
+    await expect(files.getByText('Loading files…', { exact: true })).toBeVisible();
+    await expect(original).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'File preview' })).toHaveCount(0);
+  } finally {
+    releaseFile();
+    releaseDirectory();
+  }
+  const error = files.getByRole('alert');
+  await expect(error).toContainText('The directory could not be read.');
+  await error.getByRole('button', { name: 'Retry' }).click();
+  await page.route('**/api/projects/*/files?path=*nested', (route) => route.fulfill({ json: [] }));
+  await files.getByRole('button', { name: 'nested', exact: true }).click();
+  await expect(files.getByText('No visible files.', { exact: true })).toBeVisible();
+  const breadcrumbs = files.getByRole('navigation', { name: 'File location' });
+  await expect(breadcrumbs.locator('[aria-current]')).toHaveText('nested');
+  await breadcrumbs.getByRole('button', { name: folder, exact: true }).click();
+  await expect(breadcrumbs.locator('[aria-current]')).toHaveText(folder);
+  await expect(files.getByRole('button', { name: 'nested', exact: true })).toBeVisible();
+  await expect(page.getByText('Late file', { exact: true })).toHaveCount(0);
+});
+
+test('long source files render one page of selectable lines at a time', async ({ page }) => {
+  const lines = Array.from({ length: 411 }, (_, index) => `Example line ${index + 1}`);
+  let first = true;
+  await page.route('**/api/projects/*/file?path=example.ts', (route) => {
+    if (first) {
+      first = false;
+      return route.fulfill({
+        status: 404,
+        json: { error: { code: 'FILE_NOT_FOUND', message: 'The file could not be read.' } },
+      });
+    }
+    return route.fulfill({
+      json: { path: 'example.ts', text: lines.join('\n'), sha: 'fixture', lines: lines.length },
+    });
+  });
+  await openFiles(page);
+  await page.getByRole('button', { name: 'example.ts', exact: true }).click();
+  const preview = page.getByRole('region', { name: 'File preview' });
+  const error = preview.getByRole('alert');
+  await expect(error).toContainText('The file could not be read.');
+  await error.getByRole('button', { name: 'Retry' }).click();
+  const code = preview.getByRole('group', { name: 'File lines' });
+  await expect(code.getByRole('button')).toHaveCount(200);
+  await code.getByRole('button', { name: '199 Example line 199', exact: true }).click();
+  await preview.getByRole('button', { name: 'Next lines' }).click();
+  await expect(preview.getByRole('status')).toHaveText('201–400 of 411');
+  await expect(code.getByRole('button')).toHaveCount(200);
+  await code
+    .getByRole('button', { name: '202 Example line 202', exact: true })
+    .click({ modifiers: ['Shift'] });
+  await expect(preview.getByText('Lines 199–202', { exact: true })).toBeVisible();
+  await preview.getByRole('button', { name: 'Next lines' }).click();
+  await expect(code.getByRole('button')).toHaveCount(11);
+  await expect(preview.getByRole('button', { name: 'Next lines' })).toBeDisabled();
+  await preview.getByRole('button', { name: 'Attach selection' }).click();
+  await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
+});

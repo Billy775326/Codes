@@ -7,11 +7,11 @@ import {
 } from './project-navigation';
 import { sameSettings } from '../shared/types';
 import { messagePreviewText } from '../shared/question-replies';
-import { imageLimits, projectImageType } from '../shared/images';
+import { imageLimits } from '../shared/images';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
-import { AnswerMarkdown, HtmlPreview, ProjectImagePreview } from './ContentPreview';
+import { AnswerMarkdown } from './ContentPreview';
 import { useLocalAttachments } from './useLocalAttachments';
 import { readBrowserPreferences, type Preferences } from './browser-preferences';
 import { ConversationNotifications, notificationAccess } from './browser-notifications';
@@ -55,6 +55,7 @@ import { Conversations } from './Conversations';
 import { QueuePanel } from './QueuePanel';
 import { Approval } from './Approval';
 import { DiffView } from './DiffView';
+import { FilesPanel } from './FilesPanel';
 import { PanelMenu } from './PanelMenu';
 import { usePanelFocus } from './usePanelFocus';
 import { ChangeSummary } from './ChangeSummary';
@@ -500,10 +501,7 @@ function App() {
   const openAddProject = useCallback(() => setAdding(true), []);
   const [conversationModalOpen, setConversationModalOpen] = useState(false);
   const [directory, setDirectory] = useState('');
-  const [files, setFiles] = useState<{ path: string; name: string; directory: boolean }[]>([]);
-  const [file, setFile] = useState<FileContent | { path: string; kind: 'image' }>();
-  const fileRead = useRef<AbortController | undefined>(undefined);
-  const [range, setRange] = useState<[number, number]>([1, 1]);
+  const [filePath, setFilePath] = useState<string>();
   const [receipt, setReceipt] = useState('');
   const feed = useRef<Feed | undefined>(undefined);
   const transcript = useRef<HTMLDivElement>(null);
@@ -767,10 +765,8 @@ function App() {
       current?.projectId === projectId && current.id === threadId ? current : undefined,
     );
     setDirectory('');
-    setFiles([]);
-    fileRead.current?.abort();
     setPanel(null);
-    setFile(undefined);
+    setFilePath(undefined);
     setAttachments([]);
     save('codes.project', projectId);
   }, [projectId, auth]);
@@ -832,8 +828,7 @@ function App() {
       if (!id) remember(owner, '');
       if (changed) {
         setContext(undefined);
-        setFile(undefined);
-        setFiles([]);
+        setFilePath(undefined);
         setDirectory('');
         setAttachments([]);
       }
@@ -841,10 +836,7 @@ function App() {
       returnToLatest();
       setDiffTurn('');
       setDiffPath('');
-      if (changed) {
-        setPanel(null);
-        fileRead.current?.abort();
-      }
+      if (changed) setPanel(null);
       if (window.innerWidth <= 1099) setSidebar(false);
       follow.current = true;
     },
@@ -985,10 +977,7 @@ function App() {
           setSelection({ projectId: snapshot.thread.projectId, threadId });
         if (snapshot.context) {
           setContext(snapshot.context);
-          if (!snapshot.context.directory.available) {
-            setFile(undefined);
-            setFiles([]);
-          }
+          if (!snapshot.context.directory.available) setFilePath(undefined);
         }
         remember(snapshot.thread.projectId, snapshot.thread.id);
         deltas.clear();
@@ -1101,34 +1090,6 @@ function App() {
     timelineLatest,
     preferences.autoScroll,
   ]);
-  useEffect(() => {
-    if (!contextReady || directoryBlocked || panel !== 'files') return;
-    const controller = new AbortController();
-    const owner = contextProjectId,
-      conversation = threadId;
-    void request<typeof files>(
-      `${contextBase}/files?path=${encodeURIComponent(directory)}`,
-      {},
-      controller.signal,
-    )
-      .then((list) => {
-        if (
-          !controller.signal.aborted &&
-          owner === projectRef.current &&
-          conversation === threadRef.current
-        )
-          setFiles(list);
-      })
-      .catch((e) => {
-        if (
-          !controller.signal.aborted &&
-          owner === projectRef.current &&
-          conversation === threadRef.current
-        )
-          notice(e);
-      });
-    return () => controller.abort();
-  }, [contextBase, contextReady, directoryBlocked, directory, panel]);
   const changeDraft = useCallback(
     (value: string) => {
       draftRevision.current++;
@@ -1467,58 +1428,23 @@ function App() {
     if (project.id !== projectRef.current) changeProject(project.id);
     setAdding(false);
   };
-  useEffect(() => () => fileRead.current?.abort(), [projectId, auth]);
-  useEffect(() => {
-    if (panel !== 'files') fileRead.current?.abort();
-  }, [panel]);
-  const openFile = async (path: string) => {
-    fileRead.current?.abort();
-    const controller = new AbortController();
-    fileRead.current = controller;
-    if (!contextReady || directoryBlocked) return;
-    const owner = contextProjectId;
-    const conversation = threadId;
-    if (projectImageType(path)) {
-      setFile({ path, kind: 'image' });
-      return;
-    }
-    setFile(undefined);
-    try {
-      const file = await request<FileContent>(
-        `${contextBase}/file?path=${encodeURIComponent(path)}`,
-        {},
-        controller.signal,
-      );
-      if (
-        controller.signal.aborted ||
-        owner !== projectRef.current ||
-        conversation !== threadRef.current
-      )
-        return;
-      setFile(file);
-      setRange([1, Math.min(file.lines, 50)]);
-    } catch (e) {
-      if (
-        !controller.signal.aborted &&
-        owner === projectRef.current &&
-        conversation === threadRef.current
-      )
-        notice(e);
-    }
-  };
-  const returnToComposer = () => {
-    if (window.innerWidth <= 1099) setPanel(null);
-    requestAnimationFrame(() => composer.current?.focus());
-  };
-  const attachProjectFile = (fromLine: number, toLine: number) => {
-    if (!file || !('text' in file) || attachmentBlocked) return;
-    draftRevision.current++;
-    setAttachments((list) => [
-      ...list.filter((entry) => !('path' in entry) || entry.path !== file.path),
-      { path: file.path, sha: file.sha, fromLine, toLine },
-    ]);
-    returnToComposer();
-  };
+  const browseDirectory = useCallback((path: string) => {
+    setDirectory(path);
+    setFilePath(undefined);
+  }, []);
+  const attachProjectFile = useCallback(
+    (file: FileContent, fromLine: number, toLine: number) => {
+      if (attachmentBlocked) return;
+      draftRevision.current++;
+      setAttachments((list) => [
+        ...list.filter((entry) => !('path' in entry) || entry.path !== file.path),
+        { path: file.path, sha: file.sha, fromLine, toLine },
+      ]);
+      if (narrow) setPanel(null);
+      requestAnimationFrame(() => composer.current?.focus());
+    },
+    [attachmentBlocked, narrow],
+  );
   const loadingConversation = !!threadId && (!thread || thread.id !== threadId);
   const active =
     !!thread?.pending ||
@@ -1608,12 +1534,12 @@ function App() {
     });
   }
   const openChangedFile = (path: string) => {
-    const relative = path.startsWith((project?.path ?? '') + '/')
-      ? path.slice(project!.path.length + 1)
-      : path;
+    if (!contextReady || directoryBlocked) return;
+    const prefix = project?.path?.replace(/\/?$/, '/');
+    const relative = prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
+    setDirectory(relative.split('/').slice(0, -1).join('/'));
+    setFilePath(relative);
     setPanel('files');
-    setFile(undefined);
-    void openFile(relative);
   };
   const canSteer =
     !!thread?.turnId &&
@@ -2006,7 +1932,7 @@ function App() {
             : undefined,
         } as React.CSSProperties
       }
-      className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
+      className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''} ${panel === 'files' ? 'files-open' : ''}`}
     >
       {sidebar && <div className="scrim" onClick={closeNavigation} />}
       <aside
@@ -3020,11 +2946,16 @@ function App() {
             <div className="panel-tabs">
               <button
                 className={panel === 'files' ? 'active' : ''}
+                aria-pressed={panel === 'files'}
                 onClick={() => setPanel('files')}
               >
                 Files
               </button>
-              <button className={panel === 'diff' ? 'active' : ''} onClick={() => setPanel('diff')}>
+              <button
+                className={panel === 'diff' ? 'active' : ''}
+                aria-pressed={panel === 'diff'}
+                onClick={() => setPanel('diff')}
+              >
                 Changes{thread?.diff && <i />}
               </button>
             </div>
@@ -3084,114 +3015,20 @@ function App() {
               )}
             </div>
           ) : (
-            <>
-              <div className="file-breadcrumb">
-                <button
-                  onClick={() => {
-                    setDirectory('');
-                    setFile(undefined);
-                  }}
-                >
-                  {project?.name ?? 'Project'}
-                </button>
-                {directory && (
-                  <>
-                    <span>/</span>
-                    <button
-                      onClick={() => setDirectory(directory.split('/').slice(0, -1).join('/'))}
-                    >
-                      {directory}
-                    </button>
-                  </>
-                )}
-              </div>
-              {directoryBlocked ? (
-                <div className="panel-empty">
-                  <p>{context.directory.message}</p>
-                </div>
-              ) : (
-                <div className="file-list">
-                  {files.map((f) => (
-                    <button
-                      className={file?.path === f.path ? 'active' : ''}
-                      key={f.path}
-                      onClick={() =>
-                        f.directory
-                          ? (setDirectory(f.path), setFile(undefined))
-                          : void openFile(f.path)
-                      }
-                    >
-                      <Icon name={f.directory ? 'folder' : 'file'} size={15} />
-                      {f.name}
-                      {f.directory && <Icon name="chevron" size={12} />}
-                    </button>
-                  ))}
-                  {!files.length && <p className="muted">No visible files.</p>}
-                </div>
-              )}
-              {file ? (
-                <div className="file-preview">
-                  <div className="file-title">
-                    <Icon name="file" size={14} />
-                    {file.path}
-                    <span>READ ONLY</span>
-                  </div>
-                  {'text' in file ? (
-                    <>
-                      {/\.html?$/i.test(file.path) && (
-                        <HtmlPreview key={file.path} html={file.text} />
-                      )}
-                      <div className="file-lines">
-                        {file.text.split('\n').map((line, i) => (
-                          <button
-                            key={i}
-                            className={
-                              i + 1 >= Math.min(...range) && i + 1 <= Math.max(...range)
-                                ? 'highlighted'
-                                : ''
-                            }
-                            onClick={(e) =>
-                              setRange(e.shiftKey ? [range[0], i + 1] : [i + 1, i + 1])
-                            }
-                          >
-                            <span>{i + 1}</span>
-                            <code>{line || ' '}</code>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="selection-toolbar">
-                        <span>
-                          Lines {Math.min(...range)}–{Math.max(...range)}
-                        </span>
-                        <button
-                          onClick={() => attachProjectFile(1, file.lines)}
-                          disabled={attachmentBlocked}
-                        >
-                          Attach file
-                        </button>
-                        <button
-                          className="primary"
-                          onClick={() => attachProjectFile(Math.min(...range), Math.max(...range))}
-                          disabled={attachmentBlocked}
-                        >
-                          Attach selection
-                        </button>
-                      </div>
-                      <small className="selection-hint">
-                        Click a line, then Shift-click to select a range.
-                      </small>
-                    </>
-                  ) : (
-                    <ProjectImagePreview projectId={contextProjectId} path={file.path} />
-                  )}
-                </div>
-              ) : (
-                <div className="panel-empty">
-                  <Icon name="file" size={28} />
-                  <p>Select a file</p>
-                </div>
-              )}
-            </>
+            <FilesPanel
+              key={contextBase}
+              apiBase={contextReady && !directoryBlocked ? contextBase : undefined}
+              directoryIssue={directoryBlocked ? context.directory.message : undefined}
+              projectId={contextProjectId}
+              projectName={project?.name ?? 'Project'}
+              directory={directory}
+              filePath={filePath}
+              narrow={narrow}
+              onDirectory={browseDirectory}
+              onFile={setFilePath}
+              onAttach={attachProjectFile}
+              attachmentBlocked={attachmentBlocked}
+            />
           )}
         </aside>
       )}
