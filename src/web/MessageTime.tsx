@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useInterfaceLanguage } from './interface-language';
 /** Native turn timing in English and the browser's local timezone by default. */
 export function formatMessageTime(value: number, locale = 'en-US', timeZone?: string) {
   const date = new Date(value);
@@ -25,12 +26,15 @@ export function formatMessageTime(value: number, locale = 'en-US', timeZone?: st
   return { short, full, iso: date.toISOString() };
 }
 export function MessageTime({ value, kind }: { value?: number; kind: 'started' | 'finished' }) {
+  const { t, locale } = useInterfaceLanguage();
   const formatted = useMemo(
-    () => (value === undefined ? undefined : formatMessageTime(value)),
-    [value],
+    () => (value === undefined ? undefined : formatMessageTime(value, locale)),
+    [value, locale],
   );
   if (!formatted) return null;
-  const label = `Turn ${kind}: ${formatted.full}`;
+  const label = t(kind === 'started' ? 'Turn started: {time}' : 'Turn finished: {time}', {
+    time: formatted.full,
+  });
   return (
     <time
       className={`message-time ${kind === 'started' ? 'user-message-time' : ''}`}

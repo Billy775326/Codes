@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import type { TurnInfo } from '../shared/types';
 import { MessageTime } from './MessageTime';
 
@@ -7,10 +8,12 @@ export function isTurnOutcome(value?: string): value is TurnOutcome {
   return value === 'completed' || value === 'failed' || value === 'interrupted';
 }
 
-const compactTokens = new Intl.NumberFormat('en', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
+const compactTokens = Object.fromEntries(
+  ['en-US', 'zh-CN'].map((locale) => [
+    locale,
+    new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }),
+  ]),
+);
 
 export function TurnResult({
   status,
@@ -23,6 +26,7 @@ export function TurnResult({
   current?: boolean;
   showTime?: boolean;
 }) {
+  const { t, locale } = useInterfaceLanguage();
   const usage = turn?.usage;
   const duration =
     turn?.durationMs ??
@@ -35,13 +39,17 @@ export function TurnResult({
       : undefined;
   return (
     <div className={current ? 'turn-status ' + status : 'reply-completion'}>
-      <span>{outcomeLabel[status]}</span>
+      <span>{t(outcomeLabel[status])}</span>
       {rate !== undefined && (
-        <span title="Output tokens per second across the entire turn">
-          · Avg {rate.toFixed(1)} TPS
+        <span title={t('Output tokens per second across the entire turn')}>
+          · {t('Avg {rate} TPS', { rate: rate.toFixed(1) })}
         </span>
       )}
-      {usage && <span>· {compactTokens.format(usage.totalTokens)} tokens</span>}
+      {usage && (
+        <span>
+          · {t('{count} tokens', { count: compactTokens[locale]!.format(usage.totalTokens) })}
+        </span>
+      )}
       {showTime && turn?.completedAtMs !== undefined && (
         <span>
           · <MessageTime value={turn.completedAtMs} kind="finished" />

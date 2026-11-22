@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { useMemo, useState } from 'react';
 import type { Message } from '../shared/types';
 import { parseFileDiffs } from '../shared/diff';
@@ -10,6 +11,7 @@ export function ChangeSummary({
   item: Message;
   review?: (path?: string) => void;
 }) {
+  const { t } = useInterfaceLanguage();
   const [all, setAll] = useState(false);
   const files = useMemo(() => parseFileDiffs(item.files ?? []), [item.files]);
   const totals = files.reduce(
@@ -18,22 +20,23 @@ export function ChangeSummary({
   );
   const count = new Set(files.map((file) => file.path)).size;
   return (
-    <section className="edit-summary" aria-label="Edited files">
+    <section className="edit-summary" aria-label={t('Edited files')}>
       <div className="edit-summary-heading">
         <Icon name="diff" size={15} />
         <div>
           <strong>
-            Edited {count} {count === 1 ? 'file' : 'files'}
+            {t(count === 1 ? 'Edited {count} file' : 'Edited {count} files', { count })}
           </strong>
           <small>
             <span className="diff-additions">+{totals.add}</span>{' '}
             <span className="diff-deletions">−{totals.del}</span>
-            {(item.truncated || files.some((file) => file.truncated)) && ' · Partial preview'}
+            {(item.truncated || files.some((file) => file.truncated)) &&
+              ' · ' + t('Partial preview')}
           </small>
         </div>
         {review && (
-          <button aria-label="Review edited files" onClick={() => review()}>
-            Review
+          <button aria-label={t('Review edited files')} onClick={() => review()}>
+            {t('Review')}
           </button>
         )}
       </div>
@@ -52,7 +55,7 @@ export function ChangeSummary({
       </div>
       {files.length > 4 && (
         <button className="edit-summary-more" onClick={() => setAll(!all)}>
-          {all ? 'Show fewer files' : 'Show all ' + files.length + ' edits'}
+          {all ? t('Show fewer files') : t('Show all {count} edits', { count: files.length })}
         </button>
       )}
     </section>

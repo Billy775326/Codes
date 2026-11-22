@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { useState } from 'react';
 import { notificationAccess, showNotification } from './browser-notifications';
 
@@ -8,6 +9,7 @@ export function NotificationSettings({
   enabled: boolean;
   change: (enabled: boolean) => void;
 }) {
+  const { t } = useInterfaceLanguage();
   const [access, setAccess] = useState(notificationAccess);
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState('');
@@ -35,9 +37,9 @@ export function NotificationSettings({
   }
   return (
     <section className="preferences-section" aria-labelledby="preferences-notifications">
-      <h3 id="preferences-notifications">Notifications</h3>
+      <h3 id="preferences-notifications">{t('Notifications')}</h3>
       <label className="preference-row">
-        <span>Browser notifications</span>
+        <span>{t('Browser notifications')}</span>
         <input
           className="preference-checkbox"
           type="checkbox"
@@ -49,12 +51,14 @@ export function NotificationSettings({
       </label>
       <p className="preference-help">
         {access === 'denied'
-          ? 'Allow notifications in this site’s browser settings.'
+          ? t('Allow notifications in this site’s browser settings.')
           : access === 'insecure'
-            ? 'Open Codes over HTTPS or on localhost to enable notifications.'
+            ? t('Open Codes over HTTPS or on localhost to enable notifications.')
             : access === 'unsupported'
-              ? 'This browser does not support desktop notifications.'
-              : 'Get notified about tasks, approvals, and questions while the Codes tab is open in the background.'}
+              ? t('This browser does not support desktop notifications.')
+              : t(
+                  'Get notified about tasks, approvals, and questions while the Codes tab is open in the background.',
+                )}
       </p>
       {enabled && access === 'granted' && (
         <button
@@ -63,18 +67,18 @@ export function NotificationSettings({
             setError('');
             setTested(false);
             try {
-              showNotification('Codes test notification', 'codes-test');
+              showNotification(t('Codes test notification'), 'codes-test');
               setTested(true);
             } catch {
               setError('This browser could not display a notification.');
             }
           }}
         >
-          Send test notification
+          {t('Send test notification')}
         </button>
       )}
-      {tested && <p role="status">Test notification requested.</p>}
-      {error && <p role="alert">{error}</p>}
+      {tested && <p role="status">{t('Test notification requested.')}</p>}
+      {error && <p role="alert">{t(error)}</p>}
     </section>
   );
 }

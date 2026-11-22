@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { useEffect, useRef, useState } from 'react';
 import {
   loopbackHosts,
@@ -30,6 +31,7 @@ function allowedAddresses(settings: NetworkSettingsSnapshot['settings'], port: s
 }
 
 export function NetworkSettings() {
+  const { t } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<NetworkSettingsSnapshot>();
   const [host, setHost] = useState<(typeof loopbackHosts)[number]>('127.0.0.1');
   const [port, setPort] = useState('');
@@ -81,13 +83,13 @@ export function NetworkSettings() {
       <div className="preferences-content">
         {error ? (
           <>
-            <p role="alert">{error}</p>
+            <p role="alert">{t(error)}</p>
             <button type="button" onClick={loadAgain}>
-              Retry loading
+              {t('Retry loading')}
             </button>
           </>
         ) : (
-          <p role="status">Loading network settings…</p>
+          <p role="status">{t('Loading network settings…')}</p>
         )}
       </div>
     );
@@ -190,7 +192,7 @@ export function NetworkSettings() {
     >
       <div className="network-listener">
         <label>
-          Listen address
+          {t('Listen address')}
           <select
             value={host}
             onChange={(event) => setHost(event.target.value as typeof host)}
@@ -202,7 +204,7 @@ export function NetworkSettings() {
           </select>
         </label>
         <label>
-          Listen port
+          {t('Listen port')}
           <input
             type="number"
             min="1"
@@ -218,7 +220,7 @@ export function NetworkSettings() {
       <div className="network-access-fields">
         <div>
           <label>
-            Allowed addresses
+            {t('Allowed addresses')}
             <textarea
               rows={4}
               value={addresses}
@@ -231,35 +233,37 @@ export function NetworkSettings() {
           </label>
           <p className="preference-help" id="network-address-help">
             {authMode === 'cloudflare-access'
-              ? 'One HTTPS origin per line.'
-              : 'One HTTP(S) origin per line.'}{' '}
-            Use the scheme, hostname, and optional port.
+              ? t('One HTTPS origin per line.')
+              : t('One HTTP(S) origin per line.')}{' '}
+            {t('Use the scheme, hostname, and optional port.')}
           </p>
         </div>
         <div>
           <label>
-            Authentication mode
+            {t('Authentication mode')}
             <select
               value={authMode}
               onChange={(event) => setAuthMode(event.target.value as NetworkSettings['authMode'])}
               aria-describedby="network-auth-help"
               disabled={saving}
             >
-              <option value="local">Local / Tailscale (local)</option>
+              <option value="local">{t('Local / Tailscale (local)')}</option>
               <option value="cloudflare-access">Cloudflare Access</option>
             </select>
           </label>
           <p className="preference-help" id="network-auth-help">
             {authMode === 'cloudflare-access'
-              ? 'Access sign-in is required on every address, followed by your Codes token.'
-              : 'Use your Codes token for local or tailnet access. Select Cloudflare Access for a public hostname.'}
+              ? t('Access sign-in is required on every address, followed by your Codes token.')
+              : t(
+                  'Use your Codes token for local or tailnet access. Select Cloudflare Access for a public hostname.',
+                )}
           </p>
         </div>
       </div>
       {authMode === 'cloudflare-access' && (
         <div className="network-access-credentials">
           <label>
-            Cloudflare team URL
+            {t('Cloudflare team URL')}
             <input
               type="url"
               placeholder="https://your-team.cloudflareaccess.com"
@@ -271,7 +275,7 @@ export function NetworkSettings() {
             />
           </label>
           <label>
-            Application Audience (AUD)
+            {t('Application Audience (AUD)')}
             <input
               value={audience}
               maxLength={64}
@@ -286,23 +290,25 @@ export function NetworkSettings() {
       {imported && (
         <p role="status">
           {changed
-            ? 'Configuration loaded into the form. Review it before saving.'
-            : 'Imported configuration matches the saved settings.'}
+            ? t('Configuration loaded into the form. Review it before saving.')
+            : t('Imported configuration matches the saved settings.')}
         </p>
       )}
       {snapshot.restartRequired ? (
         <p role="status">
-          Saved. Restart Codes to apply. Currently listening on {snapshot.active.host}, port{' '}
-          {snapshot.active.port}.
+          {t('Saved. Restart Codes to apply. Currently listening on {host}, port {port}.', {
+            host: snapshot.active.host,
+            port: snapshot.active.port,
+          })}
         </p>
       ) : saved && !changed ? (
-        <p role="status">Network settings saved.</p>
+        <p role="status">{t('Network settings saved.')}</p>
       ) : null}
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{t(error)}</p>}
       <div className="network-actions">
         <input
           ref={importInput}
-          aria-label="Import network settings file"
+          aria-label={t('Import network settings file')}
           type="file"
           accept="application/json,.json"
           hidden
@@ -317,14 +323,14 @@ export function NetworkSettings() {
           onClick={() => importInput.current?.click()}
           disabled={saving || importing || reloadRequired}
         >
-          Import configuration
+          {t('Import configuration')}
         </button>
         <button type="button" onClick={exportConfiguration} disabled={saving}>
-          Export saved
+          {t('Export saved')}
         </button>
         {reloadRequired && (
           <button type="button" onClick={loadAgain}>
-            Reload settings
+            {t('Reload settings')}
           </button>
         )}
         <button
@@ -332,7 +338,7 @@ export function NetworkSettings() {
           type="submit"
           disabled={!changed || saving || importing || reloadRequired}
         >
-          {saving ? 'Saving…' : 'Save network settings'}
+          {saving ? t('Saving…') : t('Save network settings')}
         </button>
       </div>
     </form>

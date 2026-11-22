@@ -1,4 +1,5 @@
 import type { State, Summary } from '../shared/types';
+import { interfaceLanguages, type Translate } from './interface-language';
 
 export function notificationAccess() {
   if (!window.isSecureContext) return 'insecure';
@@ -53,7 +54,7 @@ function deliver(title: string, tag: string) {
 export class ConversationNotifications {
   private readonly previous = new Map<string, { state: State; attention: string }>();
 
-  observe(row: Summary, live: boolean) {
+  observe(row: Summary, live: boolean, t: Translate = interfaceLanguages.en.t) {
     const next = { state: row.state, attention: attention(row) };
     const previous = this.previous.get(row.id);
     this.previous.delete(row.id);
@@ -68,7 +69,7 @@ export class ConversationNotifications {
           ? results[next.state]
           : undefined;
     if (title)
-      void deliver(title, JSON.stringify([row.id, row.updatedAt, title])).catch(() =>
+      void deliver(t(title), JSON.stringify([row.id, row.updatedAt, title])).catch(() =>
         console.warn('Unable to show a Codes browser notification.'),
       );
   }

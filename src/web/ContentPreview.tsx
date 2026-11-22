@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -27,6 +28,7 @@ function htmlPreviewIssue(html: string) {
 }
 
 export function HtmlPreview({ html }: { html: string }) {
+  const { t } = useInterfaceLanguage();
   const [open, setOpen] = useState(false);
   const issue = useMemo(() => (open ? htmlPreviewIssue(html) : undefined), [open, html]);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -39,16 +41,16 @@ export function HtmlPreview({ html }: { html: string }) {
       className="html-preview"
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>Preview HTML</summary>
+      <summary>{t('Preview HTML')}</summary>
       {open && issue && (
         <p className="html-preview-issue" role="status">
-          {issue}
+          {t(issue)}
         </p>
       )}
       {open && !issue && (
         <iframe
           ref={frame}
-          title="HTML preview"
+          title={t('HTML preview')}
           src="/api/html-preview"
           sandbox="allow-scripts"
           onLoad={() => frame.current?.contentWindow?.postMessage(html, '*')}
@@ -59,9 +61,13 @@ export function HtmlPreview({ html }: { html: string }) {
 }
 
 function PreviewImage({ src, alt }: { src: string; alt: string }) {
+  const { t } = useInterfaceLanguage();
   const [failed, setFailed] = useState(false);
   return failed ? (
-    <span role="status">Image unavailable: {alt}</span>
+    <span role="status">
+      {t('Image unavailable:') + ' '}
+      {alt}
+    </span>
   ) : (
     <img
       className="project-preview-image"
@@ -74,9 +80,15 @@ function PreviewImage({ src, alt }: { src: string; alt: string }) {
 }
 
 export function ProjectImagePreview({ projectId, path }: { projectId: string; path: string }) {
+  const { t } = useInterfaceLanguage();
   const src = projectImageUrl(projectId, path);
   return (
-    <a href={src} target="_blank" rel="noopener noreferrer" aria-label={'Open original: ' + path}>
+    <a
+      href={src}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={t('Open original: {path}', { path })}
+    >
       <PreviewImage key={src} src={src} alt={path} />
     </a>
   );

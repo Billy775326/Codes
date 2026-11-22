@@ -1,4 +1,5 @@
 import type { State, Summary } from '../shared/types';
+import { interfaceLanguages, type Translate } from './interface-language';
 
 const activityLabels: Record<NonNullable<Summary['sidebarActivity']>, string> = {
   needsInput: 'Needs answer',
@@ -20,7 +21,7 @@ const labels: Record<State, string> = {
 };
 
 /** Presentation of existing task/receipt/queue state; never an execution state machine. */
-export function conversationStatus(row: Summary) {
+export function conversationStatus(row: Summary, t: Translate = interfaceLanguages.en.t) {
   const uncertain = row.executionUnknown || row.queueIssue === 'unknown';
   const label = uncertain
     ? row.expiredQuestion
@@ -45,8 +46,16 @@ export function conversationStatus(row: Summary) {
         : row.state === 'running' || row.executionPending
           ? 'running'
           : 'neutral';
+  const queueStatus =
+    row.queueIssue === 'unknown'
+      ? 'Check result'
+      : row.queueIssue === 'failed'
+        ? 'Failed'
+        : row.queuePaused
+          ? 'Paused'
+          : undefined;
   const queue = row.queueCount
-    ? `${row.queueCount} in queue${row.queueIssue === 'unknown' ? ' · Check result' : row.queueIssue === 'failed' ? ' · Failed' : row.queuePaused ? ' · Paused' : ''}`
+    ? t('{count} in queue', { count: row.queueCount }) + (queueStatus ? ' · ' + t(queueStatus) : '')
     : undefined;
-  return { label, tone, queue };
+  return { label: t(label), tone, queue };
 }

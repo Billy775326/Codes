@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { ImageAttachmentView } from './ImageAttachments';
 import { permissionLabel } from '../shared/permissions';
 import { useEffect, useState } from 'react';
@@ -30,6 +31,7 @@ export function QueuePanel({
   onChange: (queue: QueueState) => void;
   onCheck: () => Promise<void>;
 }) {
+  const { t } = useInterfaceLanguage();
   const [editing, setEditing] = useState('');
   const [text, setText] = useState('');
   useEffect(() => {
@@ -58,7 +60,7 @@ export function QueuePanel({
   const editor = editing ? (
     <form
       className="composer queued-text-editor"
-      aria-label="Queued message editor"
+      aria-label={t('Queued message editor')}
       onSubmit={(event) => {
         event.preventDefault();
         if (!editable) return;
@@ -74,11 +76,15 @@ export function QueuePanel({
     >
       <p>
         {editable
-          ? 'Queue paused for editing. Queue position, model, permissions and attachments stay unchanged.'
-          : 'This message is no longer waiting. Your local edit was not submitted; copy it before closing.'}
+          ? t(
+              'Queue paused for editing. Queue position, model, permissions and attachments stay unchanged.',
+            )
+          : t(
+              'This message is no longer waiting. Your local edit was not submitted; copy it before closing.',
+            )}
       </p>
       <textarea
-        aria-label="Edit queued message"
+        aria-label={t('Edit queued message')}
         value={text}
         maxLength={50_000}
         onChange={(event) => setText(event.target.value)}
@@ -88,13 +94,13 @@ export function QueuePanel({
       />
       <div className="composer-toolbar queue-editor-actions">
         {onStop && (
-          <button type="button" aria-label="Stop task" disabled={busy} onClick={onStop}>
+          <button type="button" aria-label={t('Stop task')} disabled={busy} onClick={onStop}>
             <Icon name="stop" size={16} />
-            Stop
+            {t('Stop')}
           </button>
         )}
         <button type="button" disabled={busy} onClick={() => setEditing('')}>
-          {editable ? 'Cancel edit' : 'Close edit'}
+          {editable ? t('Cancel edit') : t('Close edit')}
         </button>
         <button
           className="send-button"
@@ -104,7 +110,7 @@ export function QueuePanel({
             (!text.trim() && !entryBeingEdited?.attachments.some((item) => item.kind === 'image'))
           }
         >
-          Save queued message
+          {t('Save queued message')}
         </button>
       </div>
     </form>
@@ -113,11 +119,11 @@ export function QueuePanel({
   return (
     <section
       className={`message-queue compact-queue ${editing ? 'is-editing' : ''}`}
-      aria-label="Queued messages"
+      aria-label={t('Queued messages')}
     >
       <div className="queue-heading">
         <strong>
-          {state.items.length ? 'Queued' : 'Unsubmitted edit'}{' '}
+          {state.items.length ? t('Queued') : t('Unsubmitted edit')}{' '}
           {state.items.length > 0 && <span>{state.items.length}/10</span>}
         </strong>
         {state.items.length > 0 && (
@@ -131,11 +137,11 @@ export function QueuePanel({
               )
             }
           >
-            {state.paused ? 'Resume queue' : 'Pause queue'}
+            {state.paused ? t('Resume queue') : t('Pause queue')}
           </button>
         )}
       </div>
-      <p>{state.paused && (state.reason ?? 'Queue paused. Resume when ready.')}</p>
+      <p>{state.paused && t(state.reason ?? 'Queue paused. Resume when ready.')}</p>
       <ol>
         {state.items.map((entry, index) => (
           <li key={entry.id}>
@@ -144,17 +150,17 @@ export function QueuePanel({
               <div className="queue-entry-label">
                 <span>
                   {entry.state === 'queued'
-                    ? 'Waiting · Editable'
+                    ? t('Waiting · Editable')
                     : entry.state === 'dispatching'
-                      ? 'Sending · Locked'
+                      ? t('Sending · Locked')
                       : entry.state === 'unknown'
-                        ? 'Unconfirmed · Locked'
-                        : 'Needs review · Text locked'}
+                        ? t('Unconfirmed · Locked')
+                        : t('Needs review · Text locked')}
                 </span>
                 <small>
-                  {permissionLabel(entry.settings.permission)}
+                  {t(permissionLabel(entry.settings.permission))}
                   {entry.attachments.length
-                    ? ' · ' + entry.attachments.length + ' attachment(s)'
+                    ? ' · ' + t('{count} attachment(s)', { count: entry.attachments.length })
                     : ''}
                 </small>
               </div>
@@ -175,7 +181,7 @@ export function QueuePanel({
                   )}
                 </div>
               )}
-              {entry.error && <p className="queue-error">{entry.error}</p>}
+              {entry.error && <p className="queue-error">{t(entry.error)}</p>}
               {editing !== entry.id && (
                 <div className="queue-actions">
                   {entry.state === 'queued' && turnId && (
@@ -186,8 +192,10 @@ export function QueuePanel({
                         !settings ||
                         !sameSettings(entry.settings, settings)
                       }
-                      aria-label="Add queued message to current task"
-                      title="Apply this waiting message to the running task; it stops being editable after acceptance"
+                      aria-label={t('Add queued message to current task')}
+                      title={t(
+                        'Apply this waiting message to the running task; it stops being editable after acceptance',
+                      )}
                       onClick={() =>
                         void run(() =>
                           post<QueueState>(
@@ -200,12 +208,12 @@ export function QueuePanel({
                       }
                     >
                       <Icon name="reply" size={14} />
-                      Guide now
+                      {t('Guide now')}
                     </button>
                   )}
                   {entry.state === 'queued' && (
                     <PanelMenu
-                      label="Queued message actions"
+                      label={t('Queued message actions')}
                       trigger={<Icon name="more" size={16} />}
                       className="queue-entry-menu"
                     >
@@ -234,7 +242,7 @@ export function QueuePanel({
                         }
                       >
                         <Icon name="edit" size={14} />
-                        Edit message
+                        {t('Edit message')}
                       </button>
                     </PanelMenu>
                   )}
@@ -250,12 +258,12 @@ export function QueuePanel({
                       }
                     >
                       <Icon name="close" size={14} />
-                      Remove
+                      {t('Remove')}
                     </button>
                   )}
                   {entry.state === 'unknown' && (
                     <button disabled={busy} onClick={() => void run(onCheck)}>
-                      Check result
+                      {t('Check result')}
                     </button>
                   )}
                 </div>
@@ -265,8 +273,9 @@ export function QueuePanel({
                 settings &&
                 !sameSettings(entry.settings, settings) && (
                   <p className="queue-edit-scope">
-                    Add now is unavailable because this message uses different task settings. Leave
-                    it queued for its own turn.
+                    {t(
+                      'Add now is unavailable because this message uses different task settings. Leave it queued for its own turn.',
+                    )}
                   </p>
                 )}
             </div>
@@ -276,7 +285,7 @@ export function QueuePanel({
       {editor}
       {error && (
         <p role="alert" className="queue-error">
-          {error}
+          {t(error)}
         </p>
       )}
     </section>

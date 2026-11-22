@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ConversationPage, Project, Summary } from '../shared/types';
@@ -82,12 +83,19 @@ const signature = (row: Summary) =>
     row.expiredQuestion,
     row.forkedFromId,
   ]);
-const sidebarClock = new Intl.DateTimeFormat('en-US', {
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-});
-const sidebarDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const sidebarTimes = Object.fromEntries(
+  ['en-US', 'zh-CN'].map((locale) => [
+    locale,
+    {
+      clock: new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }),
+      date: new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }),
+    },
+  ]),
+);
 
 export const Conversations = memo(function Conversations({
   projects,
@@ -99,6 +107,7 @@ export const Conversations = memo(function Conversations({
   onRefreshProjects,
   ...props
 }: Props) {
+  const { t } = useInterfaceLanguage();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [archived, setArchived] = useState(false);
@@ -132,24 +141,24 @@ export const Conversations = memo(function Conversations({
   return (
     <section
       className="conversations"
-      aria-label="Conversation management"
+      aria-label={t('Conversation management')}
       data-live={props.connection === 'Connected'}
     >
       <div className="conversation-controls">
         <button
           className={'icon-button archive-toggle' + (archived ? ' selected' : '')}
-          aria-label="Archived conversations"
+          aria-label={t('Archived conversations')}
           aria-pressed={archived}
-          data-tooltip={archived ? 'Back to chats' : 'Show archived chats'}
+          data-tooltip={archived ? t('Back to chats') : t('Show archived chats')}
           onClick={() => setArchived((value) => !value)}
         >
           <Icon name="archive" size={16} />
-          {archived && <span>Archived</span>}
+          {archived && <span>{t('Archived')}</span>}
         </button>
         <div className="conversation-tools">
           <button
             className="icon-button"
-            aria-label="Add project"
+            aria-label={t('Add project')}
             data-tooltip=""
             onClick={onAddProject}
           >
@@ -157,7 +166,7 @@ export const Conversations = memo(function Conversations({
           </button>
           <button
             className="icon-button"
-            aria-label="Refresh conversations"
+            aria-label={t('Refresh conversations')}
             data-tooltip=""
             onClick={() => {
               onRefreshProjects();
@@ -172,20 +181,20 @@ export const Conversations = memo(function Conversations({
         <div className="conversation-search">
           <Icon name="search" size={14} />
           <input
-            aria-label="Search projects and chats"
-            placeholder="Search projects and chats"
+            aria-label={t('Search projects and chats')}
+            placeholder={t('Search projects and chats')}
             value={query}
             maxLength={120}
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
-            <button aria-label="Clear search" data-tooltip="" onClick={() => setQuery('')}>
+            <button aria-label={t('Clear search')} data-tooltip="" onClick={() => setQuery('')}>
               <Icon name="close" size={13} />
             </button>
           )}
         </div>
       </div>
-      <nav className="project-cards" aria-label="Conversations">
+      <nav className="project-cards" aria-label={t('Conversations')}>
         {orderedProjects.map(({ project, updatedAt }) => {
           const projectMatch =
             !!search && project.name.toLowerCase().includes(search.toLowerCase());
@@ -209,7 +218,7 @@ export const Conversations = memo(function Conversations({
         })}
         {search && (
           <p className="sidebar-search-empty conversation-empty">
-            No matching projects or conversations
+            {t('No matching projects or conversations')}
           </p>
         )}
       </nav>
@@ -258,6 +267,7 @@ const ProjectCard = memo(function ProjectCard({
   updates: Summary[];
   onActivity: (projectId: string, updatedAt: number) => void;
 }) {
+  const { t, locale } = useInterfaceLanguage();
   const projectId = project.id;
   const listId = 'project-conversations-' + projectId;
   const projectName = useRef<HTMLButtonElement>(null);
@@ -490,7 +500,7 @@ const ProjectCard = memo(function ProjectCard({
             ref={projectName}
             className="project-card-name"
             aria-current={active ? 'true' : undefined}
-            aria-description={preference?.pinned ? 'Pinned project' : undefined}
+            aria-description={preference?.pinned ? t('Pinned project') : undefined}
             aria-controls={collapsed ? listId : undefined}
             aria-expanded={collapsed ? false : undefined}
             title={project.path}
@@ -507,8 +517,12 @@ const ProjectCard = memo(function ProjectCard({
         {!collapsed && (
           <button
             className="icon-button project-card-new"
-            aria-label={active ? 'New conversation' : 'New conversation in ' + project.name}
-            data-tooltip={'New conversation in ' + project.name}
+            aria-label={
+              active
+                ? t('New conversation')
+                : t('New conversation in {project}', { project: project.name })
+            }
+            data-tooltip={t('New conversation in {project}', { project: project.name })}
             disabled={disabled}
             onClick={() => onNew(projectId)}
           >
@@ -518,7 +532,7 @@ const ProjectCard = memo(function ProjectCard({
         {!collapsed && (
           <button
             className="icon-button"
-            aria-label={'Project actions for ' + project.name}
+            aria-label={t('Project actions for {project}', { project: project.name })}
             aria-expanded={projectMenu}
             data-tooltip=""
             disabled={savingProject}
@@ -536,7 +550,7 @@ const ProjectCard = memo(function ProjectCard({
         {!collapsed && !keepOpen && !editing && (
           <button
             className="icon-button project-card-collapse"
-            aria-label={'Collapse ' + project.name}
+            aria-label={t('Collapse {project}', { project: project.name })}
             data-tooltip=""
             aria-controls={listId}
             aria-expanded="true"
@@ -555,7 +569,7 @@ const ProjectCard = memo(function ProjectCard({
         <div
           className="conversation-actions"
           role="group"
-          aria-label={'Project actions: ' + project.name}
+          aria-label={t('Project actions: {project}', { project: project.name })}
         >
           <button
             disabled={savingProject}
@@ -565,11 +579,11 @@ const ProjectCard = memo(function ProjectCard({
             }}
           >
             <Icon name="edit" size={12} />
-            Rename
+            {t('Rename')}
           </button>
           <button onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}>
             <Icon name="pin" size={12} />
-            {preference?.pinned ? 'Unpin' : 'Pin'}
+            {preference?.pinned ? t('Unpin') : t('Pin')}
           </button>
         </div>
       )}
@@ -581,7 +595,7 @@ const ProjectCard = memo(function ProjectCard({
             void renameProject();
           }}
         >
-          <label htmlFor={'project-rename-' + projectId}>Project name</label>
+          <label htmlFor={'project-rename-' + projectId}>{t('Project name')}</label>
           <input
             id={'project-rename-' + projectId}
             value={projectEdit.name}
@@ -595,7 +609,7 @@ const ProjectCard = memo(function ProjectCard({
           />
           {projectError && (
             <p className="error-text" role="alert">
-              {projectError}
+              {t(projectError)}
             </p>
           )}
           <div>
@@ -604,7 +618,7 @@ const ProjectCard = memo(function ProjectCard({
               disabled={savingProject}
               onClick={() => setProjectEdit(undefined)}
             >
-              Cancel
+              {t('Cancel')}
             </button>
             <button
               className="primary"
@@ -614,25 +628,28 @@ const ProjectCard = memo(function ProjectCard({
                 projectEdit.name.trim() === projectEdit.original
               }
             >
-              {savingProject ? 'Saving…' : 'Save project name'}
+              {savingProject ? t('Saving…') : t('Save project name')}
             </button>
           </div>
         </form>
       )}
       {error && !confirmation && (
         <div className="conversation-error" role="alert">
-          {error}
-          <button onClick={refresh}>Refresh list</button>
+          {t(error)}
+          <button onClick={refresh}>{t('Refresh list')}</button>
         </div>
       )}
       <div className="project-conversations" id={listId} hidden={collapsed}>
         {rows.map((row) => {
-          const status = conversationStatus(row);
+          const status = conversationStatus(row, t);
           const routine = status.tone === 'neutral' && row.state === 'idle';
-          const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt) : undefined;
+          const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt, locale) : undefined;
           const shortTime =
             time &&
-            (row.updatedAt >= today.getTime() ? sidebarClock : sidebarDate).format(row.updatedAt);
+            (row.updatedAt >= today.getTime()
+              ? sidebarTimes[locale]!.clock
+              : sidebarTimes[locale]!.date
+            ).format(row.updatedAt);
           return (
             <div
               key={row.id}
@@ -659,8 +676,8 @@ const ProjectCard = memo(function ProjectCard({
                     {row.forkedFromId && (
                       <span
                         className="branch-mark"
-                        title="Conversation branch"
-                        aria-label="Conversation branch"
+                        title={t('Conversation branch')}
+                        aria-label={t('Conversation branch')}
                       >
                         ⑂
                       </span>
@@ -669,8 +686,8 @@ const ProjectCard = memo(function ProjectCard({
                       <time
                         id={'conversation-updated-' + row.id}
                         dateTime={time.iso}
-                        title={'Updated: ' + time.full}
-                        aria-label={'Updated: ' + time.full}
+                        title={t('Updated: {time}', { time: time.full })}
+                        aria-label={t('Updated: {time}', { time: time.full })}
                       >
                         {shortTime}
                       </time>
@@ -709,7 +726,7 @@ const ProjectCard = memo(function ProjectCard({
                 </button>
                 <button
                   className="icon-button conversation-menu-trigger"
-                  aria-label={'Actions for ' + row.title}
+                  aria-label={t('Actions for {title}', { title: row.title })}
                   data-tooltip=""
                   aria-expanded={menu === row.id}
                   disabled={!!pending}
@@ -728,7 +745,7 @@ const ProjectCard = memo(function ProjectCard({
                 <div
                   className="conversation-actions"
                   role="group"
-                  aria-label={'Conversation actions: ' + row.title}
+                  aria-label={t('Conversation actions: {title}', { title: row.title })}
                 >
                   <button
                     disabled={!!pending || row.managementPending}
@@ -738,23 +755,25 @@ const ProjectCard = memo(function ProjectCard({
                     }}
                   >
                     <Icon name="edit" size={12} />
-                    Rename
+                    {t('Rename')}
                   </button>
                   <button onClick={() => void copyConversation(row)}>
                     <Icon name="link" size={12} />
-                    {copied?.id === row.id && !copied.fallback ? 'Link copied' : 'Copy link'}
+                    {copied?.id === row.id && !copied.fallback ? t('Link copied') : t('Copy link')}
                   </button>
                   {row.managementPending ? (
                     <button disabled={!!pending} onClick={() => void mutate(row, 'check')}>
                       <Icon name="refresh" size={12} />
-                      Check status
+                      {t('Check status')}
                     </button>
                   ) : (
                     <button
                       disabled={!!pending || isWorking(row)}
                       title={
                         isWorking(row)
-                          ? 'Finish or stop the task, confirm its result, and remove queued messages first.'
+                          ? t(
+                              'Finish or stop the task, confirm its result, and remove queued messages first.',
+                            )
                           : undefined
                       }
                       onClick={() =>
@@ -764,7 +783,7 @@ const ProjectCard = memo(function ProjectCard({
                       }
                     >
                       <Icon name={row.archived ? 'refresh' : 'archive'} size={12} />
-                      {row.archived ? 'Restore' : 'Archive'}
+                      {row.archived ? t('Restore') : t('Archive')}
                     </button>
                   )}
                 </div>
@@ -773,7 +792,7 @@ const ProjectCard = memo(function ProjectCard({
                 copied?.id === row.id &&
                 (copied.fallback ? (
                   <label className="conversation-link">
-                    Conversation link
+                    {t('Conversation link')}
                     <input
                       value={copied.fallback}
                       readOnly
@@ -782,7 +801,7 @@ const ProjectCard = memo(function ProjectCard({
                   </label>
                 ) : (
                   <span className="visually-hidden" role="status">
-                    Conversation link copied
+                    {t('Conversation link copied')}
                   </span>
                 ))}
               {editing === row.id && (
@@ -793,10 +812,10 @@ const ProjectCard = memo(function ProjectCard({
                     if (name.trim() && name.trim() !== row.title) void mutate(row, 'rename');
                   }}
                 >
-                  <label htmlFor={'rename-' + row.id}>Conversation title</label>
+                  <label htmlFor={'rename-' + row.id}>{t('Conversation title')}</label>
                   <input
                     id={'rename-' + row.id}
-                    aria-label="Conversation title"
+                    aria-label={t('Conversation title')}
                     value={name}
                     maxLength={80}
                     disabled={!!pending}
@@ -808,13 +827,13 @@ const ProjectCard = memo(function ProjectCard({
                   />
                   <div>
                     <button type="button" onClick={() => setEditing('')} disabled={!!pending}>
-                      Cancel
+                      {t('Cancel')}
                     </button>
                     <button
                       className="primary"
                       disabled={!!pending || !name.trim() || name.trim() === row.title}
                     >
-                      {pending ? 'Saving…' : 'Save name'}
+                      {pending ? t('Saving…') : t('Save name')}
                     </button>
                   </div>
                 </form>
@@ -826,25 +845,25 @@ const ProjectCard = memo(function ProjectCard({
           <p className="conversation-empty">
             {search
               ? page.nextCursor
-                ? 'No matches on this page'
-                : 'No matches'
-              : 'No archived chats'}
+                ? t('No matches on this page')
+                : t('No matches')
+              : t('No archived chats')}
           </p>
         )}
       </div>
       {!collapsed && (page.nextCursor || previous.length > 0) && (
         <div className="conversation-pagination">
           <button
-            aria-label="Previous conversation page"
+            aria-label={t('Previous conversation page')}
             data-tooltip=""
             disabled={!previous.length || loading}
             onClick={back}
           >
             <Icon name="chevron" size={12} />
           </button>
-          <span>Page {previous.length + 1}</span>
+          <span>{t('Page {number}', { number: previous.length + 1 })}</span>
           <button
-            aria-label="Next conversation page"
+            aria-label={t('Next conversation page')}
             data-tooltip=""
             disabled={!page.nextCursor || loading}
             onClick={next}
@@ -856,7 +875,7 @@ const ProjectCard = memo(function ProjectCard({
       {confirmation &&
         createPortal(
           <InteractionDialog
-            title="Archive this conversation?"
+            title={t('Archive this conversation?')}
             close={() => setConfirmation(undefined)}
             busy={!!pending}
             className="conversation-confirm"
@@ -870,12 +889,15 @@ const ProjectCard = memo(function ProjectCard({
               }}
             >
               <p>
-                <strong>{confirmation.title}</strong> will move to the archived view. Project files
-                and history are kept. Codex may also archive chats spawned by this conversation.
+                <strong>{confirmation.title}</strong>
+                {' ' +
+                  t(
+                    'will move to the archived view. Project files and history are kept. Codex may also archive chats spawned by this conversation.',
+                  )}
               </p>
               {error && (
                 <p className="error-text" role="alert">
-                  {error}
+                  {t(error)}
                 </p>
               )}
               <div className="conversation-confirm-actions">
@@ -886,10 +908,10 @@ const ProjectCard = memo(function ProjectCard({
                   disabled={!!pending}
                   onClick={() => setConfirmation(undefined)}
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
                 <button className="primary" disabled={!!pending}>
-                  {pending ? 'Archiving…' : 'Archive conversation'}
+                  {pending ? t('Archiving…') : t('Archive conversation')}
                 </button>
               </div>
             </form>

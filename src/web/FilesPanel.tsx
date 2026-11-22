@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { projectImageType } from '../shared/images';
 import type { FileContent } from '../shared/types';
@@ -40,10 +41,11 @@ function useRead<T>(url: string | undefined) {
 }
 
 function ReadError({ error, retry }: { error: string; retry: () => void }) {
+  const { t } = useInterfaceLanguage();
   return (
     <div className="file-state" role="alert">
-      <span>{error}</span>
-      <button onClick={retry}>Retry</button>
+      <span>{t(error)}</span>
+      <button onClick={retry}>{t('Retry')}</button>
     </div>
   );
 }
@@ -60,6 +62,7 @@ function TextPreview({
   onAttach,
   attachmentBlocked,
 }: AttachmentControls & { file: FileContent }) {
+  const { t } = useInterfaceLanguage();
   const [page, setPage] = useState(0);
   const [range, setRange] = useState<[number, number]>([1, Math.min(file.lines, 50)]);
   const lines = useMemo(() => file.text.split('\n'), [file.text]);
@@ -79,8 +82,8 @@ function TextPreview({
         <div
           className="file-lines"
           role="group"
-          aria-label="File lines"
-          aria-description="Hold Shift to select a range."
+          aria-label={t('File lines')}
+          aria-description={t('Hold Shift to select a range.')}
         >
           {visible.map((line, index) => {
             const number = offset + index + 1;
@@ -103,7 +106,7 @@ function TextPreview({
         <div className="file-pages">
           <button
             className="icon-button"
-            aria-label="Previous lines"
+            aria-label={t('Previous lines')}
             data-tooltip=""
             disabled={page === 0}
             onClick={() => changePage(page - 1)}
@@ -111,11 +114,15 @@ function TextPreview({
             <Icon name="chevron" size={14} />
           </button>
           <span role="status">
-            {offset + 1}–{offset + visible.length} of {lines.length}
+            {t('{start}–{end} of {total}', {
+              start: offset + 1,
+              end: offset + visible.length,
+              total: lines.length,
+            })}
           </span>
           <button
             className="icon-button"
-            aria-label="Next lines"
+            aria-label={t('Next lines')}
             data-tooltip=""
             disabled={offset + visible.length >= lines.length}
             onClick={() => changePage(page + 1)}
@@ -125,18 +132,16 @@ function TextPreview({
         </div>
       )}
       <div className="selection-toolbar">
-        <span>
-          Lines {from}–{to}
-        </span>
+        <span>{t('Lines {start}–{end}', { start: from, end: to })}</span>
         <button onClick={() => onAttach(file, 1, file.lines)} disabled={attachmentBlocked}>
-          Attach file
+          {t('Attach file')}
         </button>
         <button
           className="primary"
           onClick={() => onAttach(file, from, to)}
           disabled={attachmentBlocked}
         >
-          Attach selection
+          {t('Attach selection')}
         </button>
       </div>
     </>
@@ -157,6 +162,7 @@ function FilePreview({
   narrow: boolean;
   close: () => void;
 }) {
+  const { t } = useInterfaceLanguage();
   const image = projectImageType(path);
   const { result, reload } = useRead<FileContent>(
     image ? undefined : `${apiBase}/file?path=${encodeURIComponent(path)}`,
@@ -166,13 +172,13 @@ function FilePreview({
     if (narrow) back.current?.focus();
   }, [narrow]);
   return (
-    <section className="file-preview" aria-label="File preview">
+    <section className="file-preview" aria-label={t('File preview')}>
       <div className="file-title">
         {narrow && (
           <button
             ref={back}
             className="icon-button file-preview-back"
-            aria-label="Back to files"
+            aria-label={t('Back to files')}
             data-tooltip=""
             onClick={close}
           >
@@ -183,11 +189,11 @@ function FilePreview({
         <span className="file-name" title={path}>
           {path.split('/').at(-1)}
         </span>
-        <span className="file-read-only">READ ONLY</span>
+        <span className="file-read-only">{t('READ ONLY')}</span>
         {!narrow && (
           <button
             className="icon-button"
-            aria-label="Close file preview"
+            aria-label={t('Close file preview')}
             data-tooltip=""
             onClick={close}
           >
@@ -201,7 +207,7 @@ function FilePreview({
         </div>
       ) : !result ? (
         <p className="file-state" role="status">
-          Loading file…
+          {t('Loading file…')}
         </p>
       ) : 'error' in result ? (
         <ReadError error={result.error} retry={reload} />
@@ -236,6 +242,7 @@ export const FilesPanel = memo(function FilesPanel({
   onFile,
   ...attachment
 }: Props) {
+  const { t } = useInterfaceLanguage();
   const { result, reload } = useRead<Entry[]>(
     apiBase && `${apiBase}/files?path=${encodeURIComponent(directory)}`,
   );
@@ -255,9 +262,13 @@ export const FilesPanel = memo(function FilesPanel({
   };
   return (
     <div className={'files-panel' + (preview ? ' has-file-preview' : '')}>
-      <section className="file-directory" aria-label="Project files" hidden={narrow && !!preview}>
+      <section
+        className="file-directory"
+        aria-label={t('Project files')}
+        hidden={narrow && !!preview}
+      >
         <div className="file-location">
-          <nav className="file-breadcrumb" aria-label="File location">
+          <nav className="file-breadcrumb" aria-label={t('File location')}>
             {breadcrumbs.map((part, index) => {
               const path = parts.slice(0, index).join('/');
               const current = index === breadcrumbs.length - 1;
@@ -279,7 +290,7 @@ export const FilesPanel = memo(function FilesPanel({
           </nav>
           <button
             className="icon-button"
-            aria-label="Refresh file list"
+            aria-label={t('Refresh file list')}
             data-tooltip=""
             onClick={reload}
             disabled={!apiBase || !result}
@@ -290,11 +301,11 @@ export const FilesPanel = memo(function FilesPanel({
         <div className="file-list" key={directory}>
           {directoryIssue ? (
             <p className="file-state" role="status">
-              {directoryIssue}
+              {t(directoryIssue)}
             </p>
           ) : !result ? (
             <p className="file-state" role="status">
-              {apiBase ? 'Loading files…' : 'Loading project…'}
+              {apiBase ? t('Loading files…') : t('Loading project…')}
             </p>
           ) : 'error' in result ? (
             <ReadError error={result.error} retry={reload} />
@@ -321,7 +332,7 @@ export const FilesPanel = memo(function FilesPanel({
             ))
           ) : (
             <p className="file-state" role="status">
-              No visible files.
+              {t('No visible files.')}
             </p>
           )}
         </div>

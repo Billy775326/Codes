@@ -1,4 +1,9 @@
 import {
+  InterfaceLanguageContext,
+  interfaceLanguages,
+  useInterfaceLanguage,
+} from './interface-language';
+import {
   linkedConversation,
   projectSidebarPreferences,
   projectViews,
@@ -151,6 +156,7 @@ const MessageView = memo(function MessageView({
   timestamp?: number;
   completion?: React.ReactNode;
 }) {
+  const { t } = useInterfaceLanguage();
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState('');
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -173,19 +179,21 @@ const MessageView = memo(function MessageView({
           <Icon name={item.status === 'completed' ? 'check' : 'terminal'} size={14} />
           <span className="activity-label">
             {item.kind === 'command'
-              ? (item.status === 'inProgress' ? 'Running ' : 'Ran ') + (firstLine || 'command')
+              ? t(item.status === 'inProgress' ? 'Running {command}' : 'Ran {command}', {
+                  command: firstLine || t('command'),
+                })
               : item.kind === 'tool'
                 ? firstLine
-                : 'File changes'}
+                : t('File changes')}
           </span>
-          <span className="activity-status">{item.status}</span>
+          <span className="activity-status">{t(item.status ?? '')}</span>
         </summary>
         {expanded && (
           <>
             <pre>{item.text}</pre>
             {item.truncated && (
               <p className="tool-truncated">
-                Output preview is truncated. Inspect native history for the complete output.
+                {t('Output preview is truncated. Inspect native history for the complete output.')}
               </p>
             )}
           </>
@@ -210,7 +218,8 @@ const MessageView = memo(function MessageView({
         <div className="message-label">
           {streaming && (
             <span className="thinking">
-              Working<span>•••</span>
+              {t('Working')}
+              <span>•••</span>
             </span>
           )}
         </div>
@@ -227,7 +236,8 @@ const MessageView = memo(function MessageView({
         )}
         {!!item.unavailableImages && (
           <p className="image-unavailable">
-            {item.unavailableImages} image attachment(s) available in native history.
+            {item.unavailableImages}
+            {' ' + t('image attachment(s) available in native history.')}
           </p>
         )}
         <div className="prose">
@@ -256,9 +266,9 @@ const MessageView = memo(function MessageView({
             completion) && (
             <div className="message-footer">
               {actions && !streaming && item.turnId && (onReply || onFork) && (
-                <div className="message-actions" role="group" aria-label="Reply actions">
+                <div className="message-actions" role="group" aria-label={t('Reply actions')}>
                   <button
-                    aria-label="Copy message"
+                    aria-label={t('Copy message')}
                     data-tooltip=""
                     onClick={() => {
                       void navigator.clipboard
@@ -275,27 +285,29 @@ const MessageView = memo(function MessageView({
                   >
                     <Icon name="copy" size={13} />
                   </button>
-                  {copied && <span role="status">{copied}</span>}
+                  {copied && <span role="status">{t(copied)}</span>}
                   {onReply && (
                     <button
-                      aria-label="Reply"
-                      title="Quote this reply into a new draft; the original stays unchanged"
+                      aria-label={t('Reply')}
+                      title={t('Quote this reply into a new draft; the original stays unchanged')}
                       disabled={disabled}
                       onClick={() => onReply(item)}
                     >
                       <Icon name="reply" size={13} />
-                      <span className="action-label">Reply</span>
+                      <span className="action-label">{t('Reply')}</span>
                     </button>
                   )}
                   {onFork && (
                     <button
-                      aria-label="Branch from here"
-                      title="Create a conversation branch through this turn; current project files stay shared"
+                      aria-label={t('Branch from here')}
+                      title={t(
+                        'Create a conversation branch through this turn; current project files stay shared',
+                      )}
                       disabled={disabled}
                       onClick={() => onFork(item)}
                     >
                       <Icon name="branch" size={13} />
-                      <span className="action-label">Branch from here</span>
+                      <span className="action-label">{t('Branch from here')}</span>
                     </button>
                   )}
                 </div>
@@ -367,6 +379,8 @@ function App() {
   const [preferences, setPreferences] = useState(() =>
     readBrowserPreferences(saved('codes.preferences')),
   );
+  const interfaceLanguage = interfaceLanguages[preferences.language];
+  const { t } = interfaceLanguage;
   const latestPreferences = useRef(preferences);
   const [preferencesError, setPreferencesError] = useState('');
   const notifications = useMemo(() => new ConversationNotifications(), []);
@@ -453,7 +467,8 @@ function App() {
     preferences.theme === 'system' ? (prefersDark ? 'dark' : 'light') : preferences.theme;
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    document.documentElement.lang = preferences.language;
+  }, [theme, preferences.language]);
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const update = () => setPrefersDark(media.matches);
@@ -470,7 +485,7 @@ function App() {
   const closeNavigation = useCallback(() => {
     setSidebar(false);
     requestAnimationFrame(() =>
-      document.querySelector<HTMLButtonElement>('[aria-label="Open navigation"]')?.focus(),
+      document.querySelector<HTMLButtonElement>('[data-open-navigation]')?.focus(),
     );
   }, []);
   const closeContext = useCallback(() => setPanel(null), []);
@@ -483,18 +498,8 @@ function App() {
     media.addEventListener('change', resize);
     return () => media.removeEventListener('change', resize);
   }, []);
-  usePanelFocus(
-    navigationElement,
-    narrow && sidebar,
-    closeNavigation,
-    '[aria-label="Open navigation"]',
-  );
-  usePanelFocus(
-    contextElement,
-    narrow && !!panel && !sidebar,
-    closeContext,
-    '[aria-label="Browse files"]',
-  );
+  usePanelFocus(navigationElement, narrow && sidebar, closeNavigation, '[data-open-navigation]');
+  usePanelFocus(contextElement, narrow && !!panel && !sidebar, closeContext, '[data-browse-files]');
   const [diffTurn, setDiffTurn] = useState('');
   const [diffPath, setDiffPath] = useState('');
   const [adding, setAdding] = useState(false);
@@ -794,7 +799,12 @@ function App() {
       (event) => {
         if (event.kind === 'summary') {
           const row = event.data as Summary;
-          if (notifyInBackground) notifications.observe(row, true);
+          if (notifyInBackground)
+            notifications.observe(
+              row,
+              true,
+              interfaceLanguages[latestPreferences.current.language].t,
+            );
           conversationUpdated(row, false);
         } else if (event.kind === 'project') projectUpdated(event.data as Project);
         else if (event.kind === 'defaults') defaultSettings.sync(event.data as SettingsProfile);
@@ -912,7 +922,12 @@ function App() {
       }
       if (e.kind === 'summary') {
         const row = e.data as Summary;
-        if (notifyInBackground) notifications.observe(row, true);
+        if (notifyInBackground)
+          notifications.observe(
+            row,
+            true,
+            interfaceLanguages[latestPreferences.current.language].t,
+          );
         conversationUpdated(row, false);
         return;
       }
@@ -1573,19 +1588,27 @@ function App() {
     active || !!thread?.queue?.items.length
       ? deliveryMode === 'queue'
         ? (thread?.queue?.items.length ?? 0) >= 10
-          ? 'Queue is full (10 messages). Edit or remove a waiting entry, or use Add now if available.'
+          ? t(
+              'Queue is full (10 messages). Edit or remove a waiting entry, or use Add now if available.',
+            )
           : active
-            ? 'Queue runs after this task completes. Waiting text can be edited or removed.' +
+            ? t('Queue runs after this task completes. Waiting text can be edited or removed.') +
               (!canSteer
-                ? ' Add now waits until the pending request or result is resolved.'
+                ? ' ' + t('Add now waits until the pending request or result is resolved.')
                 : !sameSettings(settings, thread!.settings)
-                  ? ' Queue to use the updated conversation settings.'
+                  ? ' ' + t('Queue to use the updated conversation settings.')
                   : '')
-            : 'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.'
+            : t(
+                'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.',
+              )
         : canSteer
-          ? 'Add now updates this running task using its current settings. Accepted additions cannot be edited.'
-          : 'Add now is unavailable while awaiting approval, input, or confirmation. Queue a message for later.'
-      : 'Send starts a new turn. Edit this draft before sending; sent history stays unchanged.';
+          ? t(
+              'Add now updates this running task using its current settings. Accepted additions cannot be edited.',
+            )
+          : t(
+              'Add now is unavailable while awaiting approval, input, or confirmation. Queue a message for later.',
+            )
+      : t('Send starts a new turn. Edit this draft before sending; sent history stays unchanged.');
   const shortcut =
     window.innerWidth <= 700 ||
     preferences.enter === 'cmdAlways' ||
@@ -1596,7 +1619,7 @@ function App() {
     deliveryMode === 'steer'
       ? 'Add to current task'
       : !active || thread?.queue?.paused
-        ? 'Add to waiting queue'
+        ? t('Add to waiting queue')
         : 'Queue for next turn';
   const commands = [
     {
@@ -1892,8 +1915,11 @@ function App() {
   const conversationLoadError =
     connectionError ||
     (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
+  const withLanguage = (view: React.ReactNode) => (
+    <InterfaceLanguageContext value={interfaceLanguage}>{view}</InterfaceLanguageContext>
+  );
   if (auth !== 'ready')
-    return (
+    return withLanguage(
       <Login
         token={token}
         error={error}
@@ -1915,9 +1941,9 @@ function App() {
             .catch((e) => setError(message(e)))
             .finally(() => setBusy(false));
         }}
-      />
+      />,
     );
-  return (
+  return withLanguage(
     <div
       data-theme={theme}
       data-chat-font-size={preferences.chatFontSize}
@@ -1938,7 +1964,7 @@ function App() {
       <aside
         ref={navigationElement}
         className={`sidebar ${sidebar ? 'open' : ''}`}
-        aria-label="Workspace navigation"
+        aria-label={t('Workspace navigation')}
         inert={modalOpen || undefined}
         role={narrow && sidebar && !modalOpen ? 'dialog' : undefined}
         aria-modal={narrow && sidebar && !modalOpen ? true : undefined}
@@ -1947,7 +1973,7 @@ function App() {
           <Brand />
           <button
             className="icon-button"
-            aria-label="Close navigation"
+            aria-label={t('Close navigation')}
             data-tooltip=""
             onClick={closeNavigation}
           >
@@ -1959,7 +1985,7 @@ function App() {
           activeProjectId={projectId}
           selectedId={threadId}
           updates={threads}
-          connection={connection}
+          connection={t(connection)}
           disabled={busy}
           sidebarPreferences={sidebarPreferences}
           onSidebarPreference={changeSidebarPreference}
@@ -1972,20 +1998,20 @@ function App() {
           onUpdated={conversationUpdated}
           onModalChange={setConversationModalOpen}
         />
-        <div className="workspace-footer" role="group" aria-label="Workspace controls">
+        <div className="workspace-footer" role="group" aria-label={t('Workspace controls')}>
           <div className="workspace-connection">
             <span
               className={`connection ${['Connected', 'Ready'].includes(connection) ? 'connected' : ''}`}
               role="status"
-              aria-label={'Connection: ' + connection}
+              aria-label={t('Connection: {status}', { status: t(connection) })}
             >
               <i />
-              {connection}
+              {t(connection)}
             </span>
             {!['Connected', 'Ready'].includes(connection) && (
               <button
                 className="icon-button"
-                aria-label="Reconnect conversation updates"
+                aria-label={t('Reconnect conversation updates')}
                 data-tooltip=""
                 onClick={() => setRetry((n) => n + 1)}
               >
@@ -1996,21 +2022,21 @@ function App() {
           <div className="workspace-actions">
             <button
               className="icon-button"
-              aria-label="Interaction settings"
+              aria-label={t('Interaction settings')}
               data-tooltip=""
               onClick={() => setDialog('preferences')}
             >
               <Icon name="settings" size={16} />
             </button>
             <PanelMenu
-              label="Workspace actions"
+              label={t('Workspace actions')}
               className="workspace-menu"
               iconOnly
               trigger={<Icon name="more" size={16} />}
             >
               <button data-close-menu onClick={() => setRetry((n) => n + 1)}>
                 <Icon name="refresh" size={14} />
-                Reconnect updates
+                {t('Reconnect updates')}
               </button>
               <button
                 data-close-menu
@@ -2024,7 +2050,7 @@ function App() {
                 }
               >
                 <Icon name="logout" size={14} />
-                Sign out
+                {t('Sign out')}
               </button>
             </PanelMenu>
           </div>
@@ -2032,14 +2058,14 @@ function App() {
       </aside>
       <main
         className="main"
-        aria-label="Conversation workspace"
+        aria-label={t('Conversation workspace')}
         inert={modalOpen || (narrow && (sidebar || !!panel)) || undefined}
       >
         <WorkspaceHeader
-          title={loadingConversation ? 'Conversation' : (thread?.title ?? 'New conversation')}
+          title={loadingConversation ? t('Conversation') : (thread?.title ?? t('New conversation'))}
           projectName={project?.name}
           sidebarOpen={sidebar}
-          connection={connection}
+          connection={t(connection)}
           theme={theme}
           panel={panel}
           busy={busy}
@@ -2060,23 +2086,23 @@ function App() {
           showStarters={!loadingConversation && !thread?.messages.length && !active}
         />
         {system?.runtime === 'mock' && (
-          <div className="simulation-strip">Simulation · No model or command execution</div>
+          <div className="simulation-strip">{t('Simulation · No model or command execution')}</div>
         )}
         {system?.maintenance && (
           <div className="conversation-lock-banner" role="status">
             <span>
               {system.maintenance.ready
-                ? 'Maintenance ready. New tasks are paused.'
-                : 'Maintenance pending. Existing tasks can finish.'}
+                ? t('Maintenance ready. New tasks are paused.')
+                : t('Maintenance pending. Existing tasks can finish.')}
             </span>
             <button disabled={maintenanceBusy} onClick={() => void changeMaintenance('cancel')}>
-              Cancel maintenance
+              {t('Cancel maintenance')}
             </button>
           </div>
         )}
         {directoryBlocked && (
           <div className="conversation-lock-banner directory-unavailable" role="alert">
-            <span>{context.directory.message}</span>
+            <span>{t(context.directory.message ?? '')}</span>
             <button
               disabled={busy}
               onClick={() => {
@@ -2084,14 +2110,14 @@ function App() {
                 setRetry((value) => value + 1);
               }}
             >
-              Retry directory
+              {t('Retry directory')}
             </button>
           </div>
         )}
         {thread?.forkedFromId && (
           <div className="branch-origin">
             <Icon name="branch" size={14} />
-            <span>Conversation branch</span>
+            <span>{t('Conversation branch')}</span>
             <button
               onClick={() => {
                 setBusy(true);
@@ -2105,7 +2131,7 @@ function App() {
               }}
               disabled={busy}
             >
-              Open source conversation
+              {t('Open source conversation')}
             </button>
           </div>
         )}
@@ -2114,8 +2140,8 @@ function App() {
             <span>
               <Icon name="archive" size={14} />
               {thread.managementPending
-                ? 'A conversation change needs confirmation. Check its status before sending.'
-                : 'This conversation is archived. Restore it to continue.'}
+                ? t('A conversation change needs confirmation. Check its status before sending.')
+                : t('This conversation is archived. Restore it to continue.')}
             </span>
             <button
               disabled={busy}
@@ -2135,7 +2161,7 @@ function App() {
                   .finally(() => setBusy(false));
               }}
             >
-              {thread.managementPending ? 'Check status' : 'Restore conversation'}
+              {thread.managementPending ? t('Check status') : t('Restore conversation')}
             </button>
           </div>
         )}
@@ -2143,7 +2169,7 @@ function App() {
           className="conversation"
           ref={transcript}
           role="region"
-          aria-label="Conversation timeline"
+          aria-label={t('Conversation timeline')}
           tabIndex={0}
           onPointerDown={(event) => {
             // Only a scrollbar drag begins scrolling. Clicking prose or a
@@ -2237,28 +2263,30 @@ function App() {
               <section
                 className="conversation-loading-state"
                 role="status"
-                aria-label="Conversation loading"
+                aria-label={t('Conversation loading')}
               >
                 <Icon name="history" size={24} />
                 <h2>
-                  {conversationLoadError ? 'Unable to load conversation' : 'Loading conversation…'}
+                  {conversationLoadError
+                    ? t('Unable to load conversation')
+                    : t('Loading conversation…')}
                 </h2>
-                {conversationLoadError && <p role="alert">{conversationLoadError}</p>}
+                {conversationLoadError && <p role="alert">{t(conversationLoadError)}</p>}
                 <button
                   onClick={() => {
                     setError('');
                     setRetry((value) => value + 1);
                   }}
                 >
-                  Retry loading
+                  {t('Retry loading')}
                 </button>
               </section>
             ) : !thread?.messages.length && !active ? (
-              <section className="conversation-start" aria-label="New conversation">
+              <section className="conversation-start" aria-label={t('New conversation')}>
                 {!projectId && (
                   <button className="primary" onClick={openAddProject}>
                     <Icon name="folder-add" />
-                    Add project
+                    {t('Add project')}
                   </button>
                 )}
               </section>
@@ -2270,14 +2298,14 @@ function App() {
                     disabled={busy || loadingHistory}
                     onClick={() => void loadHistory('older')}
                   >
-                    {loadingHistory ? 'Loading earlier messages…' : 'Load earlier messages'}
+                    {loadingHistory ? t('Loading earlier messages…') : t('Load earlier messages')}
                   </button>
                 )}
                 {historyError?.direction === 'older' && (
                   <div role="alert" className="history-load-error">
-                    <span>{historyError.message}</span>
+                    <span>{t(historyError.message)}</span>
                     <button onClick={() => void loadHistory('older')}>
-                      Retry loading earlier messages
+                      {t('Retry loading earlier messages')}
                     </button>
                   </div>
                 )}
@@ -2296,23 +2324,26 @@ function App() {
                         return (
                           <section
                             className="approval"
-                            aria-label="Codex question"
+                            aria-label={t('Codex question')}
                             data-testid="message-question"
                           >
                             <div className="approval-heading">
-                              <strong>Codex question</strong>
+                              <strong>{t('Codex question')}</strong>
                               <span className="badge">
                                 {action?.status === 'expired'
-                                  ? 'Expired'
+                                  ? t('Expired')
                                   : action?.skipped
-                                    ? 'Skipped'
-                                    : 'Answered'}
+                                    ? t('Skipped')
+                                    : t('Answered')}
                               </span>
                             </div>
                             {m.answeredQuestions?.map(({ question, answer }, index) => (
                               <div key={index}>
                                 <strong>{question}</strong>
-                                <p>Answer: {answer}</p>
+                                <p>
+                                  {t('Answer:') + ' '}
+                                  {answer}
+                                </p>
                               </div>
                             ))}
                             {action?.questions?.map((question) => (
@@ -2320,7 +2351,10 @@ function App() {
                                 <strong>{question.question}</strong>
                                 {action.status === 'answered' &&
                                   action.submittedAnswers?.[question.id] && (
-                                    <p>Answer: {action.submittedAnswers[question.id]}</p>
+                                    <p>
+                                      {t('Answer:') + ' '}
+                                      {action.submittedAnswers[question.id]}
+                                    </p>
                                   )}
                               </div>
                             ))}
@@ -2361,19 +2395,19 @@ function App() {
                   />
                 )}
                 {history && !timelineLatest && (
-                  <div className="history-page-edge" role="status" aria-label="Newer messages">
+                  <div className="history-page-edge" role="status" aria-label={t('Newer messages')}>
                     {historyError?.direction === 'newer' ? (
                       <>
-                        <span role="alert">{historyError.message}</span>
+                        <span role="alert">{t(historyError.message)}</span>
                         <button onClick={() => void loadHistory('newer')}>
-                          Retry loading newer messages
+                          {t('Retry loading newer messages')}
                         </button>
                       </>
                     ) : (
                       <button disabled={loadingHistory} onClick={() => void loadHistory('newer')}>
                         {loadingHistory
-                          ? 'Loading messages…'
-                          : 'Continue scrolling for newer messages'}
+                          ? t('Loading messages…')
+                          : t('Continue scrolling for newer messages')}
                       </button>
                     )}
                   </div>
@@ -2401,18 +2435,18 @@ function App() {
                     <Approval key={action.id} action={action} submit={submitAction} />
                   ))}
                 {thread?.plan && (
-                  <section className="turn-plan" aria-label="Task plan">
-                    <strong>Plan</strong>
+                  <section className="turn-plan" aria-label={t('Task plan')}>
+                    <strong>{t('Plan')}</strong>
                     {thread.plan.explanation && <p>{thread.plan.explanation}</p>}
                     <ol>
                       {thread.plan.steps.map((entry, index) => (
                         <li key={index}>
                           <small>
                             {entry.status === 'completed'
-                              ? 'Done'
+                              ? t('Done')
                               : entry.status === 'inProgress'
-                                ? 'In progress'
-                                : 'Pending'}
+                                ? t('In progress')
+                                : t('Pending')}
                           </small>
                           {entry.step}
                         </li>
@@ -2426,24 +2460,32 @@ function App() {
         </div>
         <div className="composer-area">
           {thread && !loadingConversation && !atLatest && (
-            <div className="history-navigation" role="status" aria-label="Conversation position">
+            <div
+              className="history-navigation"
+              role="status"
+              aria-label={t('Conversation position')}
+            >
               <span>
                 {history
                   ? liveRevision(thread) !== history.liveRevision
-                    ? 'New activity below'
-                    : 'Earlier messages · Scroll down to continue'
-                  : 'More recent messages below'}
+                    ? t('New activity below')
+                    : t('Earlier messages · Scroll down to continue')
+                  : t('More recent messages below')}
               </span>
-              <button onClick={returnToLatest} aria-label="Back to latest messages">
-                Back to latest ↓
+              <button onClick={returnToLatest} aria-label={t('Back to latest messages')}>
+                {t('Back to latest ↓')}
               </button>
             </div>
           )}
           {!!unresolvedQuestions.length && (
             <div className="question-attention" role="status">
               <span>
-                {unresolvedQuestions.length}{' '}
-                {unresolvedQuestions.length === 1 ? 'request needs' : 'requests need'} your input.
+                {t(
+                  unresolvedQuestions.length === 1
+                    ? '{count} request needs your input.'
+                    : '{count} requests need your input.',
+                  { count: unresolvedQuestions.length },
+                )}
               </span>
               <button
                 onClick={() => {
@@ -2455,40 +2497,42 @@ function App() {
                     ?.focus({ preventScroll: true });
                 }}
               >
-                Answer questions
+                {t('Answer questions')}
               </button>
             </div>
           )}
           {steerReceipt && (
             <div className="recovery">
-              <span>An immediate follow-up needs confirmation.</span>
+              <span>{t('An immediate follow-up needs confirmation.')}</span>
               <button disabled={busy} onClick={() => void checkSteer()}>
-                Check follow-up receipt
+                {t('Check follow-up receipt')}
               </button>
             </div>
           )}
           {!!thread?.steering?.length && (
-            <section className="steering-receipt" aria-label="Immediate follow-ups">
+            <section className="steering-receipt" aria-label={t('Immediate follow-ups')}>
               {thread.steering.map((entry) => (
                 <p key={entry.id}>
                   {entry.state === 'unknown'
-                    ? 'Check result'
+                    ? t('Check result')
                     : entry.state === 'acknowledged'
-                      ? 'Added to current task'
-                      : 'Sending follow-up'}{' '}
+                      ? t('Added to current task')
+                      : t('Sending follow-up')}{' '}
                   · {entry.text.slice(0, 200)}
                 </p>
               ))}
               <button disabled={busy} onClick={() => void reconcile()}>
-                Check follow-up results
+                {t('Check follow-up results')}
               </button>
             </section>
           )}
           {queueRequest && (
             <div className="recovery">
-              <span>A queue receipt needs confirmation. Check before sending another message.</span>
+              <span>
+                {t('A queue receipt needs confirmation. Check before sending another message.')}
+              </span>
               <button disabled={busy} onClick={() => void checkQueueReceipt()}>
-                Check queue receipt
+                {t('Check queue receipt')}
               </button>
               <button
                 disabled={busy}
@@ -2498,7 +2542,7 @@ function App() {
                   setAttachments(queueRequest.payload.attachments);
                 }}
               >
-                Restore pending draft
+                {t('Restore pending draft')}
               </button>
             </div>
           )}
@@ -2535,34 +2579,34 @@ function App() {
 
           {connectionError && !loadingConversation && (
             <div className="error-banner" role="alert">
-              <span>{connectionError}</span>
+              <span>{t(connectionError)}</span>
               <button
                 onClick={() => {
                   setConnectionError('');
                   setRetry((value) => value + 1);
                 }}
               >
-                Retry connection
+                {t('Retry connection')}
               </button>
             </div>
           )}
           {thread?.writerConflict && (
-            <section className="recovery" aria-label="Conversation ownership">
-              <span>Open in another Codex client</span>
+            <section className="recovery" aria-label={t('Conversation ownership')}>
+              <span>{t('Open in another Codex client')}</span>
               <button disabled={busy || !!thread.pending} onClick={() => void checkWriter()}>
-                Check availability
+                {t('Check availability')}
               </button>
               <button disabled={busy || !!thread.pending} onClick={() => void recoverBranch()}>
-                Continue in branch
+                {t('Continue in branch')}
               </button>
             </section>
           )}
           {error && (
             <div className="error-banner" role="alert">
-              <span>{error}</span>
+              <span>{t(error)}</span>
               <button
                 className="icon-button"
-                aria-label="Dismiss error"
+                aria-label={t('Dismiss error')}
                 onClick={() => setError('')}
               >
                 <Icon name="close" size={15} />
@@ -2573,27 +2617,29 @@ function App() {
             <div className="recovery">
               <span>
                 {thread?.expiredQuestion
-                  ? 'The pending question expired when Codex stopped. Its answer can no longer be submitted. Check the task result before continuing.'
-                  : 'A request may still be running. Check before continuing.'}
+                  ? t(
+                      'The pending question expired when Codex stopped. Its answer can no longer be submitted. Check the task result before continuing.',
+                    )
+                  : t('A request may still be running. Check before continuing.')}
               </span>
               <button disabled={busy} onClick={() => void reconcile()}>
-                Check result
+                {t('Check result')}
               </button>
               {thread?.expiredQuestion && (
                 <button disabled={busy} onClick={() => void recoverBranch()}>
-                  Continue in branch
+                  {t('Continue in branch')}
                 </button>
               )}
             </div>
           )}
           {!queueEditing && draft.startsWith('/') && !draft.includes('\n') && (
-            <div className="slash-commands" role="group" aria-label="Commands">
+            <div className="slash-commands" role="group" aria-label={t('Commands')}>
               {commands
                 .filter((entry) => entry.name.startsWith(draft.split(/\s+/)[0] ?? ''))
                 .map((entry) => (
                   <button key={entry.name} onClick={() => runCommand(entry.name)}>
                     <strong>{entry.name}</strong>
-                    <span>{entry.detail}</span>
+                    <span>{t(entry.detail)}</span>
                   </button>
                 ))}
             </div>
@@ -2632,7 +2678,9 @@ function App() {
                           : `${a.path}:${a.fromLine}–${a.toLine}`}
                       </span>
                       <button
-                        aria-label={`Remove ${a.kind === 'uploaded-file' ? a.name : a.path}`}
+                        aria-label={t('Remove {name}', {
+                          name: a.kind === 'uploaded-file' ? a.name : a.path,
+                        })}
                         onClick={() => {
                           draftRevision.current++;
                           setAttachments((list) => list.filter((x) => x !== a));
@@ -2647,25 +2695,25 @@ function App() {
             )}
             {!!localAttachments.pending && (
               <p className="attachment-upload-status" role="status">
-                Uploading {localAttachments.pending} attachment(s)…
+                {t('Uploading {count} attachment(s)…', { count: localAttachments.pending })}
               </p>
             )}
             {threadId && conversationSettings.saving && (
               <p role="status" className="settings-save-status">
-                Saving conversation settings…
+                {t('Saving conversation settings…')}
               </p>
             )}
             {settingsBlocked && profile.error && (
               <p role="alert" className="settings-save-status">
-                {profile.error}{' '}
+                {t(profile.error)}{' '}
                 <button onClick={() => void profile.retry()}>
-                  {profile.conflict ? 'Reload settings' : 'Retry settings'}
+                  {profile.conflict ? t('Reload settings') : t('Retry settings')}
                 </button>
               </p>
             )}
             <textarea
               onPaste={localAttachments.paste}
-              aria-label="Message Codex"
+              aria-label={t('Message Codex')}
               aria-describedby="message-delivery-help"
               aria-keyshortcuts={shortcut === 'Enter' ? 'Enter' : 'Control+Enter Meta+Enter'}
               ref={composer}
@@ -2674,14 +2722,14 @@ function App() {
               onChange={(e) => changeDraft(e.target.value)}
               placeholder={
                 thread?.archived
-                  ? 'Restore this conversation to continue…'
+                  ? t('Restore this conversation to continue…')
                   : thread?.managementPending
-                    ? 'Check conversation status to continue…'
+                    ? t('Check conversation status to continue…')
                     : active
                       ? deliveryMode === 'queue'
-                        ? 'Write a message for the next turn…'
-                        : 'Add a correction to this running task…'
-                      : 'Ask Codex anything'
+                        ? t('Write a message for the next turn…')
+                        : t('Add a correction to this running task…')
+                      : t('Ask Codex anything')
               }
               maxLength={50_000}
               onKeyDown={(e) => {
@@ -2712,7 +2760,7 @@ function App() {
             />
             <div className="composer-toolbar">
               <PanelMenu
-                label="Attach files"
+                label={t('Attach files')}
                 className="composer-attachment-menu"
                 disabled={attachmentBlocked}
                 iconOnly
@@ -2724,11 +2772,11 @@ function App() {
                   onClick={() => localAttachments.picker.current?.click()}
                 >
                   <Icon name="upload" size={16} />
-                  Upload from device
+                  {t('Upload from device')}
                 </button>
                 <button type="button" data-close-menu onClick={() => setPanel('files')}>
                   <Icon name="folder" size={16} />
-                  Browse project files
+                  {t('Browse project files')}
                 </button>
               </PanelMenu>
               <input
@@ -2736,7 +2784,7 @@ function App() {
                 ref={localAttachments.picker}
                 type="file"
                 multiple
-                aria-label="Choose local files"
+                aria-label={t('Choose local files')}
                 onChange={localAttachments.choose}
               />
               <ComposerControls
@@ -2761,24 +2809,28 @@ function App() {
                 {(active || !!thread?.queue?.items.length) && (
                   <button
                     className="queue-send"
-                    aria-label={deliveryMode === 'steer' ? 'Add to current task' : 'Queue message'}
-                    data-tooltip={followUpHint + ' · ' + shortcut}
+                    aria-label={
+                      deliveryMode === 'steer' ? t('Add to current task') : t('Queue message')
+                    }
+                    data-tooltip={t(followUpHint) + ' · ' + shortcut}
                     aria-describedby="message-delivery-help"
                     disabled={deliveryMode === 'steer' ? addBlocked : queueBlocked}
                     onClick={() => followUp()}
                   >
                     <Icon name={deliveryMode === 'steer' ? 'steer' : 'queue'} size={15} />
                     <span className="action-label">
-                      {deliveryMode === 'steer' ? 'Add now' : 'Queue'}
+                      {deliveryMode === 'steer' ? t('Add now') : t('Queue')}
                     </span>
                   </button>
                 )}
                 {active ? (
                   <button
                     className="stop-button"
-                    aria-label="Stop task"
-                    data-tooltip="Stop current task and pause queue"
-                    aria-description="Stop the current task and pause queued work. Completed file changes remain."
+                    aria-label={t('Stop task')}
+                    data-tooltip={t('Stop current task and pause queue')}
+                    aria-description={t(
+                      'Stop the current task and pause queued work. Completed file changes remain.',
+                    )}
                     disabled={
                       busy ||
                       !thread?.turnId ||
@@ -2792,14 +2844,14 @@ function App() {
                     }}
                   >
                     <Icon name="stop" size={16} />
-                    <span className="action-label">Stop</span>
+                    <span className="action-label">{t('Stop')}</span>
                   </button>
                 ) : (
                   <button
                     className="send-button"
-                    aria-label="Send message"
+                    aria-label={t('Send message')}
                     aria-describedby="message-delivery-help"
-                    data-tooltip={'Send message · ' + shortcut}
+                    data-tooltip={t('Send message') + ' · ' + shortcut}
                     onClick={() => void send()}
                     disabled={deliveryBlocked || !!receipt || !!thread?.queue?.items.length}
                   >
@@ -2820,13 +2872,15 @@ function App() {
                 title={
                   deliveryMode === 'queue'
                     ? thread && !sameSettings(settings, thread.settings)
-                      ? 'Queue this message to use the updated conversation settings'
-                      : 'Apply this draft to the running task; accepted additions cannot be edited'
-                    : 'Wait for a new turn; waiting text remains editable'
+                      ? t('Queue this message to use the updated conversation settings')
+                      : t(
+                          'Apply this draft to the running task; accepted additions cannot be edited',
+                        )
+                    : t('Wait for a new turn; waiting text remains editable')
                 }
                 onClick={() => followUp(true)}
               >
-                {deliveryMode === 'queue' ? 'Add now instead' : 'Queue instead'}
+                {deliveryMode === 'queue' ? t('Add now instead') : t('Queue instead')}
               </button>
             )}
           </div>
@@ -2879,13 +2933,13 @@ function App() {
           changeMaintenance={changeMaintenance}
           thread={thread}
           settings={thread?.settings ?? settings}
-          connection={connection}
+          connection={t(connection)}
           close={() => setDialog(undefined)}
         />
       )}
       {forking && (
         <InteractionDialog
-          title="Branch from this turn?"
+          title={t('Branch from this turn?')}
           close={() => {
             setForking(undefined);
             setRecoveryFork(false);
@@ -2900,20 +2954,20 @@ function App() {
             }}
           >
             <p>
-              Copy the conversation through this completed turn into a new conversation. Later turns
-              and queued messages stay in the source conversation. Both conversations use the
-              current project files; files are not copied or rolled back. The branch starts in Read
-              only.
+              {t(
+                'Copy the conversation through this completed turn into a new conversation. Later turns and queued messages stay in the source conversation. Both conversations use the current project files; files are not copied or rolled back. The branch starts in Read only.',
+              )}
             </p>
             {recoveryFork && (
               <p>
-                Your unsent draft and attachments will be copied to the branch. Nothing will be sent
-                automatically.
+                {t(
+                  'Your unsent draft and attachments will be copied to the branch. Nothing will be sent automatically.',
+                )}
               </p>
             )}
             {forkError && (
               <p className="fork-error" role="alert">
-                {forkError}
+                {t(forkError)}
               </p>
             )}
             <div className="conversation-confirm-actions">
@@ -2924,10 +2978,10 @@ function App() {
                 disabled={forkBusy}
                 onClick={() => setForking(undefined)}
               >
-                Cancel
+                {t('Cancel')}
               </button>
               <button className="primary" disabled={forkBusy}>
-                {forkBusy ? 'Creating branch…' : 'Create branch'}
+                {forkBusy ? t('Creating branch…') : t('Create branch')}
               </button>
             </div>
           </form>
@@ -2938,7 +2992,7 @@ function App() {
           ref={contextElement}
           inert={modalOpen || (narrow && sidebar) || undefined}
           className="context-panel"
-          aria-label="Project context"
+          aria-label={t('Project context')}
           role={narrow && !sidebar && !modalOpen ? 'dialog' : undefined}
           aria-modal={narrow && !sidebar && !modalOpen ? true : undefined}
         >
@@ -2949,19 +3003,20 @@ function App() {
                 aria-pressed={panel === 'files'}
                 onClick={() => setPanel('files')}
               >
-                Files
+                {t('Files')}
               </button>
               <button
                 className={panel === 'diff' ? 'active' : ''}
                 aria-pressed={panel === 'diff'}
                 onClick={() => setPanel('diff')}
               >
-                Changes{thread?.diff && <i />}
+                {t('Changes')}
+                {thread?.diff && <i />}
               </button>
             </div>
             <button
               className="icon-button"
-              aria-label="Close panel"
+              aria-label={t('Close panel')}
               data-tooltip=""
               onClick={() => setPanel(null)}
             >
@@ -2971,21 +3026,21 @@ function App() {
           {panel === 'diff' ? (
             <div className="diff-panel">
               <label className="diff-scope">
-                Change scope
+                {t('Change scope')}
                 <select
-                  aria-label="Change scope"
+                  aria-label={t('Change scope')}
                   value={diffTurn}
                   onChange={(event) => {
                     setDiffTurn(event.target.value);
                     setDiffPath('');
                   }}
                 >
-                  <option value="">Last turn</option>
+                  <option value="">{t('Last turn')}</option>
                   {changeTurns
                     .filter((id) => id !== thread?.turnId)
                     .map((id, i) => (
                       <option key={id} value={id}>
-                        Earlier turn {i + 1} · {id.slice(0, 8)}
+                        {t('Earlier turn {number} · {id}', { number: i + 1, id: id.slice(0, 8) })}
                       </option>
                     ))}
                 </select>
@@ -3005,12 +3060,8 @@ function App() {
               ) : (
                 <div className="panel-empty">
                   <Icon name="diff" size={30} />
-                  <h3>No changes to review</h3>
-                  <p>
-                    Changes from the current turn
-                    <br />
-                    will appear here.
-                  </p>
+                  <h3>{t('No changes to review')}</h3>
+                  <p>{t('Changes from the current turn will appear here.')}</p>
                 </div>
               )}
             </div>
@@ -3020,7 +3071,7 @@ function App() {
               apiBase={contextReady && !directoryBlocked ? contextBase : undefined}
               directoryIssue={directoryBlocked ? context.directory.message : undefined}
               projectId={contextProjectId}
-              projectName={project?.name ?? 'Project'}
+              projectName={project?.name ?? t('Project')}
               directory={directory}
               filePath={filePath}
               narrow={narrow}
@@ -3034,7 +3085,7 @@ function App() {
       )}
       {adding && <AddProjectDialog close={() => setAdding(false)} added={projectAdded} />}
       <ControlTooltip />
-    </div>
+    </div>,
   );
 }
 createRoot(document.getElementById('root')!).render(<App />);

@@ -1,4 +1,5 @@
 import type { Message, TurnInfo } from '../shared/types';
+import { interfaceLanguages, type Translate } from './interface-language';
 
 export interface TurnActivity {
   id: string;
@@ -76,7 +77,11 @@ export function commandCounts(items: readonly Message[]) {
   return counts;
 }
 
-export function workDuration(info?: TurnInfo, now?: number): string | undefined {
+export function workDuration(
+  info?: TurnInfo,
+  now?: number,
+  t: Translate = interfaceLanguages.en.t,
+): string | undefined {
   const elapsed =
     info?.durationMs ??
     (info?.startedAtMs !== undefined && (info.completedAtMs ?? now) !== undefined
@@ -85,5 +90,7 @@ export function workDuration(info?: TurnInfo, now?: number): string | undefined 
   if (elapsed === undefined || !Number.isFinite(elapsed) || elapsed < 0) return;
   const seconds = Math.floor(elapsed / 1000);
   const minutes = Math.floor(seconds / 60);
-  return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+  return minutes
+    ? t('{minutes}m {seconds}s', { minutes, seconds: seconds % 60 })
+    : t('{seconds}s', { seconds });
 }

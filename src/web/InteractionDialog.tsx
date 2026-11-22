@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { chatFontSizes, codeFontSizes } from './font-sizes';
 import { defaultBrowserPreferences, type Preferences } from './browser-preferences';
 import { ModelSettingsFields } from './ComposerControls';
@@ -27,6 +28,7 @@ export function InteractionDialog({
   initialFocus?: string;
   closeOnBackdrop?: boolean;
 }) {
+  const { t } = useInterfaceLanguage();
   const dialog = useRef<HTMLDivElement>(null);
   // Capture the opener before mounting auto-focused fields or making the workspace inert.
   const previous = useRef(document.activeElement as HTMLElement | null);
@@ -75,7 +77,7 @@ export function InteractionDialog({
       >
         <div className="modal-heading">
           <h2>{title}</h2>
-          <button type="button" aria-label="Close dialog" disabled={busy} onClick={close}>
+          <button type="button" aria-label={t('Close dialog')} disabled={busy} onClick={close}>
             ×
           </button>
         </div>
@@ -95,6 +97,7 @@ function ResetSettings({
   reset: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useInterfaceLanguage();
   const [confirming, setConfirming] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const dismiss = () => {
@@ -113,11 +116,11 @@ function ResetSettings({
         {label}
       </button>
       {confirming && (
-        <div role="group" aria-label={label + ' confirmation'}>
+        <div role="group" aria-label={t('{label} confirmation', { label })}>
           <p>{detail}</p>
           <div className="preferences-reset-actions">
             <button type="button" onClick={dismiss} autoFocus>
-              Cancel
+              {t('Cancel')}
             </button>
             <button
               type="button"
@@ -127,7 +130,7 @@ function ResetSettings({
                 dismiss();
               }}
             >
-              Confirm reset
+              {t('Confirm reset')}
             </button>
           </div>
         </div>
@@ -162,31 +165,48 @@ export function PreferencesDialog({
     planReady: boolean;
   };
 }) {
+  const { t } = useInterfaceLanguage();
   const [section, setSection] = useState<'preferences' | 'network' | 'runtime'>('preferences');
   const preferences = (
     <>
       <div className="preferences-content">
         <section className="preferences-section" aria-labelledby="preferences-appearance">
-          <h3 id="preferences-appearance">Appearance</h3>
+          <h3 id="preferences-appearance">{t('Appearance')}</h3>
           <label className="preference-row">
-            <span className="preference-description">Theme</span>
+            <span className="preference-description">{t('Language')}</span>
             <select
-              aria-label="Theme"
+              value={value.language}
+              onChange={(event) =>
+                change({ ...value, language: event.target.value === 'zh-CN' ? 'zh-CN' : 'en' })
+              }
+            >
+              <option value="en" lang="en">
+                English
+              </option>
+              <option value="zh-CN" lang="zh-CN">
+                简体中文
+              </option>
+            </select>
+          </label>
+          <label className="preference-row">
+            <span className="preference-description">{t('Theme')}</span>
+            <select
+              aria-label={t('Theme')}
               value={value.theme}
               onChange={(event) =>
                 change({ ...value, theme: event.target.value as Preferences['theme'] })
               }
             >
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-              <option value="system">System</option>
+              <option value="dark">{t('Dark')}</option>
+              <option value="light">{t('Light')}</option>
+              <option value="system">{t('System')}</option>
             </select>
           </label>
           <div className="preferences-fonts">
             <label>
-              Chat text size
+              {t('Chat text size')}
               <select
-                aria-label="Chat text size"
+                aria-label={t('Chat text size')}
                 value={value.chatFontSize ?? ''}
                 onChange={(event) =>
                   change({
@@ -195,7 +215,7 @@ export function PreferencesDialog({
                   })
                 }
               >
-                <option value="">Default</option>
+                <option value="">{t('Default')}</option>
                 {chatFontSizes.map((size) => (
                   <option key={size} value={size}>
                     {size} px
@@ -204,9 +224,9 @@ export function PreferencesDialog({
               </select>
             </label>
             <label>
-              Code text size
+              {t('Code text size')}
               <select
-                aria-label="Code text size"
+                aria-label={t('Code text size')}
                 value={value.codeFontSize ?? ''}
                 onChange={(event) =>
                   change({
@@ -215,7 +235,7 @@ export function PreferencesDialog({
                   })
                 }
               >
-                <option value="">Default</option>
+                <option value="">{t('Default')}</option>
                 {codeFontSizes.map((size) => (
                   <option key={size} value={size}>
                     {size} px
@@ -224,10 +244,10 @@ export function PreferencesDialog({
               </select>
             </label>
           </div>
-          <div className="preferences-preview" role="region" aria-label="Text preview">
+          <div className="preferences-preview" role="region" aria-label={t('Text preview')}>
             <div className="prose">
               <p>
-                Aa Bb Cc · 0123456789
+                {t('Aa Bb Cc · 0123456789')}
                 <br />
                 中文字体预览。
               </p>
@@ -241,18 +261,18 @@ export function PreferencesDialog({
           className="preferences-section"
           aria-labelledby="preferences-defaults"
           role="region"
-          aria-label="New conversation defaults"
+          aria-label={t('New conversation defaults')}
         >
-          <h3 id="preferences-defaults">New conversation defaults</h3>
+          <h3 id="preferences-defaults">{t('New conversation defaults')}</h3>
           <p className="preference-help">
-            Applies to new conversations. Existing conversations keep their settings.
+            {t('Applies to new conversations. Existing conversations keep their settings.')}
           </p>
           {defaults.settings && (
             <>
               <label className="preference-row">
-                <span className="preference-description">Permissions</span>
+                <span className="preference-description">{t('Permissions')}</span>
                 <select
-                  aria-label="Default permissions"
+                  aria-label={t('Default permissions')}
                   value={defaults.settings.permission}
                   disabled={defaults.loading}
                   onChange={(event) =>
@@ -268,16 +288,16 @@ export function PreferencesDialog({
                       value={preset.id}
                       disabled={preset.id === 'auto-review' && !defaults.autoReviewReady}
                     >
-                      {preset.label}
+                      {t(preset.label)}
                     </option>
                   ))}
                 </select>
               </label>
               <p className="preference-help">
-                {
+                {t(
                   permissionPresets.find((preset) => preset.id === defaults.settings!.permission)
-                    ?.description
-                }
+                    ?.description ?? '',
+                )}
               </p>
               <div className="default-model-settings">
                 <ModelSettingsFields
@@ -291,68 +311,70 @@ export function PreferencesDialog({
                 />
               </div>
               <ResetSettings
-                label="Reset new conversation defaults"
-                detail="Restore Read only, the native model and reasoning defaults, Execution mode, and Standard speed for future conversations."
+                label={t('Reset new conversation defaults')}
+                detail={t(
+                  'Restore Read only, the native model and reasoning defaults, Execution mode, and Standard speed for future conversations.',
+                )}
                 disabled={defaults.loading || defaults.conflict}
                 reset={() => defaults.change({ permission: 'read-only' })}
               />
             </>
           )}
-          {defaults.loading && <p role="status">Loading defaults…</p>}
-          {defaults.saving && <p role="status">Saving defaults…</p>}
+          {defaults.loading && <p role="status">{t('Loading defaults…')}</p>}
+          {defaults.saving && <p role="status">{t('Saving defaults…')}</p>}
           {defaults.error && (
             <p role="alert">
-              {defaults.error}{' '}
+              {t(defaults.error)}{' '}
               <button onClick={defaults.retry}>
-                {defaults.conflict ? 'Reload default settings' : 'Retry default settings'}
+                {defaults.conflict ? t('Reload default settings') : t('Retry default settings')}
               </button>
             </p>
           )}
         </section>
         <section className="preferences-section" aria-labelledby="preferences-interaction">
-          <h3 id="preferences-interaction">Interaction</h3>
+          <h3 id="preferences-interaction">{t('Interaction')}</h3>
           <label className="preference-row">
-            <span className="preference-description">Follow-up delivery</span>
+            <span className="preference-description">{t('Follow-up delivery')}</span>
             <select
-              aria-label="Follow-up delivery"
+              aria-label={t('Follow-up delivery')}
               value={value.followUp}
               onChange={(event) =>
                 change({ ...value, followUp: event.target.value as Preferences['followUp'] })
               }
             >
-              <option value="queue">Queue for next turn</option>
-              <option value="steer">Add to running task</option>
+              <option value="queue">{t('Queue for next turn')}</option>
+              <option value="steer">{t('Add to running task')}</option>
             </select>
           </label>
           <label className="preference-row">
-            <span className="preference-description">Send shortcut</span>
+            <span className="preference-description">{t('Send shortcut')}</span>
             <select
-              aria-label="Send shortcut"
+              aria-label={t('Send shortcut')}
               value={value.enter}
               onChange={(event) =>
                 change({ ...value, enter: event.target.value as Preferences['enter'] })
               }
             >
-              <option value="enter">Enter</option>
-              <option value="cmdIfMultiline">Multiline: Ctrl/Cmd+Enter</option>
+              <option value="enter">{t('Enter')}</option>
+              <option value="cmdIfMultiline">{t('Multiline: Ctrl/Cmd+Enter')}</option>
               <option value="cmdAlways">Ctrl/Cmd+Enter</option>
             </select>
           </label>
           <label className="preference-row">
-            <span className="preference-description">Review location</span>
+            <span className="preference-description">{t('Review location')}</span>
             <select
-              aria-label="Review location"
+              aria-label={t('Review location')}
               value={value.review}
               onChange={(event) =>
                 change({ ...value, review: event.target.value as Preferences['review'] })
               }
             >
-              <option value="inline">Current conversation</option>
-              <option value="detached">Separate conversation</option>
+              <option value="inline">{t('Current conversation')}</option>
+              <option value="detached">{t('Separate conversation')}</option>
             </select>
           </label>
           <label className="preference-row">
-            <span>Scroll with replies</span>
+            <span>{t('Scroll with replies')}</span>
             <input
               className="preference-checkbox"
               type="checkbox"
@@ -362,16 +384,16 @@ export function PreferencesDialog({
             />
           </label>
           <details className="preferences-help">
-            <summary>Editing and shortcuts</summary>
+            <summary>{t('Editing and shortcuts')}</summary>
             <p>
-              Shift+Enter adds a line. Phone keyboards always add a line. Ctrl/Cmd+Shift+Enter
-              reverses queue and steer for one follow-up. Steering uses the running task's settings;
-              accepted additions cannot be edited or recalled.
+              {t(
+                "Shift+Enter adds a line. Phone keyboards always add a line. Ctrl/Cmd+Shift+Enter reverses queue and steer for one follow-up. Steering uses the running task's settings; accepted additions cannot be edited or recalled.",
+              )}
             </p>
             <p>
-              Drafts and waiting queued text are editable. Sent history is not edited in place.
-              Reply quotes a response; Branch from here creates a separate conversation and shares
-              the current project files.
+              {t(
+                'Drafts and waiting queued text are editable. Sent history is not edited in place. Reply quotes a response; Branch from here creates a separate conversation and shares the current project files.',
+              )}
             </p>
           </details>
         </section>
@@ -380,51 +402,57 @@ export function PreferencesDialog({
       <div className="preferences-footer">
         {saveError && (
           <div className="preferences-save-error">
-            <span role="alert">{saveError}</span>
+            <span role="alert">{t(saveError)}</span>
             <button type="button" onClick={() => change(value)}>
-              Retry save
+              {t('Retry save')}
             </button>
           </div>
         )}
         <ResetSettings
-          label="Reset browser settings"
-          detail="Restore theme, text sizes, interaction and notification preferences in this browser."
+          label={t('Reset browser settings')}
+          detail={t(
+            'Restore language, theme, text sizes, interaction and notification preferences in this browser.',
+          )}
           reset={() => change(defaultBrowserPreferences)}
         />
         <button
           className="preferences-done"
           type="button"
-          title="Preferences are saved in this browser"
+          title={t('Preferences are saved in this browser')}
           onClick={close}
         >
-          Done
+          {t('Done')}
         </button>
       </div>
     </>
   );
   return (
-    <InteractionDialog title="Interaction settings" close={close} className="preferences-dialog">
-      <div className="preferences-nav" role="group" aria-label="Settings sections">
+    <InteractionDialog
+      title={t('Interaction settings')}
+      close={close}
+      className="preferences-dialog"
+    >
+      <div className="preferences-nav" role="group" aria-label={t('Settings sections')}>
         <button
           type="button"
           aria-pressed={section === 'preferences'}
           onClick={() => setSection('preferences')}
         >
-          Preferences
+          {t('Preferences')}
         </button>
         <button
           type="button"
           aria-pressed={section === 'network'}
           onClick={() => setSection('network')}
         >
-          Network &amp; access
+          {t('Network & access')}
         </button>
         <button
           type="button"
           aria-pressed={section === 'runtime'}
           onClick={() => setSection('runtime')}
         >
-          Runtime
+          {t('Runtime')}
         </button>
       </div>
       {section === 'network' ? (
@@ -448,13 +476,14 @@ export function ReviewDialog({
   delivery: Preferences['review'];
   inlineAvailable: boolean;
 }) {
+  const { t } = useInterfaceLanguage();
   const [type, setType] = useState<ReviewTarget['type']>('uncommittedChanges');
   const [detail, setDetail] = useState('');
   const [delivery, setDelivery] = useState(inlineAvailable ? initial : 'detached');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return (
-    <InteractionDialog title="Review code" close={close} busy={busy}>
+    <InteractionDialog title={t('Review code')} close={close} busy={busy}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -475,13 +504,14 @@ export function ReviewDialog({
         }}
       >
         <p>
-          Run Codex's native code review in Read only mode. Review uses the selected model and
-          reasoning effort.
+          {t(
+            "Run Codex's native code review in Read only mode. Review uses the selected model and reasoning effort.",
+          )}
         </p>
         <label>
-          Review target
+          {t('Review target')}
           <select
-            aria-label="Review target"
+            aria-label={t('Review target')}
             value={type}
             disabled={busy}
             onChange={(e) => {
@@ -489,21 +519,21 @@ export function ReviewDialog({
               setDetail('');
             }}
           >
-            <option value="uncommittedChanges">Uncommitted changes</option>
-            <option value="baseBranch">Compare with a base branch</option>
-            <option value="commit">A specific commit</option>
-            <option value="custom">Custom review instructions</option>
+            <option value="uncommittedChanges">{t('Uncommitted changes')}</option>
+            <option value="baseBranch">{t('Compare with a base branch')}</option>
+            <option value="commit">{t('A specific commit')}</option>
+            <option value="custom">{t('Custom review instructions')}</option>
           </select>
         </label>
         {type !== 'uncommittedChanges' && (
           <label>
             {type === 'baseBranch'
-              ? 'Base branch'
+              ? t('Base branch')
               : type === 'commit'
-                ? 'Commit SHA'
-                : 'Review instructions'}
+                ? t('Commit SHA')
+                : t('Review instructions')}
             <input
-              aria-label="Review details"
+              aria-label={t('Review details')}
               value={detail}
               maxLength={type === 'custom' ? 4000 : 200}
               required
@@ -514,35 +544,36 @@ export function ReviewDialog({
           </label>
         )}
         <label>
-          Review location
+          {t('Review location')}
           <select
-            aria-label="Review location"
+            aria-label={t('Review location')}
             value={delivery}
             disabled={busy}
             onChange={(e) => setDelivery(e.target.value as Preferences['review'])}
           >
             <option value="inline" disabled={!inlineAvailable}>
-              Current conversation
+              {t('Current conversation')}
             </option>
-            <option value="detached">Separate conversation</option>
+            <option value="detached">{t('Separate conversation')}</option>
           </select>
         </label>
         {delivery === 'detached' && (
           <p>
-            A separate conversation uses the same current project files; it does not create a Git
-            worktree.
+            {t(
+              'A separate conversation uses the same current project files; it does not create a Git worktree.',
+            )}
           </p>
         )}
         {error && (
           <p role="alert" className="error-text">
-            {error}
+            {t(error)}
           </p>
         )}
         <button
           className="primary"
           disabled={busy || (type !== 'uncommittedChanges' && !detail.trim())}
         >
-          {busy ? 'Starting review…' : 'Start review'}
+          {busy ? t('Starting review…') : t('Start review')}
         </button>
       </form>
     </InteractionDialog>
@@ -565,67 +596,79 @@ export function StatusDialog({
   connection: string;
   close: () => void;
 }) {
+  const { t, locale } = useInterfaceLanguage();
   const usage = thread?.usage;
   return (
-    <InteractionDialog title="Session status" close={close}>
+    <InteractionDialog title={t('Session status')} close={close}>
       <dl className="session-status">
-        <dt>Browser connection</dt>
-        <dd>{connection}</dd>
-        <dt>Runtime</dt>
+        <dt>{t('Browser connection')}</dt>
+        <dd>{t(connection)}</dd>
+        <dt>{t('Runtime')}</dt>
         <dd>
-          {system?.runtime ?? 'Unknown'} · {system?.state ?? 'Unknown'}
+          {system?.runtime ?? t('Unknown')} · {system?.state ?? t('Unknown')}
         </dd>
-        <dt>CLI version</dt>
-        <dd>{system?.version ?? 'Unknown'}</dd>
-        <dt>Model</dt>
-        <dd>{settings.model || thread?.resolvedModel || 'CLI default'}</dd>
-        <dt>Reasoning</dt>
-        <dd>{settings.effort || 'Model default'}</dd>
-        <dt>Mode</dt>
-        <dd>{settings.mode === 'plan' ? 'Plan' : 'Code'}</dd>
-        <dt>Clarification questions</dt>
+        <dt>{t('CLI version')}</dt>
+        <dd>{system?.version ?? t('Unknown')}</dd>
+        <dt>{t('Model')}</dt>
+        <dd>{settings.model || thread?.resolvedModel || t('CLI default')}</dd>
+        <dt>{t('Reasoning')}</dt>
+        <dd>{t(settings.effort || 'Model default')}</dd>
+        <dt>{t('Mode')}</dt>
+        <dd>{settings.mode === 'plan' ? t('Plan') : t('Code')}</dd>
+        <dt>{t('Clarification questions')}</dt>
         <dd>
           {system?.codeQuestions === true
-            ? 'Code and Plan, when Codex needs input'
+            ? t('Code and Plan, when Codex needs input')
             : system?.codeQuestions === false
-              ? 'Plan mode only'
-              : 'Not reported'}
+              ? t('Plan mode only')
+              : t('Not reported')}
         </dd>
-        <dt>Permissions</dt>
-        <dd>{permissionLabel(settings.permission)}</dd>
-        <dt>Conversation</dt>
-        <dd>{thread?.id ?? 'Not created'}</dd>
-        <dt>Turn</dt>
-        <dd>{thread?.turnId ?? 'No turn'}</dd>
-        <dt>Latest context usage</dt>
+        <dt>{t('Permissions')}</dt>
+        <dd>{t(permissionLabel(settings.permission))}</dd>
+        <dt>{t('Conversation')}</dt>
+        <dd>{thread?.id ?? t('Not created')}</dd>
+        <dt>{t('Turn')}</dt>
+        <dd>{thread?.turnId ?? t('No turn')}</dd>
+        <dt>{t('Latest context usage')}</dt>
         <dd>
           {usage
-            ? usage.contextTokens.toLocaleString('en-US') +
-              (usage.contextWindow
-                ? ' / ' + usage.contextWindow.toLocaleString('en-US') + ' tokens'
-                : ' tokens; window unknown')
-            : 'Not reported'}
+            ? usage.contextWindow
+              ? t('{count} tokens', {
+                  count:
+                    usage.contextTokens.toLocaleString(locale) +
+                    ' / ' +
+                    usage.contextWindow.toLocaleString(locale),
+                })
+              : t('{count} tokens; window unknown', {
+                  count: usage.contextTokens.toLocaleString(locale),
+                })
+            : t('Not reported')}
         </dd>
-        <dt>Cumulative usage</dt>
-        <dd>{usage ? usage.totalTokens.toLocaleString('en-US') + ' tokens' : 'Not reported'}</dd>
-        <dt>Maintenance</dt>
+        <dt>{t('Cumulative usage')}</dt>
+        <dd>
+          {usage
+            ? t('{count} tokens', { count: usage.totalTokens.toLocaleString(locale) })
+            : t('Not reported')}
+        </dd>
+        <dt>{t('Maintenance')}</dt>
         <dd>
           {system?.maintenance
             ? system.maintenance.ready
-              ? 'Ready'
-              : 'Waiting for active work'
-            : 'Accepting tasks'}
+              ? t('Ready')
+              : t('Waiting for active work')
+            : t('Accepting tasks')}
         </dd>
       </dl>
       <button
         disabled={maintenanceBusy}
         onClick={() => void changeMaintenance(system?.maintenance ? 'cancel' : 'start')}
       >
-        {system?.maintenance ? 'Cancel maintenance' : 'Prepare maintenance'}
+        {system?.maintenance ? t('Cancel maintenance') : t('Prepare maintenance')}
       </button>
       <p>
-        Usage is reported by the CLI while connected. It is not your account quota or billing
-        balance.
+        {t(
+          'Usage is reported by the CLI while connected. It is not your account quota or billing balance.',
+        )}
       </p>
     </InteractionDialog>
   );

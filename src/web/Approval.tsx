@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { useRef, useState } from 'react';
 import type { Action } from '../shared/types';
 import { message, post } from './api';
@@ -14,6 +15,7 @@ export function Approval({
     input: { decision?: string; answers?: Record<string, string> },
   ) => Promise<void>;
 }) {
+  const { t } = useInterfaceLanguage();
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       (action.questions ?? [])
@@ -45,33 +47,41 @@ export function Approval({
   return (
     <section
       className="approval"
-      aria-label={action.title}
+      aria-label={t(action.title)}
       id={'action-' + action.id}
       tabIndex={-1}
     >
       <div className="approval-heading">
         <span className="approval-dot" />
-        <strong>{action.title}</strong>
+        <strong>{t(action.title)}</strong>
         <span className="badge">
           {action.kind === 'questions'
             ? action.blocking === false
-              ? 'OPTIONAL INPUT'
-              : 'ANSWER REQUIRED'
-            : 'REVIEW REQUIRED'}
+              ? t('OPTIONAL INPUT')
+              : t('ANSWER REQUIRED')
+            : t('REVIEW REQUIRED')}
         </span>
       </div>
       {action.kind !== 'questions' && <pre>{action.detail}</pre>}
       {!!action.files?.length && (
-        <DiffView files={action.files} truncated={action.truncated} title="Proposed file changes" />
+        <DiffView
+          files={action.files}
+          truncated={action.truncated}
+          title={t('Proposed file changes')}
+        />
       )}
       {action.kind === 'questions' && (
         <p className="question-help">
           {action.async
-            ? 'You can answer while Codex works or after it finishes.'
+            ? t('You can answer while Codex works or after it finishes.')
             : action.blocking === false
-              ? 'Codex asked for clarification. Submit your choices or skip this optional request.'
-              : 'Codex is waiting for your answers. Review each question before submitting.'}{' '}
-          A suggested choice is not sent until you submit.
+              ? t(
+                  'Codex asked for clarification. Submit your choices or skip this optional request.',
+                )
+              : t(
+                  'Codex is waiting for your answers. Review each question before submitting.',
+                )}{' '}
+          {t('A suggested choice is not sent until you submit.')}
         </p>
       )}
       {questions.map((q, index) => (
@@ -86,7 +96,7 @@ export function Approval({
             <div
               className="question-choices"
               role="radiogroup"
-              aria-label={'Options for ' + q.question}
+              aria-label={t('Options for {question}', { question: q.question })}
             >
               {q.options.map((option) => (
                 <label
@@ -129,7 +139,7 @@ export function Approval({
                 setCustom({ ...custom, [q.id]: event.target.value });
                 setAnswers({ ...answers, [q.id]: event.target.value });
               }}
-              placeholder={q.options?.length ? 'Or write your own answer' : 'Your answer'}
+              placeholder={q.options?.length ? t('Or write your own answer') : t('Your answer')}
               onKeyDown={(event) => {
                 if (
                   event.key === 'Enter' &&
@@ -147,7 +157,7 @@ export function Approval({
       ))}
       {error && (
         <p role="alert" className="error-text">
-          {error}
+          {t(error)}
         </p>
       )}
       <div className="approval-actions">
@@ -158,7 +168,7 @@ export function Approval({
               disabled={disabled || !complete}
               onClick={() => void answer({ answers })}
             >
-              Submit answer
+              {t('Submit answer')}
             </button>
             {action.blocking === false && (
               <button
@@ -166,7 +176,7 @@ export function Approval({
                 disabled={disabled}
                 onClick={() => void answer({ decision: 'skip' })}
               >
-                Skip question
+                {t('Skip question')}
               </button>
             )}
             {!action.async && (
@@ -185,7 +195,7 @@ export function Approval({
                     });
                 }}
               >
-                Cancel task
+                {t('Cancel task')}
               </button>
             )}
           </>
@@ -198,14 +208,14 @@ export function Approval({
               onClick={() => void answer({ decision })}
             >
               {decision === 'accept'
-                ? 'Approve once'
+                ? t('Approve once')
                 : decision === 'decline'
-                  ? 'Decline'
-                  : 'Cancel task'}
+                  ? t('Decline')
+                  : t('Cancel task')}
             </button>
           ))
         )}
-        {action.status === 'responding' && <span role="status">Waiting for Codex…</span>}
+        {action.status === 'responding' && <span role="status">{t('Waiting for Codex…')}</span>}
       </div>
     </section>
   );

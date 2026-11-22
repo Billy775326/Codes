@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { useEffect, useState } from 'react';
 import { runtimeRequestTimeout, type RuntimeSettingsSnapshot } from '../shared/runtime-settings';
 import { ApiError, message, request } from './api';
@@ -5,6 +6,7 @@ import { ApiError, message, request } from './api';
 const path = '/settings/runtime';
 
 export function RuntimeSettings() {
+  const { t, locale } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<RuntimeSettingsSnapshot>();
   const [questions, setQuestions] = useState(true);
   const [timeout, setTimeout] = useState('');
@@ -39,13 +41,13 @@ export function RuntimeSettings() {
       <div className="preferences-content">
         {error ? (
           <>
-            <p role="alert">{error}</p>
+            <p role="alert">{t(error)}</p>
             <button type="button" onClick={loadAgain}>
-              Retry loading
+              {t('Retry loading')}
             </button>
           </>
         ) : (
-          <p role="status">Loading runtime settings…</p>
+          <p role="status">{t('Loading runtime settings…')}</p>
         )}
       </div>
     );
@@ -84,7 +86,7 @@ export function RuntimeSettings() {
       }}
     >
       <label className="preference-row">
-        <span>Codex questions in Code mode</span>
+        <span>{t('Codex questions in Code mode')}</span>
         <input
           className="preference-checkbox"
           type="checkbox"
@@ -95,7 +97,7 @@ export function RuntimeSettings() {
         />
       </label>
       <label>
-        Native request timeout (milliseconds)
+        {t('Native request timeout (milliseconds)')}
         <input
           type="number"
           min={runtimeRequestTimeout.min}
@@ -108,31 +110,36 @@ export function RuntimeSettings() {
         />
       </label>
       <p className="preference-help">
-        1,000–300,000 milliseconds. Applies to native RPC requests, such as loading metadata, with
-        the default deadline.
+        {t(
+          '1,000–300,000 milliseconds. Applies to native RPC requests, such as loading metadata, with the default deadline.',
+        )}
       </p>
       <dl className="runtime-paths">
-        <dt>Codex executable</dt>
+        <dt>{t('Codex executable')}</dt>
         <dd>
           <code>{snapshot.executable}</code>
         </dd>
-        <dt>Data directory</dt>
+        <dt>{t('Data directory')}</dt>
         <dd>
           <code>{snapshot.dataDirectory}</code>
         </dd>
       </dl>
       {snapshot.restartRequired && (
         <p role="status">
-          Saved. Restart Codes to apply. Active timeout{' '}
-          {snapshot.active.requestTimeoutMs.toLocaleString()} ms. Code-mode questions{' '}
-          {snapshot.active.codeQuestions ? 'enabled' : 'disabled'}.
+          {t(
+            'Saved. Restart Codes to apply. Active timeout {timeout} ms. Code-mode questions {state}.',
+            {
+              timeout: snapshot.active.requestTimeoutMs.toLocaleString(locale),
+              state: t(snapshot.active.codeQuestions ? 'enabled' : 'disabled'),
+            },
+          )}
         </p>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{t(error)}</p>}
       <div className="network-actions">
         {needsReload && (
           <button type="button" onClick={loadAgain}>
-            Reload settings
+            {t('Reload settings')}
           </button>
         )}
         <button
@@ -140,7 +147,7 @@ export function RuntimeSettings() {
           className="preferences-done"
           disabled={!changed || saving || needsReload}
         >
-          {saving ? 'Saving…' : 'Save runtime settings'}
+          {saving ? t('Saving…') : t('Save runtime settings')}
         </button>
       </div>
     </form>

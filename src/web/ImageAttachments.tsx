@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { useState } from 'react';
 import type { ImageAttachment } from '../shared/types';
 import { imageUrl } from '../shared/images';
@@ -10,17 +11,18 @@ export function ImageAttachmentView({
   projectId: string;
   remove?: () => void;
 }) {
+  const { t } = useInterfaceLanguage();
   const [failed, setFailed] = useState(false);
   return (
     <span className="image-attachment">
       {failed ? (
-        <span className="image-unavailable">Image unavailable</span>
+        <span className="image-unavailable">{t('Image unavailable')}</span>
       ) : (
         <a
           href={imageUrl(projectId, image.id)}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={'Open image: ' + image.name}
+          aria-label={t('Open image: {name}', { name: image.name })}
         >
           <img
             src={imageUrl(projectId, image.id)}
@@ -33,7 +35,11 @@ export function ImageAttachmentView({
         </a>
       )}
       {remove && (
-        <button type="button" aria-label={'Remove image: ' + image.name} onClick={remove}>
+        <button
+          type="button"
+          aria-label={t('Remove image: {name}', { name: image.name })}
+          onClick={remove}
+        >
           ×
         </button>
       )}

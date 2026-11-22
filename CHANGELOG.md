@@ -8,6 +8,7 @@
 
 ### Added
 
+- Choose English or Simplified Chinese in Settings → Appearance. English is the default, and the selection is saved in the current browser.
 - Enable optional browser notifications for task results, approvals and questions while the workspace is open in the background.
 - Save native request timeout and Code-mode questions in Runtime settings. Review the active configuration and apply changes on the next restart.
 - Export saved network configuration and import it into the Network & access form for review before saving.

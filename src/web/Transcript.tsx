@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Message, TurnInfo } from '../shared/types';
 import { groupTurns, commandCounts, workDuration, type TurnActivity } from './activity';
@@ -15,6 +16,7 @@ type RenderMessage = (
 const isActivity = (item: Message) => item.kind === 'command' || item.kind === 'tool';
 
 function ActivityGroup({ items, render }: { items: Message[]; render: RenderMessage }) {
+  const { t } = useInterfaceLanguage();
   const [open, setOpen] = useState(false);
   const counts = commandCounts(items);
   return (
@@ -22,14 +24,39 @@ function ActivityGroup({ items, render }: { items: Message[]; render: RenderMess
       <summary>
         <Icon name="terminal" size={14} />
         <span>
-          {items.length} {items.length === 1 ? 'activity' : 'activities'}
+          {items.length} {items.length === 1 ? t('activity') : t('activities')}
         </span>
         <span className="work-history-status">
-          {!!counts.completed && <span>{counts.completed} completed</span>}
-          {!!counts.failed && <span className="work-history-failed">{counts.failed} failed</span>}
-          {!!counts.running && <span>{counts.running} running</span>}
-          {!!counts.stopped && <span>{counts.stopped} stopped</span>}
-          {!!counts.unknown && <span>{counts.unknown} status unavailable</span>}
+          {!!counts.completed && (
+            <span>
+              {counts.completed}
+              {' ' + t('completed')}
+            </span>
+          )}
+          {!!counts.failed && (
+            <span className="work-history-failed">
+              {counts.failed}
+              {' ' + t('failed')}
+            </span>
+          )}
+          {!!counts.running && (
+            <span>
+              {counts.running}
+              {' ' + t('running')}
+            </span>
+          )}
+          {!!counts.stopped && (
+            <span>
+              {counts.stopped}
+              {' ' + t('stopped')}
+            </span>
+          )}
+          {!!counts.unknown && (
+            <span>
+              {counts.unknown}
+              {' ' + t('status unavailable')}
+            </span>
+          )}
         </span>
         <Icon name="chevron" size={12} />
       </summary>
@@ -65,6 +92,7 @@ function Turn({
   completion?: ReactNode;
   showStandaloneTime: boolean;
 }) {
+  const { t } = useInterfaceLanguage();
   const [choice, setChoice] = useState<boolean>();
   const open = choice ?? turn.active;
   const [now, setNow] = useState(Date.now);
@@ -74,14 +102,14 @@ function Turn({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [turn.active, turn.info?.startedAtMs]);
-  const elapsed = workDuration(turn.info, turn.active ? now : undefined);
+  const elapsed = workDuration(turn.info, turn.active ? now : undefined, t);
   const label = turn.active
     ? elapsed
-      ? `Working · ${elapsed}`
-      : 'Working'
+      ? t('Working · {elapsed}', { elapsed })
+      : t('Working')
     : elapsed
-      ? `Worked for ${elapsed}`
-      : 'Work history';
+      ? t('Worked for {elapsed}', { elapsed })
+      : t('Work history');
   const last = turn.replies.at(-1);
   const segments: Message[][] = [];
   for (const item of turn.work) {
@@ -107,23 +135,45 @@ function Turn({
           <span className="work-history-status">
             {!!tools.length && (
               <span>
-                {tools.length} {tools.length === 1 ? 'activity' : 'activities'}
+                {tools.length} {tools.length === 1 ? t('activity') : t('activities')}
               </span>
             )}
-            {!!counts.failed && <span className="work-history-failed">{counts.failed} failed</span>}
-            {!!counts.stopped && <span>{counts.stopped} stopped</span>}
-            {!!counts.running && <span>{counts.running} running</span>}
-            {!!counts.unknown && <span>{counts.unknown} status unavailable</span>}
-            {turn.info?.status === 'failed' && (
-              <span className="work-history-failed">Turn failed</span>
+            {!!counts.failed && (
+              <span className="work-history-failed">
+                {counts.failed}
+                {' ' + t('failed')}
+              </span>
             )}
-            {turn.info?.status === 'interrupted' && <span>Turn interrupted</span>}
+            {!!counts.stopped && (
+              <span>
+                {counts.stopped}
+                {' ' + t('stopped')}
+              </span>
+            )}
+            {!!counts.running && (
+              <span>
+                {counts.running}
+                {' ' + t('running')}
+              </span>
+            )}
+            {!!counts.unknown && (
+              <span>
+                {counts.unknown}
+                {' ' + t('status unavailable')}
+              </span>
+            )}
+            {turn.info?.status === 'failed' && (
+              <span className="work-history-failed">{t('Turn failed')}</span>
+            )}
+            {turn.info?.status === 'interrupted' && <span>{t('Turn interrupted')}</span>}
           </span>
         </button>
         <div id={`work-${turn.id}-${index}`} hidden={!open} className="work-history-items">
           {open && <WorkItems items={items} render={render} />}
           {open && !items.length && (
-            <p className="work-history-empty">No additional activity in the loaded history.</p>
+            <p className="work-history-empty">
+              {t('No additional activity in the loaded history.')}
+            </p>
           )}
         </div>
       </section>

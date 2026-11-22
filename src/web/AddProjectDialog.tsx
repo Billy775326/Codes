@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { useState, type FormEvent } from 'react';
 import type { Project } from '../shared/types';
 import { ApiError, message, post } from './api';
@@ -10,6 +11,7 @@ export function AddProjectDialog({
   close: () => void;
   added: (project: Project) => void;
 }) {
+  const { t } = useInterfaceLanguage();
   const [path, setPath] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -41,7 +43,7 @@ export function AddProjectDialog({
   };
   return (
     <InteractionDialog
-      title="Add a project"
+      title={t('Add a project')}
       close={close}
       busy={busy}
       className="project-dialog"
@@ -50,7 +52,7 @@ export function AddProjectDialog({
     >
       <form onSubmit={(event) => void submit(event)}>
         <div>
-          <label htmlFor="project-path">Project directory on server</label>
+          <label htmlFor="project-path">{t('Project directory on server')}</label>
           <input
             id="project-path"
             value={path}
@@ -71,15 +73,15 @@ export function AddProjectDialog({
             }}
           />
           <p className="project-field-help" id="project-path-help">
-            Use the absolute path of an existing folder on this server.
+            {t('Use the absolute path of an existing folder on this server.')}
           </p>
         </div>
         <div>
-          <label htmlFor="new-project-name">Project name (optional)</label>
+          <label htmlFor="new-project-name">{t('Project name (optional)')}</label>
           <input
             id="new-project-name"
             value={name}
-            placeholder="Use the folder name"
+            placeholder={t('Use the folder name')}
             maxLength={80}
             disabled={busy}
             onChange={(event) => setName(event.target.value)}
@@ -87,15 +89,15 @@ export function AddProjectDialog({
         </div>
         {error && (
           <p id="project-add-error" className="error-text" role="alert">
-            {error.text}
+            {t(error.text)}
           </p>
         )}
         <div className="project-dialog-actions">
           <button type="button" className="secondary" disabled={busy} onClick={close}>
-            Cancel
+            {t('Cancel')}
           </button>
           <button className="primary" disabled={busy || !path.trim()}>
-            {busy ? 'Adding…' : 'Add project'}
+            {busy ? t('Adding…') : t('Add project')}
           </button>
         </div>
       </form>

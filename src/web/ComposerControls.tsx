@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { useImperativeHandle, useRef, type Ref } from 'react';
 import type { Model, Settings } from '../shared/types';
 import { permissionLabel, permissionPresets } from '../shared/permissions';
@@ -32,6 +33,7 @@ export function ComposerControls({
   disabled: boolean;
   ref: Ref<ComposerControlsHandle>;
 }) {
+  const { t } = useInterfaceLanguage();
   const modelMenu = useRef<HTMLDetailsElement>(null);
   const modelControl = useRef<HTMLSelectElement>(null);
   const effortControl = useRef<HTMLSelectElement>(null);
@@ -63,39 +65,41 @@ export function ComposerControls({
         entry.model === (settings.model || resolvedModel),
     ) ?? (!settings.model && !resolvedModel ? models.find((entry) => entry.isDefault) : undefined);
   const effort = settings.effort || selectedModel?.defaultReasoningEffort;
-  const effortLabel = effort ? effort.charAt(0).toUpperCase() + effort.slice(1) : 'Default';
+  const effortLabel = effort ? t(effort.charAt(0).toUpperCase() + effort.slice(1)) : t('Default');
   const modelLabel =
-    selectedModel?.displayName ?? settings.model ?? resolvedModel ?? 'Default model';
+    selectedModel?.displayName ?? settings.model ?? resolvedModel ?? t('Default model');
   return (
     <>
       <PanelMenu
-        label="Codex permissions"
-        description="Applies to future tasks in this conversation. Running tasks and queued messages keep their settings."
+        label={t('Codex permissions')}
+        description={t(
+          'Applies to future tasks in this conversation. Running tasks and queued messages keep their settings.',
+        )}
         controller={permissionControl}
         className="permission-menu"
         disabled={disabled || !modesReady}
         trigger={
           <>
-            <span>{permissionLabel(settings.permission)}</span>
+            <span>{t(permissionLabel(settings.permission))}</span>
             <Icon name="chevron" size={11} />
           </>
         }
       >
-        <strong>Conversation permissions</strong>
-        <div role="group" aria-label="Permission presets">
+        <strong>{t('Conversation permissions')}</strong>
+        <div role="group" aria-label={t('Permission presets')}>
           {permissionPresets.map((preset) => (
             <button
               key={preset.id}
               type="button"
-              aria-label={preset.label}
-              aria-description={preset.description}
+              aria-label={t(preset.label)}
+              aria-description={t(preset.description)}
               aria-pressed={settings.permission === preset.id}
               disabled={disabled || (preset.id === 'auto-review' && !autoReviewReady)}
               data-close-menu
               onClick={() => change({ ...settings, permission: preset.id })}
             >
-              <span>{preset.label}</span>
-              <small>{preset.description}</small>
+              <span>{t(preset.label)}</span>
+              <small>{t(preset.description)}</small>
             </button>
           ))}
         </div>
@@ -103,24 +107,24 @@ export function ComposerControls({
       {settings.mode === 'plan' && (
         <button
           className="plan-mode"
-          aria-label="Exit Plan mode"
+          aria-label={t('Exit Plan mode')}
           disabled={disabled}
           onClick={() => change({ ...settings, mode: 'default' })}
         >
-          Plan ×
+          {t('Plan ×')}
         </button>
       )}
       <div className="toolbar-spacer" />
       <PanelMenu
-        label="Model and reasoning"
-        description={`${modelLabel} · ${effortLabel}${!settings.effort ? ' (model default)' : ''}${settings.fast ? ' · Fast' : ''} · ${settings.mode === 'plan' ? 'Plan' : 'Execution'} · Future tasks in this conversation`}
+        label={t('Model and reasoning')}
+        description={`${modelLabel} · ${effortLabel}${!settings.effort ? ' ' + t('(model default)') : ''}${settings.fast ? ' · ' + t('Fast') : ''} · ${t(settings.mode === 'plan' ? 'Plan' : 'Execution')} · ${t('Future tasks in this conversation')}`}
         controller={modelMenu}
         className="model-menu"
         trigger={
           <>
             <span
               className="model-selection"
-              title={`${modelLabel} · ${effortLabel}${!settings.effort ? ' (model default)' : ''}`}
+              title={`${modelLabel} · ${effortLabel}${!settings.effort ? ' ' + t('(model default)') : ''}`}
             >
               <span className="model-selection-name">{modelLabel}</span>
               <span className="model-selection-effort">· {effortLabel}</span>
@@ -129,7 +133,7 @@ export function ComposerControls({
           </>
         }
       >
-        <strong>Model and reasoning</strong>
+        <strong>{t('Model and reasoning')}</strong>
         <ModelSettingsFields
           settings={settings}
           change={change}
@@ -169,6 +173,7 @@ export function ModelSettingsFields({
   effortControl?: Ref<HTMLSelectElement>;
   defaults?: boolean;
 }) {
+  const { t } = useInterfaceLanguage();
   const selectedModel =
     models.find(
       (entry) =>
@@ -178,9 +183,9 @@ export function ModelSettingsFields({
   return (
     <>
       <label className="model-field">
-        Model
+        {t('Model')}
         <select
-          aria-label={defaults ? 'Default model' : 'Model'}
+          aria-label={defaults ? t('Default model') : t('Model')}
           ref={modelControl}
           value={settings.model ?? ''}
           onChange={(e) =>
@@ -193,7 +198,7 @@ export function ModelSettingsFields({
           }
           disabled={disabled}
         >
-          <option value="">Default</option>
+          <option value="">{t('Default')}</option>
           {settings.model && !models.some((entry) => entry.id === settings.model) && (
             <option value={settings.model}>{settings.model}</option>
           )}
@@ -205,59 +210,65 @@ export function ModelSettingsFields({
         </select>
       </label>
       <label className="model-field">
-        Reasoning effort
+        {t('Reasoning effort')}
         <select
           ref={effortControl}
-          aria-label={defaults ? 'Default reasoning effort' : 'Reasoning effort'}
+          aria-label={defaults ? t('Default reasoning effort') : t('Reasoning effort')}
           value={settings.effort ?? ''}
           disabled={disabled || !selectedModel}
           onChange={(event) => change({ ...settings, effort: event.target.value || undefined })}
         >
           <option value="">
-            Default{selectedModel ? ' (' + selectedModel.defaultReasoningEffort + ')' : ''}
+            {t('Default')}
+            {selectedModel ? ' (' + t(selectedModel.defaultReasoningEffort ?? '') + ')' : ''}
           </option>
           {settings.effort &&
             !selectedModel?.supportedReasoningEfforts.some(
               (entry) => entry.reasoningEffort === settings.effort,
-            ) && <option value={settings.effort}>{settings.effort} (unavailable)</option>}
+            ) && (
+              <option value={settings.effort}>
+                {t(settings.effort ?? '')}
+                {' ' + t('(unavailable)')}
+              </option>
+            )}
           {selectedModel?.supportedReasoningEfforts.map((entry) => (
             <option
-              key={entry.reasoningEffort}
+              key={t(entry.reasoningEffort)}
               value={entry.reasoningEffort}
               title={entry.description}
             >
-              {entry.reasoningEffort}
+              {t(entry.reasoningEffort)}
             </option>
           ))}
         </select>
       </label>
       <label className="model-field">
-        Task mode
+        {t('Task mode')}
         <select
-          aria-label={defaults ? 'Default task mode' : 'Task mode'}
+          aria-label={defaults ? t('Default task mode') : t('Task mode')}
           value={settings.mode ?? 'default'}
           disabled={disabled || !modesReady}
           onChange={(event) =>
             change({ ...settings, mode: event.target.value as Settings['mode'] })
           }
         >
-          <option value="default">Execution</option>
+          <option value="default">{t('Execution')}</option>
           <option value="plan" disabled={!planReady}>
-            Plan
+            {t('Plan')}
           </option>
         </select>
       </label>
       <label className="fast-option">
         <span>
-          Fast
+          {t('Fast')}
           <small>
-            {selectedModel?.supportsFast ? 'Higher usage' : 'Unavailable for this model'}
+            {selectedModel?.supportsFast ? t('Higher usage') : t('Unavailable for this model')}
           </small>
         </span>
         <input
           type="checkbox"
           role="switch"
-          aria-label={defaults ? 'Default fast mode' : 'Fast mode'}
+          aria-label={defaults ? t('Default fast mode') : t('Fast mode')}
           checked={!!settings.fast}
           disabled={disabled || (!selectedModel?.supportsFast && !settings.fast)}
           onChange={(event) => change({ ...settings, fast: event.target.checked })}

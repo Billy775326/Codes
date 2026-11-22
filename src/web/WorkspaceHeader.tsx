@@ -1,3 +1,4 @@
+import { useInterfaceLanguage } from './interface-language';
 import { PanelMenu } from './PanelMenu';
 import { Icon } from './primitives';
 
@@ -25,15 +26,17 @@ const starters = [
   ['Explore this project', 'Explain the architecture of this project and its main entry points.'],
   ['Plan a change', 'Review this project and help me plan a small, verifiable improvement.'],
   ['Review the code', 'Review the current code for potential bugs and explain your findings.'],
-];
+] as const;
 
 export function WorkspaceHeader(props: Props) {
+  const { t } = useInterfaceLanguage();
   return (
     <header className="topbar">
       {!props.sidebarOpen && (
         <button
           className="icon-button"
-          aria-label="Open navigation"
+          data-open-navigation=""
+          aria-label={t('Open navigation')}
           data-tooltip=""
           onClick={props.onNavigation}
         >
@@ -56,22 +59,22 @@ export function WorkspaceHeader(props: Props) {
               (['Connected', 'Ready'].includes(props.connection) ? 'connected' : '')
             }
             role="status"
-            aria-label={'Connection: ' + props.connection}
-            title={props.connection}
+            aria-label={t('Connection: {status}', { status: t(props.connection) })}
+            title={t(props.connection)}
           >
-            {props.connection}
+            {t(props.connection)}
           </span>
         )}
         <PanelMenu
-          label="Conversation actions"
+          label={t('Conversation actions')}
           className="conversation-menu"
           iconOnly
           trigger={<Icon name="more" size={17} />}
         >
           {props.showStarters &&
             starters.map(([title, text]) => (
-              <button key={title} data-close-menu onClick={() => props.onDraft(text!)}>
-                {title}
+              <button key={title} data-close-menu onClick={() => props.onDraft(text)}>
+                {t(title)}
               </button>
             ))}
           <button
@@ -80,15 +83,16 @@ export function WorkspaceHeader(props: Props) {
             disabled={!props.hasProject || props.busy}
           >
             <Icon name="review" size={14} />
-            Review code
+            {t('Review code')}
           </button>
           <button data-close-menu onClick={props.onStatus}>
             <Icon name="activity" size={14} />
-            Session status
+            {t('Session status')}
           </button>
         </PanelMenu>
         <button
-          aria-label="Browse files"
+          data-browse-files=""
+          aria-label={t('Browse files')}
           disabled={!props.hasProject || props.busy}
           aria-pressed={props.panel === 'files'}
           data-tooltip=""
@@ -98,7 +102,7 @@ export function WorkspaceHeader(props: Props) {
           <Icon name="folder" size={17} />
         </button>
         <button
-          aria-label="Review changes"
+          aria-label={t('Review changes')}
           aria-pressed={props.panel === 'diff'}
           data-tooltip=""
           className={'icon-button ' + (props.panel === 'diff' ? 'selected' : '')}
@@ -108,7 +112,7 @@ export function WorkspaceHeader(props: Props) {
         </button>
         <button
           type="button"
-          aria-label={props.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={props.theme === 'dark' ? t('Switch to light mode') : t('Switch to dark mode')}
           data-tooltip=""
           className="icon-button"
           onClick={props.onToggleTheme}
@@ -117,7 +121,7 @@ export function WorkspaceHeader(props: Props) {
         </button>
         {!props.sidebarOpen && (
           <button
-            aria-label="Interaction settings"
+            aria-label={t('Interaction settings')}
             data-tooltip=""
             className="icon-button"
             onClick={props.onSettings}
@@ -127,7 +131,7 @@ export function WorkspaceHeader(props: Props) {
         )}
         {!props.sidebarOpen && (
           <button
-            aria-label="New conversation"
+            aria-label={t('New conversation')}
             data-tooltip=""
             className="icon-button"
             disabled={props.busy}
