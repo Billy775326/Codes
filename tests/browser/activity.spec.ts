@@ -145,6 +145,23 @@ test('answers and project files preview raster images and isolated static HTML',
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   expect(externalResponses).toBe(0);
 });
+test('HTML preview explains an empty JavaScript app shell and keeps its source visible', async ({
+  page,
+}) => {
+  const { base } = await fixture(page, 0);
+  await writeFile(
+    join(base.context!.project.path, 'app-entry.html'),
+    '<!doctype html><html><head><title>Example app</title></head><body><div id="root"></div>' +
+      '<script type="module" src="/src/main.tsx"></script></body></html>',
+  );
+  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await page.getByRole('button', { name: 'app-entry.html', exact: true }).click();
+  const preview = page.getByRole('region', { name: 'File preview', exact: true });
+  await preview.getByText('Preview HTML', { exact: true }).click();
+  await expect(preview.getByRole('status')).toContainText('This page needs JavaScript to render.');
+  await expect(preview.locator('iframe')).toHaveCount(0);
+  await expect(preview.getByRole('group', { name: 'File lines' })).toContainText('/src/main.tsx');
+});
 test('the whole work history defaults collapsed with final answer, edits and one footer outside', async ({
   page,
 }) => {

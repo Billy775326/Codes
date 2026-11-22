@@ -111,6 +111,8 @@
 
 ### Fixed
 
+- Explain when an HTML entry page needs JavaScript to render instead of opening a blank static preview. Keep the source available in Files.
+
 - Give Files a full-height folder list, a focused preview on narrow screens, and paged source lines for large files. Clear stale entries and previews during navigation and offer local retry for failed reads.
 
 - Keep resolved Codex questions in their original turns when viewing paginated conversation history.

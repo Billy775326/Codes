@@ -2,10 +2,33 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { projectImageType, projectImageUrl } from '../shared/images';
+import { limits } from '../shared/types';
 import './content-preview.css';
+
+function htmlPreviewIssue(html: string) {
+  if (html.length > limits.file) return 'This HTML is too large to preview.';
+  // Parse into inert content. The sandbox still owns how renderable markup is sanitized.
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const content = template.content;
+  const hasScript = !!content.querySelector('script');
+  for (const element of content.querySelectorAll(
+    'script, title, meta, link, base, template, noscript',
+  ))
+    element.remove();
+  if (
+    content.textContent?.trim() ||
+    content.querySelector('style, [style], img, hr, input, button, select, progress, table')
+  )
+    return;
+  return hasScript
+    ? 'This page needs JavaScript to render. Open the running app to see the page.'
+    : 'No visible static HTML to preview.';
+}
 
 export function HtmlPreview({ html }: { html: string }) {
   const [open, setOpen] = useState(false);
+  const issue = useMemo(() => (open ? htmlPreviewIssue(html) : undefined), [open, html]);
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     frame.current?.contentWindow?.postMessage(html, '*');
@@ -17,7 +40,12 @@ export function HtmlPreview({ html }: { html: string }) {
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>Preview HTML</summary>
-      {open && (
+      {open && issue && (
+        <p className="html-preview-issue" role="status">
+          {issue}
+        </p>
+      )}
+      {open && !issue && (
         <iframe
           ref={frame}
           title="HTML preview"

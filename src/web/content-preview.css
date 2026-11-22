@@ -20,6 +20,15 @@
   background: white;
 }
 
+.html-preview-issue {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .project-preview-image {
   display: block;
   max-width: 100%;
