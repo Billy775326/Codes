@@ -1586,10 +1586,16 @@ function App() {
       .filter((action) => action.kind === 'questions')
       .map((action) => [action.id, action]),
   );
+  const visibleTurnIds = new Set(visibleMessages.map((item) => item.turnId));
   const transcriptMessages = [...visibleMessages];
   for (const action of [...inlineQuestions.values()].reverse()) {
+    // A resolved question belongs to its history page. Open requests must remain reachable.
+    if (
+      !visibleTurnIds.has(action.turnId) &&
+      (!timelineLatest || action.status === 'answered' || action.status === 'expired')
+    )
+      continue;
     const last = transcriptMessages.findLastIndex((item) => item.turnId === action.turnId);
-    if (last < 0 && !timelineLatest) continue;
     const anchor = transcriptMessages.findLastIndex(
       (item) => item.id === action.afterMessageId && item.turnId === action.turnId,
     );

@@ -111,6 +111,8 @@
 
 ### Fixed
 
+- Keep resolved Codex questions in their original turns when viewing paginated conversation history.
+
 - Show readable answer previews in follow-up receipts and pending messages for asynchronous Codex questions.
 
 - Keep recorded token usage and completion metrics beside the original reply’s actions across later turns and service restarts.

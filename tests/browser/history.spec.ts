@@ -1,6 +1,6 @@
 import { reconnectUpdates } from './sidebar-helpers';
 import { expect, test, type Page } from '@playwright/test';
-import type { Message, Snapshot } from '../../src/shared/types';
+import type { Action, Message, Snapshot } from '../../src/shared/types';
 function messages(first: number, last: number): Message[] {
   return Array.from({ length: last - first + 1 }, (_, index) => {
     const n = first + index;
@@ -12,7 +12,7 @@ function messages(first: number, last: number): Message[] {
     };
   });
 }
-async function fixture(page: Page) {
+async function fixture(page: Page, actions: Omit<Action, 'threadId'>[] = []) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
@@ -26,11 +26,44 @@ async function fixture(page: Page) {
   base.thread.turnId = 'history-turn-119';
   base.thread.turns = [];
   base.thread.olderCursor = 'older-1';
+  base.thread.actions = actions.map((action) => ({ ...action, threadId: base.thread.id }));
   await page.route('**/api/threads/*/snapshot', (route) => route.fulfill({ json: base }));
   await page.reload();
   await expect(page.getByText('Recent answer 239', { exact: true })).toBeVisible();
   return base;
 }
+
+test('an answered question appears only when its original turn is loaded', async ({ page }) => {
+  await fixture(page, [
+    {
+      id: 'old-answered-question',
+      turnId: 'history-turn--1',
+      afterMessageId: 'history-item--2',
+      kind: 'questions',
+      title: 'Codex question',
+      detail: '',
+      decisions: [],
+      async: true,
+      blocking: false,
+      status: 'answered',
+      questions: [{ id: 'mode', question: 'Which mode should I use?' }],
+      submittedAnswers: { mode: 'Use local mode' },
+    },
+  ]);
+  await page.route('**/api/threads/*/history?cursor=*', (route) =>
+    route.fulfill({ json: { messages: messages(-24, -1), olderCursor: null, turns: [] } }),
+  );
+  const question = page.getByRole('region', { name: 'Codex question', exact: true });
+  await expect(question).toHaveCount(0);
+  await page.getByRole('button', { name: 'Load earlier messages', exact: true }).click();
+  const originalTurn = page.locator('.turn').filter({ hasText: 'Recent answer -1' });
+  await expect(originalTurn.getByRole('region', { name: 'Codex question' })).toContainText(
+    'Answer: Use local mode',
+  );
+  await expect(question).toHaveCount(1);
+  await page.getByRole('button', { name: 'Back to latest messages', exact: true }).click();
+  await expect(question).toHaveCount(0);
+});
 for (const width of [1440, 390])
   test(`older history stays bounded and new live messages remain one click away at ${width}px`, async ({
     page,
