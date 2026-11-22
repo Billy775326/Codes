@@ -32,6 +32,10 @@
   font-size: 13px;
   color: var(--fg);
 }
+.conversation-search input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
 .conversation-search:focus-within {
   border-color: var(--fg);
 }

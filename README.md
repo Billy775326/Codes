@@ -19,7 +19,7 @@ Keep the interface, architecture, and implementation simple. Let layout and expl
   <img alt="Codes V3 identity" src="public/brand/codes-lockup-light.svg" width="280" height="96">
 </picture>
 
-The owner-provided V3 SVG identity is active in navigation, sign-in, and the favicon. The interface selects the original light/dark wordmarks by theme. See [identity assets and attribution](docs/brand.md#identity-assets).
+The owner-provided V3 SVG identity is active in navigation, sign-in, and the favicon. The outlined wordmark follows the interface foreground color. See [identity assets and attribution](docs/brand.md#identity-assets).
 
 ## What is implemented
 

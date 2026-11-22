@@ -18,6 +18,6 @@ These principles guide implementation choices; they do not promise that every Co
 
 ## Identity assets
 
-The project owner supplied the approved V3 identity in `codes-logo-v3`. The sidebar and login use its original outlined **Codes** wordmark; the browser favicon uses its standalone icon. Light and dark SVG variants are selected by the workspace theme, with no external font request or regenerated artwork.
+The project owner supplied the approved V3 identity in `codes-logo-v3`. The sidebar and login use the original icon and outlined **Codes** wordmark. The interface uses the wordmark outline as a mask so it follows the surrounding foreground color. The browser favicon uses the standalone icon.
 
 Production assets are `public/brand/codes-lockup-dark.svg`, `codes-lockup-light.svg`, and `codes-icon.svg`. They are copied into each build; the source is the owner-provided V3 package, not an earlier candidate gallery. Keep these originals unchanged. The outlined wordmark derives from Inter; its font license is preserved in `LICENSES/OFL-Inter.txt`. This attribution does not assign a license to the application's source code. Earlier candidate galleries are review archives, not the current identity.

@@ -169,6 +169,8 @@ code {
   box-shadow: 0 4px 12px #0003;
 }
 .brand {
+  --wordmark-start: 36%;
+  position: relative;
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
@@ -178,15 +180,16 @@ code {
   width: 140px;
   height: 48px;
   object-fit: contain;
+  clip-path: inset(0 calc(100% - var(--wordmark-start)) 0 0);
 }
-.brand .brand-light {
-  display: none;
-}
-:root[data-theme='light'] .brand .brand-dark {
-  display: none;
-}
-:root[data-theme='light'] .brand .brand-light {
-  display: block;
+.brand-wordmark {
+  /* Use the original outline with the same foreground as adjacent text. */
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  mask: url('/brand/codes-lockup-dark.svg') center / contain no-repeat;
+  clip-path: inset(0 0 0 var(--wordmark-start));
+  forced-color-adjust: none;
 }
 .visually-hidden {
   position: absolute;

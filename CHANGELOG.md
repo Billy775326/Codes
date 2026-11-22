@@ -111,6 +111,8 @@
 
 ### Fixed
 
+- Keep the Codes wordmark and sidebar search placeholder readable on dark backgrounds, including when browser colors differ from the app theme.
+
 - Wrap long diff lines and hunk headers within both Changes layouts while keeping line numbers and before/after columns aligned.
 
 - Wrap long source lines inside Files so their full text is readable on desktop and phones while preserving source line numbers and selection.
