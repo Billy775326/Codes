@@ -126,7 +126,7 @@ export class Service {
           return false;
         const thread = await this.read(id);
         if (thread.writerConflict) {
-          store.queue.pause(
+          store.queue.pauseForReview(
             id,
             'Another Codex client owns this conversation. Check availability, then resume explicitly.',
           );
@@ -134,19 +134,19 @@ export class Service {
           return false;
         }
         if (thread.archived) {
-          store.queue.pause(id, 'Restore the conversation before resuming the queue.');
+          store.queue.pauseForReview(id, 'Restore the conversation before resuming the queue.');
           this.queue.notify(id);
           return false;
         }
         const { native } = await this.conversationOwner(id);
         const directory = await this.projectContext(thread.projectId);
         if (!directory.directory.available) {
-          store.queue.pause(id, directory.directory.message!);
+          store.queue.pauseForReview(id, directory.directory.message!);
           this.queue.notify(id);
           return false;
         }
         if (native.status?.type === 'active') {
-          store.queue.pause(
+          store.queue.pauseForReview(
             id,
             'A native task is still active. Review its result before resuming.',
           );
@@ -174,7 +174,7 @@ export class Service {
         if (!Array.isArray(page.data))
           throw new AppError('PROTOCOL_ERROR', 'Invalid native readiness metadata.', 502);
         if (page.data[0]?.status === 'inProgress') {
-          store.queue.pause(id, 'The last native task has no confirmed result.');
+          store.queue.pauseForReview(id, 'The last native task has no confirmed result.');
           this.queue.notify(id);
           return false;
         }
@@ -1083,8 +1083,6 @@ export class Service {
       );
     if (Buffer.byteLength(payload.text) > 100_000)
       throw new AppError('INPUT_LIMIT', 'The queued text exceeds 100 KB.');
-    if (this.store.active(id)?.state === 'unknown')
-      this.store.queue.pause(id, 'An execution result is unknown. Check result before resuming.');
     if (this.store.operation(messageId) && !this.store.queue.get(messageId))
       throw new AppError(
         'OPERATION_CONFLICT',
@@ -1092,6 +1090,11 @@ export class Service {
         409,
       );
     this.store.queue.add(messageId, id, payload);
+    if (this.uncertainExecution(id))
+      this.store.queue.pauseForReview(
+        id,
+        'An execution result is unknown. Check result before resuming.',
+      );
     this.queue.notify(id);
     this.queue.wake(id);
     return this.queueState(id);
@@ -1167,16 +1170,26 @@ export class Service {
         receipt?.state === 'unknown' ? 'unknown' : 'failed',
         error instanceof Error ? error.message : 'Follow-up dispatch failed.',
       );
-      this.store.queue.pause(id, 'A follow-up needs review before continuing.');
+      this.store.queue.pauseForReview(id, 'A follow-up needs review before continuing.');
       throw error;
     } finally {
       this.queue.notify(id);
     }
     return this.queueState(id);
   }
+  private uncertainExecution(id: string) {
+    return (
+      this.store.active(id)?.state === 'unknown' ||
+      this.store.steers(id).some((entry) => entry.state === 'unknown')
+    );
+  }
   controlQueue(id: string, paused: boolean) {
     const state = this.queueState(id);
-    if (!paused && state.items.some((row) => ['unknown', 'failed'].includes(row.state)))
+    if (
+      !paused &&
+      (this.uncertainExecution(id) ||
+        state.items.some((row) => ['unknown', 'failed'].includes(row.state)))
+    )
       throw new AppError(
         'QUEUE_REVIEW',
         'Check unknown results and remove failed messages before resuming.',
@@ -1551,12 +1564,14 @@ export class Service {
     } catch (error) {
       const receipt = this.store.operation(operationId)!;
       if (receipt.state === 'completed') return receipt;
+      const uncertain = !(error instanceof AppError) || error.uncertain;
       this.store.update(
         operationId,
-        error instanceof AppError && !error.uncertain ? 'failed' : 'unknown',
+        uncertain ? 'unknown' : 'failed',
         undefined,
         error instanceof AppError ? error.message : 'The follow-up result is unknown.',
       );
+      if (uncertain) this.store.queue.pauseForReview(id, 'An execution result is unknown.');
       this.boundary(thread);
       throw error;
     }
@@ -1753,6 +1768,7 @@ export class Service {
       );
       if (uncertain) {
         thread.state = 'unknown';
+        this.store.queue.pauseForReview(id, 'An execution result is unknown.');
         if (thread.pending) thread.pending.state = 'unknown';
       } else {
         delete thread.pending;
@@ -1762,6 +1778,7 @@ export class Service {
             : 'failed';
         if (error instanceof AppError && error.code === 'THREAD_WRITER_BUSY')
           thread.writerConflict = true;
+        else this.pauseAfterTurn(id, thread.state);
       }
       this.boundary(thread);
       throw error;
@@ -1802,6 +1819,7 @@ export class Service {
     if (match && terminal(match.status)) {
       this.store.complete(id, match.id);
       thread.state = match.status;
+      this.pauseAfterTurn(id, match.status);
       thread.messages = history.messages;
       thread.turns = history.turns;
       thread.olderCursor = history.olderCursor;
@@ -2017,28 +2035,35 @@ export class Service {
       this.publishQuestions(threadId);
     }
   }
+  private pauseAfterTurn(id: string, outcome: string | undefined) {
+    if (outcome === 'failed' || outcome === 'interrupted')
+      this.store.queue.pauseForReview(
+        id,
+        'A task stopped or failed. Review the queue before resuming.',
+      );
+  }
   private syncQueue(thread: Thread) {
     for (const entry of this.store.queue.inFlight(thread.id)) {
       const op = this.store.operation(entry.id);
       if (op?.state === 'completed') {
-        const successful = thread.state === 'completed';
+        const outcome =
+          thread.turns?.find((turn) => turn.id === op.turnId)?.status ??
+          (thread.turnId === op.turnId ? thread.state : undefined);
         this.store.queue.set(
           entry.id,
           'completed',
-          successful ? undefined : 'The task ended ' + thread.state + '.',
+          outcome === 'failed' || outcome === 'interrupted'
+            ? `The task ended ${outcome}.`
+            : undefined,
         );
-        if (!successful)
-          this.store.queue.pause(
-            thread.id,
-            'A task stopped or failed. Review the remaining messages before resuming.',
-          );
+        this.pauseAfterTurn(thread.id, outcome);
       } else if (op?.state === 'unknown') {
         if (entry.state !== 'sent')
           this.store.queue.set(entry.id, 'unknown', 'Check result before continuing.');
-        this.store.queue.pause(thread.id, 'An execution result is unknown.');
+        this.store.queue.pauseForReview(thread.id, 'An execution result is unknown.');
       } else if (op?.state === 'failed') {
         this.store.queue.set(entry.id, entry.state === 'sent' ? 'completed' : 'failed', op.error);
-        this.store.queue.pause(thread.id, 'A queued task failed.');
+        this.store.queue.pauseForReview(thread.id, 'A queued task failed.');
       }
     }
     thread.queue = this.store.queue.state(thread.id);
@@ -2079,8 +2104,6 @@ export class Service {
     );
     this.emitActions(id);
     if (!thread.pending && !thread.steering?.length) {
-      if (['failed', 'interrupted'].includes(thread.state) && this.store.queue.count(id))
-        this.store.queue.pause(id, 'A task stopped or failed. Review the queue before resuming.');
       this.queue.wake(id);
       for (const waiting of this.store.queue.pendingThreads()) this.queue.wake(waiting);
     }
@@ -2135,6 +2158,7 @@ export class Service {
         this.store.update(closed.pending.id, 'unknown');
         closed.pending.state = 'unknown';
         closed.state = 'unknown';
+        this.store.queue.pauseForReview(closed.id, 'An execution result is unknown.');
         for (const action of closed.actions) action.status = 'expired';
         for (const [id, entry] of this.actions)
           if (entry.action.threadId === closed.id) this.actions.delete(id);
@@ -2342,12 +2366,14 @@ export class Service {
       if (event.method === 'turn/completed' && terminal(info.status))
         this.recordTurnUsage(thread, info);
       const previous = thread.turns?.find((turn) => turn.id === info.id);
+      const terminalKey = thread.id + '/' + p.turn.id;
+      const newTerminal = !terminal(previous?.status) && !this.terminals.has(terminalKey);
       thread.turns = [
         ...(thread.turns ?? []).filter((turn) => turn.id !== info.id),
         { ...previous, ...info },
       ].slice(-300);
       if (event.method === 'turn/completed' && terminal(p.turn.status)) {
-        this.terminals.set(thread.id + '/' + p.turn.id, p.turn.status);
+        this.terminals.set(terminalKey, p.turn.status);
         while (this.terminals.size > 100)
           this.terminals.delete(this.terminals.keys().next().value!);
       }
@@ -2375,6 +2401,7 @@ export class Service {
         // outer review turn's completion. Only that exact receipt can close it.
         thread.turnId = p.turn.id;
         thread.state = terminal(p.turn.status) ? p.turn.status : 'unknown';
+        if (newTerminal) this.pauseAfterTurn(thread.id, thread.state);
         const pending = this.store.active(thread.id);
         if (
           pending &&

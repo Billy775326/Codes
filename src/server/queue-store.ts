@@ -13,6 +13,7 @@ export const queueSchema = `
  CREATE TABLE IF NOT EXISTS queue_controls (
   thread_id TEXT PRIMARY KEY REFERENCES threads(id), paused INTEGER NOT NULL DEFAULT 0, reason TEXT);
 `;
+const manualPause = 'Paused by you.';
 export class QueueStore {
   constructor(private db: DatabaseSync) {}
   count(threadId: string) {
@@ -119,12 +120,17 @@ export class QueueStore {
         )
         .get() as any
     ).count;
-    if (this.count(threadId) >= 10 || total >= 100)
+    const count = this.count(threadId);
+    if (count >= 10 || total >= 100)
       throw new AppError(
         'QUEUE_LIMIT',
         'The queue is full. Remove a waiting message before adding another.',
         429,
       );
+    if (!count)
+      this.db
+        .prepare('DELETE FROM queue_controls WHERE thread_id=? AND paused=1 AND reason<>?')
+        .run(threadId, manualPause);
     this.db
       .prepare(
         'INSERT INTO queued_messages(id,thread_id,digest,payload,created_at) VALUES(?,?,?,?,?)',
@@ -172,12 +178,22 @@ export class QueueStore {
       .prepare('UPDATE queued_messages SET state=?,error=? WHERE id=?')
       .run(state, error ?? null, id);
   }
-  pause(threadId: string, reason?: string) {
+  pause(threadId: string) {
     this.db
       .prepare(
         'INSERT INTO queue_controls VALUES(?,1,?) ON CONFLICT(thread_id) DO UPDATE SET paused=1,reason=excluded.reason',
       )
-      .run(threadId, reason ?? 'Paused by you.');
+      .run(threadId, manualPause);
+  }
+  pauseForReview(threadId: string, reason: string) {
+    this.db
+      .prepare(
+        `INSERT INTO queue_controls SELECT ?,1,? WHERE EXISTS (
+          SELECT 1 FROM queued_messages WHERE thread_id=? AND state NOT IN ('completed','cancelled','sent')
+        ) ON CONFLICT(thread_id) DO UPDATE SET paused=1, reason=excluded.reason
+        WHERE queue_controls.paused=0`,
+      )
+      .run(threadId, reason, threadId);
   }
   resume(threadId: string) {
     this.db
@@ -192,13 +208,13 @@ export class QueueStore {
         "SELECT DISTINCT thread_id FROM queued_messages WHERE state NOT IN ('completed','cancelled')",
       )
       .all() as any[])
-      this.pause(row.thread_id, reason);
+      this.pauseForReview(row.thread_id, reason);
   }
   recover() {
     this.db
       .exec(`UPDATE queued_messages SET state='unknown',error='Check the execution receipt before continuing.' WHERE state='dispatching';
    INSERT INTO queue_controls SELECT DISTINCT thread_id,1,'Service restarted. Review and resume waiting messages.' FROM queued_messages WHERE state NOT IN ('completed','cancelled')
-    ON CONFLICT(thread_id) DO UPDATE SET paused=1,reason='Service restarted. Review and resume waiting messages.';`);
+    ON CONFLICT(thread_id) DO UPDATE SET paused=1,reason=excluded.reason WHERE queue_controls.paused=0;`);
   }
   prune() {
     this.db

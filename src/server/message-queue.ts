@@ -1,5 +1,6 @@
 import { limits, type Operation, type QueueState } from '../shared/types.js';
 import type { QueueStore } from './queue-store.js';
+import { AppError } from '../shared/errors.js';
 
 /** Serial dispatch is independent of browser subscriptions and native approval callbacks. */
 export class MessageQueue {
@@ -32,7 +33,7 @@ export class MessageQueue {
       this.waiting.delete(id);
       const work = this.run(id)
         .catch(() => {
-          this.store.pause(
+          this.store.pauseForReview(
             id,
             'The queue could not verify readiness. Review the conversation before resuming.',
           );
@@ -86,15 +87,20 @@ export class MessageQueue {
             receipt.error,
           );
         if (receipt.state === 'failed' || receipt.state === 'unknown')
-          this.store.pause(id, 'A queued task needs review before continuing.');
+          this.store.pauseForReview(id, 'A queued task needs review before continuing.');
       } catch (error) {
+        if (error instanceof AppError && error.code === 'MAINTENANCE_ACTIVE') {
+          if (this.store.get(first.id)?.state === 'dispatching') this.store.set(first.id, 'queued');
+          this.notify(id);
+          return;
+        }
         if (this.store.get(first.id)?.state === 'dispatching')
           this.store.set(
             first.id,
             'failed',
             error instanceof Error ? error.message : 'Queued dispatch failed.',
           );
-        this.store.pause(id, 'A queued task needs review before continuing.');
+        this.store.pauseForReview(id, 'A queued task needs review before continuing.');
       }
       this.notify(id);
       if (this.store.get(first.id)?.state !== 'completed') return;

@@ -896,6 +896,7 @@ it('dequeues accepted messages while execution is active and still pauses follow
   expect(service.store.thread(thread.id)?.executionUnknown).toBe(true);
   expect(() => service.cancelQueued(thread.id, first)).toThrow(/already be executing/);
   await service.enqueue(thread.id, next, { ...payload, text: 'After accepted execution' });
+  expect(() => service.controlQueue(thread.id, false)).toThrow(/Check unknown results/);
   await service.enqueue(thread.id, first, payload);
   expect(service.queueState(thread.id).items.map((item) => item.id)).toEqual([next]);
   expect(service.store.queue.get(next)?.state).toBe('queued');
@@ -955,9 +956,33 @@ it('holds remaining queued messages after stopping a task until explicitly resum
   await until(() => thread.state === 'interrupted');
   expect(service.queueState(thread.id)).toMatchObject({ paused: true });
   expect(thread.messages.filter((row) => row.kind === 'user')).toHaveLength(1);
+  const interruptedTurn = thread.turnId;
   service.controlQueue(thread.id, false);
+  service.driver.emit('notification', {
+    method: 'turn/completed',
+    params: { threadId: thread.id, turn: { id: interruptedTurn, status: 'interrupted' } },
+  });
   await until(() => service.queueState(thread.id).items.length === 0);
   expect(thread.messages.filter((row) => row.kind === 'user')).toHaveLength(2);
+});
+it('lets new queued work run after an interruption with no waiting followers', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[approve] Stop without followers', thread.settings);
+  await until(() => thread.actions.length > 0);
+  await service.interrupt(thread.id);
+  await until(() => thread.state === 'interrupted');
+  expect(service.queueState(thread.id).paused).toBe(false);
+  const id = randomUUID();
+  await service.enqueue(thread.id, id, {
+    text: 'New work',
+    settings: thread.settings,
+    attachments: [],
+  });
+  await until(() => service.store.queue.get(id)?.state === 'completed');
+  expect(thread.messages.filter((row) => row.kind === 'user').map((row) => row.text)).toEqual([
+    '[approve] Stop without followers',
+    'New work',
+  ]);
 });
 it('protects an uncertain queued dispatch and reconciles it without resending', async () => {
   const { service, thread } = await fixture(1400);

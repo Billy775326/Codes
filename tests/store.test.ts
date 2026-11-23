@@ -103,12 +103,13 @@ it('dequeues accepted deliveries from counts and capacity while retaining recove
   expect(store.queue.inFlight('a')).toMatchObject([{ id: 'accepted', state: 'sent' }]);
   expect(() => store.queue.add('overflow', 'a', payload)).toThrow(/queue is full/);
   store.queue.set('waiting-0', 'dispatching');
+  store.queue.pause('a');
   store.close();
   const restarted = new Store(directory);
   try {
     expect(restarted.operation('accepted')?.state).toBe('unknown');
     expect(restarted.queue.get('accepted')?.state).toBe('sent');
-    expect(restarted.queue.state('a')).toMatchObject({ paused: true });
+    expect(restarted.queue.state('a')).toMatchObject({ paused: true, reason: 'Paused by you.' });
     expect(restarted.queue.state('a').items.map((item) => item.id)).not.toContain('accepted');
     expect(restarted.queue.get('waiting-0')?.state).toBe('unknown');
     expect(restarted.queue.count('a')).toBe(10);
