@@ -31,6 +31,7 @@ The owner-provided V3 SVG identity is active in navigation, sign-in, and the fav
 - Command, file, and turn-scoped permission approvals; proactive native questions in Code and Plan, with choices, custom answers, secret inputs, and explicit skipping for optional questions.
 - Quoted follow-up drafts, compact durable FIFO queue cards, immediate native steering, and conversation branches through completed turns. Confirmed deliveries leave the queue immediately while task status stays in the conversation. Edit waiting text in the composer area without replacing a separate unsent draft; editing pauses the queue until you resume it.
 - Server-backed per-conversation permissions and model/reasoning preferences, saved immediately, with separate new-conversation defaults in the settings modal. See [settings behavior](docs/conversation-settings.md).
+- Edit the current project's root `AGENTS.md` under Settings → AGENTS.md. If the file changes on disk while editing, reload it before saving.
 - Native Execution/Plan modes, model-specific reasoning effort, Fast speed control, task-plan steps, inline/separate code reviews, and session/context-token status.
 - A browser workspace with persistent desktop project/conversation navigation, central chat, right-side file/change previews, larger text and controls, and dark/light/system themes.
 - IDE-style model/reasoning controls, edited-file cards, questions, approvals and follow-up actions within that Web layout.

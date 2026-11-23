@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -17,6 +17,39 @@ let service: Service;
 let origin: string;
 let cookie: string;
 const token = 'test-only-access-token-not-a-real-secret';
+it('edits only the authenticated project instructions and rejects stale revisions and symlinks', async () => {
+  const root = join(directory, 'project');
+  await mkdir(root);
+  const project = await service.addProject(root);
+  const url = origin + '/api/projects/' + project.id + '/instructions';
+  const path = join(root, 'AGENTS.md');
+  const read = () => fetch(url, { headers: { cookie } });
+  const save = (value: unknown, session = cookie) =>
+    fetch(url, {
+      method: 'PUT',
+      headers: { origin, cookie: session, 'content-type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+  expect(await (await read()).json()).toEqual({ text: '', revision: null });
+  expect((await save({ revision: null, text: '# Unauthorized' }, '')).status).toBe(401);
+  expect((await save({ revision: null, text: '# Instructions\n' })).status).toBe(200);
+  expect(await readFile(path, 'utf8')).toBe('# Instructions\n');
+  const current = await (await read()).json();
+  expect((await save({ revision: null, text: 'Would overwrite' })).status).toBe(409);
+  const changed = await save({ revision: current.revision, text: '# Updated\n' });
+  expect(changed.status).toBe(200);
+  const updated = await changed.json();
+  await writeFile(path, '# External edit\n');
+  expect((await save({ revision: updated.revision, text: 'Stale edit' })).status).toBe(409);
+  expect(await readFile(path, 'utf8')).toBe('# External edit\n');
+  const outside = join(directory, 'external.txt');
+  await writeFile(outside, 'Keep this file');
+  await rm(path);
+  await symlink(outside, path);
+  expect((await read()).status).toBe(403);
+  expect((await save({ revision: null, text: 'Replace symlink' })).status).toBe(403);
+  expect(await readFile(outside, 'utf8')).toBe('Keep this file');
+});
 it('authenticates settings writes, applies defaults and prevents stale conversation updates', async () => {
   const project = await service.addProject(directory);
   const existing = await service.create(project.id, { permission: 'read-only' });

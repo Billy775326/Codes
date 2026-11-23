@@ -1,5 +1,5 @@
 import { useInterfaceLanguage } from './interface-language';
-import { chatFontSizes, codeFontSizes } from './font-sizes';
+import { chatFontSizes, codeFontSizes, defaultTextSize } from './font-sizes';
 import { defaultBrowserPreferences, type Preferences } from './browser-preferences';
 import { ModelSettingsFields } from './ComposerControls';
 import { permissionPresets } from '../shared/permissions';
@@ -10,6 +10,7 @@ import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
 import { message } from './api';
 import { NetworkSettings } from './NetworkSettings';
 import { RuntimeSettings } from './RuntimeSettings';
+import { ProjectInstructionsSettings } from './ProjectInstructionsSettings';
 import { IconButton } from './primitives';
 import { NotificationSettings } from './NotificationSettings';
 export function InteractionDialog({
@@ -138,6 +139,7 @@ function ResetSettings({
   );
 }
 export function PreferencesDialog({
+  project,
   value,
   change,
   changeNotifications,
@@ -145,6 +147,7 @@ export function PreferencesDialog({
   saveError,
   defaults,
 }: {
+  project?: { id: string; name: string };
   value: Preferences;
   change: (value: Preferences) => void;
   changeNotifications: (enabled: boolean) => void;
@@ -165,13 +168,22 @@ export function PreferencesDialog({
   };
 }) {
   const { t } = useInterfaceLanguage();
-  const [section, setSection] = useState<'preferences' | 'network' | 'runtime'>('preferences');
-  const [visited, setVisited] = useState({ preferences: true, network: false, runtime: false });
+  const targetProject = useRef(project).current;
+  const [section, setSection] = useState<'preferences' | 'network' | 'runtime' | 'instructions'>(
+    'preferences',
+  );
+  const [visited, setVisited] = useState({
+    preferences: true,
+    network: false,
+    runtime: false,
+    instructions: false,
+  });
   const [networkDraft, setNetworkDraft] = useState({ changed: false, busy: false });
   const [runtimeDraft, setRuntimeDraft] = useState({ changed: false, busy: false });
+  const [instructionsDraft, setInstructionsDraft] = useState({ changed: false, busy: false });
   const [discarding, setDiscarding] = useState(false);
   const sectionButton = useRef<HTMLButtonElement>(null);
-  const discardBusy = networkDraft.busy || runtimeDraft.busy;
+  const discardBusy = networkDraft.busy || runtimeDraft.busy || instructionsDraft.busy;
   const selectSection = (value: typeof section) => {
     setVisited((previous) => (previous[value] ? previous : { ...previous, [value]: true }));
     setSection(value);
@@ -190,7 +202,7 @@ export function PreferencesDialog({
   const requestClose = () => {
     if (discarding) {
       stay();
-    } else if (networkDraft.changed || runtimeDraft.changed) {
+    } else if (networkDraft.changed || runtimeDraft.changed || instructionsDraft.changed) {
       setDiscarding(true);
     } else {
       close();
@@ -244,7 +256,7 @@ export function PreferencesDialog({
                   })
                 }
               >
-                <option value="">{t('Default')}</option>
+                <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
                 {chatFontSizes.map((size) => (
                   <option key={size} value={size}>
                     {size} px
@@ -264,7 +276,7 @@ export function PreferencesDialog({
                   })
                 }
               >
-                <option value="">{t('Default')}</option>
+                <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
                 {codeFontSizes.map((size) => (
                   <option key={size} value={size}>
                     {size} px
@@ -483,6 +495,14 @@ export function PreferencesDialog({
           >
             {t('Runtime')}
           </button>
+          <button
+            type="button"
+            ref={section === 'instructions' ? sectionButton : undefined}
+            aria-pressed={section === 'instructions'}
+            onClick={() => selectSection('instructions')}
+          >
+            AGENTS.md
+          </button>
         </div>
         <div className="preferences-page" hidden={section !== 'preferences'}>
           {preferences}
@@ -497,6 +517,15 @@ export function PreferencesDialog({
             <RuntimeSettings onDraft={setRuntimeDraft} />
           </div>
         )}
+        {visited.instructions && (
+          <div className="preferences-page" hidden={section !== 'instructions'}>
+            {targetProject ? (
+              <ProjectInstructionsSettings project={targetProject} onDraft={setInstructionsDraft} />
+            ) : (
+              <p className="preferences-content">{t('Select a project to edit AGENTS.md.')}</p>
+            )}
+          </div>
+        )}
       </div>
       {discarding && (
         <div
@@ -505,7 +534,7 @@ export function PreferencesDialog({
           aria-labelledby="discard-settings-heading"
         >
           <h3 id="discard-settings-heading">{t('Discard unsaved settings?')}</h3>
-          <p>{t('Unsaved Network & access and Runtime edits will be lost.')}</p>
+          <p>{t('Unsaved edits will be lost.')}</p>
           <div className="network-actions">
             <button type="button" autoFocus onClick={stay}>
               {t('Keep editing')}

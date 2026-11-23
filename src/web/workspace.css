@@ -256,7 +256,7 @@
 }
 .app .prose {
   color: var(--fg);
-  font-size: 15px;
+  font-size: var(--chat-font-size);
   line-height: 1.8;
 }
 .app .prose > :first-child {
@@ -287,11 +287,12 @@
   background: var(--field);
   border-color: var(--line);
   border-radius: 6px;
-  font-size: 13.2px;
+  font-size: var(--code-font-size);
 }
 .app .prose code {
   color: inherit;
   background: var(--selected);
+  font-size: var(--code-font-size);
 }
 .app .prose pre code {
   background: transparent;
@@ -366,7 +367,7 @@
   border-left: 1px solid var(--border);
   background: var(--field);
   color: var(--fg);
-  font-size: 12.1px;
+  font-size: var(--code-font-size);
 }
 .edit-summary {
   border: 1px solid var(--line);

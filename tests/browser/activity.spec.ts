@@ -503,7 +503,7 @@ for (const width of [1440, 320])
       .last()
       .locator('.prose')
       .evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
-    expect(initial).toBe(15);
+    expect(initial).toBe(14);
     await page.evaluate(() => {
       const preferences = JSON.parse(localStorage.getItem('codes.preferences') || '{}');
       localStorage.setItem(

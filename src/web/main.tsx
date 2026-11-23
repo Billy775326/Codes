@@ -20,6 +20,7 @@ import { ImageAttachmentView } from './ImageAttachments';
 import { AnswerMarkdown } from './ContentPreview';
 import { useLocalAttachments } from './useLocalAttachments';
 import { readBrowserPreferences, type Preferences } from './browser-preferences';
+import { defaultTextSize } from './font-sizes';
 import { ConversationNotifications, notificationAccess } from './browser-notifications';
 import React, {
   memo,
@@ -2073,12 +2074,8 @@ function App() {
         {
           '--navigation-width': `${sidebarLayout.navigation.width}px`,
           '--context-width': `${sidebarLayout.context.width}px`,
-          '--chat-font-size': preferences.chatFontSize
-            ? `${preferences.chatFontSize}px`
-            : undefined,
-          '--code-font-size': preferences.codeFontSize
-            ? `${preferences.codeFontSize}px`
-            : undefined,
+          '--chat-font-size': `${preferences.chatFontSize ?? defaultTextSize}px`,
+          '--code-font-size': `${preferences.codeFontSize ?? defaultTextSize}px`,
         } as React.CSSProperties
       }
       className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
@@ -3072,6 +3069,7 @@ function App() {
       </main>
       {dialog === 'preferences' && (
         <PreferencesDialog
+          project={project}
           value={preferences}
           defaults={{
             settings: defaultSettings.value?.settings,

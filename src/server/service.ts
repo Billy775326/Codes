@@ -10,6 +10,8 @@ import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
+import { projectInstructions } from './project-instructions.js';
+import type { ProjectInstructions } from '../shared/project-instructions.js';
 import { Images, validatedImageType } from './images.js';
 import { imageLimits, projectImageType } from '../shared/images.js';
 import { hasHiddenPathSegment } from '../shared/project-files.js';
@@ -83,6 +85,7 @@ export class Service {
   private reads = new Map<string, Promise<Thread>>();
   private admission: Promise<void> = Promise.resolve();
   private managing = new Set<string>();
+  private savingInstructions = new Set<string>();
   readonly queue: MessageQueue;
   readonly modelSettings: ModelSettings;
   private readonly asyncQuestions: AsyncQuestions;
@@ -302,6 +305,22 @@ export class Service {
     const context = await this.projectContext(id);
     if (!context.directory.available) throw directoryError(context.directory);
     return context.project;
+  }
+  async projectInstructions(id: string) {
+    return projectInstructions((await this.requireProject(id)).path);
+  }
+  async saveProjectInstructions(id: string, update: ProjectInstructions) {
+    const project = await this.requireProject(id);
+    if (this.project(id).archived)
+      throw new AppError('PROJECT_ARCHIVED', 'Restore this project before editing AGENTS.md.', 409);
+    if (this.savingInstructions.has(project.path))
+      throw new AppError('INSTRUCTIONS_BUSY', 'Another save is in progress. Try again.', 409);
+    this.savingInstructions.add(project.path);
+    try {
+      return await projectInstructions(project.path, update);
+    } finally {
+      this.savingInstructions.delete(project.path);
+    }
   }
   async conversationContext(id: string) {
     const { saved } = await this.conversationOwner(id);

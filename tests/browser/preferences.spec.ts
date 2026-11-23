@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { NetworkSettingsSnapshot } from '../../src/shared/network-settings';
 import type { RuntimeSettingsSnapshot } from '../../src/shared/runtime-settings';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 async function fixture(page: Page, text = 'Settings dialog fixture') {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
@@ -13,6 +14,43 @@ async function fixture(page: Page, text = 'Settings dialog fixture') {
       page.locator('.turn-status').getByText('Completed', { exact: true }),
     ).toBeVisible();
 }
+test('settings save the current project AGENTS.md and protect a draft after an external edit', async ({
+  page,
+}) => {
+  await fixture(page);
+  const projects = await (await page.request.get('/api/projects')).json();
+  const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
+  const path = join(project.path, 'AGENTS.md');
+  await writeFile(path, '# Original fixture\n', { flag: 'wx' });
+  try {
+    await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    const tab = page.getByRole('button', { name: 'AGENTS.md', exact: true });
+    await tab.click();
+    const editor = page.getByLabel('AGENTS.md contents', { exact: true });
+    await expect(editor).toHaveValue('# Original fixture\n');
+    await editor.fill('# Saved through settings\n');
+    await page.getByRole('button', { name: 'Preferences', exact: true }).click();
+    await tab.click();
+    await page.getByRole('button', { name: 'Save AGENTS.md', exact: true }).click();
+    await expect(page.getByText('AGENTS.md saved.', { exact: true })).toBeVisible();
+    expect(await readFile(path, 'utf8')).toBe('# Saved through settings\n');
+    await editor.fill('# My unsaved change');
+    await writeFile(path, '# External change');
+    await page.getByRole('button', { name: 'Save AGENTS.md', exact: true }).click();
+    await expect(page.getByRole('alert')).toHaveText(
+      'AGENTS.md changed on disk. Reload before saving.',
+    );
+    await expect(editor).toHaveValue('# My unsaved change');
+    await expect(editor).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('group', { name: 'Discard unsaved settings?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Keep editing' }).click();
+    await page.getByRole('button', { name: 'Discard draft and reload file' }).click();
+    await expect(editor).toHaveValue('# External change');
+  } finally {
+    await rm(path);
+  }
+});
 test('edits network settings and Cloudflare Access on a narrow screen', async ({
   page,
   baseURL,
@@ -309,9 +347,11 @@ test('font previews and chat typography persist alongside legacy interaction pre
   await expect(page.getByRole('combobox', { name: 'Review location', exact: true })).toHaveValue(
     'detached',
   );
+  const preview = page.getByRole('region', { name: 'Text preview', exact: true });
+  await expect(preview.locator('.prose')).toHaveCSS('font-size', '14px');
+  await expect(preview.locator('code')).toHaveCSS('font-size', '14px');
   await page.getByLabel('Chat text size').selectOption('20');
   await page.getByLabel('Code text size').selectOption('16');
-  const preview = page.getByRole('region', { name: 'Text preview', exact: true });
   expect(await preview.locator('.prose').evaluate((e) => getComputedStyle(e).fontSize)).toBe(
     '20px',
   );
@@ -343,7 +383,7 @@ test('font previews and chat typography persist alongside legacy interaction pre
       .last()
       .locator('.prose')
       .evaluate((element) => getComputedStyle(element).fontSize),
-  ).toBe('15px');
+  ).toBe('14px');
   await expect(page.getByLabel('Message Codex')).toHaveValue('Preserve draft across font changes');
 });
 test('a failed browser preference save keeps the current choice available to retry', async ({
@@ -553,6 +593,6 @@ for (const width of [1440, 320]) {
         .last()
         .locator('.prose')
         .evaluate((element) => getComputedStyle(element).fontSize),
-    ).toBe('15px');
+    ).toBe('14px');
   });
 }

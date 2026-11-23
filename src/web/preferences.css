@@ -286,9 +286,6 @@
 .preferences-done:hover {
   background: var(--hover);
 }
-.app[data-chat-font-size] .prose {
-  font-size: var(--chat-font-size);
-}
 .app[data-chat-font-size] .prose h1 {
   font-size: 1.35em;
 }
@@ -298,10 +295,11 @@
 .app[data-chat-font-size] .prose h3 {
   font-size: 1em;
 }
-.app[data-code-font-size] .prose code,
-.app[data-code-font-size] .prose pre,
-.app[data-code-font-size] .tool pre {
-  font-size: var(--code-font-size);
+.project-instructions textarea {
+  width: 100%;
+  min-height: min(240px, 38dvh);
+  resize: vertical;
+  font: var(--code-font-size) / 1.55 var(--font-code);
 }
 @media (max-width: 560px) {
   .app .preferences-dialog {

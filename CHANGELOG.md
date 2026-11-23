@@ -10,6 +10,8 @@
 
 ### Added
 
+- Edit the current project's root AGENTS.md in Settings. Saving checks for edits made on disk since the file was opened.
+
 - Resize desktop navigation and project panels by dragging their inner edges or using the arrow keys while the divider has focus. Each width is saved in the browser.
 
 - Reload Codes from the workspace header. Restore the selected conversation and saved draft after reload.
@@ -70,6 +72,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Use 14 px as the default conversation and code text size.
 
 - Put the desktop navigation toggle at the start of the workspace header and the project panel close button next to its tabs.
 
@@ -150,6 +154,8 @@
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 
 ### Fixed
+
+- Pause waiting messages for new failures, interruptions, or uncertain receipts. Preserve explicit pauses and avoid applying old failures to a fresh queue.
 
 - Open absolute project-file links from Codex replies in the Files preview, including plain HTML anchors and Markdown file links.
 

@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { AppError, asError } from '../shared/errors.js';
 import { imageId, imageLimits, imageTypes } from '../shared/images.js';
 import { limits } from '../shared/types.js';
+import { projectInstructionsLimit } from '../shared/project-instructions.js';
 import { Service } from './service.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
@@ -278,6 +279,20 @@ export async function application(
         const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
         if (segments[1] === 'projects' && segments[2]) {
           const projectId = segments[2];
+          if (segments.length === 4 && segments[3] === 'instructions') {
+            if (method === 'GET')
+              return json(response, await service.projectInstructions(projectId));
+            if (method === 'PUT') {
+              const update = z
+                .object({
+                  revision: z.string().regex(sha256).nullable(),
+                  text: z.string().max(projectInstructionsLimit),
+                })
+                .strict()
+                .parse(await body(request));
+              return json(response, await service.saveProjectInstructions(projectId, update));
+            }
+          }
           if (segments.length === 3 && method === 'PUT') {
             const { name, expectedName } = z
               .object({
