@@ -46,9 +46,8 @@ export function ChangeSummary({
             key={file.path + ':' + index}
             onClick={() => review?.(file.path)}
             disabled={!review}
-            title={file.path}
           >
-            <span>{file.path}</span>
+            <span data-tooltip-overflow="">{file.path}</span>
             <small className="diff-additions">+{file.additions}</small>
             <small className="diff-deletions">−{file.deletions}</small>
           </button>

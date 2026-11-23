@@ -123,9 +123,7 @@ export function RuntimeSettings({
         />
       </label>
       <p className="preference-help">
-        {t(
-          '1,000–300,000 milliseconds. Applies to native RPC requests, such as loading metadata, with the default deadline.',
-        )}
+        {t('1,000–300,000 ms. Applies to CLI requests, such as loading metadata.')}
       </p>
       <dl className="runtime-paths">
         <dt>{t('Codex executable')}</dt>

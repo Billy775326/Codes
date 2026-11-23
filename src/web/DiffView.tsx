@@ -86,9 +86,7 @@ const FileDiff = memo(function FileDiff({
       <div className="diff-file-heading">
         <button className="diff-file-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
           <Icon name={open ? 'review' : 'file'} size={14} />
-          <span className="diff-file-path" title={file.path}>
-            {file.path}
-          </span>
+          <span className="diff-file-path">{file.path}</span>
           <small>
             {file.previousPath && file.previousPath !== file.path
               ? t('Renamed')
@@ -106,7 +104,6 @@ const FileDiff = memo(function FileDiff({
             <IconButton
               icon="open-file"
               label={t('Open file')}
-              hint={t('Open this file in the Files panel.')}
               onClick={() => openFile(file.path)}
             />
           )}

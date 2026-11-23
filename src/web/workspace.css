@@ -909,7 +909,8 @@
 .app .work-history {
   margin: 4px 0 12px;
 }
-.app .work-history-toggle {
+.app .work-history-toggle,
+.app .work-history-label {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -923,6 +924,8 @@
   color: var(--muted);
   padding: 8px 0;
   font-size: 14px;
+}
+.app .work-history-toggle {
   cursor: pointer;
 }
 .app .work-history-toggle:hover {
@@ -978,11 +981,6 @@
 .app .activity-group > .tool {
   margin-inline: 12px;
 }
-.app .work-history-empty {
-  color: var(--muted);
-  font-size: 14px;
-}
-
 .app .interaction-dialog label {
   font-size: 14.3px;
 }

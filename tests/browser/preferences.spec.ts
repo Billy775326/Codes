@@ -45,9 +45,7 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
     const exportSaved = dialog.getByRole('button', { name: 'Export saved', exact: true });
     await expect(exportSaved).toHaveText('');
     await exportSaved.hover();
-    await expect(page.locator('.control-tooltip')).toHaveText(
-      'Download the saved network settings.',
-    );
+    await expect(page.locator('.control-tooltip')).toHaveText('Export saved');
     const downloaded = page.waitForEvent('download');
     await exportSaved.click();
     const exported = JSON.parse(await readFile((await (await downloaded).path())!, 'utf8'));
@@ -70,7 +68,7 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
       settings: { ...initial.settings, port: 8788, origins: ['http://127.0.0.1:8788'] },
     });
     await expect(listenPort).toHaveValue('8788');
-    await expect(dialog.getByRole('status')).toContainText('Review it before saving');
+    await expect(dialog.getByRole('status')).toContainText('Review before saving');
     expect((await read()).revision).toBe(initial.revision);
     await listenPort.fill('8787');
     await addresses.fill('https://codes.example.test/path');
@@ -258,7 +256,7 @@ for (const width of [1440, 320]) {
         .getByRole('combobox', { name: 'Review location', exact: true })
         .selectOption('detached');
       await dialog.getByText('Editing and shortcuts', { exact: true }).click();
-      await expect(dialog).toContainText('Sent history is not edited in place');
+      await expect(dialog).toContainText('Queued messages can be edited until dispatch.');
       const box = await dialog.boundingBox();
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.y).toBeGreaterThanOrEqual(0);

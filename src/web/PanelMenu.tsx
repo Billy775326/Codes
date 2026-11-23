@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } fro
 export function PanelMenu({
   label,
   trigger,
+  hint,
   description,
   children,
   controller,
@@ -13,6 +14,7 @@ export function PanelMenu({
 }: {
   label: string;
   trigger: ReactNode;
+  hint?: string;
   description?: string;
   children: ReactNode;
   controller?: RefObject<HTMLDetailsElement | null>;
@@ -53,7 +55,7 @@ export function PanelMenu({
       <summary
         role="button"
         aria-label={label}
-        data-tooltip={description ?? (iconOnly ? '' : undefined)}
+        data-tooltip={hint ?? (iconOnly ? '' : undefined)}
         aria-description={description}
         aria-expanded={open}
         aria-disabled={disabled || undefined}

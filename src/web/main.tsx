@@ -285,7 +285,7 @@ const MessageView = memo(function MessageView({
                     <IconButton
                       icon="reply"
                       label={t('Reply')}
-                      hint={t('Quote this reply in an editable draft')}
+                      hint={t('Quote in draft')}
                       size={13}
                       disabled={disabled}
                       onClick={() => onReply(item)}
@@ -295,7 +295,6 @@ const MessageView = memo(function MessageView({
                     <IconButton
                       icon="branch"
                       label={t('Branch from here')}
-                      hint={t('Branch from this turn using the same project files')}
                       size={13}
                       disabled={disabled}
                       onClick={() => onFork(item)}
@@ -1647,26 +1646,25 @@ function App() {
     !!thread?.managementPending;
   const queueBlocked = deliveryBlocked || (thread?.queue?.items.length ?? 0) >= 10;
   const addBlocked = deliveryBlocked || !canSteer || !matchesTaskSettings;
+  const queueDescription = t(
+    (thread?.queue?.items.length ?? 0) >= 10
+      ? 'Queue full. Edit or remove a waiting message.'
+      : thread?.queue?.paused
+        ? 'Resume the queue to send waiting messages.'
+        : 'Queued messages can be edited until dispatch.',
+  );
+  const addNowDescription = t(
+    !canSteer
+      ? 'Resolve the pending request first.'
+      : !matchesTaskSettings
+        ? 'Requires matching task settings.'
+        : 'Accepted additions cannot be edited.',
+  );
   const deliveryHelp = hasFollowUps
     ? deliveryMode === 'queue'
-      ? (thread?.queue?.items.length ?? 0) >= 10
-        ? t(
-            'Queue is full (10 messages). Edit or remove a waiting entry, or use Add now if available.',
-          )
-        : active
-          ? t('Queue runs after this task completes. Waiting text can be edited or removed.') +
-            (!canSteer
-              ? ' ' + t('Add now waits until the pending request or result is resolved.')
-              : !matchesTaskSettings
-                ? ' ' + t('Queue to use the updated conversation settings.')
-                : '')
-          : t(
-              'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.',
-            )
-      : t(
-          'Add now updates this running task using its current settings. Accepted additions cannot be edited.',
-        )
-    : t('Send starts a new turn. Edit this draft before sending; sent history stays unchanged.');
+      ? queueDescription
+      : addNowDescription
+    : t('Starts a new turn.');
   const shortcut =
     phoneLayout ||
     preferences.enter === 'cmdAlways' ||
@@ -1676,17 +1674,6 @@ function App() {
   const keyShortcut = shortcut === 'Enter' ? 'Enter' : 'Control+Enter Meta+Enter';
   const alternateShortcut = 'Ctrl/Cmd+Shift+Enter';
   const alternateKeyShortcut = 'Control+Shift+Enter Meta+Shift+Enter';
-  const queueHint = t(
-    !active || thread?.queue?.paused ? 'Add to waiting queue' : 'Queue for next turn',
-  );
-  const queueDescription = t('Wait for a new turn. Waiting text stays editable.');
-  const addNowDescription = t(
-    !canSteer
-      ? 'Add now waits until the pending request or result is resolved.'
-      : !matchesTaskSettings
-        ? 'Add now needs the running task settings. Queue to use the updated settings.'
-        : 'Add this draft to the running task. Accepted additions cannot be edited.',
-  );
   const commands = [
     {
       name: '/model',
@@ -2607,11 +2594,9 @@ function App() {
               aria-label={t('Conversation position')}
             >
               <span>
-                {history
-                  ? liveRevision(thread) !== history.liveRevision
-                    ? t('New activity below')
-                    : t('Earlier messages · Scroll down to continue')
-                  : t('More recent messages below')}
+                {history && liveRevision(thread) !== history.liveRevision
+                  ? t('New activity')
+                  : t('Earlier messages')}
               </span>
               <IconButton
                 icon="latest"
@@ -2646,7 +2631,7 @@ function App() {
           )}
           {steerReceipt && (
             <div className="recovery">
-              <span>{t('An immediate follow-up needs confirmation.')}</span>
+              <span>{t('Follow-up acceptance unconfirmed')}</span>
               <button disabled={busy} onClick={() => void checkSteer()}>
                 {t('Check follow-up receipt')}
               </button>
@@ -2675,9 +2660,7 @@ function App() {
           )}
           {queueRequest && (
             <div className="recovery">
-              <span>
-                {t('A queue receipt needs confirmation. Check before sending another message.')}
-              </span>
+              <span>{t('Queue receipt unconfirmed. Check before sending again.')}</span>
               <button
                 disabled={busy || loadingConversation}
                 onClick={() => void checkQueueReceipt()}
@@ -2972,9 +2955,7 @@ function App() {
                     }
                     aria-description={queueDescription}
                     data-tooltip={
-                      deliveryMode === 'queue'
-                        ? queueHint + ' · ' + shortcut
-                        : queueDescription + ' · ' + alternateShortcut
+                      t('Queue') + ' · ' + (deliveryMode === 'queue' ? shortcut : alternateShortcut)
                     }
                     disabled={queueBlocked}
                     onClick={() => followUp('queue')}
@@ -3006,9 +2987,11 @@ function App() {
                       }
                       aria-description={addNowDescription}
                       data-tooltip={
-                        deliveryMode === 'steer'
-                          ? t('Add to current task') + ' · ' + shortcut
-                          : addNowDescription + ' · ' + alternateShortcut
+                        !canSteer || !matchesTaskSettings
+                          ? addNowDescription
+                          : t('Add now') +
+                            ' · ' +
+                            (deliveryMode === 'steer' ? shortcut : alternateShortcut)
                       }
                       disabled={addBlocked}
                       onClick={() => followUp('steer')}
@@ -3020,7 +3003,7 @@ function App() {
                       type="button"
                       className="stop-button"
                       aria-label={t('Stop task')}
-                      data-tooltip={t('Stop current task and pause queue')}
+                      data-tooltip={t('Pauses the queue')}
                       aria-description={t(
                         'Stop the current task and pause queued work. Completed file changes remain.',
                       )}
@@ -3118,16 +3101,10 @@ function App() {
           >
             <p>
               {t(
-                'Copy the conversation through this completed turn into a new conversation. Later turns and queued messages stay in the source conversation. Both conversations use the current project files; files are not copied or rolled back. The branch starts in Read only.',
+                'Copy history through this turn. Later turns and queued messages stay here. The branch shares project files and starts in Read only.',
               )}
             </p>
-            {recoveryFork && (
-              <p>
-                {t(
-                  'Your unsent draft and attachments will be copied to the branch. Nothing will be sent automatically.',
-                )}
-              </p>
-            )}
+            {recoveryFork && <p>{t('Copy the draft and attachments without sending.')}</p>}
             {forkError && (
               <p className="fork-error" role="alert">
                 {t(forkError)}
@@ -3234,7 +3211,6 @@ function App() {
                 <div className="panel-empty">
                   <Icon name="diff" size={30} />
                   <h3>{t('No changes to review')}</h3>
-                  <p>{t('Changes from the current turn will appear here.')}</p>
                 </div>
               )}
             </div>

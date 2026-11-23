@@ -293,9 +293,6 @@ export function PreferencesDialog({
           aria-label={t('New conversation defaults')}
         >
           <h3 id="preferences-defaults">{t('New conversation defaults')}</h3>
-          <p className="preference-help">
-            {t('Applies to new conversations. Existing conversations keep their settings.')}
-          </p>
           {defaults.settings && (
             <>
               <label className="preference-row">
@@ -341,9 +338,7 @@ export function PreferencesDialog({
               </div>
               <ResetSettings
                 label={t('Reset new conversation defaults')}
-                detail={t(
-                  'Restore Read only, the native model and reasoning defaults, Execution mode, and Standard speed for future conversations.',
-                )}
+                detail={t('Restore default permissions, model, reasoning, mode, and speed.')}
                 disabled={defaults.loading || defaults.conflict}
                 reset={() => defaults.change({ permission: 'read-only' })}
               />
@@ -416,12 +411,12 @@ export function PreferencesDialog({
             <summary>{t('Editing and shortcuts')}</summary>
             <p>
               {t(
-                "Shift+Enter adds a line. Phone keyboards always add a line. Ctrl/Cmd+Shift+Enter reverses queue and steer for one follow-up. Steering uses the running task's settings; accepted additions cannot be edited or recalled.",
+                'Shift+Enter adds a line. On phones, Enter adds a line. Ctrl/Cmd+Shift+Enter switches delivery for one follow-up.',
               )}
             </p>
             <p>
               {t(
-                'Drafts and waiting queued text are editable. Sent history is not edited in place. Reply quotes a response; Branch from here creates a separate conversation and shares the current project files.',
+                'Queued messages can be edited until dispatch. Immediate additions use the running task’s settings.',
               )}
             </p>
           </details>
@@ -562,11 +557,7 @@ export function ReviewDialog({
             .finally(() => setBusy(false));
         }}
       >
-        <p>
-          {t(
-            "Run Codex's native code review in Read only mode. Review uses the selected model and reasoning effort.",
-          )}
-        </p>
+        <p>{t('Reviews run in Read only mode.')}</p>
         <label>
           {t('Review target')}
           <select
@@ -616,13 +607,7 @@ export function ReviewDialog({
             <option value="detached">{t('Separate conversation')}</option>
           </select>
         </label>
-        {delivery === 'detached' && (
-          <p>
-            {t(
-              'A separate conversation uses the same current project files; it does not create a Git worktree.',
-            )}
-          </p>
-        )}
+        {delivery === 'detached' && <p>{t('A separate conversation shares the project files.')}</p>}
         {error && (
           <p role="alert" className="error-text">
             {t(error)}
@@ -703,7 +688,7 @@ export function StatusDialog({
                 })
             : t('Not reported')}
         </dd>
-        <dt>{t('Cumulative usage')}</dt>
+        <dt>{t('CLI token usage')}</dt>
         <dd>
           {usage
             ? t('{count} tokens', { count: usage.totalTokens.toLocaleString(locale) })
@@ -724,11 +709,6 @@ export function StatusDialog({
       >
         {system?.maintenance ? t('Cancel maintenance') : t('Prepare maintenance')}
       </button>
-      <p>
-        {t(
-          'Usage is reported by the CLI while connected. It is not your account quota or billing balance.',
-        )}
-      </p>
     </InteractionDialog>
   );
 }

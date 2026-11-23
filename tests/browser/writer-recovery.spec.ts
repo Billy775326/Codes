@@ -51,7 +51,7 @@ for (const width of [1440, 390])
     await expect(page.getByRole('region', { name: 'Conversation ownership' })).toBeVisible();
     await page.getByRole('button', { name: 'Continue in branch', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Branch from this turn?', exact: true });
-    await expect(dialog).toContainText('Nothing will be sent automatically');
+    await expect(dialog).toContainText('Copy the draft and attachments without sending.');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

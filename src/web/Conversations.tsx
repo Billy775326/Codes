@@ -13,22 +13,13 @@ import './conversations.css';
 function SidebarAction({
   icon,
   label,
-  description,
   ...props
 }: Pick<ComponentProps<'button'>, 'onClick' | 'disabled'> & {
   icon: string;
   label: string;
-  description?: string;
 }) {
   return (
-    <button
-      {...props}
-      type="button"
-      className="sidebar-action"
-      aria-label={label}
-      aria-description={description}
-      data-tooltip={description ? label + ' · ' + description : ''}
-    >
+    <button {...props} type="button" className="sidebar-action" aria-label={label}>
       <Icon name={icon} size={15} />
       <span>{label}</span>
     </button>
@@ -179,7 +170,7 @@ export const Conversations = memo(function Conversations({
           className={'icon-button archive-toggle' + (archived ? ' selected' : '')}
           aria-label={t('Archived projects and chats')}
           aria-pressed={archived}
-          data-tooltip={archived ? t('Back to chats') : t('Show archived projects and chats')}
+          data-tooltip={archived ? t('Back to chats') : t('Archive')}
           onClick={() => setArchived((value) => !value)}
         >
           <Icon name="archive" size={16} />
@@ -583,7 +574,7 @@ const ProjectCard = memo(function ProjectCard({
                 ? t('New conversation')
                 : t('New conversation in {project}', { project: project.name })
             }
-            data-tooltip={t('New conversation in {project}', { project: project.name })}
+            data-tooltip={t('New conversation')}
             disabled={disabled}
             onClick={() => onNew(projectId)}
           >
@@ -650,11 +641,6 @@ const ProjectCard = memo(function ProjectCard({
             icon={project.archived ? 'unarchive' : 'archive'}
             label={project.archived ? t('Restore project') : t('Archive project')}
             disabled={savingProject}
-            description={
-              project.archived
-                ? t('Return this project to the main sidebar.')
-                : t('Move this project to the archive view. Its files and conversations are kept.')
-            }
             onClick={() => {
               setProjectEdit(undefined);
               setProjectError('');
@@ -762,7 +748,6 @@ const ProjectCard = memo(function ProjectCard({
                   aria-current={row.id === selectedId ? 'page' : undefined}
                   disabled={disabled}
                   onClick={() => onSelect(row.id, projectId)}
-                  title={row.title}
                   aria-label={row.title}
                   aria-describedby={
                     'conversation-status-' +
@@ -771,7 +756,7 @@ const ProjectCard = memo(function ProjectCard({
                   }
                 >
                   <span className="conversation-title">
-                    <span>{row.title}</span>
+                    <span data-tooltip-overflow="">{row.title}</span>
                     {row.forkedFromId && (
                       <span
                         className="branch-mark"
@@ -840,13 +825,13 @@ const ProjectCard = memo(function ProjectCard({
                       title: row.title,
                     })}
                     disabled={!!pending || isWorking(row)}
-                    hint={
+                    hint={t(
                       isWorking(row)
-                        ? t(
-                            'Finish or stop the task, confirm its result, and remove queued messages first.',
-                          )
-                        : undefined
-                    }
+                        ? 'Resolve active work and clear the queue first.'
+                        : row.archived
+                          ? 'Restore conversation'
+                          : 'Archive conversation',
+                    )}
                     onClick={() =>
                       row.archived
                         ? void mutate(row, 'archive')
@@ -912,13 +897,7 @@ const ProjectCard = memo(function ProjectCard({
                 <Icon name="archive" size={18} />
                 <strong>{confirmation === 'project' ? project.name : confirmation.title}</strong>
               </div>
-              <p>
-                {t(
-                  projectConfirmation
-                    ? 'Restore this project anytime from Archived projects and chats. Its files and conversations are kept.'
-                    : 'Restore this conversation anytime from Archived projects and chats. Its history and project files are kept.',
-                )}
-              </p>
+              <p>{t('Restore from Archived projects and chats. Project files are kept.')}</p>
               {!projectConfirmation && (
                 <p>{t('Codex may also archive conversations started from this one.')}</p>
               )}

@@ -68,13 +68,15 @@ export function ComposerControls({
   const effortLabel = effort ? t(effort.charAt(0).toUpperCase() + effort.slice(1)) : t('Default');
   const modelLabel =
     selectedModel?.displayName ?? settings.model ?? resolvedModel ?? t('Default model');
+  const fastLabel = settings.fast ? ' · ' + t('Fast') : '';
+  const defaultEffort = settings.effort ? '' : ' ' + t('(model default)');
+  const modeLabel = t(settings.mode === 'plan' ? 'Plan' : 'Execution');
   return (
     <>
       <PanelMenu
         label={t('Codex permissions')}
-        description={t(
-          'Applies to future tasks in this conversation. Running tasks and queued messages keep their settings.',
-        )}
+        hint={t('Permissions for future tasks')}
+        description={t(permissionLabel(settings.permission)) + ' · ' + t('Future tasks')}
         controller={permissionControl}
         className="permission-menu"
         disabled={disabled || !modesReady}
@@ -119,7 +121,8 @@ export function ComposerControls({
       )}
       <PanelMenu
         label={t('Model and reasoning')}
-        description={`${modelLabel} · ${effortLabel}${!settings.effort ? ' ' + t('(model default)') : ''}${settings.fast ? ' · ' + t('Fast') : ''} · ${t(settings.mode === 'plan' ? 'Plan' : 'Execution')} · ${t('Future tasks in this conversation')}`}
+        hint={modelLabel + fastLabel}
+        description={`${modelLabel} · ${effortLabel}${defaultEffort}${fastLabel} · ${modeLabel}`}
         controller={modelMenu}
         className="model-menu"
         trigger={
@@ -231,11 +234,7 @@ export function ModelSettingsFields({
               </option>
             )}
           {selectedModel?.supportedReasoningEfforts.map((entry) => (
-            <option
-              key={t(entry.reasoningEffort)}
-              value={entry.reasoningEffort}
-              title={entry.description}
-            >
+            <option key={t(entry.reasoningEffort)} value={entry.reasoningEffort}>
               {t(entry.reasoningEffort)}
             </option>
           ))}

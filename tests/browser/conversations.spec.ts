@@ -55,7 +55,7 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await archive.click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('dialog')).toContainText(renamed);
-  await expect(page.getByRole('dialog')).toContainText('Restore this conversation anytime');
+  await expect(page.getByRole('dialog')).toContainText('Restore from Archived projects and chats.');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(archive).toBeFocused();

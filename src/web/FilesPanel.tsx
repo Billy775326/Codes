@@ -96,7 +96,7 @@ function TextPreview({
           className="file-lines"
           role="group"
           aria-label={t('File lines')}
-          aria-description={t('Hold Shift or use Select range to select multiple lines.')}
+          aria-description={t('Shift+click selects a range.')}
         >
           {visible.map((line, index) => {
             const number = offset + index + 1;
@@ -196,7 +196,6 @@ function TextPreview({
           </button>
           <button
             className="primary"
-            aria-description={t('Attach the selected line range.')}
             onClick={() => onAttach(file, from, to)}
             disabled={attachmentBlocked || !selected}
           >
@@ -417,7 +416,7 @@ export const FilesPanel = memo(function FilesPanel({
                   }
                   size={16}
                 />
-                <span className="file-name" title={entry.name}>
+                <span className="file-name" data-tooltip-overflow="">
                   {entry.name}
                 </span>
                 {entry.directory && <Icon name="chevron" size={12} />}

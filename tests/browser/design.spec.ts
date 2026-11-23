@@ -40,12 +40,35 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
   await expect(page.getByRole('complementary', { name: 'Project context' })).toBeVisible();
 
   await permissions.hover();
-  await expect(tooltip).toContainText('Applies to future tasks');
+  await expect(tooltip).toHaveText('Permissions for future tasks');
   await permissions.press('Tab');
   const model = page.getByRole('button', { name: 'Model and reasoning', exact: true });
   await expect(model).toBeFocused();
-  await expect(tooltip).toContainText('Future tasks in this conversation');
+  await expect(tooltip).toHaveText('Demo model');
   await expect(tooltip).toBeVisible();
+});
+
+test('full names appear on hover only when the displayed title is clipped', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await login(page);
+  const title = page.getByRole('heading', { level: 1 });
+  const hint = page.locator('.control-tooltip');
+  await page.clock.install();
+  await title.hover();
+  await page.clock.runFor(350);
+  await expect(hint).toBeHidden();
+  const prompt = '[hold] A conversation title with a long name';
+  await page.getByLabel('Message Codex').fill(prompt);
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect(title).toHaveText(prompt);
+  expect(await title.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await title.hover();
+  await page.clock.runFor(350);
+  await expect(hint).toHaveText(prompt);
+  await expect(hint).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(hint).toBeHidden();
+  await page.getByRole('button', { name: 'Stop task', exact: true }).click();
 });
 
 for (const width of [1440, 320]) {

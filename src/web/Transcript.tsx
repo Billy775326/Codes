@@ -117,7 +117,6 @@ function Turn({
       previous.push(item);
     else segments.push([item]);
   }
-  if (!segments.length && elapsed !== undefined) segments.push([]);
   const disclosure = (items: Message[], index: number) => {
     const open = choices[index] ?? turn.active;
     const tools = items.filter(isActivity);
@@ -170,11 +169,6 @@ function Turn({
         </button>
         <div id={`work-${turn.id}-${index}`} hidden={!open} className="work-history-items">
           {open && <WorkItems items={items} render={render} />}
-          {open && !items.length && (
-            <p className="work-history-empty">
-              {t('No additional activity in the loaded history.')}
-            </p>
-          )}
         </div>
       </section>
     );
@@ -186,6 +180,9 @@ function Turn({
           {render(item, false, undefined, index === 0 ? turn.info?.startedAtMs : undefined)}
         </Fragment>
       ))}
+      {!segments.length && elapsed !== undefined && (
+        <div className="work-history work-history-label">{label}</div>
+      )}
       {segments.map((items, index) =>
         items[0]?.kind === 'question' ? (
           <Fragment key={items[0].id}>{render(items[0], false)}</Fragment>

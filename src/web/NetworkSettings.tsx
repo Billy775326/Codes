@@ -243,8 +243,7 @@ export function NetworkSettings({
           <p className="preference-help" id="network-address-help">
             {authMode === 'cloudflare-access'
               ? t('One HTTPS origin per line.')
-              : t('One HTTP(S) origin per line.')}{' '}
-            {t('Use the scheme, hostname, and optional port.')}
+              : t('One HTTP(S) origin per line.')}
           </p>
         </div>
         <div>
@@ -262,10 +261,8 @@ export function NetworkSettings({
           </label>
           <p className="preference-help" id="network-auth-help">
             {authMode === 'cloudflare-access'
-              ? t('Access sign-in is required on every address, followed by your Codes token.')
-              : t(
-                  'Use your Codes token for local or tailnet access. Select Cloudflare Access for a public hostname.',
-                )}
+              ? t('Sign in with Access, then your Codes token.')
+              : t('Use Cloudflare Access for public hostnames.')}
           </p>
         </div>
       </div>
@@ -299,7 +296,7 @@ export function NetworkSettings({
       {imported && (
         <p role="status">
           {changed
-            ? t('Configuration loaded into the form. Review it before saving.')
+            ? t('Imported. Review before saving.')
             : t('Imported configuration matches the saved settings.')}
         </p>
       )}
@@ -331,14 +328,13 @@ export function NetworkSettings({
           <IconButton
             icon="upload"
             label={t('Import configuration')}
-            hint={t('Load a configuration file into the form for review.')}
+            hint={t('Import for review')}
             onClick={() => importInput.current?.click()}
             disabled={saving || importing || reloadRequired}
           />
           <IconButton
             icon="download"
             label={t('Export saved')}
-            hint={t('Download the saved network settings.')}
             onClick={exportConfiguration}
             disabled={saving}
           />

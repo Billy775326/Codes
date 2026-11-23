@@ -39,15 +39,13 @@ for (const width of [1440, 320]) {
     expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(2);
     await expect(page.locator('.project-card-name[aria-current="true"]')).toHaveCount(1);
     await expect(page.locator('#message-delivery-help')).toBeHidden();
-    await expect(input).toHaveAccessibleDescription(/Send starts a new turn/);
+    await expect(input).toHaveAccessibleDescription(/Starts a new turn/);
     await input.fill(Array.from({ length: 24 }, (_, i) => 'Synthetic draft line ' + i).join('\n'));
     expect((await input.boundingBox())!.height).toBeLessThanOrEqual(180);
     expect(await input.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
     await input.fill('A short draft');
     expect((await input.boundingBox())!.height).toBeLessThanOrEqual(80);
-    await expect(page.locator('#message-delivery-help')).toContainText(
-      'sent history stays unchanged',
-    );
+    await expect(page.locator('#message-delivery-help')).toContainText('Starts a new turn.');
     for (const theme of ['dark', 'light']) {
       await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
       await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
@@ -102,18 +100,20 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
     page.getByRole('button', { name: 'Add to current task', exact: true }),
   ).toBeDisabled();
   await queue.hover();
-  await expect(tooltip).toHaveText('Queue for next turn · Enter');
+  await expect(tooltip).toHaveText('Queue · Enter');
   await expect(tooltip).toBeVisible();
   await page.getByRole('button', { name: 'Stop task', exact: true }).hover();
-  await expect(tooltip).toHaveText('Stop current task and pause queue');
+  await expect(tooltip).toHaveText('Pauses the queue');
   await expect(tooltip).toBeVisible();
   await queue.click();
   await page.getByRole('button', { name: 'Decline', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   await queue.hover();
-  await expect(tooltip).toHaveText('Add to waiting queue · Enter');
+  await expect(tooltip).toHaveText('Queue · Enter');
   await expect(tooltip).toBeVisible();
-  await expect(page.locator('#message-delivery-help')).toContainText('Waiting text stays editable');
+  await expect(page.locator('#message-delivery-help')).toContainText(
+    'Resume the queue to send waiting messages.',
+  );
 });
 
 test('the model picker remains usable above a tall draft in a short phone viewport', async ({

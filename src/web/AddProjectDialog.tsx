@@ -81,7 +81,7 @@ export function AddProjectDialog({
             }}
           />
           <p className="project-field-help" id="project-path-help">
-            {t('Use the absolute path of an existing folder on this server.')}
+            {t('Absolute path to an existing folder.')}
           </p>
         </div>
         <div>

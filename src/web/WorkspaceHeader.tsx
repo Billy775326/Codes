@@ -60,7 +60,7 @@ function ConversationHeading({
   if (name === undefined)
     return (
       <div className="conversation-heading">
-        <h1 title={title}>{title}</h1>
+        <h1 data-tooltip-overflow="">{title}</h1>
         {conversationId && (
           <IconButton
             ref={trigger}
@@ -145,7 +145,7 @@ export function WorkspaceHeader(props: Props) {
       )}
       <div className="breadcrumb">
         {!props.sidebarOpen && props.projectName && (
-          <span className="project-breadcrumb" title={props.projectName}>
+          <span className="project-breadcrumb" data-tooltip-overflow="">
             {props.projectName}
           </span>
         )}
@@ -172,7 +172,6 @@ export function WorkspaceHeader(props: Props) {
             }
             role="status"
             aria-label={t('Connection: {status}', { status: t(props.connection) })}
-            title={t(props.connection)}
           >
             {t(props.connection)}
           </span>

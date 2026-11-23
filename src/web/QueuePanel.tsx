@@ -100,7 +100,7 @@ export function QueuePanel({
             type="button"
             aria-label={t('Stop task')}
             aria-description={t('Stop current task and pause queue')}
-            data-tooltip={t('Stop current task and pause queue')}
+            data-tooltip={t('Pauses the queue')}
             disabled={busy}
             onClick={onStop}
           >
@@ -169,12 +169,12 @@ export function QueuePanel({
               <div className="queue-entry-label">
                 <span>
                   {entry.state === 'queued'
-                    ? t('Waiting · Editable')
+                    ? t('Waiting')
                     : entry.state === 'dispatching'
-                      ? t('Sending · Locked')
+                      ? t('Sending')
                       : entry.state === 'unknown'
-                        ? t('Unconfirmed · Locked')
-                        : t('Needs review · Text locked')}
+                        ? t('Unconfirmed')
+                        : t('Needs review')}
                 </span>
                 <small>
                   {t(permissionLabel(entry.settings.permission))}
@@ -212,12 +212,7 @@ export function QueuePanel({
                         !sameSettings(entry.settings, settings)
                       }
                       aria-label={t('Add queued message to current task')}
-                      data-tooltip={t(
-                        'Apply this waiting message to the running task; it stops being editable after acceptance',
-                      )}
-                      aria-description={t(
-                        'Apply this waiting message to the running task; it stops being editable after acceptance',
-                      )}
+                      aria-description={t('Accepted additions cannot be edited.')}
                       onClick={() =>
                         void run(() =>
                           post<QueueState>(
@@ -238,7 +233,7 @@ export function QueuePanel({
                       icon="edit"
                       size={15}
                       label={t('Edit message')}
-                      hint={t('Edit message and pause the queue')}
+                      hint={t('Edit · Pauses queue')}
                       disabled={busy || !!editing}
                       onClick={() =>
                         void run(async () => {
@@ -289,9 +284,7 @@ export function QueuePanel({
                 settings &&
                 !sameSettings(entry.settings, settings) && (
                   <p className="queue-edit-scope">
-                    {t(
-                      'Add now is unavailable because this message uses different task settings. Leave it queued for its own turn.',
-                    )}
+                    {t('Add now requires matching task settings.')}
                   </p>
                 )}
             </div>

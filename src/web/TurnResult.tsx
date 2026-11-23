@@ -41,7 +41,7 @@ export function TurnResult({
     <div className={current ? 'turn-status ' + status : 'reply-completion'}>
       <span>{t(outcomeLabel[status])}</span>
       {rate !== undefined && (
-        <span title={t('Output tokens per second across the entire turn')}>
+        <span title={t('Output tokens per second')}>
           · {t('Avg {rate} TPS', { rate: rate.toFixed(1) })}
         </span>
       )}

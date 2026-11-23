@@ -52,7 +52,6 @@ export function Login({
               disabled={pending}
               required
               autoFocus
-              placeholder={t('Paste your token')}
               aria-describedby={error ? 'login-error' : undefined}
             />
             <IconButton
@@ -93,10 +92,7 @@ export function Login({
             <Icon name="chevron" size={13} />
           </summary>
           <p>
-            {t('The default file is') + ' '}
-            <code>.local/access-token</code>
-            {' ' +
-              t('on your server. If you configured a different workspace token, use that value.')}
+            {t('Default on the server')} · <code>.local/access-token</code>
           </p>
         </details>
       </section>

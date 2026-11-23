@@ -176,10 +176,10 @@ test('quoted replies remain ordinary editable drafts across conversation switchi
   await page.setViewportSize({ width: 1440, height: 1000 });
   const hint = page.locator('.control-tooltip');
   await replyAction.hover();
-  await expect(hint).toHaveText('Quote this reply in an editable draft');
+  await expect(hint).toHaveText('Quote in draft');
   await replyAction.press('Tab');
   await expect(branchAction).toBeFocused();
-  await expect(hint).toHaveText('Branch from this turn using the same project files');
+  await expect(hint).toHaveText('Branch from here');
   await expect(hint).toBeVisible();
   await replyAction.click();
   const quote = await page.getByLabel('Message Codex').inputValue();
@@ -285,7 +285,7 @@ test('branching from a completed turn copies only earlier context and preserves 
     .first()
     .getByRole('button', { name: 'Branch from here', exact: true })
     .click();
-  await expect(page.getByRole('dialog')).toContainText('files are not copied or rolled back');
+  await expect(page.getByRole('dialog')).toContainText('The branch shares project files');
   await page.getByRole('button', { name: 'Create branch', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Open source conversation', exact: true }),

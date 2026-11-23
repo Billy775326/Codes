@@ -77,26 +77,15 @@ export function Approval({
           {t(action.replyUnconfirmed ? 'Answer acceptance unconfirmed' : 'Submitting answer…')}
         </p>
       )}
-      {action.kind === 'questions' && action.status === 'pending' && (
-        <p className="question-help">
-          {action.async
-            ? t('You can answer while Codex works or after it finishes.')
-            : action.blocking === false
-              ? t(
-                  'Codex asked for clarification. Submit your choices or skip this optional request.',
-                )
-              : t(
-                  'Codex is waiting for your answers. Review each question before submitting.',
-                )}{' '}
-          {t('A suggested choice is not sent until you submit.')}
-        </p>
+      {action.kind === 'questions' && action.status === 'pending' && action.async && (
+        <p className="question-help">{t('You can also answer after the task ends.')}</p>
       )}
       {questions.map((q, index) => (
         <fieldset className="question" key={q.id} disabled={disabled}>
           <legend>
-            <small>
-              {q.header || 'Question ' + (index + 1)} · {index + 1}/{questions.length}
-            </small>
+            {(q.header || questions.length > 1) && (
+              <small>{q.header || `${index + 1}/${questions.length}`}</small>
+            )}
             {q.question}
           </legend>
           {!!q.options?.length && (

@@ -49,33 +49,34 @@ export function NotificationSettings({
           onChange={(event) => void toggleNotifications(event.target.checked)}
         />
       </label>
-      <p className="preference-help">
-        {access === 'denied'
-          ? t('Allow notifications in this site’s browser settings.')
-          : access === 'insecure'
-            ? t('Open Codes over HTTPS or on localhost to enable notifications.')
-            : access === 'unsupported'
-              ? t('This browser does not support desktop notifications.')
-              : t(
-                  'Get notified about tasks, approvals, and questions while the Codes tab is open in the background.',
-                )}
-      </p>
+      {unavailable && (
+        <p className="preference-help">
+          {access === 'denied'
+            ? t('Allow notifications in your browser settings.')
+            : access === 'insecure'
+              ? t('Notifications require HTTPS or localhost.')
+              : t('This browser does not support notifications.')}
+        </p>
+      )}
       {enabled && access === 'granted' && (
-        <button
-          type="button"
-          onClick={() => {
-            setError('');
-            setTested(false);
-            try {
-              showNotification(t('Codes test notification'), 'codes-test');
-              setTested(true);
-            } catch {
-              setError('This browser could not display a notification.');
-            }
-          }}
-        >
-          {t('Send test notification')}
-        </button>
+        <>
+          <p className="preference-help">{t('Keep this tab open for notifications.')}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setError('');
+              setTested(false);
+              try {
+                showNotification(t('Codes test notification'), 'codes-test');
+                setTested(true);
+              } catch {
+                setError('This browser could not display a notification.');
+              }
+            }}
+          >
+            {t('Send test notification')}
+          </button>
+        </>
       )}
       {tested && <p role="status">{t('Test notification requested.')}</p>}
       {error && <p role="alert">{t(error)}</p>}

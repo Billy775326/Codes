@@ -33,7 +33,9 @@ export function ControlTooltip() {
       control = null;
     };
     const find = (target: EventTarget | null) =>
-      target instanceof Element ? target.closest<HTMLElement>('[data-tooltip]') : null;
+      target instanceof Element
+        ? target.closest<HTMLElement>('[data-tooltip], [data-tooltip-overflow]')
+        : null;
     const overHint = (event: PointerEvent) => {
       if (tooltip.hidden) return false;
       const { left, right, top, bottom } = tooltip.getBoundingClientRect();
@@ -48,7 +50,11 @@ export function ControlTooltip() {
       if (closing === undefined) closing = setTimeout(hide, exitDelay);
     };
     const render = (target: HTMLElement) => {
-      const label = target.dataset.tooltip || target.getAttribute('aria-label');
+      const label = target.hasAttribute('data-tooltip-overflow')
+        ? target.scrollWidth > target.clientWidth
+          ? target.textContent?.trim()
+          : ''
+        : target.dataset.tooltip || target.getAttribute('aria-label');
       const bounds = target.getBoundingClientRect();
       if (
         !label ||
