@@ -9,6 +9,29 @@ import { Driver } from '../src/codex/driver';
 import { AppError } from '../src/shared/errors';
 import type { Thread } from '../src/shared/types';
 const cleanup: (() => Promise<void>)[] = [];
+it('confirms follow-up acceptance from its native user item while the turn is still running', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[hold] Follow-up recovery', thread.settings);
+  const turnId = thread.turnId!;
+  const delivered = randomUUID();
+  const missing = randomUUID();
+  const text = 'An identical follow-up';
+  await service.steer(thread.id, delivered, turnId, text);
+  service.store.update(delivered, 'unknown');
+  service.store.begin(missing, thread.id, 'steer', { expectedTurnId: turnId, prompt: text }, text);
+  service.store.update(missing, 'unknown');
+  const checked = await service.reconcile(thread.id);
+  expect(checked.state).toBe('running');
+  expect(checked.pending?.state).toBe('acknowledged');
+  expect(checked.steering).toEqual([
+    expect.objectContaining({ id: delivered, state: 'acknowledged', turnId }),
+    expect.objectContaining({ id: missing, state: 'unknown' }),
+  ]);
+  await service.interrupt(thread.id);
+  await until(() => thread.state === 'interrupted');
+  expect(service.store.operation(delivered)?.state).toBe('completed');
+  expect(service.store.operation(missing)?.state).toBe('unknown');
+});
 it('keeps future conversation choices independent of an active task and captured queue settings', async () => {
   const { service, thread } = await fixture();
   const before = { ...thread.settings };

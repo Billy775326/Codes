@@ -1764,11 +1764,16 @@ export class Service {
     }
     const history = await this.history(id);
     for (const steer of this.store.steers(id)) {
-      const nativeItem = history.messages.find((entry) => entry.clientId === steer.id);
+      const nativeItem = history.messages.find(
+        (entry) => entry.kind === 'user' && entry.clientId === steer.id,
+      );
       const known = history.turns.find(
         (turn: any) => turn.id === (nativeItem?.turnId || steer.turnId),
       );
       if (known && terminal(known.status)) this.store.update(steer.id, 'completed', known.id);
+      // An exact native user item proves acceptance before the enclosing turn finishes.
+      else if (steer.state !== 'acknowledged' && nativeItem?.turnId)
+        this.store.update(steer.id, 'acknowledged', nativeItem.turnId);
     }
     const match =
       pending &&

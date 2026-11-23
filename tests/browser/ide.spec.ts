@@ -69,6 +69,8 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
     await expect(page.getByRole('region', { name: 'Immediate follow-ups' })).toContainText(
       'Added to current task',
     );
+    const receipt = page.getByRole('region', { name: 'Immediate follow-ups' });
+    await expect(receipt.getByRole('button', { name: 'Check follow-up results' })).toHaveCount(0);
     await page.getByLabel('Message Codex').fill('Queued then promoted');
     await page.getByRole('button', { name: 'Queue message', exact: true }).click();
     const queue = page.getByRole('region', { name: 'Queued messages' });

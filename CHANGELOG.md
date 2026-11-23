@@ -116,6 +116,8 @@
 
 ### Fixed
 
+- Separate immediate follow-up acceptance from task completion. A confirmed follow-up no longer offers a result check while its task is still running, and an unconfirmed follow-up can be checked without a misleading task lock warning.
+
 - Keep the light palette visible when Chrome auto-darkening is enabled with a dark system preference. Update the open theme shortcut tooltip when the system theme changes.
 
 - Keep the Codes wordmark and sidebar search placeholder readable on dark backgrounds, including when browser colors differ from the app theme.

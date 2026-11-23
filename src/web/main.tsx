@@ -1735,35 +1735,76 @@ function App() {
   };
   const checkSteer = async () => {
     if (!steerReceipt || busy) return;
+    const id = threadId;
+    const record = steerReceipt;
+    const key = 'codes.steer.' + id;
+    const version = draftRevision.current;
+    const readReceipt = async () => {
+      const result = await request<Operation>('/operations/' + record.operationId);
+      if (result.id !== record.operationId || result.threadId !== id || result.kind !== 'steer')
+        throw new ApiError(
+          'The service returned a result for a different conversation.',
+          'INVALID_RESPONSE',
+        );
+      return result;
+    };
+    let recorded = false;
     setBusy(true);
     setError('');
     try {
-      let result = await request<Operation>('/operations/' + steerReceipt.operationId);
+      let result = await readReceipt();
+      recorded = true;
       if (result.state === 'unknown' || result.state === 'dispatching') {
-        const updated = await post<Thread>('/threads/' + threadId + '/reconcile');
-        setThread(updated);
-        result = await request<Operation>('/operations/' + steerReceipt.operationId);
+        await post<Thread>('/threads/' + id + '/reconcile');
+        result = await readReceipt();
         if (result.state === 'unknown' || result.state === 'dispatching')
           throw new Error('Follow-up acceptance is still unconfirmed. It will not be resent.');
       }
+      save(key, '');
+      if (threadRef.current !== id) return;
       if (
         result.state !== 'failed' &&
-        draft === steerReceipt.text &&
-        JSON.stringify(attachments) === JSON.stringify(steerReceipt.attachments ?? [])
-      ) {
-        changeDraft('');
-        setAttachments([]);
-      }
-      save('codes.steer.' + threadId, '');
+        draft === record.text &&
+        JSON.stringify(attachments) === JSON.stringify(record.attachments ?? [])
+      )
+        clearAcceptedDraft(id, version);
       setSteerReceipt(undefined);
       if (result.state === 'failed')
         setError(result.error || 'The follow-up was rejected. Your draft is safe.');
     } catch (error) {
-      if (error instanceof ApiError && error.code === 'NOT_FOUND') {
-        save('codes.steer.' + threadId, '');
-        setSteerReceipt(undefined);
-        setError('The follow-up was not recorded. Your draft is safe.');
-      } else notice(error);
+      if (!recorded && error instanceof ApiError && error.code === 'NOT_FOUND') {
+        save(key, '');
+        if (threadRef.current === id) {
+          setSteerReceipt(undefined);
+          setError('The follow-up was not recorded. Your draft is safe.');
+        }
+      } else if (threadRef.current === id) notice(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const checkFollowUpStatus = async () => {
+    if (!threadId || busy) return;
+    const id = threadId;
+    const previous = thread?.steering;
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await post<Thread>('/threads/' + id + '/reconcile');
+      if (updated.id !== id)
+        throw new ApiError(
+          'The service returned a result for a different conversation.',
+          'INVALID_RESPONSE',
+        );
+      // A status check can finish after a newer event. Only refresh receipts it observed.
+      setThread((current) =>
+        current?.id === id && current.steering === previous
+          ? { ...current, steering: updated.steering }
+          : current,
+      );
+      if (threadRef.current === id && connection !== 'Connected') void feed.current?.connect();
+    } catch (error) {
+      if (threadRef.current === id) notice(error);
     } finally {
       setBusy(false);
     }
@@ -2532,16 +2573,20 @@ function App() {
               {thread.steering.map((entry) => (
                 <p key={entry.id}>
                   {entry.state === 'unknown'
-                    ? t('Check result')
+                    ? t('Follow-up acceptance unconfirmed')
                     : entry.state === 'acknowledged'
                       ? t('Added to current task')
                       : t('Sending follow-up')}{' '}
                   · {entry.text.slice(0, 200)}
                 </p>
               ))}
-              <button disabled={busy} onClick={() => void reconcile()}>
-                {t('Check follow-up results')}
-              </button>
+              {thread.steering.some(
+                (entry) => entry.state === 'unknown' && entry.id !== steerReceipt?.operationId,
+              ) && (
+                <button disabled={busy} onClick={() => void checkFollowUpStatus()}>
+                  {t('Check follow-up results')}
+                </button>
+              )}
             </section>
           )}
           {queueRequest && (

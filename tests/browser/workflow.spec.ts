@@ -50,7 +50,32 @@ test('an answer added to a running task displays answer text in its receipt', as
   const receipt = page.getByRole('region', { name: 'Immediate follow-ups' });
   await expect(receipt).toContainText('Added to current task · Answer: Explain first');
   await expect(receipt).not.toContainText(/send_user_message_question_reply|questionItemId/);
-  await expect(receipt.getByRole('button', { name: 'Check follow-up results' })).toBeEnabled();
+  await expect(receipt.getByRole('button', { name: 'Check follow-up results' })).toHaveCount(0);
+  // Simulate a stale browser snapshot with an uncertain follow-up but a live parent turn.
+  await page.route(
+    '**/api/threads/*/snapshot',
+    async (route) => {
+      const response = await route.fetch();
+      const snapshot = await response.json();
+      const confirmed = structuredClone(snapshot.thread);
+      await page.route(
+        '**/api/threads/*/reconcile',
+        (check) => check.fulfill({ json: confirmed }),
+        { times: 1 },
+      );
+      snapshot.thread.steering[0].state = 'unknown';
+      await route.fulfill({ response, json: snapshot });
+    },
+    { times: 1 },
+  );
+  await page.reload();
+  await expect(receipt).toContainText('Follow-up acceptance unconfirmed');
+  await receipt.getByRole('button', { name: 'Check follow-up results', exact: true }).click();
+  await expect(receipt).toContainText('Added to current task · Answer: Explain first');
+  await expect(
+    page.getByText('The CLI has not confirmed a terminal result.', { exact: false }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Stop task', exact: true }).click();
   await expect(receipt).toHaveCount(0);
 });

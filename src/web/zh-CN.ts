@@ -258,6 +258,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
     '请先完成或停止任务，确认结果并移除排队的消息。',
   'Follow-up acceptance is still unconfirmed. It will not be resent.':
     '追加消息仍未确认接收，系统会保留当前状态等待确认。',
+  'Follow-up acceptance unconfirmed': '追加消息是否已接收尚未确认',
   'Follow-up delivery': '追加消息方式',
   'Full access': '完全访问',
   'Future tasks in this conversation': '当前会话后续任务',
