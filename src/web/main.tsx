@@ -32,6 +32,7 @@ import React, {
 import { createRoot } from 'react-dom/client';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MarkdownLink } from './MarkdownLink';
 import type {
   Action,
   Attachment,
@@ -252,7 +253,9 @@ const MessageView = memo(function MessageView({
               streaming={streaming}
             />
           ) : (
-            <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
+              {item.text}
+            </Markdown>
           )}
           {streaming && running && <span className="caret" aria-hidden="true" />}
         </div>

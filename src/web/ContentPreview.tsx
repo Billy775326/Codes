@@ -2,6 +2,7 @@ import { useInterfaceLanguage } from './interface-language';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MarkdownLink } from './MarkdownLink';
 import { projectImageType, projectImageUrl } from '../shared/images';
 import { limits } from '../shared/types';
 import './content-preview.css';
@@ -169,9 +170,9 @@ export const AnswerMarkdown = memo(function AnswerMarkdown({
         const path = imagePath(href, projectPath);
         if (!path || !projectId)
           return (
-            <a href={href} {...props}>
+            <MarkdownLink href={href} {...props}>
               {children}
-            </a>
+            </MarkdownLink>
           );
         return (
           <a

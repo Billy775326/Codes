@@ -65,6 +65,8 @@
 
 ### Changed
 
+- Open external web links in chat in a new tab and keep workspace links in the current tab.
+
 - Use compact icon rows for project and conversation actions in the sidebar. Show action names on hover and keyboard focus, and keep labels visible on touch devices.
 
 - Show hover and keyboard hints for reply and branch actions, the model and permission pickers, and alternate delivery actions. Enlarge reply controls on narrow screens and label the error close action on hover.

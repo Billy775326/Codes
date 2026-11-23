@@ -85,6 +85,52 @@ test('a streaming Codex reply renders Markdown before the task finishes', async 
   await expect(reply.getByRole('heading', { name: 'A clear path forward' })).toBeVisible();
 });
 
+test('external chat links open a separate tab and internal links stay in the workspace', async ({
+  page,
+  context,
+}) => {
+  const { base } = await fixture(page, 0);
+  const origin = new URL(page.url()).origin;
+  const external = 'https://outside.example';
+  base.thread.messages.find((message) => message.kind === 'user')!.text =
+    `[External from user](${external}/user)\n\n[Same origin](${origin}/?view=current)`;
+  base.thread.messages.find((message) => message.phase === 'final_answer')!.text =
+    `${external}/answer\n\n[Protocol-relative link](//outside.example/reference)\n\n[Jump within the page](#details)`;
+  await context.route(external + '/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<title>External link fixture</title>' }),
+  );
+  await reconnectUpdates(page);
+
+  const ownPage = page.url();
+  const userMessage = page.getByTestId('message-user');
+  const assistant = page.getByTestId('message-assistant').filter({ hasText: external + '/answer' });
+  for (const [link, pathname] of [
+    [userMessage.getByRole('link', { name: 'External from user', exact: true }), '/user'],
+    [assistant.getByRole('link', { name: external + '/answer', exact: true }), '/answer'],
+  ] as const) {
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    const opened = context.waitForEvent('page');
+    await link.click();
+    const newTab = await opened;
+    await newTab.waitForURL(external + pathname);
+    expect(await newTab.evaluate(() => window.opener === null)).toBe(true);
+    expect(page.url()).toBe(ownPage);
+    await newTab.close();
+  }
+  await expect(assistant.getByRole('link', { name: 'Protocol-relative link' })).toHaveAttribute(
+    'target',
+    '_blank',
+  );
+  await expect(userMessage.getByRole('link', { name: 'Same origin' })).not.toHaveAttribute(
+    'target',
+  );
+  const anchor = assistant.getByRole('link', { name: 'Jump within the page' });
+  await expect(anchor).not.toHaveAttribute('target');
+  await anchor.click();
+  await expect(page).toHaveURL(new URL('#details', ownPage).href);
+});
+
 test('answers and project files preview raster images and isolated static HTML', async ({
   page,
 }) => {
