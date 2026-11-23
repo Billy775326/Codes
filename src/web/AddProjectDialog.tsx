@@ -1,18 +1,21 @@
 import { useInterfaceLanguage } from './interface-language';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import type { Project } from '../shared/types';
 import { ApiError, message, post } from './api';
 import { InteractionDialog } from './InteractionDialog';
 
 export function AddProjectDialog({
+  defaultPath,
   close,
   added,
 }: {
+  defaultPath: string;
   close: () => void;
   added: (project: Project) => void;
 }) {
   const { t } = useInterfaceLanguage();
-  const [path, setPath] = useState('');
+  const [path, setPath] = useState(defaultPath);
+  const selectDefault = useRef(!!defaultPath);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; path?: boolean }>();
@@ -67,6 +70,11 @@ export function AddProjectDialog({
             maxLength={2048}
             disabled={busy}
             required
+            onFocus={(event) => {
+              if (!selectDefault.current) return;
+              selectDefault.current = false;
+              event.currentTarget.select();
+            }}
             onChange={(event) => {
               setPath(event.target.value);
               setError(undefined);

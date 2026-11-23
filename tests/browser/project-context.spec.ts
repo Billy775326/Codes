@@ -457,6 +457,20 @@ test('adding a project validates the path and reuses a registered directory', as
   const submit = dialog.getByRole('button', { name: 'Add project', exact: true });
   const name = 'zz Added project ' + suffix;
   await add.click();
+  await expect(directory).toHaveValue(original.path);
+  await expect(directory).toBeFocused();
+  expect(
+    await directory.evaluate((input: HTMLInputElement) => [
+      input.selectionStart,
+      input.selectionEnd,
+    ]),
+  ).toEqual([0, original.path.length]);
+  await submit.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.project-card-name[aria-current="true"]')).toHaveText(
+    'sample-project',
+  );
+  await add.click();
   await projectName.fill(name);
   await directory.fill('.');
   await submit.click();

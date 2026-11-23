@@ -100,6 +100,7 @@ export class Service {
   constructor(
     readonly store: Store,
     readonly driver: Driver,
+    private readonly defaultProjectPath?: string,
   ) {
     const codexHome = resolve(process.env.CODEX_HOME ?? resolve(homedir(), '.codex'));
     this.privateFileRoots = [realpathSync(store.directory)];
@@ -217,6 +218,7 @@ export class Service {
     const maintenance = this.maintenance;
     return {
       ...this.driver.system(),
+      defaultProjectPath: this.defaultProjectPath,
       maintenance: maintenance
         ? {
             expiresAt: maintenance.expiresAt,

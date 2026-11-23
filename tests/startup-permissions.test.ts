@@ -4,7 +4,7 @@ import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { createServer } from 'node:net';
 import { mkdtemp, mkdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { expect, it } from 'vitest';
 async function port() {
   const server = createServer();
@@ -121,7 +121,13 @@ it('uses the saved port and allows local and HTTPS proxy origins after restart',
         });
         expect(
           await (await fetch(base + '/api/system', { headers: { cookie } })).json(),
-        ).toMatchObject({ codeQuestions: false });
+        ).toMatchObject({
+          codeQuestions: false,
+          defaultProjectPath: resolve(import.meta.dirname, '..'),
+        });
+        expect(await (await fetch(base + '/api/projects', { headers: { cookie } })).json()).toEqual(
+          [],
+        );
         const state = await (await fetch(base + path, { headers: { cookie } })).json();
         expect(state).toMatchObject({
           restartRequired: false,
@@ -207,6 +213,7 @@ it('ignores retired global policy settings and preserves native permissions acro
       expect(response.status).toBe(200);
       const cookie = response.headers.get('set-cookie')!.split(';')[0]!;
       const system = await (await fetch(base + '/api/system', { headers: { cookie } })).json();
+      expect(system).toMatchObject({ defaultProjectPath: root });
       expect(system).not.toHaveProperty('taskWriteRoot');
       const projects = await (await fetch(base + '/api/projects', { headers: { cookie } })).json();
       const project = projects.find((item: { path: string }) => item.path === root);

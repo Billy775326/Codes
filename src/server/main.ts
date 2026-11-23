@@ -51,6 +51,9 @@ const token = process.env.CODES_ACCESS_TOKEN ?? readFileSync(tokenPath, 'utf8').
 if (token.length < 16) throw new Error('CODES_ACCESS_TOKEN must contain at least 16 characters.');
 const mode = process.env.CODES_RUNTIME ?? 'codex';
 if (mode !== 'mock' && mode !== 'codex') throw new Error('CODES_RUNTIME must be codex or mock.');
+const configuredProjectPath = process.env.CODES_PROJECT_ROOT
+  ? resolve(process.env.CODES_PROJECT_ROOT)
+  : undefined;
 const service = new Service(
   new Store(directory),
   new Driver(mode, {
@@ -59,13 +62,14 @@ const service = new Service(
     codeQuestions: runtime.active.codeQuestions,
     timeoutMs: runtime.active.requestTimeoutMs,
   }),
+  configuredProjectPath ?? resolve(import.meta.dirname, '../..'),
 );
-if (process.env.CODES_PROJECT_ROOT) {
-  const configured = resolve(process.env.CODES_PROJECT_ROOT);
-  // Existing registrations must stay readable when a directory is temporarily absent.
-  if (!service.store.projects().some((project) => project.path === configured))
-    await service.addProject(configured);
-}
+// Existing registrations must stay readable when a directory is temporarily absent.
+if (
+  configuredProjectPath &&
+  !service.store.projects().some((project) => project.path === configuredProjectPath)
+)
+  await service.addProject(configuredProjectPath);
 const app = await application(service, {
   network,
   runtime,

@@ -69,6 +69,8 @@
 
 ### Changed
 
+- Prefill Add project with the configured startup project directory, or the Codes installation directory when unset.
+
 - Show one three-dot task indicator in the conversation, with distinct colors for running, questions, approvals, reconnecting and unknown results. Only running animates and reduced-motion preferences are respected.
 - Keep project menus compact, confirm project archiving, and edit queued messages directly from their cards.
 - Select a file range explicitly, including on touchscreens. Remember the Changes layout and copy individual code blocks from finished replies.

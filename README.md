@@ -114,7 +114,7 @@ Set environment variables in the process environment; the application does not a
 | `CODES_PORT`           | `6670`                             | Initial listener port, 1–65535                                            |
 | `CODES_PUBLIC_ORIGIN`  | Local origins on the listener port | Exact initial browser origin when specified                               |
 | `CODES_DATA_DIR`       | `.local`                           | Private database, token, lock, and simulator data                         |
-| `CODES_PROJECT_ROOT`   | unset                              | Register an existing directory at startup                                 |
+| `CODES_PROJECT_ROOT`   | unset                              | Register a directory at startup and prefill it in Add project             |
 | `CODES_CODEX_BINARY`   | `codex`                            | CLI executable path                                                       |
 | `CODES_CODE_QUESTIONS` | `1`                                | Enable native Code-mode questions; `0` leaves them available in Plan only |
 | `CODES_ACCESS_TOKEN`   | generated token file               | Optional access token, minimum 16 characters                              |

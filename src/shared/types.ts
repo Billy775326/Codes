@@ -193,6 +193,7 @@ export interface MaintenanceState {
 }
 export interface System {
   maintenance?: MaintenanceState;
+  defaultProjectPath?: string;
   runtime: 'codex' | 'mock';
   state: string;
   version: string;

@@ -3236,7 +3236,13 @@ function App() {
           )}
         </aside>
       )}
-      {adding && <AddProjectDialog close={() => setAdding(false)} added={projectAdded} />}
+      {adding && (
+        <AddProjectDialog
+          defaultPath={system?.defaultProjectPath ?? ''}
+          close={() => setAdding(false)}
+          added={projectAdded}
+        />
+      )}
     </div>,
   );
 }
