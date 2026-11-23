@@ -69,6 +69,8 @@
 
 ### Changed
 
+- Show shorter descriptions and a clear selected mark in the conversation permission picker. Highlight unrestricted access and explain when Auto-review is unavailable.
+
 - Shorten hover hints and help text throughout the workspace. Show full titles when clipped and keep actionable warnings, shortcuts, and recovery instructions.
 
 - Group composer buttons by purpose and put Queue, Add now and Stop together while a task runs. Highlight the action used by the send shortcut, with accessible labels and hints for each action.

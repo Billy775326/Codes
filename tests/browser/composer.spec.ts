@@ -172,6 +172,7 @@ for (const viewport of [
       await picker.click();
       const option = page.getByRole('button', { name: new RegExp('^' + label) });
       await option.scrollIntoViewIfNeeded();
+      expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       expect(
         await option.evaluate((element) => {
           const box = element.getBoundingClientRect();
@@ -198,6 +199,11 @@ for (const viewport of [
         page.getByRole('dialog', { name: 'Codex permissions', exact: true }),
       ).toBeVisible();
       await expect(page.getByText('Conversation permissions', { exact: true })).toBeVisible();
+      await expect(
+        page
+          .getByRole('group', { name: 'Permission presets' })
+          .getByRole('button', { pressed: true }),
+      ).toHaveAccessibleName(label);
       await page.keyboard.press('Escape');
       await page.getByRole('button', { name: 'Stop task', exact: true }).click();
       await expect(picker).toBeEnabled();

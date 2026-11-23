@@ -5,6 +5,19 @@ import { permissionLabel, permissionPresets } from '../shared/permissions';
 import { PanelMenu } from './PanelMenu';
 import { Icon } from './primitives';
 
+const permissionOption = {
+  'read-only': { icon: 'eye', detail: 'Ask before edits or access outside the sandbox.' },
+  'workspace-write': {
+    icon: 'lock',
+    detail: 'Ask before file access outside the workspace or network use.',
+  },
+  'auto-review': { icon: 'shield', detail: 'Codex reviews eligible approval requests.' },
+  'danger-full-access': {
+    icon: 'warning',
+    detail: 'Unrestricted server files and network without approval.',
+  },
+} satisfies Record<Settings['permission'], { icon: string; detail: string }>;
+
 export interface ComposerControlsHandle {
   openModel: () => void;
   openReasoning: () => void;
@@ -88,23 +101,35 @@ export function ComposerControls({
           </>
         }
       >
-        <strong>{t('Conversation permissions')}</strong>
-        <div role="group" aria-label={t('Permission presets')}>
-          {permissionPresets.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              aria-label={t(preset.label)}
-              aria-description={t(preset.description)}
-              aria-pressed={settings.permission === preset.id}
-              disabled={disabled || (preset.id === 'auto-review' && !autoReviewReady)}
-              data-close-menu
-              onClick={() => change({ ...settings, permission: preset.id })}
-            >
-              <span>{t(preset.label)}</span>
-              <small>{t(preset.description)}</small>
-            </button>
-          ))}
+        <strong className="permission-menu-heading">{t('Conversation permissions')}</strong>
+        <div className="permission-options" role="group" aria-label={t('Permission presets')}>
+          {permissionPresets.map(({ id, label }) => {
+            const option = permissionOption[id];
+            const selected = settings.permission === id;
+            const unavailable = id === 'auto-review' && !autoReviewReady;
+            const detail = t(unavailable ? 'Auto-review unavailable' : option.detail);
+            return (
+              <button
+                key={id}
+                className="permission-option"
+                type="button"
+                aria-label={t(label)}
+                aria-description={detail}
+                aria-pressed={selected}
+                disabled={disabled || unavailable}
+                data-unrestricted={id === 'danger-full-access' || undefined}
+                data-close-menu
+                onClick={() => change({ ...settings, permission: id })}
+              >
+                <Icon name={option.icon} size={16} />
+                <span className="permission-option-copy">
+                  <span>{t(label)}</span>
+                  <small>{detail}</small>
+                </span>
+                {selected && <Icon name="check" size={14} />}
+              </button>
+            );
+          })}
         </div>
       </PanelMenu>
       {settings.mode === 'plan' && (

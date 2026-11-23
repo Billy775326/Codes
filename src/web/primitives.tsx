@@ -136,6 +136,7 @@ const iconPaths: Record<string, React.ReactNode> = {
       <path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" />
     </>
   ),
+  warning: <path d="M12 3 2.5 20h19ZM12 9v4m0 3v.5" />,
   eye: (
     <>
       <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />

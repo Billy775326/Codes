@@ -50,6 +50,12 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
     '1,000–300,000 毫秒。适用于加载元数据等 CLI 请求。',
   'Default on the server': '服务器默认路径',
   'Archive this project?': '归档这个项目？',
+  'Ask before edits or access outside the sandbox.': '修改文件或访问沙箱外资源前询问。',
+  'Ask before file access outside the workspace or network use.':
+    '访问工作区外的文件或联网前询问。',
+  'Codex reviews eligible approval requests.': '由 Codex 审核符合条件的审批请求。',
+  'Unrestricted server files and network without approval.': '服务器文件和网络不限，无需审批。',
+  'Auto-review unavailable': '自动审批不可用',
   'Discard unsaved settings?': '放弃未保存的设置？',
   'Unsaved Network & access and Runtime edits will be lost.':
     '网络与访问和运行环境中未保存的修改将丢失。',

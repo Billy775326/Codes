@@ -87,27 +87,57 @@
 .app .permission-menu .panel-menu-content {
   left: 0;
   right: auto;
-  width: 264px;
+  width: 296px;
   max-width: calc(100vw - 48px);
+  padding: 7px;
 }
-.app .permission-menu [role='group'] {
-  display: grid;
-  gap: 4px;
+.app .permission-menu-heading {
+  display: block;
+  padding: 3px 7px 6px;
+  color: var(--muted);
+  font-size: 12px;
 }
-.app .permission-menu button {
+.app .permission-options {
   display: grid;
-  gap: 4px;
+  gap: 1px;
+}
+.app .permission-option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 14px;
+  align-items: start;
+  gap: 8px;
   text-align: left;
-  padding: 10px;
+  min-height: 44px;
+  padding: 6px 7px;
+  border-radius: 6px;
   white-space: normal;
 }
-.app .permission-menu button[aria-pressed='true'] {
+.app .permission-option:hover:not(:disabled) {
   background: var(--hover);
-  box-shadow: inset 2px 0 var(--muted);
 }
-.app .permission-menu small {
+.app .permission-option[aria-pressed='true'] {
+  background: var(--selected);
+}
+.app .permission-option > svg {
+  margin-top: 1px;
+}
+.app .permission-option[data-unrestricted] {
+  color: var(--status-attention);
+}
+.app .permission-option:disabled {
+  opacity: 1;
   color: var(--muted);
-  line-height: 1.5;
+}
+.app .permission-option-copy {
+  display: grid;
+  gap: 1px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.app .permission-option-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 .app .plan-mode {
   display: inline-flex;

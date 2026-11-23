@@ -75,7 +75,9 @@ test('managed restrictions disable Auto-review in both menus without replacing e
   await page.route('**/api/permissions', (route) => route.fulfill({ json: { autoReview: false } }));
   await login(page);
   await page.getByRole('button', { name: 'Codex permissions', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Approve for me', exact: true })).toBeDisabled();
+  const autoReview = page.getByRole('button', { name: 'Approve for me', exact: true });
+  await expect(autoReview).toBeDisabled();
+  await expect(autoReview).toHaveAccessibleDescription('Auto-review unavailable');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
   await expect(
