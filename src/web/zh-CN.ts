@@ -24,7 +24,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Copy unavailable. Select the code text.': '无法复制，请手动选中代码。',
   'Work history · {elapsed}': '工作记录 · {elapsed}',
   'Runtime settings saved.': '运行环境设置已保存。',
-  'Rename project': '重命名项目',
   'Reconnecting…': '正在重连…',
   '(model default)': '（模型默认）',
   '(unavailable)': '（不可用）',

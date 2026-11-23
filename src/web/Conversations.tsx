@@ -1,15 +1,39 @@
 import { useInterfaceLanguage } from './interface-language';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import { createPortal } from 'react-dom';
 import type { ConversationPage, Project, ProjectUpdate, Summary } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon, IconButton } from './primitives';
 import { InteractionDialog } from './InteractionDialog';
-import { PanelMenu } from './PanelMenu';
 import { conversationStatus } from './conversation-status';
 import { formatMessageTime } from './MessageTime';
 import type { ProjectSidebarPreference } from './project-navigation';
 import './conversations.css';
+
+function SidebarAction({
+  icon,
+  label,
+  description,
+  ...props
+}: Pick<ComponentProps<'button'>, 'onClick' | 'disabled'> & {
+  icon: string;
+  label: string;
+  description?: string;
+}) {
+  return (
+    <button
+      {...props}
+      type="button"
+      className="sidebar-action"
+      aria-label={label}
+      aria-description={description}
+      data-tooltip={description ? label + ' · ' + description : ''}
+    >
+      <Icon name={icon} size={15} />
+      <span>{label}</span>
+    </button>
+  );
+}
 
 interface Props {
   projects: Project[];
@@ -282,6 +306,7 @@ const ProjectCard = memo(function ProjectCard({
   const { t, locale } = useInterfaceLanguage();
   const projectId = project.id;
   const listId = 'project-conversations-' + projectId;
+  const actionsId = 'project-actions-' + projectId;
   const projectName = useRef<HTMLButtonElement>(null);
   const [archivedChats, setArchivedChats] = useState(true);
   const archived = archiveView && (!project.archived || archivedChats);
@@ -291,7 +316,8 @@ const ProjectCard = memo(function ProjectCard({
   const [loading, setLoading] = useState(filtering);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const projectMenu = useRef<HTMLDetailsElement>(null);
+  const [projectMenu, setProjectMenu] = useState(false);
+  const projectMenuButton = useRef<HTMLButtonElement>(null);
   const [projectEdit, setProjectEdit] = useState<{ original: string; name: string }>();
   const [savingProject, setSavingProject] = useState(false);
   const [projectError, setProjectError] = useState('');
@@ -327,7 +353,7 @@ const ProjectCard = memo(function ProjectCard({
   const archiveBusy = projectConfirmation ? savingProject : !!pending;
   const closeProjectEdit = () => {
     setProjectEdit(undefined);
-    projectMenu.current?.querySelector('summary')?.focus();
+    projectMenuButton.current?.focus();
   };
   const seenRefresh = useRef(refreshVersion);
 
@@ -424,6 +450,7 @@ const ProjectCard = memo(function ProjectCard({
       });
       onProjectUpdated({ id: projectId, name: updated.name }, { name: projectEdit.original });
       setProjectEdit(undefined);
+      setProjectMenu(false);
       projectName.current?.focus();
     } catch (error) {
       setProjectError(message(error));
@@ -445,6 +472,7 @@ const ProjectCard = memo(function ProjectCard({
         },
       );
       setConfirmation(undefined);
+      setProjectMenu(false);
       onProjectUpdated(updated, { archived: !archived });
       requestAnimationFrame(onArchiveChange);
     } catch (error) {
@@ -500,6 +528,12 @@ const ProjectCard = memo(function ProjectCard({
       data-project-id={projectId}
       aria-labelledby={'project-heading-' + projectId}
       aria-busy={loading}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !projectMenu || savingProject) return;
+        event.stopPropagation();
+        setProjectMenu(false);
+        projectMenuButton.current?.focus();
+      }}
       hidden={
         !!search &&
         !loading &&
@@ -557,45 +591,22 @@ const ProjectCard = memo(function ProjectCard({
           </button>
         )}
         {!collapsed && (
-          <PanelMenu
-            label={t('Project actions for {project}', { project: project.name })}
-            className="project-action-menu"
-            trigger={<Icon name="more" size={16} />}
-            controller={projectMenu}
+          <button
+            ref={projectMenuButton}
+            className="icon-button"
+            aria-label={t('Project actions for {project}', { project: project.name })}
+            aria-expanded={projectMenu}
+            aria-controls={projectMenu ? actionsId : undefined}
+            data-tooltip=""
             disabled={savingProject}
-            iconOnly
-            floating
+            onClick={() => {
+              setProjectMenu(!projectMenu);
+              setProjectEdit(undefined);
+              setProjectError('');
+            }}
           >
-            <button
-              data-close-menu
-              onClick={() => {
-                setProjectEdit({ original: project.name, name: project.name });
-                setProjectError('');
-              }}
-            >
-              <Icon name="edit" size={15} />
-              {t('Rename project')}
-            </button>
-            <button
-              data-close-menu
-              onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}
-            >
-              <Icon name={preference?.pinned ? 'pin-off' : 'pin'} size={15} />
-              {t(preference?.pinned ? 'Unpin' : 'Pin')}
-            </button>
-            <button
-              data-close-menu
-              onClick={() => {
-                setProjectEdit(undefined);
-                setProjectError('');
-                if (project.archived) void changeProjectArchive();
-                else setConfirmation('project');
-              }}
-            >
-              <Icon name={project.archived ? 'unarchive' : 'archive'} size={15} />
-              {t(project.archived ? 'Restore project' : 'Archive project')}
-            </button>
-          </PanelMenu>
+            <Icon name="more" size={16} />
+          </button>
         )}
         {!collapsed && !keepOpen && (
           <button
@@ -605,6 +616,7 @@ const ProjectCard = memo(function ProjectCard({
             aria-controls={listId}
             aria-expanded="true"
             onClick={() => {
+              setProjectMenu(false);
               onSidebarPreference(projectId, { expanded: false });
               projectName.current?.focus();
             }}
@@ -613,6 +625,45 @@ const ProjectCard = memo(function ProjectCard({
           </button>
         )}
       </header>
+      {!collapsed && projectMenu && (
+        <div
+          id={actionsId}
+          className="project-actions"
+          role="group"
+          aria-label={t('Project actions: {project}', { project: project.name })}
+        >
+          <SidebarAction
+            icon="edit"
+            label={t('Rename')}
+            disabled={savingProject}
+            onClick={() => {
+              setProjectEdit({ original: project.name, name: project.name });
+              setProjectError('');
+            }}
+          />
+          <SidebarAction
+            icon={preference?.pinned ? 'pin-off' : 'pin'}
+            label={preference?.pinned ? t('Unpin') : t('Pin')}
+            onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}
+          />
+          <SidebarAction
+            icon={project.archived ? 'unarchive' : 'archive'}
+            label={project.archived ? t('Restore project') : t('Archive project')}
+            disabled={savingProject}
+            description={
+              project.archived
+                ? t('Return this project to the main sidebar.')
+                : t('Move this project to the archive view. Its files and conversations are kept.')
+            }
+            onClick={() => {
+              setProjectEdit(undefined);
+              setProjectError('');
+              if (project.archived) void changeProjectArchive();
+              else setConfirmation('project');
+            }}
+          />
+        </div>
+      )}
       {projectError && !projectEdit && !projectConfirmation && (
         <p className="conversation-error" role="alert">
           {t(projectError)}

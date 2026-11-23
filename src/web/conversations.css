@@ -271,29 +271,34 @@
 .conversation-queue.tone-error {
   color: var(--status-error);
 }
-.app .project-action-menu > summary {
-  display: grid;
-  place-items: center;
-  width: var(--control-size);
-  height: var(--control-size);
-}
-.project-action-menu .panel-menu-content {
-  position: fixed;
-  right: auto;
-  bottom: auto;
-  margin: 0;
-  width: min(196px, calc(100vw - 16px));
-  padding: 5px;
-  overflow-y: auto;
-  color: var(--fg);
-}
-.project-action-menu .panel-menu-content > button {
+.project-actions {
   display: flex;
+  gap: 2px;
+  padding: 0 6px 4px;
+  flex-wrap: wrap;
+}
+.project-actions .sidebar-action {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: var(--control-size);
-  text-align: left;
+  justify-content: center;
+  gap: 4px;
+  min-width: 32px;
+  min-height: 30px;
+  font-size: 12px;
+  padding: 4px 6px;
+  color: var(--muted);
+  border-radius: 5px;
+}
+.sidebar-action > svg {
+  flex-shrink: 0;
+}
+.sidebar-action > span {
+  display: none;
+}
+.project-actions .sidebar-action:hover:not(:disabled),
+.project-actions .sidebar-action:focus-visible {
+  color: var(--fg);
+  background: var(--hover);
 }
 .conversation-rename {
   padding: 2px 8px 12px;
@@ -428,7 +433,8 @@
     font-size: 16px;
   }
   .conversation-controls select,
-  .conversation-search button {
+  .conversation-search button,
+  .project-actions .sidebar-action {
     min-height: 36px;
   }
   .conversation-rename input {
@@ -448,6 +454,12 @@
   }
 }
 @media (hover: none) {
+  .project-actions .sidebar-action {
+    min-height: 40px;
+  }
+  .project-actions .sidebar-action > span {
+    display: inline;
+  }
   .project-card-name {
     min-height: 38px;
   }

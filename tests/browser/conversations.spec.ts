@@ -213,13 +213,16 @@ test.describe('touch sidebar controls', () => {
     const card = activeProjectCard(page);
     const projectName = await card.locator('.project-card-name').innerText();
     await card.getByRole('button', { name: 'Project actions for ' + projectName }).tap();
-    for (const label of ['Rename project', 'Pin', 'Archive project']) {
-      const action = card.getByRole('button', { name: label, exact: true });
+    const projectActions = card.getByRole('group', { name: 'Project actions: ' + projectName });
+    await expect(projectActions).toBeInViewport();
+    for (const label of ['Rename', 'Pin', 'Archive project']) {
+      const action = projectActions.getByRole('button', { name: label, exact: true });
       await expect(action.getByText(label, { exact: true })).toBeVisible();
       expect((await action.boundingBox())?.height).toBeGreaterThanOrEqual(40);
     }
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Workspace navigation' })).toBeVisible();
+    await expect(projectActions).toHaveCount(0);
     await expect(
       card.getByRole('button', { name: 'Project actions for ' + projectName }),
     ).toBeFocused();

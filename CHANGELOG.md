@@ -72,7 +72,7 @@
 - Prefill Add project with the configured startup project directory, or the Codes installation directory when unset.
 
 - Show one three-dot task indicator in the conversation, with distinct colors for running, questions, approvals, reconnecting and unknown results. Only running animates and reduced-motion preferences are respected.
-- Keep project menus compact, confirm project archiving, and edit queued messages directly from their cards.
+- Expand project actions inside each project card. Confirm project archiving and edit queued messages directly from their cards.
 - Select a file range explicitly, including on touchscreens. Remember the Changes layout and copy individual code blocks from finished replies.
 - Expand each work-history segment independently around questions; terminal groups still start collapsed.
 

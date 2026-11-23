@@ -87,6 +87,7 @@ test('project archive survives reload, preserves native chat states, and syncs r
     await login(observer);
     const mirror = projectCard(observer, b.id);
     await expect(mirror).toBeVisible();
+    await page.bringToFront();
     await menu.click();
     await card.getByRole('button', { name: 'Archive project', exact: true }).click();
     const confirmation = page.getByRole('dialog', { name: 'Archive this project?', exact: true });
@@ -510,12 +511,18 @@ test('project management and conversation links survive reload and keep the veri
   const actions = (name: string) =>
     card.getByRole('button', { name: 'Project actions for ' + name, exact: true });
   const projectMenu = (name: string) =>
-    card.getByRole('dialog', { name: 'Project actions for ' + name, exact: true });
-  await actions(b.name).click();
-  const rename = projectMenu(b.name).getByRole('button', { name: 'Rename project', exact: true });
+    card.getByRole('group', { name: 'Project actions: ' + name, exact: true });
+  const closedHeight = (await card.boundingBox())!.height;
+  await actions(b.name).press('Space');
+  await expect(actions(b.name)).toHaveAttribute('aria-expanded', 'true');
+  const rename = projectMenu(b.name).getByRole('button', { name: 'Rename', exact: true });
   const pin = projectMenu(b.name).getByRole('button', { name: 'Pin', exact: true });
-  await expect(rename).toHaveText('Rename project');
+  await expect(rename).toBeVisible();
+  await expect(rename.getByText('Rename', { exact: true })).toBeHidden();
+  expect((await card.boundingBox())!.height).toBeGreaterThan(closedHeight);
   await actions(b.name).press('Tab');
+  await expect(card.getByRole('button', { name: 'Collapse ' + b.name, exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(rename).toBeFocused();
   await rename.press('Tab');
   await expect(pin).toBeFocused();
@@ -523,6 +530,8 @@ test('project management and conversation links survive reload and keep the veri
   await expect(projectMenu(b.name).getByRole('button', { name: 'Archive project' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(actions(b.name)).toBeFocused();
+  await expect(projectMenu(b.name)).toHaveCount(0);
+  expect((await card.boundingBox())!.height).toBe(closedHeight);
   await actions(b.name).click();
   await rename.click();
   const renamed = 'zz Sidebar ' + randomUUID();
