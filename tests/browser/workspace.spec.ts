@@ -34,6 +34,41 @@ test('an idle browser receives conversations created on another device without r
     await second.close();
   }
 });
+test('long running conversations scroll inside the workspace at desktop and phone widths', async ({
+  page,
+}) => {
+  await login(page);
+  await send(
+    page,
+    '[hold] Long scroll fixture\n\n' + 'A long message stays inside the transcript.\n\n'.repeat(65),
+  );
+  const status = page.getByRole('status', { name: 'Running', exact: true });
+  await expect(status).toBeVisible();
+  const transcript = page.locator('.conversation');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 720 });
+    const metrics = await transcript.evaluate((element) => {
+      element.scrollTop = 0;
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      return {
+        pageScroll: window.scrollY,
+        documentHeight: document.documentElement.scrollHeight,
+        viewportHeight: window.innerHeight,
+        transcriptScrollable: element.scrollHeight > element.clientHeight,
+      };
+    });
+    expect(metrics.pageScroll).toBe(0);
+    expect(metrics.documentHeight).toBe(metrics.viewportHeight);
+    expect(metrics.transcriptScrollable).toBe(true);
+    const bounds = await status.boundingBox();
+    expect(bounds!.y).toBeGreaterThan(720);
+    await transcript.evaluate((element) => (element.scrollTop = element.scrollHeight));
+    await expect(status).toBeInViewport();
+    await expect(page.getByLabel('Message Codex')).toBeInViewport({ ratio: 1 });
+  }
+  await page.getByRole('button', { name: 'Stop task', exact: true }).click();
+  await expect(status).toHaveCount(0);
+});
 test('desktop layout, streamed response, reload, and file selection context', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));

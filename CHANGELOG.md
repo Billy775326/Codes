@@ -141,6 +141,8 @@
 
 ### Fixed
 
+- Keep the workspace at the viewport boundary while a long conversation is running.
+
 - Keep the header's conversation menu in the viewport on phones and close project menus before closing navigation with Escape.
 - Preserve unsaved Network & access and Runtime edits while switching settings sections, and confirm discarding them when closing.
 - Check queue receipts after restoring the selected conversation and preserve newer draft edits during recovery.

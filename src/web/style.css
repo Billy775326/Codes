@@ -353,8 +353,9 @@
 .stream-text {
   white-space: pre-wrap;
 }
-/* Mount one indicator at the end of the current conversation. */
+/* Keep the screen-reader label inside the conversation scroll container. */
 .task-activity {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 5px;
