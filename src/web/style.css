@@ -375,11 +375,18 @@
 }
 .caret {
   display: inline-block;
-  width: 5px;
-  height: 12px;
-  background: #b8a1f0;
-  margin-left: 3px;
-  animation: pulse 1s infinite;
+  width: 0.55em;
+  height: 1.2em;
+  margin-inline-start: 0.2em;
+  vertical-align: -0.15em;
+  border-radius: 2px;
+  background: var(--link);
+  animation: caret-pulse 1.4s ease-in-out infinite;
+}
+@keyframes caret-pulse {
+  50% {
+    opacity: 0.75;
+  }
 }
 .tool {
   margin: 0 0 20px 41px;

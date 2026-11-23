@@ -63,6 +63,8 @@
 
 ### Changed
 
+- Make the indicator at the end of an in-progress Codex reply larger and easier to see in both themes.
+
 - Move Add project above the sidebar cards, accept an optional display name, and keep form errors and retry input in the add-project dialog. Reuse an existing project when the path resolves to a registered directory.
 - Replace the Chats dropdown with an archive toggle, shorten the project action labels, and show message destination and stop behavior in the shared tooltips.
 - Use icon-only workspace tools with hover and keyboard hints. Keep permission, model, and follow-up labels visible. Give changes, code review, link copying, and message delivery distinct icons.

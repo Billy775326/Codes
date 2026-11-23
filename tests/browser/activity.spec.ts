@@ -65,10 +65,21 @@ test('a streaming Codex reply renders Markdown before the task finishes', async 
   await expect(reply.getByRole('heading', { name: 'A clear path forward' })).toBeVisible();
   await expect(reply.locator('strong')).toHaveText('simulated response');
   await expect(reply.getByRole('listitem')).toHaveCount(3);
+  const caret = reply.locator('.caret');
+  await expect(caret).toBeVisible();
+  await expect(caret).toHaveCSS('background-color', 'rgb(168, 200, 235)');
+  const size = (await caret.boundingBox())!;
+  expect(size.width).toBeGreaterThan(6);
+  expect(size.height).toBeGreaterThan(14);
+  await page.getByRole('button', { name: 'Switch to light mode', exact: true }).click();
+  await expect(caret).toHaveCSS('background-color', 'rgb(36, 92, 145)');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(caret).toHaveCSS('animation-name', 'none');
   const stop = page.getByRole('button', { name: 'Stop task', exact: true });
   await expect(stop).toBeEnabled();
   await stop.click();
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
+  await expect(caret).toHaveCount(0);
   await expect(reply.getByRole('heading', { name: 'A clear path forward' })).toBeVisible();
 });
 
