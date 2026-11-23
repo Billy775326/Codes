@@ -3,6 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MarkdownLink } from './MarkdownLink';
+import { projectFilePath, remarkProjectFileLinks } from './remarkProjectFileLinks';
 import { projectImageType, projectImageUrl } from '../shared/images';
 import { limits } from '../shared/types';
 import { IconButton } from './primitives';
@@ -168,11 +169,13 @@ export const AnswerMarkdown = memo(function AnswerMarkdown({
   text,
   projectId,
   projectPath,
+  onOpenFile,
   streaming = false,
 }: {
   text: string;
   projectId: string;
   projectPath?: string;
+  onOpenFile?: (path: string) => void;
   streaming?: boolean;
 }) {
   const components = useMemo<Components>(
@@ -187,6 +190,19 @@ export const AnswerMarkdown = memo(function AnswerMarkdown({
         return <PreviewImage key={preview} src={preview} alt={alt || path} />;
       },
       a: ({ node: _node, href, children, ...props }) => {
+        const file = projectFilePath(href, projectPath);
+        if (file) {
+          return (
+            <button
+              type="button"
+              className="project-file-link"
+              disabled={!onOpenFile}
+              onClick={() => onOpenFile?.(file)}
+            >
+              {children}
+            </button>
+          );
+        }
         const path = imagePath(href, projectPath);
         if (!path || !projectId)
           return (
@@ -206,13 +222,16 @@ export const AnswerMarkdown = memo(function AnswerMarkdown({
         );
       },
     }),
-    [projectId, projectPath, streaming],
+    [onOpenFile, projectId, projectPath, streaming],
   );
   if (streaming && text.length > liveMarkdownLimit)
     return <div className="stream-text">{text}</div>;
   return (
     <>
-      <Markdown remarkPlugins={[remarkGfm]} components={components}>
+      <Markdown
+        remarkPlugins={[remarkGfm, [remarkProjectFileLinks, { projectPath }]]}
+        components={components}
+      >
         {text}
       </Markdown>
       {!streaming && /^(?:\s*<!doctype\s+html\b|\s*<html[\s>])/i.test(text) && (

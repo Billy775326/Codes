@@ -138,6 +138,7 @@ const MessageView = memo(function MessageView({
   projectPath,
   item,
   streaming,
+  onOpenFile,
   onReply,
   onFork,
   disabled,
@@ -148,6 +149,7 @@ const MessageView = memo(function MessageView({
   completion,
 }: {
   onReply?: (item: Message) => void;
+  onOpenFile?: (path: string) => void;
   onFork?: (item: Message) => void;
   disabled?: boolean;
   onReview?: (item: Message, path?: string) => void;
@@ -242,6 +244,7 @@ const MessageView = memo(function MessageView({
               text={item.text}
               projectId={projectId}
               projectPath={projectPath}
+              onOpenFile={onOpenFile}
               streaming={streaming}
             />
           ) : (
@@ -1627,14 +1630,17 @@ function App() {
       text: '',
     });
   }
-  const openChangedFile = (path: string) => {
-    if (!contextReady || directoryBlocked) return;
-    const prefix = project?.path?.replace(/\/?$/, '/');
-    const relative = prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
-    setDirectory(relative.split('/').slice(0, -1).join('/'));
-    setFilePath(relative);
-    setPanel('files');
-  };
+  const openProjectFile = useCallback(
+    (path: string) => {
+      if (!contextReady || directoryBlocked) return;
+      const prefix = project?.path?.replace(/\/?$/, '/');
+      const relative = prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
+      setDirectory(relative.split('/').slice(0, -1).join('/'));
+      setFilePath(relative);
+      setPanel('files');
+    },
+    [contextReady, directoryBlocked, project?.path],
+  );
   const canSteer =
     !!thread?.turnId &&
     thread.state === 'running' &&
@@ -2506,6 +2512,9 @@ function App() {
                         <MessageView
                           projectId={contextProjectId}
                           projectPath={project?.path}
+                          onOpenFile={
+                            contextReady && !directoryBlocked ? openProjectFile : undefined
+                          }
                           key={m.id}
                           item={m}
                           actions={finalReply}
@@ -3239,7 +3248,7 @@ function App() {
                     !!changeTruncated ||
                     (selectedDiffTurn === thread?.turnId && thread?.diffTruncated)
                   }
-                  openFile={openChangedFile}
+                  openFile={openProjectFile}
                   focusPath={diffPath}
                   layout={diffLayout}
                   onLayoutChange={(layout) => {

@@ -50,3 +50,11 @@
 .app .code-block pre {
   margin-top: 0;
 }
+.app .project-file-link {
+  display: inline;
+  padding: 0;
+  color: var(--link);
+  text-align: inherit;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}

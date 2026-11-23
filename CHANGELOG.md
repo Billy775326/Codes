@@ -151,6 +151,8 @@
 
 ### Fixed
 
+- Open absolute project-file links from Codex replies in the Files preview, including plain HTML anchors and Markdown file links.
+
 - Restore keyboard focus to the composer menu button when Escape dismisses a model or reasoning picker opened by a slash command.
 
 - Keep the workspace at the viewport boundary while a long conversation is running.

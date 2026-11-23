@@ -1,7 +1,7 @@
 import { reconnectUpdates } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot, Message } from '../../src/shared/types';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { imagePng } from '../fixtures/image';
 async function fixture(page: Page, count: number) {
@@ -173,6 +173,35 @@ test('external chat links open a separate tab and internal links stay in the wor
   await expect(anchor).not.toHaveAttribute('target');
   await anchor.click();
   await expect(page).toHaveURL(new URL('#details', ownPage).href);
+});
+
+test('HTML anchors and Markdown links open project files without navigating the conversation', async ({
+  page,
+}) => {
+  const { base } = await fixture(page, 0);
+  const root = base.context!.project.path;
+  const drafts = join(root, '_drafts');
+  await mkdir(drafts, { recursive: true });
+  await writeFile(join(drafts, 'draft notes.md'), '# Saved draft\nRead through the preview.\n');
+  base.thread.messages.find((item) => item.phase === 'final_answer')!.text = [
+    `<a href="${root}/_drafts/draft%20notes.md">初稿已完成</a>，可以开始审阅。`,
+    `[Open source](${root}/example.ts:2)`,
+    `<a href="${root}/example.ts" title="Raw markup">Other raw HTML</a>`,
+  ].join('\n\n');
+  await reconnectUpdates(page);
+  const url = page.url();
+  const input = page.getByLabel('Message Codex');
+  await input.fill('Keep this unsent message');
+  const preview = page.getByRole('region', { name: 'File preview' });
+  await page.getByRole('button', { name: '初稿已完成', exact: true }).click();
+  await expect(preview).toContainText('draft notes.md');
+  await expect(preview).toContainText('Read through the preview.');
+  await expect(page).toHaveURL(url);
+  await expect(input).toHaveValue('Keep this unsent message');
+  await page.getByRole('button', { name: 'Open source', exact: true }).press('Enter');
+  await expect(preview).toContainText('export function hello');
+  await expect(page).toHaveURL(url);
+  await expect(page.getByRole('button', { name: 'Other raw HTML', exact: true })).toHaveCount(0);
 });
 
 test('answers and project files preview raster images and isolated static HTML', async ({
