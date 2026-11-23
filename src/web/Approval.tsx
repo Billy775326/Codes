@@ -8,12 +8,14 @@ import './questions.css';
 export function Approval({
   action,
   submit,
+  checkAnswer,
 }: {
   action: Action;
   submit: (
     action: Action,
     input: { decision?: string; answers?: Record<string, string> },
   ) => Promise<void>;
+  checkAnswer?: () => Promise<void>;
 }) {
   const { t } = useInterfaceLanguage();
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
@@ -70,7 +72,12 @@ export function Approval({
           title={t('Proposed file changes')}
         />
       )}
-      {action.kind === 'questions' && (
+      {action.kind === 'questions' && action.status === 'responding' && (
+        <p className="question-help" role="status">
+          {t(action.replyUnconfirmed ? 'Answer acceptance unconfirmed' : 'Submitting answer…')}
+        </p>
+      )}
+      {action.kind === 'questions' && action.status === 'pending' && (
         <p className="question-help">
           {action.async
             ? t('You can answer while Codex works or after it finishes.')
@@ -161,7 +168,18 @@ export function Approval({
         </p>
       )}
       <div className="approval-actions">
-        {action.kind === 'questions' ? (
+        {action.replyUnconfirmed && checkAnswer ? (
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void checkAnswer().finally(() => setBusy(false));
+            }}
+          >
+            {t('Check answer status')}
+          </button>
+        ) : action.kind === 'questions' ? (
           <>
             <button
               className="primary"

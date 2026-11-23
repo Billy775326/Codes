@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Action, Message, Question } from '../shared/types.js';
+import { questionSourceItemId } from '../shared/question-replies.js';
 
 type Entry = {
   id: string;
@@ -51,9 +52,17 @@ export class AsyncQuestions {
       !message.answeredQuestions?.some((answer) => answer.questionItemId)
     )
       return false;
+    return this.transaction(() => this.record(threadId, message));
+  }
+
+  confirmReply(threadId: string, replies: NonNullable<Message['answeredQuestions']>) {
+    return this.transaction(() => this.recordReplies(threadId, replies));
+  }
+
+  private transaction(record: () => boolean) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      const changed = this.record(threadId, message);
+      const changed = record();
       this.db.exec('COMMIT');
       return changed;
     } catch (error) {
@@ -88,9 +97,14 @@ export class AsyncQuestions {
         changed = true;
       }
     }
-    for (const { questionItemId, question, answer } of message.answeredQuestions ?? []) {
+    return this.recordReplies(threadId, message.answeredQuestions ?? []) || changed;
+  }
+
+  private recordReplies(threadId: string, replies: NonNullable<Message['answeredQuestions']>) {
+    let changed = false;
+    for (const { questionItemId, question, answer } of replies) {
       if (!questionItemId || !answer.trim()) continue;
-      const itemId = this.sourceId(questionItemId);
+      const itemId = questionSourceItemId(questionItemId);
       if (!itemId) continue;
       const result = this.db
         .prepare(
@@ -104,24 +118,6 @@ export class AsyncQuestions {
       }
     }
     return changed;
-  }
-
-  private sourceId(id: string) {
-    if (!id.startsWith('[')) return id;
-    try {
-      const value: unknown = JSON.parse(id);
-      return Array.isArray(value) &&
-        value.length === 3 &&
-        value[0] === 'request_user_input_async' &&
-        typeof value[1] === 'string' &&
-        Number.isInteger(value[2]) &&
-        value[2] >= 0 &&
-        value[2] < 8
-        ? value[1]
-        : undefined;
-    } catch {
-      return undefined;
-    }
   }
 
   private answers(threadId: string, itemId: string, questions: Question[]) {
@@ -211,6 +207,7 @@ export class AsyncQuestions {
       async: true,
       blocking: false,
       status,
+      replyUnconfirmed: status === 'responding' && entry.operationState === 'unknown',
       skipped: entry.closed === 'skipped',
       submittedAnswers,
       questions:

@@ -81,6 +81,7 @@ export interface Action {
   questions?: Question[];
   afterMessageId?: string;
   submittedAnswers?: Record<string, string>;
+  replyUnconfirmed?: boolean;
   /** Missing on older clients/requests: treat questions as required. */
   blocking?: boolean;
   files?: FileChange[];
@@ -137,7 +138,7 @@ export interface Thread extends Summary {
   diff: string;
   diffTruncated?: boolean;
   resolvedModel?: string;
-  steering?: (Operation & { text: string })[];
+  steering?: (Operation & { text: string; questionReply?: boolean })[];
   /** Native progress only; does not end the turn or release its execution lease. */
   compaction?: { id: string; turnId: string };
   usage?: {

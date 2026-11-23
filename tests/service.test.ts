@@ -378,6 +378,43 @@ it('sends at most one async question reply to the running turn when two clients 
   expect(thread.messages.filter((message) => message.answeredQuestions)).toHaveLength(1);
   await service.interrupt(thread.id);
 });
+it('records a confirmed reply on the original question even when the CLI has not echoed its item', async () => {
+  const { service, thread } = await fixture();
+  await service.send(thread.id, randomUUID(), '[async-question] [hold]', thread.settings);
+  await until(() => service.conversationActions(thread.id).some((action) => action.async));
+  const action = service.conversationActions(thread.id)[0]!;
+  const question = action.questions![0]!;
+  const turnId = thread.turnId;
+  const nativeCall = service.driver.call.bind(service.driver);
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation((method, params, timeout) =>
+      method === 'turn/steer' ? Promise.resolve({ turnId }) : nativeCall(method, params, timeout),
+    );
+  const receiptId = randomUUID();
+  try {
+    await expect(
+      service.answer(action.id, receiptId, {
+        answers: { [question.id]: 'Keep the original placement' },
+      }),
+    ).resolves.toMatchObject({ id: receiptId, state: 'acknowledged', turnId });
+    expect(thread.messages.some((item) => item.answeredQuestions)).toBe(false);
+    expect(service.conversationActions(thread.id)[0]).toMatchObject({
+      id: action.id,
+      afterMessageId: action.afterMessageId,
+      status: 'answered',
+      submittedAnswers: { [question.id]: 'Keep the original placement' },
+    });
+    expect(thread.steering).toMatchObject([{ id: receiptId, questionReply: true, text: '' }]);
+    await expect(
+      service.answer(action.id, randomUUID(), { answers: { [question.id]: 'Do not send again' } }),
+    ).rejects.toMatchObject({ code: 'STALE_ACTION' });
+  } finally {
+    spy.mockRestore();
+    await service.interrupt(thread.id);
+  }
+});
+
 it('lets optional Code questions be explicitly skipped and resumes the same native task', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[question]', thread.settings);

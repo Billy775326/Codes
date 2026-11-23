@@ -11,7 +11,7 @@ import {
   type ProjectSidebarPreference,
 } from './project-navigation';
 import { sameSettings } from '../shared/types';
-import { messagePreviewText } from '../shared/question-replies';
+import { parseQuestionReplies, questionSourceItemId } from '../shared/question-replies';
 import { imageLimits } from '../shared/images';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
@@ -1547,8 +1547,34 @@ function App() {
       .filter((action) => action.kind === 'questions')
       .map((action) => [action.id, action]),
   );
+  const questionsByItem = new Map(
+    [...inlineQuestions.values()]
+      .filter((action) => action.async && action.afterMessageId)
+      .map((action) => [action.afterMessageId, action]),
+  );
+  const steering = thread?.steering?.filter((entry) => !entry.questionReply) ?? [];
   const visibleTurnIds = new Set(visibleMessages.map((item) => item.turnId));
-  const transcriptMessages = [...visibleMessages];
+  const transcriptMessages = visibleMessages.flatMap((item) => {
+    if (!item.answeredQuestions?.length) return [item];
+    const standalone = item.answeredQuestions.filter(({ questionItemId, question }) => {
+      if (!questionItemId) return true;
+      const action = questionsByItem.get(questionSourceItemId(questionItemId));
+      if (!action?.submittedAnswers) return true;
+      const answers = action.submittedAnswers;
+      // Older reply envelopes used the source item ID and the question text.
+      return (
+        !Object.hasOwn(answers, questionItemId) &&
+        (questionItemId !== action.afterMessageId ||
+          !action.questions?.some(
+            (entry) => entry.question === question && Object.hasOwn(answers, entry.id),
+          ))
+      );
+    });
+    if (!standalone.length) return [];
+    return standalone.length === item.answeredQuestions.length
+      ? [item]
+      : [{ ...item, answeredQuestions: standalone }];
+  });
   for (const action of [...inlineQuestions.values()].reverse()) {
     // A resolved question belongs to its history page. Open requests must remain reachable.
     if (
@@ -2385,7 +2411,13 @@ function App() {
                       if (m.kind === 'question') {
                         const action = inlineQuestions.get(m.id);
                         if (action && ['pending', 'responding'].includes(action.status))
-                          return <Approval action={action} submit={submitAction} />;
+                          return (
+                            <Approval
+                              action={action}
+                              submit={submitAction}
+                              checkAnswer={checkFollowUpStatus}
+                            />
+                          );
                         return (
                           <section
                             className="approval"
@@ -2479,6 +2511,7 @@ function App() {
                   </div>
                 )}
                 {thread?.pending &&
+                  !parseQuestionReplies(thread.pending.text ?? '') &&
                   !thread.messages.some((m) => m.clientId === thread.pending?.id) && (
                     <MessageView
                       projectId={contextProjectId}
@@ -2486,7 +2519,7 @@ function App() {
                         id: thread.pending.id,
                         turnId: '',
                         kind: 'user',
-                        text: messagePreviewText(thread.pending.text ?? ''),
+                        text: thread.pending.text ?? '',
                       }}
                       streaming={false}
                     />
@@ -2577,9 +2610,9 @@ function App() {
               </button>
             </div>
           )}
-          {!!thread?.steering?.length && (
+          {!!steering.length && (
             <section className="steering-receipt" aria-label={t('Immediate follow-ups')}>
-              {thread.steering.map((entry) => (
+              {steering.map((entry) => (
                 <p key={entry.id}>
                   {entry.state === 'unknown'
                     ? t('Follow-up acceptance unconfirmed')
@@ -2589,7 +2622,7 @@ function App() {
                   · {entry.text.slice(0, 200)}
                 </p>
               ))}
-              {thread.steering.some(
+              {steering.some(
                 (entry) => entry.state === 'unknown' && entry.id !== steerReceipt?.operationId,
               ) && (
                 <button disabled={busy} onClick={() => void checkFollowUpStatus()}>

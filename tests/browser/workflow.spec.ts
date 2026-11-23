@@ -36,10 +36,13 @@ test('async questions stay in the original turn and show sidebar attention after
   await expect(original.getByRole('region', { name: 'Codex question' })).toContainText(
     'Answer: Explain first',
   );
+  await expect(card).toHaveCount(1);
   await page.reload();
   await expect(original.getByRole('region', { name: 'Codex question' })).toContainText('Answered');
 });
-test('an answer added to a running task displays answer text in its receipt', async ({ page }) => {
+test('a reply to a running task stays with its original question and outside ordinary follow-ups', async ({
+  page,
+}) => {
   await login(page);
   await send(page, '[async-question] [hold] Answer receipt fixture');
   const card = page.getByRole('region', { name: 'Codex question', exact: true });
@@ -47,9 +50,17 @@ test('an answer added to a running task displays answer text in its receipt', as
     .getByLabel('Which direction should I use?', { exact: true })
     .fill('Explain first. ' + 'Additional detail. '.repeat(135));
   await card.getByRole('button', { name: 'Submit answer' }).click();
+  await expect(card).toHaveCount(1);
+  await expect(card).toContainText('Answer: Explain first.');
   const receipt = page.getByRole('region', { name: 'Immediate follow-ups' });
-  await expect(receipt).toContainText('Added to current task · Answer: Explain first');
-  await expect(receipt).not.toContainText(/send_user_message_question_reply|questionItemId/);
+  await expect(receipt).toHaveCount(0);
+  await page.getByLabel('Message Codex').fill('An ordinary follow-up');
+  await page.getByLabel('Message Codex').press('Control+Shift+Enter');
+  const accepted = 'Added to current task · An ordinary follow-up';
+  await expect(receipt).toContainText(accepted);
+  await expect(receipt).not.toContainText(
+    /Answer:|send_user_message_question_reply|questionItemId/,
+  );
   await expect(receipt.getByRole('button', { name: 'Check follow-up results' })).toHaveCount(0);
   // Simulate a stale browser snapshot with an uncertain follow-up but a live parent turn.
   await page.route(
@@ -63,15 +74,19 @@ test('an answer added to a running task displays answer text in its receipt', as
         (check) => check.fulfill({ json: confirmed }),
         { times: 1 },
       );
-      snapshot.thread.steering[0].state = 'unknown';
+      snapshot.thread.steering.find(
+        (entry: { questionReply?: boolean }) => !entry.questionReply,
+      ).state = 'unknown';
       await route.fulfill({ response, json: snapshot });
     },
     { times: 1 },
   );
   await page.reload();
+  await expect(card).toHaveCount(1);
+  await expect(card).toContainText('Answer: Explain first.');
   await expect(receipt).toContainText('Follow-up acceptance unconfirmed');
   await receipt.getByRole('button', { name: 'Check follow-up results', exact: true }).click();
-  await expect(receipt).toContainText('Added to current task · Answer: Explain first');
+  await expect(receipt).toContainText(accepted);
   await expect(
     page.getByText('The CLI has not confirmed a terminal result.', { exact: false }),
   ).toHaveCount(0);

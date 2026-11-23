@@ -1765,7 +1765,9 @@ export class Service {
     const history = await this.history(id);
     for (const steer of this.store.steers(id)) {
       const nativeItem = history.messages.find(
-        (entry) => entry.kind === 'user' && entry.clientId === steer.id,
+        (entry) =>
+          entry.clientId === steer.id &&
+          (entry.kind === 'user' || (steer.questionReply && !!entry.answeredQuestions?.length)),
       );
       const known = history.turns.find(
         (turn: any) => turn.id === (nativeItem?.turnId || steer.turnId),
@@ -1985,14 +1987,18 @@ export class Service {
     this.asyncQuestions.beginReply(id, operationId);
     this.publishQuestions(threadId);
     try {
-      if (thread.state === 'running' && thread.turnId)
-        return await this.steer(threadId, operationId, thread.turnId, prompt);
-      return await this.send(
-        threadId,
-        operationId,
-        prompt,
-        this.store.settingsProfile(threadId).settings,
-      );
+      const receipt =
+        thread.state === 'running' && thread.turnId
+          ? await this.steer(threadId, operationId, thread.turnId, prompt)
+          : await this.send(
+              threadId,
+              operationId,
+              prompt,
+              this.store.settingsProfile(threadId).settings,
+            );
+      if (receipt.state === 'acknowledged' || receipt.state === 'completed')
+        this.asyncQuestions.confirmReply(threadId, replies);
+      return receipt;
     } finally {
       this.asyncQuestions.finishReply(id);
       this.publishQuestions(threadId);

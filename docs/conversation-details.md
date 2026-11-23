@@ -44,7 +44,9 @@ This is progress display, not browser-side context summarization, transcript del
 
 The native agent decides whether to call `request_user_input`. codes does not manufacture a question for every prompt or treat ordinary assistant prose as a structured request. Code-mode availability is enabled by default for the codes child process with the pinned CLI's `features.default_mode_request_user_input` setting. Set `CODES_CODE_QUESTIONS=0` before starting to retain Plan-only availability. Global Codex configuration is unchanged.
 
-Question cards appear inside the turn that requested input. When the runtime confirms a response, the card shows the answered state and any non-secret answers while that turn remains in the live cache. This live display is not a durable answer log. If the runtime stops while a question is still open, Codes records only that the task was waiting for input. On restart it explains that the question expired and offers **Check result** for the original task. Imported Covro answer records appear in their stored turns as read-only cards.
+Question cards appear inside the turn that requested input. Confirmed replies to asynchronous questions stay on the original card and remain visible after refresh. If delivery is uncertain, **Check answer status** appears on that card. A historical answer without a matching source card remains visible in its stored turn.
+
+Native blocking requests show the confirmed state and any non-secret answers while the turn remains in the live cache. If the runtime stops with that request open, Codes marks the question expired and offers **Check result** for the original task.
 
 In Plan, questions are required. In Code, the native request can be optional. The UI follows the request's `isBlocking` field; requests without that field are conservatively treated as required. **Skip question** is available only for an optional request and sends an empty native answer map. No timer automatically chooses or submits an answer.
 
@@ -53,7 +55,7 @@ In Plan, questions are required. In Code, the native request can be optional. Th
 3. Choose an option or type a custom answer when the request permits it. Secret inputs stay masked. Every required answer must be present before submission.
 4. Select **Submit answer**, or explicitly skip an optional request. **Cancel task** interrupts the actual turn.
 
-Responses belong to that native request and turn. Another signed-in device can resolve it; the card disappears when the CLI reports resolution. Expired requests cannot be answered again. HTTP or runtime uncertainty never triggers an automatic resend. Secret answers are not stored as plaintext in the codes operation journal or browser draft storage; the native CLI may retain them in its own history.
+Responses belong to that native request and turn. When another signed-in device resolves a request, the original question card updates. Expired requests cannot be answered again. HTTP or runtime uncertainty never triggers an automatic resend. Secret answers are excluded from the Codes operation journal and browser drafts. The native CLI may retain them in its own history.
 
 ## Inspect a patch
 

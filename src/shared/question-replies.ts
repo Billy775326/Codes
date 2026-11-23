@@ -36,9 +36,20 @@ export function parseQuestionReplies(value: string): Message['answeredQuestions'
   }
 }
 
-export function messagePreviewText(value: string) {
-  const replies = parseQuestionReplies(value);
-  if (!replies) return value;
-  if (replies.length === 1) return 'Answer: ' + replies[0]!.answer;
-  return 'Answers: ' + replies.map(({ answer }) => answer).join(' · ');
+export function questionSourceItemId(id: string) {
+  if (!id.startsWith('[')) return id;
+  try {
+    const value: unknown = JSON.parse(id);
+    return Array.isArray(value) &&
+      value.length === 3 &&
+      value[0] === 'request_user_input_async' &&
+      typeof value[1] === 'string' &&
+      Number.isInteger(value[2]) &&
+      value[2] >= 0 &&
+      value[2] < 8
+      ? value[1]
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
