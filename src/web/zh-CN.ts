@@ -50,6 +50,8 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
     '1,000–300,000 毫秒。适用于加载元数据等 CLI 请求。',
   'Default on the server': '服务器默认路径',
   'Archive this project?': '归档这个项目？',
+  'Resize navigation': '调整导航侧栏宽度',
+  'Resize project panel': '调整项目侧栏宽度',
   'Ask before edits or access outside the sandbox.': '修改文件或访问沙箱外资源前询问。',
   'Ask before file access outside the workspace or network use.':
     '访问工作区外的文件或联网前询问。',

@@ -11,6 +11,7 @@ interface Props {
   renameDisabled?: boolean;
   projectName?: string;
   sidebarOpen: boolean;
+  drawerLayout: boolean;
   connection: string;
   theme: 'dark' | 'light';
   panel: Panel | null;
@@ -132,16 +133,17 @@ export function WorkspaceHeader(props: Props) {
   const reloadLabel = t('Reload page');
   return (
     <header className="topbar">
-      {!props.sidebarOpen && (
-        <button
-          className="icon-button"
+      {(!props.sidebarOpen || !props.drawerLayout) && (
+        <IconButton
+          className="navigation-toggle"
+          icon="sidebar"
+          size={18}
+          label={t(props.sidebarOpen ? 'Close navigation' : 'Open navigation')}
           data-open-navigation=""
-          aria-label={t('Open navigation')}
-          data-tooltip=""
+          aria-controls="sidebar-navigation"
+          aria-expanded={props.sidebarOpen}
           onClick={props.onNavigation}
-        >
-          <Icon name="sidebar" size={17} />
-        </button>
+        />
       )}
       <div className="breadcrumb">
         {!props.sidebarOpen && props.projectName && (
@@ -204,6 +206,7 @@ export function WorkspaceHeader(props: Props) {
         <div className="top-action-group" role="group" aria-label={t('Project views')}>
           <button
             data-browse-files=""
+            data-project-view="files"
             aria-label={t('Browse files')}
             disabled={!props.hasProject || props.busy}
             aria-pressed={props.panel === 'files'}
@@ -214,6 +217,7 @@ export function WorkspaceHeader(props: Props) {
             <Icon name="folder" size={17} />
           </button>
           <button
+            data-project-view="diff"
             aria-label={t('View changes')}
             aria-pressed={props.panel === 'diff'}
             data-tooltip=""

@@ -33,6 +33,90 @@ test('workspace defaults to persistent navigation, retains drafts through histor
   await expect(page.getByLabel('Model', { exact: true })).toBeHidden();
 });
 
+test('desktop sidebars resize independently and keep their widths through reloads and drawers', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await login(page);
+  const navigation = page.getByRole('complementary', { name: 'Workspace navigation' });
+  const context = page.locator('.context-panel');
+  const closeNavigation = page.getByRole('button', { name: 'Close navigation', exact: true });
+  const files = page.getByRole('button', { name: 'Browse files', exact: true });
+  const left = page.getByRole('separator', { name: 'Resize navigation' });
+  const right = page.getByRole('separator', { name: 'Resize project panel' });
+  const input = page.getByLabel('Message Codex');
+  await expect(page.locator('.topbar')).toContainText('New conversation');
+  await expect(
+    page.locator('.topbar').getByRole('button', { name: 'Close navigation' }),
+  ).toHaveAttribute('aria-expanded', 'true');
+  await expect(navigation.getByRole('button', { name: 'Close navigation' })).toHaveCount(0);
+  await input.fill('Keep this draft while resizing');
+  await files.click();
+  const closeContext = context.getByRole('button', { name: 'Close panel', exact: true });
+  expect((await closeContext.boundingBox())!.x).toBeLessThan(
+    (await context.getByRole('button', { name: 'Files', exact: true }).boundingBox())!.x,
+  );
+  const width = (element: typeof navigation) =>
+    element.evaluate((node) => node.getBoundingClientRect().width);
+  const beginDrag = async (handle: typeof left, distance: number) => {
+    const box = (await handle.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + distance, y, { steps: 4 });
+  };
+  await expect.poll(() => width(navigation)).toBe(260);
+  await expect.poll(() => width(context)).toBe(460);
+  await beginDrag(left, 80);
+  await expect.poll(() => width(navigation)).toBe(340);
+  expect(await page.evaluate(() => localStorage.getItem('codes.navigation-width'))).toBeNull();
+  await page.mouse.up();
+  await expect(left).toHaveAttribute('aria-valuenow', '340');
+  await expect.poll(() => width(context)).toBe(460);
+  await beginDrag(right, -120);
+  await expect.poll(() => width(context)).toBe(580);
+  await page.mouse.up();
+  await expect(right).toHaveAttribute('aria-valuenow', '580');
+  await expect.poll(() => width(navigation)).toBe(340);
+
+  await beginDrag(left, -90);
+  await expect.poll(() => width(navigation)).toBe(250);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await expect.poll(() => width(navigation)).toBe(340);
+  await right.press('ArrowLeft');
+  await expect(right).toHaveAttribute('aria-valuenow', '596');
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await expect(right).toHaveAttribute('aria-valuenow', '320');
+  expect((await page.locator('.main').boundingBox())!.width).toBeGreaterThanOrEqual(460);
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await expect(right).toHaveAttribute('aria-valuenow', '596');
+  await expect(left).toHaveAttribute('aria-valuenow', '340');
+
+  await closeContext.click();
+  await expect(files).toBeFocused();
+  await closeNavigation.click();
+  await expect(page.getByRole('button', { name: 'Open navigation' })).toBeFocused();
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.reload();
+  await expect(left).toHaveAttribute('aria-valuenow', '340');
+  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await expect(right).toHaveAttribute('aria-valuenow', '596');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(left).toHaveCount(0);
+  await expect(right).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Project context' })).toBeVisible();
+  expect((await context.boundingBox())!.width).toBe(390);
+  await closeContext.click();
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await files.click();
+  await expect(right).toHaveAttribute('aria-valuenow', '596');
+  await right.dblclick();
+  await expect(right).toHaveAttribute('aria-valuenow', '460');
+  await expect(input).toHaveValue('Keep this draft while resizing');
+});
+
 test('edited-file cards open a focused review to the right of chat and preserve read-only behavior', async ({
   page,
   context,

@@ -10,6 +10,8 @@
 
 ### Added
 
+- Resize desktop navigation and project panels by dragging their inner edges or using the arrow keys while the divider has focus. Each width is saved in the browser.
+
 - Reload Codes from the workspace header. Restore the selected conversation and saved draft after reload.
 
 - Toggle hidden files in Files to browse, preview, and attach dotfiles in the selected project. Hidden entries are off by default.
@@ -68,6 +70,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Put the desktop navigation toggle at the start of the workspace header and the project panel close button next to its tabs.
 
 - Show shorter descriptions and a clear selected mark in the conversation permission picker. Highlight unrestricted access and explain when Auto-review is unavailable.
 

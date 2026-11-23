@@ -90,6 +90,7 @@ import { ComposerControls, type ComposerControlsHandle } from './ComposerControl
 import { ControlTooltip } from './ControlTooltip';
 import { AddProjectDialog } from './AddProjectDialog';
 import { WorkspaceHeader } from './WorkspaceHeader';
+import { readSidebarWidth, SidebarResize, useSidebarLayout } from './SidebarResize';
 import './foundation.css';
 import './interactions.css';
 import './workflow.css';
@@ -474,8 +475,16 @@ function App() {
     if (window.innerWidth > 1099) save('codes.navigation', sidebar ? 'open' : 'closed');
   }, [sidebar]);
   const [panel, setPanel] = useState<'files' | 'diff' | null>(null);
+  const workspaceElement = useRef<HTMLDivElement>(null);
   const navigationElement = useRef<HTMLElement>(null);
   const contextElement = useRef<HTMLElement>(null);
+  const [navigationWidth, setNavigationWidth] = useState(() =>
+    readSidebarWidth(saved('codes.navigation-width')),
+  );
+  const [contextWidth, setContextWidth] = useState(() =>
+    readSidebarWidth(saved('codes.context-width')),
+  );
+  const sidebarLayout = useSidebarLayout(sidebar, panel, navigationWidth, contextWidth);
   const [narrow, setNarrow] = useState(window.innerWidth <= 1099);
   const [phoneLayout, setPhoneLayout] = useState(window.innerWidth <= 700);
   useEffect(() => {
@@ -491,6 +500,15 @@ function App() {
     );
   }, []);
   const closeContext = useCallback(() => setPanel(null), []);
+  const dismissContext = () => {
+    closeContext();
+    if (!narrow)
+      requestAnimationFrame(() => {
+        workspaceElement.current
+          ?.querySelector<HTMLElement>(`[data-project-view="${panel}"]`)
+          ?.focus({ preventScroll: true });
+      });
+  };
   useEffect(() => {
     const media = window.matchMedia('(max-width: 1099px)');
     const resize = () => {
@@ -2040,12 +2058,15 @@ function App() {
     );
   return withLanguage(
     <div
+      ref={workspaceElement}
       data-theme={theme}
       data-live={connection === 'Connected'}
       data-chat-font-size={preferences.chatFontSize}
       data-code-font-size={preferences.codeFontSize}
       style={
         {
+          '--navigation-width': `${sidebarLayout.navigation.width}px`,
+          '--context-width': `${sidebarLayout.context.width}px`,
           '--chat-font-size': preferences.chatFontSize
             ? `${preferences.chatFontSize}px`
             : undefined,
@@ -2054,11 +2075,12 @@ function App() {
             : undefined,
         } as React.CSSProperties
       }
-      className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''} ${panel === 'files' ? 'files-open' : ''}`}
+      className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
     >
       {sidebar && <div className="scrim" onClick={closeNavigation} />}
       <aside
         ref={navigationElement}
+        id="sidebar-navigation"
         className={`sidebar ${sidebar ? 'open' : ''}`}
         aria-label={t('Workspace navigation')}
         inert={modalOpen || undefined}
@@ -2066,15 +2088,10 @@ function App() {
         aria-modal={narrow && sidebar && !modalOpen ? true : undefined}
       >
         <div className="sidebar-brand">
+          {narrow && (
+            <IconButton icon="sidebar" label={t('Close navigation')} onClick={closeNavigation} />
+          )}
           <Brand />
-          <button
-            className="icon-button"
-            aria-label={t('Close navigation')}
-            data-tooltip=""
-            onClick={closeNavigation}
-          >
-            <Icon name="close" />
-          </button>
         </div>
         <Conversations
           projects={projects}
@@ -2152,6 +2169,17 @@ function App() {
           </div>
         </div>
       </aside>
+      {sidebar && !narrow && !modalOpen && (
+        <SidebarResize
+          side="navigation"
+          range={sidebarLayout.navigation}
+          workspace={workspaceElement}
+          change={(width) => {
+            setNavigationWidth(width);
+            save('codes.navigation-width', width === undefined ? '' : String(width));
+          }}
+        />
+      )}
       <main
         className="main"
         aria-label={t('Conversation workspace')}
@@ -2163,12 +2191,13 @@ function App() {
           renameDisabled={busy || !!thread?.managementPending}
           projectName={project?.name}
           sidebarOpen={sidebar}
+          drawerLayout={narrow}
           connection={connection}
           theme={theme}
           panel={panel}
           busy={busy}
           hasProject={contextReady && !directoryBlocked}
-          onNavigation={() => setSidebar(true)}
+          onNavigation={sidebar ? closeNavigation : () => setSidebar(true)}
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
           onReload={reloadPage}
@@ -3130,9 +3159,21 @@ function App() {
       {panel && narrow && !sidebar && !modalOpen && (
         <div className="context-scrim" aria-hidden="true" onClick={closeContext} />
       )}
+      {panel && !narrow && !modalOpen && (
+        <SidebarResize
+          side="context"
+          range={sidebarLayout.context}
+          workspace={workspaceElement}
+          change={(width) => {
+            setContextWidth(width);
+            save('codes.context-width', width === undefined ? '' : String(width));
+          }}
+        />
+      )}
       {panel && (
         <aside
           ref={contextElement}
+          id="sidebar-context"
           inert={modalOpen || (narrow && sidebar) || undefined}
           className="context-panel"
           aria-label={t('Project context')}
@@ -3140,6 +3181,13 @@ function App() {
           aria-modal={narrow && !sidebar && !modalOpen ? true : undefined}
         >
           <div className="panel-heading">
+            <IconButton
+              className="context-close"
+              icon="sidebar"
+              label={t('Close panel')}
+              size={17}
+              onClick={dismissContext}
+            />
             <div className="panel-tabs" role="group" aria-label={t('Project views')}>
               <button
                 className={panel === 'files' ? 'active' : ''}
@@ -3159,14 +3207,6 @@ function App() {
                 {thread?.diff && <i />}
               </button>
             </div>
-            <button
-              className="icon-button"
-              aria-label={t('Close panel')}
-              data-tooltip=""
-              onClick={() => setPanel(null)}
-            >
-              <Icon name="close" size={16} />
-            </button>
           </div>
           {panel === 'diff' ? (
             <div className="diff-panel">

@@ -20,6 +20,8 @@ Feature styles remain with their feature. New changes should edit the owning rul
 
 The modal state takes priority over drawers: background navigation, conversation, and preview become inert while a workspace modal is open. The shared dialog captures its opener before auto-focused fields mount, traps Tab, handles Escape, and restores focus when the opener remains available. Project creation uses this same container and retains backdrop dismissal.
 
+On desktop, drag the divider beside either sidebar or focus it and use the arrow keys. Double-click restores that sidebar’s default width. The browser remembers each width and temporarily limits it to keep room for the conversation. Narrow windows use drawers with their own close controls.
+
 ## UX, DX, and AX acceptance
 
 Each design decision must improve the task flow, reduce maintenance ambiguity, and expose a clear semantic operation. Less text alone is not a sufficient improvement.
