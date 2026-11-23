@@ -1,10 +1,11 @@
 import { useInterfaceLanguage } from './interface-language';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { projectImageType } from '../shared/images';
+import { hasHiddenPathSegment } from '../shared/project-files';
 import type { FileContent } from '../shared/types';
 import { message, request } from './api';
 import { HtmlPreview, ProjectImagePreview } from './ContentPreview';
-import { Icon } from './primitives';
+import { Icon, IconButton } from './primitives';
 import './files-panel.css';
 
 interface Entry {
@@ -156,6 +157,7 @@ function FilePreview({
   projectId,
   path,
   narrow,
+  showHidden,
   close,
   ...attachment
 }: AttachmentControls & {
@@ -163,12 +165,13 @@ function FilePreview({
   projectId: string;
   path: string;
   narrow: boolean;
+  showHidden: boolean;
   close: () => void;
 }) {
   const { t } = useInterfaceLanguage();
   const image = projectImageType(path);
   const { result, reload } = useRead<FileContent>(
-    image ? undefined : `${apiBase}/file?path=${encodeURIComponent(path)}`,
+    image ? undefined : fileReadUrl(apiBase, 'file', path, showHidden),
   );
   const back = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -206,7 +209,7 @@ function FilePreview({
       </div>
       {image ? (
         <div className="file-preview-scroll file-image">
-          <ProjectImagePreview projectId={projectId} path={path} />
+          <ProjectImagePreview projectId={projectId} path={path} showHidden={showHidden} />
         </div>
       ) : !result ? (
         <p className="file-state" role="status">
@@ -229,8 +232,19 @@ interface Props extends AttachmentControls {
   directory: string;
   filePath?: string;
   narrow: boolean;
+  showHidden: boolean;
+  onShowHiddenChange: (show: boolean) => void;
   onDirectory: (path: string) => void;
   onFile: (path?: string) => void;
+}
+
+function fileReadUrl(
+  apiBase: string,
+  endpoint: 'file' | 'files',
+  path: string,
+  showHidden: boolean,
+) {
+  return `${apiBase}/${endpoint}?path=${encodeURIComponent(path)}${showHidden ? '&showHidden=true' : ''}`;
 }
 
 export const FilesPanel = memo(function FilesPanel({
@@ -241,13 +255,15 @@ export const FilesPanel = memo(function FilesPanel({
   directory,
   filePath,
   narrow,
+  showHidden,
+  onShowHiddenChange,
   onDirectory,
   onFile,
   ...attachment
 }: Props) {
   const { t } = useInterfaceLanguage();
   const { result, reload } = useRead<Entry[]>(
-    apiBase && `${apiBase}/files?path=${encodeURIComponent(directory)}`,
+    apiBase && fileReadUrl(apiBase, 'files', directory, showHidden),
   );
   const preview = apiBase ? filePath : undefined;
   const location = useRef<HTMLSpanElement>(null);
@@ -262,6 +278,14 @@ export const FilesPanel = memo(function FilesPanel({
     const entry = selectedEntry.current;
     onFile();
     requestAnimationFrame(() => (entry?.isConnected ? entry : location.current)?.focus());
+  };
+  const toggleHidden = () => {
+    if (showHidden) {
+      const firstHidden = parts.findIndex(hasHiddenPathSegment);
+      if (firstHidden >= 0) onDirectory(parts.slice(0, firstHidden).join('/'));
+      else if (preview && hasHiddenPathSegment(preview)) onFile();
+    }
+    onShowHiddenChange(!showHidden);
   };
   return (
     <div className={'files-panel' + (preview ? ' has-file-preview' : '')}>
@@ -291,6 +315,14 @@ export const FilesPanel = memo(function FilesPanel({
               );
             })}
           </nav>
+          <IconButton
+            icon={showHidden ? 'eye' : 'hidden'}
+            label={t('Show hidden files')}
+            className={showHidden ? 'selected' : undefined}
+            aria-pressed={showHidden}
+            disabled={!apiBase}
+            onClick={toggleHidden}
+          />
           <button
             className="icon-button"
             aria-label={t('Refresh file list')}
@@ -347,6 +379,7 @@ export const FilesPanel = memo(function FilesPanel({
           projectId={projectId}
           path={preview}
           narrow={narrow}
+          showHidden={showHidden}
           close={closePreview}
           {...attachment}
         />

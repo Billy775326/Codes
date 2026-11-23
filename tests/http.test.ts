@@ -525,14 +525,20 @@ it('serves only validated images inside the authenticated project scope', async 
   await mkdir(work);
   const imageBytes = Buffer.concat([imagePng, Buffer.alloc(600_000)]);
   await writeFile(join(work, 'plot.png'), imageBytes);
+  await writeFile(join(work, '.plot.png'), imagePng);
   await writeFile(join(work, 'wrong.jpg'), imagePng);
   await writeFile(join(work, 'not-an-image.png'), '<html>invalid image</html>');
   await writeFile(join(directory, 'outside.png'), imagePng);
   await symlink(join(directory, 'outside.png'), join(work, 'escape.png'));
   const project = await service.addProject(work);
-  const read = (path: string, session = cookie) =>
+  const read = (path: string, session = cookie, showHidden = false) =>
     fetch(
-      origin + '/api/projects/' + project.id + '/image-preview?path=' + encodeURIComponent(path),
+      origin +
+        '/api/projects/' +
+        project.id +
+        '/image-preview?path=' +
+        encodeURIComponent(path) +
+        (showHidden ? '&showHidden=true' : ''),
       {
         headers: { cookie: session },
       },
@@ -545,6 +551,10 @@ it('serves only validated images inside the authenticated project scope', async 
   expect(Buffer.from(await image.arrayBuffer())).toEqual(imageBytes);
   expect((await read('../outside.png')).status).toBe(403);
   expect((await read('escape.png')).status).toBe(403);
+  expect((await read('.plot.png')).status).toBe(403);
+  expect((await read('.plot.png', '')).status).toBe(401);
+  expect((await read('.plot.png', cookie, true)).status).toBe(200);
+  expect((await read('escape.png', cookie, true)).status).toBe(403);
   expect((await read('wrong.jpg')).status).toBe(415);
   expect((await read('not-an-image.png')).status).toBe(400);
 });

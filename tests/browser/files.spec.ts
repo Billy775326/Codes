@@ -25,6 +25,7 @@ for (const width of [1440, 320]) {
     const list = panel.locator('.file-list');
     const entry = list.getByRole('button', { name: 'example.ts', exact: true });
     await expect(entry).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Show hidden files' })).toBeInViewport();
     expect((await list.boundingBox())!.height).toBeGreaterThan(300);
     await entry.click();
     const preview = panel.getByRole('region', { name: 'File preview' });
@@ -49,6 +50,50 @@ for (const width of [1440, 320]) {
     expect((await list.boundingBox())!.height).toBeGreaterThan(300);
   });
 }
+
+test('Files opts into hidden entries and preserves an explicitly attached file when hiding them again', async ({
+  page,
+}) => {
+  await openFiles(page);
+  const files = page.getByRole('region', { name: 'Project files', exact: true });
+  const toggle = files.getByRole('button', { name: 'Show hidden files', exact: true });
+  await expect(files.getByRole('button', { name: 'example.ts', exact: true })).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(files.getByRole('button', { name: '.gitignore', exact: true })).toHaveCount(0);
+  await toggle.press('Space');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(files.getByRole('button', { name: '.gitignore', exact: true })).toBeVisible();
+
+  await files.getByRole('button', { name: 'conversation-fixtures', exact: true }).click();
+  await files.getByRole('button', { name: '.settings', exact: true }).click();
+  await files.getByRole('button', { name: '.options', exact: true }).click();
+  const preview = page.getByRole('region', { name: 'File preview', exact: true });
+  await expect(preview).toContainText('Fixture option');
+  await preview.getByRole('button', { name: 'Attach file', exact: true }).click();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(files.getByRole('navigation').locator('[aria-current]')).toHaveText(
+    'conversation-fixtures',
+  );
+  await expect(files.getByRole('button', { name: '.settings', exact: true })).toHaveCount(0);
+  await expect(preview).toHaveCount(0);
+  await expect(
+    page.getByRole('button', {
+      name: 'Remove conversation-fixtures/.settings/.options',
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  await page.getByLabel('Message Codex').fill('Inspect the selected fixture');
+  const sent = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith('/send'),
+  );
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  expect((await sent).postDataJSON().attachments).toEqual([
+    expect.objectContaining({ path: 'conversation-fixtures/.settings/.options', showHidden: true }),
+  ]);
+  await expect(page.locator('.turn-status')).toContainText('Completed');
+});
 
 test('folder navigation clears stale rows and previews, and failed directory reads can be retried', async ({
   page,

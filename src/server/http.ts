@@ -23,6 +23,7 @@ const fileAttachment = z
   .object({
     kind: z.literal('file').optional(),
     path: z.string().min(1).max(1024),
+    showHidden: z.literal(true).optional(),
     sha: z.string().regex(sha256),
     fromLine: z.number().int().positive(),
     toLine: z.number().int().positive(),
@@ -418,17 +419,26 @@ export async function application(
           if (segments[3] === 'files' && method === 'GET')
             return json(
               response,
-              await service.files(projectId, url.searchParams.get('path') ?? ''),
+              await service.files(
+                projectId,
+                url.searchParams.get('path') ?? '',
+                url.searchParams.get('showHidden') === 'true',
+              ),
             );
           if (segments[3] === 'file' && method === 'GET')
             return json(
               response,
-              await service.file(projectId, url.searchParams.get('path') ?? ''),
+              await service.file(
+                projectId,
+                url.searchParams.get('path') ?? '',
+                url.searchParams.get('showHidden') === 'true',
+              ),
             );
           if (segments[3] === 'image-preview' && !segments[4] && method === 'GET') {
             const { stream, size, contentType } = await service.projectImage(
               projectId,
               url.searchParams.get('path') ?? '',
+              url.searchParams.get('showHidden') === 'true',
             );
             response.writeHead(200, {
               'content-type': contentType,
@@ -479,12 +489,20 @@ export async function application(
           if (segments[3] === 'files' && method === 'GET')
             return json(
               response,
-              await service.conversationFiles(id, url.searchParams.get('path') ?? ''),
+              await service.conversationFiles(
+                id,
+                url.searchParams.get('path') ?? '',
+                url.searchParams.get('showHidden') === 'true',
+              ),
             );
           if (segments[3] === 'file' && method === 'GET')
             return json(
               response,
-              await service.conversationFile(id, url.searchParams.get('path') ?? ''),
+              await service.conversationFile(
+                id,
+                url.searchParams.get('path') ?? '',
+                url.searchParams.get('showHidden') === 'true',
+              ),
             );
           if (segments[3] === 'settings' && !segments[4]) {
             if (method === 'GET') return json(response, service.store.settingsProfile(id));

@@ -8,6 +8,8 @@
 
 ### Added
 
+- Toggle hidden files in Files to browse, preview, and attach dotfiles in the selected project. Hidden entries are off by default.
+
 - Archive and restore projects from the sidebar, including projects with no active conversations. In the archive view, browse a project's active and archived chats without changing individual conversation states.
 - Choose English or Simplified Chinese in Settings → Appearance. English is the default, and the selection is saved in the current browser.
 - Enable optional browser notifications for task results, approvals and questions while the workspace is open in the background.

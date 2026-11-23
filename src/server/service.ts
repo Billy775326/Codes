@@ -1,9 +1,10 @@
 import { directoryStatus, directoryError } from './project-context.js';
 import { nativePermissions } from '../shared/permissions.js';
 import { randomUUID, createHash } from 'node:crypto';
-import { constants } from 'node:fs';
+import { constants, existsSync, realpathSync } from 'node:fs';
 import { open, realpath, readFile, readdir, stat } from 'node:fs/promises';
-import { resolve, relative, basename, isAbsolute } from 'node:path';
+import { resolve, relative, basename, dirname, isAbsolute } from 'node:path';
+import { homedir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
@@ -11,6 +12,7 @@ import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
 import { Images, validatedImageType } from './images.js';
 import { imageLimits, projectImageType } from '../shared/images.js';
+import { hasHiddenPathSegment } from '../shared/project-files.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
 import { encodeQuestionReplies } from '../shared/question-replies.js';
@@ -68,6 +70,11 @@ const nativeStatus = z.discriminatedUnion('type', [
 const nativeHistoryItemPageSize = 1;
 const nativeHistoryItemLimit = 2000;
 
+function isWithinDirectory(directory: string, path: string) {
+  const rel = relative(directory, path);
+  return rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel);
+}
+
 export class Service {
   readonly events = new Events();
   readonly images: Images;
@@ -89,10 +96,14 @@ export class Service {
     string,
     { action: Action; rpcId: string | number; epoch: string; permissions?: unknown }
   >();
+  private readonly privateFileRoots: string[];
   constructor(
     readonly store: Store,
     readonly driver: Driver,
   ) {
+    const codexHome = resolve(process.env.CODEX_HOME ?? resolve(homedir(), '.codex'));
+    this.privateFileRoots = [realpathSync(store.directory)];
+    if (existsSync(codexHome)) this.privateFileRoots.push(realpathSync(codexHome));
     this.images = new Images(store.directory);
     this.asyncQuestions = new AsyncQuestions(store.db);
     this.modelSettings = new ModelSettings(driver);
@@ -294,13 +305,13 @@ export class Service {
     const { saved } = await this.conversationOwner(id);
     return this.projectContext(saved.projectId);
   }
-  async conversationFile(id: string, path: string) {
+  async conversationFile(id: string, path: string, showHidden = false) {
     const { saved } = await this.conversationOwner(id);
-    return this.file(saved.projectId, path);
+    return this.file(saved.projectId, path, showHidden);
   }
-  async conversationFiles(id: string, path: string) {
+  async conversationFiles(id: string, path: string, showHidden = false) {
     const { saved } = await this.conversationOwner(id);
-    return this.files(saved.projectId, path);
+    return this.files(saved.projectId, path, showHidden);
   }
   async addProject(path: string, name?: string) {
     try {
@@ -1425,7 +1436,7 @@ export class Service {
         context += `\n\nUploaded file context ${JSON.stringify({ name: attachment.name })}:\n${content}`;
         continue;
       }
-      const file = await this.file(projectId, attachment.path);
+      const file = await this.file(projectId, attachment.path, attachment.showHidden);
       if (file.sha !== attachment.sha)
         throw new AppError(
           'FILE_CHANGED',
@@ -2625,8 +2636,8 @@ export class Service {
           .slice(0, 160) || 'File',
     };
   }
-  async file(projectId: string, path: string): Promise<FileContent> {
-    const absolute = await this.safePath(projectId, path);
+  async file(projectId: string, path: string, showHidden = false): Promise<FileContent> {
+    const absolute = await this.safePath(projectId, path, showHidden);
     const info = await stat(absolute).catch((error) => this.fileError(projectId, error));
     if (!info.isFile() || info.size > limits.file)
       throw new AppError('FILE_LIMIT', 'Choose a text file smaller than 256 KB.');
@@ -2641,20 +2652,18 @@ export class Service {
       lines: content.split('\n').length,
     };
   }
-  async projectImage(projectId: string, path: string) {
+  async projectImage(projectId: string, path: string, showHidden = false) {
     const contentType = projectImageType(path);
     if (!contentType)
       throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP project image.', 415);
-    const absolute = await this.safePath(projectId, path);
+    const absolute = await this.safePath(projectId, path, showHidden);
     const file = await open(
       absolute,
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     ).catch((error) => this.fileError(projectId, error));
     try {
       const openedPath = await realpath('/proc/self/fd/' + file.fd);
-      const rel = relative(this.project(projectId).path, openedPath);
-      if (!rel || isAbsolute(rel) || rel.split('/').some((part) => part.startsWith('.')))
-        throw new AppError('PATH_DENIED', 'This path is outside the file browser scope.', 403);
+      this.requireBrowserPath(this.project(projectId).path, openedPath, showHidden);
       const info = await file.stat();
       if (!info.isFile() || info.size > imageLimits.bytes)
         throw new AppError('IMAGE_LIMIT', 'Project images must be at most 8 MiB.', 413);
@@ -2674,14 +2683,22 @@ export class Service {
       throw error;
     }
   }
-  async files(projectId: string, path = '') {
-    const absolute = await this.safePath(projectId, path);
+  async files(projectId: string, path = '', showHidden = false) {
+    const absolute = await this.safePath(projectId, path, showHidden);
+    const privateEntries = new Set(
+      this.privateFileRoots
+        .filter((root) => dirname(root) === absolute)
+        .map((root) => basename(root)),
+    );
     return (
       await readdir(absolute, { withFileTypes: true }).catch((error) =>
         this.fileError(projectId, error),
       )
     )
-      .filter((x) => !x.name.startsWith('.'))
+      .filter(
+        (entry) =>
+          (showHidden || !hasHiddenPathSegment(entry.name)) && !privateEntries.has(entry.name),
+      )
       .slice(0, 200)
       .map((x) => ({
         name: x.name,
@@ -2702,19 +2719,34 @@ export class Service {
       throw new AppError('FILE_ACCESS', 'The selected file or directory cannot be accessed.', 403);
     throw error;
   }
-  private async safePath(projectId: string, path: string) {
+  private isPrivateBrowserPath(projectRoot: string, absolute: string) {
+    return this.privateFileRoots.some(
+      (root) =>
+        root !== projectRoot &&
+        isWithinDirectory(projectRoot, root) &&
+        isWithinDirectory(root, absolute),
+    );
+  }
+  private requireBrowserPath(projectRoot: string, absolute: string, showHidden: boolean) {
+    if (
+      !isWithinDirectory(projectRoot, absolute) ||
+      this.isPrivateBrowserPath(projectRoot, absolute) ||
+      (!showHidden && hasHiddenPathSegment(relative(projectRoot, absolute)))
+    )
+      throw new AppError('PATH_DENIED', 'This path is outside the file browser scope.', 403);
+  }
+  private async safePath(projectId: string, path: string, showHidden: boolean) {
     if (
       isAbsolute(path) ||
-      path.split(/[\\/]/).some((part) => part === '..' || part.startsWith('.'))
+      path.split(/[\\/]/).includes('..') ||
+      (!showHidden && hasHiddenPathSegment(path))
     )
       throw new AppError('PATH_DENIED', 'This path is outside the file browser scope.', 403);
     const project = await this.requireProject(projectId);
     const canonical = await realpath(resolve(project.path, path)).catch((error) =>
       this.fileError(projectId, error),
     );
-    const rel = relative(project.path, canonical);
-    if (rel.startsWith('..') || isAbsolute(rel))
-      throw new AppError('PATH_DENIED', 'This path is outside the project.', 403);
+    this.requireBrowserPath(project.path, canonical, showHidden);
     return canonical;
   }
   async close() {

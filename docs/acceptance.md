@@ -10,7 +10,7 @@ Target: one owner, one Linux host, a desktop browser for development, and a phon
 | Recovery             | A lost native acknowledgement remains unknown; only matching terminal history releases the lease                   | Service fault-injection test                       |
 | Browser independence | Closing the originating page leaves approval available to a different signed-in device                             | Desktop-to-mobile browser test                     |
 | Stop                 | Stop propagates to the runtime and remains interrupted after reload                                                | Service and browser tests                          |
-| Context              | File selection is sent with a checksum; changed files, hidden paths, traversal, and escaping symlinks are rejected | Service and browser tests                          |
+| Context              | Send file context with a checksum, opt into hidden paths, and reject stale files, traversal, and escaping symlinks | Service and browser tests                          |
 | Long history         | Open the latest 12 turns, load another page, type, then switch conversations                                       | Browser test against 100 synthetic turns           |
 | Authentication       | APIs require a session; foreign origins and hosts are rejected; logout revokes the cookie                          | HTTP tests                                         |
 | CLI compatibility    | Initialize and read model/thread metadata with an empty temporary CLI home                                         | `npm run test:native`                              |

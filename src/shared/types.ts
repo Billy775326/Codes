@@ -165,6 +165,7 @@ export interface Operation {
 export interface FileAttachment {
   kind?: 'file';
   path: string;
+  showHidden?: true;
   sha: string;
   fromLine: number;
   toLine: number;

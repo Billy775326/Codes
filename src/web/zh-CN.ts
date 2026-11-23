@@ -540,6 +540,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Shorten the current draft before adding this quote.': '请先缩短当前草稿，再添加这条引用。',
   'Show access token': '显示访问令牌',
   'Show all {count} edits': '显示全部 {count} 处编辑',
+  'Show hidden files': '显示隐藏文件',
   'Show archived projects and chats': '查看已归档项目和会话',
   'Show fewer files': '收起文件',
   'Side by side': '并排',

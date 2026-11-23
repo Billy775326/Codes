@@ -104,7 +104,7 @@ Native Plan/Code and reasoning settings use experimental collaboration fields on
 
 An independent simulator exercises protocol timing and failure paths, but does not prove that every live Codex tool, account policy, permission request, or model event behaves as expected. Basic live read/write/interrupt acceptance passed; real prompting policies and broader tool variants remain separate gates.
 
-The workspace token grants access to the configured owner's projects and execution authority. Project paths are canonicalized; the file browser refuses hidden paths, traversal, and symlinks escaping the project. Files are exposed read-only through the browser. This is not isolation against a malicious local process modifying the filesystem concurrently, or against tools authorized by the owner to execute on the host.
+The workspace token grants access to the configured owner's projects and execution authority. The read-only file browser hides dotfiles by default and supports an explicit opt-in. Paths are canonicalized, with traversal and escaping symlinks denied. Nested Codes and Codex data directories are excluded from the project view. A local process can still modify the filesystem concurrently, and authorized tools can execute on the host.
 
 The implementation intentionally omits multi-tenancy, a browser terminal, automatic deployment, automatic Git commits, branch/worktree orchestration, and a second editable history store.
 

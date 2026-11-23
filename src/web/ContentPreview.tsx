@@ -79,9 +79,17 @@ function PreviewImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export function ProjectImagePreview({ projectId, path }: { projectId: string; path: string }) {
+export function ProjectImagePreview({
+  projectId,
+  path,
+  showHidden,
+}: {
+  projectId: string;
+  path: string;
+  showHidden?: boolean;
+}) {
   const { t } = useInterfaceLanguage();
-  const src = projectImageUrl(projectId, path);
+  const src = projectImageUrl(projectId, path, showHidden);
   return (
     <a
       href={src}

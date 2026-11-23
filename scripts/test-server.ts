@@ -6,6 +6,9 @@ const directory = await mkdtemp(join(tmpdir(), 'codes-browser-'));
 const project = join(directory, 'sample-project');
 await mkdir(project);
 await mkdir(join(project, 'conversation-fixtures'));
+await mkdir(join(project, 'conversation-fixtures', '.settings'));
+await writeFile(join(project, '.gitignore'), 'local-fixture.txt\n');
+await writeFile(join(project, 'conversation-fixtures', '.settings', '.options'), 'Fixture option');
 await writeFile(
   join(project, 'README.md'),
   '# Sample project\n\nA fixture for isolated browser acceptance.\n',

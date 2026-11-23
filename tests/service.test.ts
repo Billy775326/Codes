@@ -1,6 +1,6 @@
-import { mkdtemp, rm, writeFile, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Store } from '../src/server/store';
@@ -602,11 +602,36 @@ it('paginates native history instead of loading every turn', async () => {
   expect(older.messages).toHaveLength(24);
   expect(older.messages[0]?.id).not.toBe(page.messages[0]?.id);
 });
-it('blocks directory traversal, hidden files, and escaping symlinks', async () => {
-  const { service, project, directory } = await fixture();
+it('opts into hidden project paths while rejecting traversal, private data, and external symlinks', async () => {
+  const { service, project, directory, thread } = await fixture();
+  await mkdir(join(directory, '.settings'));
+  await writeFile(join(directory, '.settings', '.options'), 'Fixture option');
+  await symlink(join(directory, '.settings', '.options'), join(directory, 'visible-alias'));
   await symlink('/etc', join(directory, 'outside'));
-  for (const path of ['../passwd', '.private', 'outside/passwd'])
+  for (const path of ['../passwd', '.settings/.options', 'visible-alias', 'outside/passwd'])
     await expect(service.file(project.id, path)).rejects.toMatchObject({ code: 'PATH_DENIED' });
+  expect(await service.files(project.id)).not.toContainEqual(
+    expect.objectContaining({ name: '.settings' }),
+  );
+  expect(await service.files(project.id, '', true)).toContainEqual({
+    name: '.settings',
+    path: '.settings',
+    directory: true,
+  });
+  expect(await service.conversationFiles(thread.id, '.settings', true)).toEqual([
+    { name: '.options', path: '.settings/.options', directory: false },
+  ]);
+  expect(await service.conversationFile(thread.id, '.settings/.options', true)).toMatchObject({
+    text: 'Fixture option',
+  });
+  for (const path of ['../passwd', 'outside/passwd', directory + '/.settings/.options'])
+    await expect(service.file(project.id, path, true)).rejects.toMatchObject({
+      code: 'PATH_DENIED',
+    });
+  const parent = await service.addProject(dirname(directory));
+  await expect(service.files(parent.id, basename(directory), true)).rejects.toMatchObject({
+    code: 'PATH_DENIED',
+  });
 });
 it('rejects stale context but still returns an existing operation receipt after files change', async () => {
   const { service, project, directory, thread } = await fixture();

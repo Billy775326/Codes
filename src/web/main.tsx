@@ -509,6 +509,7 @@ function App() {
   const openAddProject = useCallback(() => setAdding(true), []);
   const [conversationModalOpen, setConversationModalOpen] = useState(false);
   const [directory, setDirectory] = useState('');
+  const [showHiddenFiles, setShowHiddenFiles] = useState(false);
   const [filePath, setFilePath] = useState<string>();
   const [receipt, setReceipt] = useState('');
   const feed = useRef<Feed | undefined>(undefined);
@@ -1468,12 +1469,18 @@ function App() {
       draftRevision.current++;
       setAttachments((list) => [
         ...list.filter((entry) => !('path' in entry) || entry.path !== file.path),
-        { path: file.path, sha: file.sha, fromLine, toLine },
+        {
+          path: file.path,
+          sha: file.sha,
+          fromLine,
+          toLine,
+          ...(showHiddenFiles ? { showHidden: true as const } : {}),
+        },
       ]);
       if (narrow) setPanel(null);
       requestAnimationFrame(() => composer.current?.focus());
     },
-    [attachmentBlocked, narrow],
+    [attachmentBlocked, narrow, showHiddenFiles],
   );
   const loadingConversation = !!threadId && (!thread || thread.id !== threadId);
   const active =
@@ -3177,6 +3184,8 @@ function App() {
               directory={directory}
               filePath={filePath}
               narrow={narrow}
+              showHidden={showHiddenFiles}
+              onShowHiddenChange={setShowHiddenFiles}
               onDirectory={browseDirectory}
               onFile={setFilePath}
               onAttach={attachProjectFile}

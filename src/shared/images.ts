@@ -16,5 +16,5 @@ export function projectImageType(path: string) {
   if (/\.webp$/i.test(path)) return 'image/webp';
   return undefined;
 }
-export const projectImageUrl = (projectId: string, path: string) =>
-  `/api/projects/${encodeURIComponent(projectId)}/image-preview?path=${encodeURIComponent(path)}`;
+export const projectImageUrl = (projectId: string, path: string, showHidden = false) =>
+  `/api/projects/${encodeURIComponent(projectId)}/image-preview?path=${encodeURIComponent(path)}${showHidden ? '&showHidden=true' : ''}`;
