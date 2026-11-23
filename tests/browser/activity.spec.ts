@@ -56,6 +56,7 @@ async function fixture(page: Page, count: number) {
   return { base, commands };
 }
 test('a streaming Codex reply renders Markdown before the task finishes', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
@@ -67,12 +68,13 @@ test('a streaming Codex reply renders Markdown before the task finishes', async 
   await expect(reply.getByRole('listitem')).toHaveCount(3);
   const caret = reply.locator('.caret');
   await expect(caret).toBeVisible();
-  await expect(caret).toHaveCSS('background-color', 'rgb(168, 200, 235)');
+  await expect(caret).toHaveCSS('background-color', 'rgb(85, 204, 255)');
+  await expect(caret).toHaveCSS('animation-name', 'caret-pulse');
   const size = (await caret.boundingBox())!;
-  expect(size.width).toBeGreaterThan(6);
-  expect(size.height).toBeGreaterThan(14);
+  expect(size.width).toBeGreaterThan(9);
+  expect(size.height).toBeGreaterThan(17);
   await page.getByRole('button', { name: 'Switch to light mode', exact: true }).click();
-  await expect(caret).toHaveCSS('background-color', 'rgb(36, 92, 145)');
+  await expect(caret).toHaveCSS('background-color', 'rgb(0, 93, 156)');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(caret).toHaveCSS('animation-name', 'none');
   const stop = page.getByRole('button', { name: 'Stop task', exact: true });

@@ -57,5 +57,14 @@ export function conversationStatus(row: Summary, t: Translate = interfaceLanguag
   const queue = row.queueCount
     ? t('{count} in queue', { count: row.queueCount }) + (queueStatus ? ' · ' + t(queueStatus) : '')
     : undefined;
-  return { label: t(label), tone, queue };
+  const motion =
+    tone === 'running' && (row.state === 'running' || row.sidebarActivity === 'compacting')
+      ? 'running'
+      : tone === 'attention' &&
+          !uncertain &&
+          !row.managementPending &&
+          (row.sidebarActivity || row.state === 'waitingApproval' || row.state === 'waitingInput')
+        ? 'attention'
+        : undefined;
+  return { label: t(label), tone, queue, motion };
 }

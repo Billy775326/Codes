@@ -36,7 +36,12 @@ it('keeps uncertain receipts visible over terminal state and queue metadata', ()
 it('retains the task status alongside paused, failed, and uncertain queue entries', () => {
   expect(
     conversationStatus({ ...row, state: 'waitingApproval', queueCount: 2, queuePaused: true }),
-  ).toEqual({ label: 'Needs approval', tone: 'attention', queue: '2 in queue · Paused' });
+  ).toEqual({
+    label: 'Needs approval',
+    tone: 'attention',
+    queue: '2 in queue · Paused',
+    motion: 'attention',
+  });
   expect(
     conversationStatus({ ...row, queueCount: 1, queuePaused: true, queueIssue: 'failed' }).queue,
   ).toBe('1 in queue · Failed');
@@ -44,4 +49,16 @@ it('retains the task status alongside paused, failed, and uncertain queue entrie
     'Check result',
   );
   expect(conversationStatus({ ...row, queuePaused: true }).queue).toBeUndefined();
+});
+it('animates live work and interactions while keeping unconfirmed results static', () => {
+  expect(conversationStatus({ ...row, state: 'running' }).motion).toBe('running');
+  expect(
+    conversationStatus({ ...row, state: 'running', sidebarActivity: 'optionalInput' }).motion,
+  ).toBe('attention');
+  expect(conversationStatus({ ...row, state: 'waitingInput' }).motion).toBe('attention');
+  expect(
+    conversationStatus({ ...row, state: 'running', executionUnknown: true }).motion,
+  ).toBeUndefined();
+  expect(conversationStatus({ ...row, executionPending: true }).motion).toBeUndefined();
+  expect(conversationStatus(row).motion).toBeUndefined();
 });

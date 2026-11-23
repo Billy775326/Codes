@@ -135,6 +135,7 @@ const MessageView = memo(function MessageView({
   projectPath,
   item,
   streaming,
+  running = false,
   onReply,
   onFork,
   disabled,
@@ -152,6 +153,7 @@ const MessageView = memo(function MessageView({
   projectPath?: string;
   item: Message;
   streaming: boolean;
+  running?: boolean;
   actions?: boolean;
   changes?: Message;
   timestamp?: number;
@@ -217,7 +219,7 @@ const MessageView = memo(function MessageView({
     >
       <div className="message-body">
         <div className="message-label">
-          {streaming && (
+          {streaming && running && (
             <span className="thinking">
               {t('Working')}
               <span>•••</span>
@@ -252,7 +254,7 @@ const MessageView = memo(function MessageView({
           ) : (
             <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
           )}
-          {streaming && <span className="caret" aria-hidden="true" />}
+          {streaming && running && <span className="caret" aria-hidden="true" />}
         </div>
         {changes && (
           <ChangeSummary
@@ -2005,6 +2007,7 @@ function App() {
   return withLanguage(
     <div
       data-theme={theme}
+      data-live={connection === 'Connected'}
       data-chat-font-size={preferences.chatFontSize}
       data-code-font-size={preferences.codeFontSize}
       style={
@@ -2440,6 +2443,7 @@ function App() {
                               : undefined
                           }
                           disabled={busy || forkBusy || thread.managementPending}
+                          running={thread.state === 'running'}
                           streaming={
                             m.kind === 'assistant' &&
                             m.id === assistantTail.get(m.turnId) &&

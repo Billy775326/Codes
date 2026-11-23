@@ -63,6 +63,8 @@
 
 ### Changed
 
+- Make live replies and sidebar activity easier to spot with a brighter running cursor and larger indicators for active tasks, approvals, and questions. Keep indicators static while reconnecting or when reduced motion is enabled.
+
 - Make the indicator at the end of an in-progress Codex reply larger and easier to see in both themes.
 - Fit queue editing controls on narrow screens with labeled icons for saving, canceling, stopping, and pausing or resuming the queue.
 

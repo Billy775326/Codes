@@ -778,6 +778,7 @@ const ProjectCard = memo(function ProjectCard({
                     id={'conversation-status-' + row.id}
                   >
                     <span
+                      data-motion={status.motion}
                       className={
                         'conversation-status tone-' +
                         status.tone +

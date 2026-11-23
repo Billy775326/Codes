@@ -219,11 +219,29 @@
   display: none;
 }
 .conversation-status.tone-running {
-  color: var(--link);
+  color: var(--status-running);
+}
+.conversation-status[data-motion] {
+  gap: 7px;
+  font-weight: 650;
+}
+.conversation-status[data-motion]::before {
+  width: 8px;
+  height: 8px;
+  outline: 2px solid color-mix(in srgb, currentColor 28%, transparent);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .conversations[data-live='true'] .conversation-row[data-state='running'] .tone-running::before {
-    animation: pulse 1.8s ease-in-out infinite;
+  .conversations[data-live='true'] .conversation-status[data-motion='running']::before {
+    animation: sidebar-activity-pulse 1.15s ease-in-out infinite;
+  }
+  .conversations[data-live='true'] .conversation-status[data-motion='attention']::before {
+    animation: sidebar-activity-pulse 1.9s ease-in-out infinite;
+  }
+}
+@keyframes sidebar-activity-pulse {
+  50% {
+    transform: scale(1.3);
+    opacity: 0.8;
   }
 }
 .conversation-status.tone-attention {

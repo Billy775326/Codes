@@ -16,6 +16,7 @@
   --bubble: #333941;
   --primary-ink: #202328;
   --link: #a8c8eb;
+  --status-running: #55ccff;
   --status-attention: #dfbb80;
   --status-error: #e39b9b;
   --control-size: 36px;
@@ -41,6 +42,7 @@
   --bubble: #ededed;
   --primary-ink: #fff;
   --link: #245c91;
+  --status-running: #005d9c;
   --status-attention: #795516;
   --status-error: #a52b36;
   color-scheme: only light;

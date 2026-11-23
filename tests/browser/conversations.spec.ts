@@ -261,6 +261,7 @@ test('a delayed list response cannot undo a title already received through live 
 test('sidebar keeps task and paused queue status across selection, reload, themes and narrow layouts', async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await login(page);
   const title = '[approve] Sidebar status ' + Date.now();
   await page.getByLabel('Message Codex').fill(title);
@@ -270,6 +271,13 @@ test('sidebar keeps task and paused queue status across selection, reload, theme
     .locator('.conversation-row')
     .filter({ has: page.getByRole('button', { name: title, exact: true }) });
   await expect(row.locator('.conversation-status')).toHaveText('Needs approval');
+  await expect
+    .poll(() =>
+      row
+        .locator('.conversation-status')
+        .evaluate((status) => getComputedStyle(status, '::before').animationName),
+    )
+    .toBe('sidebar-activity-pulse');
   await expect(row.locator('.thread-link')).toHaveAccessibleDescription(/Needs approval.*Updated:/);
   await expect(row.locator('time')).toHaveAttribute('datetime', /T/);
   await page.getByLabel('Message Codex').fill('Waiting sidebar follow-up');
@@ -342,7 +350,13 @@ test('the running dot pulses only while live updates and motion are enabled', as
   const animation = () =>
     status.evaluate((element) => getComputedStyle(element, '::before').animationName);
   await expect(status).toHaveText('Running');
-  await expect.poll(animation).toBe('pulse');
+  await expect.poll(animation).toBe('sidebar-activity-pulse');
+  await expect(status).toHaveCSS('color', 'rgb(85, 204, 255)');
+  await expect
+    .poll(() => status.evaluate((el) => getComputedStyle(el, '::before').width))
+    .toBe('8px');
+  await page.getByRole('button', { name: 'Switch to light mode', exact: true }).click();
+  await expect(status).toHaveCSS('color', 'rgb(0, 93, 156)');
 
   let resume!: () => void;
   const reconnect = new Promise<void>((resolve) => {
@@ -363,12 +377,12 @@ test('the running dot pulses only while live updates and motion are enabled', as
   } finally {
     resume();
   }
-  await expect.poll(animation).toBe('pulse');
+  await expect.poll(animation).toBe('sidebar-activity-pulse');
 
   await page.setViewportSize({ width: 320, height: 844 });
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await expect(status).toBeVisible();
-  await expect.poll(animation).toBe('pulse');
+  await expect.poll(animation).toBe('sidebar-activity-pulse');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect.poll(animation).toBe('none');
   await expect(status).toHaveText('Running');
