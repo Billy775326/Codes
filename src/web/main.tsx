@@ -270,9 +270,10 @@ const MessageView = memo(function MessageView({
             <div className="message-footer">
               {actions && !streaming && item.turnId && (onReply || onFork) && (
                 <div className="message-actions" role="group" aria-label={t('Reply actions')}>
-                  <button
-                    aria-label={t('Copy message')}
-                    data-tooltip=""
+                  <IconButton
+                    icon="copy"
+                    label={t('Copy message')}
+                    size={13}
                     onClick={() => {
                       void navigator.clipboard
                         ?.writeText(item.text)
@@ -285,33 +286,27 @@ const MessageView = memo(function MessageView({
                       if (!navigator.clipboard)
                         setCopied('Copy unavailable. Select the message text.');
                     }}
-                  >
-                    <Icon name="copy" size={13} />
-                  </button>
+                  />
                   {copied && <span role="status">{t(copied)}</span>}
                   {onReply && (
-                    <button
-                      aria-label={t('Reply')}
-                      title={t('Quote this reply into a new draft; the original stays unchanged')}
+                    <IconButton
+                      icon="reply"
+                      label={t('Reply')}
+                      hint={t('Quote this reply in an editable draft')}
+                      size={13}
                       disabled={disabled}
                       onClick={() => onReply(item)}
-                    >
-                      <Icon name="reply" size={13} />
-                      <span className="action-label">{t('Reply')}</span>
-                    </button>
+                    />
                   )}
                   {onFork && (
-                    <button
-                      aria-label={t('Branch from here')}
-                      title={t(
-                        'Create a conversation branch through this turn; current project files stay shared',
-                      )}
+                    <IconButton
+                      icon="branch"
+                      label={t('Branch from here')}
+                      hint={t('Branch from this turn using the same project files')}
+                      size={13}
                       disabled={disabled}
                       onClick={() => onFork(item)}
-                    >
-                      <Icon name="branch" size={13} />
-                      <span className="action-label">{t('Branch from here')}</span>
-                    </button>
+                    />
                   )}
                 </div>
               )}
@@ -1667,6 +1662,14 @@ function App() {
       : !active || thread?.queue?.paused
         ? t('Add to waiting queue')
         : 'Queue for next turn';
+  const alternateDeliveryHint =
+    deliveryMode === 'steer'
+      ? t('Wait for a new turn. Waiting text stays editable.')
+      : !canSteer
+        ? t('Add now waits until the pending request or result is resolved.')
+        : !sameSettings(settings, thread!.settings)
+          ? t('Add now needs the running task settings. Queue to use the updated settings.')
+          : t('Add this draft to the running task. Accepted additions cannot be edited.');
   const commands = [
     {
       name: '/model',
@@ -2709,13 +2712,12 @@ function App() {
           {error && (
             <div className="error-banner" role="alert">
               <span>{t(error)}</span>
-              <button
-                className="icon-button"
-                aria-label={t('Dismiss error')}
+              <IconButton
+                icon="close"
+                label={t('Dismiss error')}
+                size={15}
                 onClick={() => setError('')}
-              >
-                <Icon name="close" size={15} />
-              </button>
+              />
             </div>
           )}
           {(thread?.state === 'unknown' || (receipt && !thread?.pending)) && (
@@ -2974,15 +2976,8 @@ function App() {
               <button
                 type="button"
                 disabled={deliveryMode === 'queue' ? addBlocked : queueBlocked}
-                title={
-                  deliveryMode === 'queue'
-                    ? thread && !sameSettings(settings, thread.settings)
-                      ? t('Queue this message to use the updated conversation settings')
-                      : t(
-                          'Apply this draft to the running task; accepted additions cannot be edited',
-                        )
-                    : t('Wait for a new turn; waiting text remains editable')
-                }
+                data-tooltip={alternateDeliveryHint}
+                aria-description={alternateDeliveryHint}
                 onClick={() => followUp(true)}
               >
                 {deliveryMode === 'queue' ? t('Add now instead') : t('Queue instead')}

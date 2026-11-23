@@ -26,10 +26,17 @@ for (const width of [1440, 320])
     await expect(page.locator('#message-delivery-help')).toContainText(
       'Waiting text can be edited',
     );
+    const alternate = page.getByRole('button', { name: 'Add now instead', exact: true });
+    await alternate.hover();
+    const hint = page.locator('.control-tooltip');
+    await expect(hint).toHaveText(
+      'Add this draft to the running task. Accepted additions cannot be edited.',
+    );
+    await expect(hint).toBeVisible();
     const steer = page.waitForRequest(
       (request) => request.url().endsWith('/steer') && request.method() === 'POST',
     );
-    await page.getByRole('button', { name: 'Add now instead', exact: true }).click();
+    await alternate.click();
     await steer;
     await expect(page.getByTestId('message-user')).toHaveCount(2);
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
@@ -44,13 +51,15 @@ for (const width of [1440, 320])
     const addNow = page.getByRole('button', { name: 'Add to current task', exact: true });
     await expect(addNow).toBeEnabled();
     await addNow.hover();
-    const hint = page.locator('.control-tooltip');
     await expect(hint).toContainText('Add to current task');
     await expect(hint).toBeVisible();
     await expect(page.locator('#message-delivery-help')).toContainText(
       'Accepted additions cannot be edited',
     );
-    await page.getByRole('button', { name: 'Queue instead', exact: true }).click();
+    const queueInstead = page.getByRole('button', { name: 'Queue instead', exact: true });
+    await queueInstead.hover();
+    await expect(hint).toHaveText('Wait for a new turn. Waiting text stays editable.');
+    await queueInstead.click();
     const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
     await expect(queue).toContainText('Waiting · Editable');
     await expect(

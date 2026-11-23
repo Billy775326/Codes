@@ -29,12 +29,16 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
     '这条消息的任务设置不同，无法加入当前任务。请保留在队列中，等待单独执行。',
   'Add now is unavailable while awaiting approval, input, or confirmation. Queue a message for later.':
     '等待审批、回答或确认时，消息可以先排队。',
+  'Add now needs the running task settings. Queue to use the updated settings.':
+    '立即加入需要沿用当前任务设置。排队可使用更新后的设置。',
   'Add now updates this running task using its current settings. Accepted additions cannot be edited.':
     '立即加入会沿用当前任务的设置，接收后的消息无法编辑。',
   'Add now waits until the pending request or result is resolved.':
     '请求或结果确认后即可立即加入。',
   'Add project': '添加项目',
   'Add queued message to current task': '将排队消息加入当前任务',
+  'Add this draft to the running task. Accepted additions cannot be edited.':
+    '将草稿加入当前任务，接收后无法编辑。',
   'Add to current task': '加入当前任务',
   'Add to running task': '加入当前任务',
   'Add to waiting queue': '加入等待队列',
@@ -56,8 +60,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
     '适用于当前会话后续任务。运行中和已排队的任务沿用各自的设置。',
   'Applies to new conversations. Existing conversations keep their settings.':
     '适用于新会话。已有会话沿用各自的设置。',
-  'Apply this draft to the running task; accepted additions cannot be edited':
-    '将草稿加入当前任务，接收后无法编辑',
   'Apply this waiting message to the running task; it stops being editable after acceptance':
     '将等待中的消息发给当前任务，接收后将无法编辑',
   'Approve for me': '代我审批',
@@ -89,6 +91,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Before and after line numbers': '修改前后的行号',
   'Branch from here': '从此处分支',
   'Branch from the latest displayed completed reply': '从最新的已完成回复创建分支',
+  'Branch from this turn using the same project files': '从本轮创建分支，共享当前项目文件',
   'Branch from this turn?': '从本轮创建分支？',
   'Browse files': '浏览文件',
   'Browse project files': '浏览项目文件',
@@ -197,8 +200,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
     '将截至本轮的历史复制到新会话。后续轮次和排队消息留在原会话。两者共享当前项目文件，分支以只读权限开始。',
   'Copy unavailable. Select the message text.': '无法复制，可以手动选择消息文本。',
   'Could not request browser notification permission.': '无法请求浏览器通知权限。',
-  'Create a conversation branch through this turn; current project files stay shared':
-    '为截至本轮的会话创建分支，共享当前项目文件',
   'Create branch': '创建分支',
   'Creating branch…': '正在创建分支…',
   'Cumulative usage': '累计用量',
@@ -441,14 +442,12 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Queue paused. Resume when ready.': '队列已暂停，可手动恢复。',
   'Queue runs after this task completes. Waiting text can be edited or removed.':
     '排队消息将在当前任务结束后运行。等待中的文本可以编辑或移除。',
-  'Queue this message to use the updated conversation settings':
-    '将消息排队，以使用更新后的会话设置',
   'Queue to use the updated conversation settings.': '使用排队可应用已更新的会话设置。',
   Queued: '已排队',
   'Queued message actions': '排队消息操作',
   'Queued message editor': '排队消息编辑器',
   'Queued messages': '排队消息',
-  'Quote this reply into a new draft; the original stays unchanged': '引用这条回复创建新草稿',
+  'Quote this reply in an editable draft': '引用这条回复到可编辑的草稿',
   'Ran {command}': '已运行 {command}',
   'READ ONLY': '只读',
   'Read only': '只读',
@@ -633,7 +632,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Use your Codes token for local or tailnet access. Select Cloudflare Access for a public hostname.':
     '通过本机或 Tailscale 访问时使用 Codes 令牌。公网域名可选择 Cloudflare Access。',
   Viewed: '已查看',
-  'Wait for a new turn; waiting text remains editable': '等待下一轮，排队文本仍可编辑',
+  'Wait for a new turn. Waiting text stays editable.': '等待下一轮，排队文本仍可编辑。',
   'Waiting for active work': '等待当前任务结束',
   'Waiting for Codex…': '正在等待 Codex…',
   'Waiting · Editable': '等待中 · 可编辑',

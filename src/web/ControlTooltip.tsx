@@ -89,13 +89,16 @@ export function ControlTooltip() {
     };
     const pointerOver = (event: PointerEvent) => {
       if (event.pointerType === 'touch') return;
+      const target = find(event.target);
+      if (target) {
+        show(target, hoverDelay);
+        return;
+      }
       if (overHint(event)) {
         cancelClosing();
         return;
       }
-      const target = find(event.target);
-      if (target) show(target, hoverDelay);
-      else if (control && !control.isConnected) hide();
+      if (control && !control.isConnected) hide();
     };
     const pointerOut = (event: PointerEvent) => {
       if (

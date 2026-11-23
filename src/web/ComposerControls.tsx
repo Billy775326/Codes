@@ -108,6 +108,7 @@ export function ComposerControls({
         <button
           className="plan-mode"
           aria-label={t('Exit Plan mode')}
+          data-tooltip=""
           disabled={disabled}
           onClick={() => change({ ...settings, mode: 'default' })}
         >
@@ -122,10 +123,7 @@ export function ComposerControls({
         className="model-menu"
         trigger={
           <>
-            <span
-              className="model-selection"
-              title={`${modelLabel} · ${effortLabel}${!settings.effort ? ' ' + t('(model default)') : ''}`}
-            >
+            <span className="model-selection">
               <span className="model-selection-name">{modelLabel}</span>
               <span className="model-selection-effort">· {effortLabel}</span>
             </span>

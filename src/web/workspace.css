@@ -890,6 +890,10 @@
   .app .message-actions {
     opacity: 1;
   }
+  .app .message-actions button {
+    width: 36px;
+    min-height: 36px;
+  }
   .app .approval-actions {
     flex-wrap: wrap;
   }

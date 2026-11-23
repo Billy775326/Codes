@@ -63,6 +63,8 @@
 
 ### Changed
 
+- Show hover and keyboard hints for reply and branch actions, the model and permission pickers, and alternate delivery actions. Enlarge reply controls on narrow screens and label the error close action on hover.
+
 - Group toolbar actions by task. Use named icons for patch layout, viewed state, file navigation, configuration transfer, and compact attachment controls. Keep visible labels for sending, approvals, recovery, and file attachment scope.
 
 - Make live replies and sidebar activity easier to spot with a brighter running cursor and larger indicators for active tasks, approvals, and questions. Keep indicators static while reconnecting or when reduced motion is enabled.

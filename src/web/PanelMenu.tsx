@@ -47,8 +47,7 @@ export function PanelMenu({
       <summary
         role="button"
         aria-label={label}
-        data-tooltip={iconOnly ? '' : undefined}
-        title={iconOnly ? undefined : description ? label + ': ' + description : label}
+        data-tooltip={description ?? (iconOnly ? '' : undefined)}
         aria-description={description}
         aria-disabled={disabled || undefined}
         onClick={(event) => {

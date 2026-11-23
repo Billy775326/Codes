@@ -283,5 +283,10 @@ test('a rejected send retains image context and text for correction', async ({ p
   ).toBeVisible();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this image context');
   await loadedImages(page, '.attachments img', 1);
+  const dismiss = page.getByRole('button', { name: 'Dismiss error', exact: true });
+  await dismiss.hover();
+  await expect(page.locator('.control-tooltip')).toHaveText('Dismiss error');
+  await dismiss.click();
+  await expect(dismiss).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
 });

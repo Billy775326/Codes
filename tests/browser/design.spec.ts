@@ -18,9 +18,8 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
     await expect(control).toBeVisible();
     await expect(control).toHaveText('');
   }
-  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
-    'Read only',
-  );
+  const permissions = page.getByRole('button', { name: 'Codex permissions', exact: true });
+  await expect(permissions).toContainText('Read only');
   const tooltip = page.locator('.control-tooltip');
   await files.hover();
   await expect(tooltip).toHaveText('Browse files');
@@ -39,6 +38,14 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
   await page.keyboard.press('Enter');
   await expect(changes).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('complementary', { name: 'Project context' })).toBeVisible();
+
+  await permissions.hover();
+  await expect(tooltip).toContainText('Applies to future tasks');
+  await permissions.press('Tab');
+  const model = page.getByRole('button', { name: 'Model and reasoning', exact: true });
+  await expect(model).toBeFocused();
+  await expect(tooltip).toContainText('Future tasks in this conversation');
+  await expect(tooltip).toBeVisible();
 });
 
 for (const width of [1440, 320]) {

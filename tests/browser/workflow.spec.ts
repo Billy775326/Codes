@@ -164,11 +164,24 @@ test('quoted replies remain ordinary editable drafts across conversation switchi
   const prompt = 'Quoted message fixture ' + Date.now();
   await send(page, prompt);
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  await page
-    .getByTestId('message-assistant')
-    .last()
-    .getByRole('button', { name: 'Reply', exact: true })
-    .click();
+  const reply = page.getByTestId('message-assistant').last();
+  const replyAction = reply.getByRole('button', { name: 'Reply', exact: true });
+  const branchAction = reply.getByRole('button', { name: 'Branch from here', exact: true });
+  await page.setViewportSize({ width: 320, height: 800 });
+  for (const action of [replyAction, branchAction]) {
+    const bounds = await action.boundingBox();
+    expect(bounds?.width).toBeGreaterThanOrEqual(36);
+    expect(bounds?.height).toBeGreaterThanOrEqual(36);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const hint = page.locator('.control-tooltip');
+  await replyAction.hover();
+  await expect(hint).toHaveText('Quote this reply in an editable draft');
+  await replyAction.press('Tab');
+  await expect(branchAction).toBeFocused();
+  await expect(hint).toHaveText('Branch from this turn using the same project files');
+  await expect(hint).toBeVisible();
+  await replyAction.click();
   const quote = await page.getByLabel('Message Codex').inputValue();
   expect(quote).toContain('Regarding this Codex reply:');
   expect(quote).toContain('> ## A clear path forward');
