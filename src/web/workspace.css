@@ -146,6 +146,9 @@
   min-width: 0;
   gap: 0;
 }
+.app .breadcrumb .compact-page-reload {
+  display: none;
+}
 .app .breadcrumb h1 {
   display: block;
   max-width: none;
@@ -896,6 +899,15 @@
   }
   .app .approval-actions {
     flex-wrap: wrap;
+  }
+}
+@media (max-width: 360px) {
+  .app .top-actions .page-reload {
+    display: none;
+  }
+  .app .breadcrumb .compact-page-reload {
+    display: inline-flex;
+    order: 2;
   }
 }
 @media (prefers-reduced-motion: reduce) {

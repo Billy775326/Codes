@@ -462,7 +462,10 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Refresh list': '刷新列表',
   'Refreshing…': '正在刷新…',
   'Reload default settings': '重新加载默认设置',
+  'Reload page': '重载页面',
   'Reload settings': '重新加载设置',
+  'Reload this page? Unsent attachments or a queue edit may be lost.':
+    '要重载页面吗？未发送的附件或正在编辑的队列消息可能丢失。',
   Remove: '移除',
   'Remove image: {name}': '移除图片：{name}',
   'Remove {name}': '移除 {name}',

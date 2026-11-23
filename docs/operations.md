@@ -109,6 +109,8 @@ Enable **Browser notifications** in **Settings → Preferences** and allow the s
 
 ## When the page disconnects
 
+Use **Reload page** in the workspace header to reload Codes. The selected conversation and saved text draft are restored, and active tasks continue on the server. Codes asks for confirmation if a reload would discard unsent attachments or an open queue edit.
+
 A 401 response from the snapshot, sidebar or question/approval API returns an already signed-in page to the login form. Sign in with the existing token to restore the selected conversation and saved composer draft. The browser does not automatically resend messages or answers. An unsubmitted answer inside a question card may need to be entered again; it is not saved as plaintext browser storage.
 
 Permanent snapshot read failures (such as missing history, denied access or a size limit) stop automatic retry and display the cause with **Retry loading**. The composer keeps editable draft text but disables send/model/permission changes until the selected history and task status have loaded. Transient errors and broken streams retain bounded reconnect behavior.

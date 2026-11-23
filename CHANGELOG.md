@@ -8,6 +8,8 @@
 
 ### Added
 
+- Reload Codes from the workspace header. Restore the selected conversation and saved draft after reload.
+
 - Toggle hidden files in Files to browse, preview, and attach dotfiles in the selected project. Hidden entries are off by default.
 
 - Archive and restore projects from the sidebar, including projects with no active conversations. In the archive view, browse a project's active and archived chats without changing individual conversation states.

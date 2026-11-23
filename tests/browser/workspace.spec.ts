@@ -79,6 +79,48 @@ test('a phone can approve after the originating desktop page is closed', async (
   expect(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await mobile.close();
 });
+test('reload from the workspace header restores the draft and keeps a running turn', async ({
+  page,
+}) => {
+  await login(page);
+  const prompt = '[hold] Reload button fixture';
+  const draft = 'Keep this draft when reloading';
+  await send(page, prompt);
+  await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeVisible();
+  await page.getByLabel('Message Codex').fill(draft);
+  const reload = page.getByRole('button', { name: 'Reload page', exact: true });
+  await reload.hover();
+  await expect(page.locator('.control-tooltip')).toHaveText('Reload page');
+  let duplicateDispatches = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/send')) duplicateDispatches++;
+  });
+
+  const loaded = page.waitForEvent('domcontentloaded');
+  await reload.click();
+  await loaded;
+  await expect(page.getByTestId('message-user')).toHaveText(/Reload button fixture/);
+  await expect(page.getByLabel('Message Codex')).toHaveValue(draft);
+  await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeVisible();
+  expect(duplicateDispatches).toBe(0);
+  await page.getByRole('button', { name: 'Stop task', exact: true }).click();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
+
+  await page.setViewportSize({ width: 320, height: 740 });
+  await expect(reload).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await page.getByRole('button', { name: 'example.ts', exact: true }).click();
+  await page.getByRole('button', { name: 'Attach file', exact: true }).click();
+  const confirm = page.waitForEvent('dialog').then(async (dialog) => {
+    expect(dialog.message()).toContain('Unsent attachments');
+    await dialog.dismiss();
+  });
+  await reload.click();
+  await confirm;
+  await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Message Codex')).toHaveValue(draft);
+});
 test('browser offline recovery preserves the active turn and draft without duplicate sends', async ({
   page,
   context,

@@ -630,6 +630,14 @@ function App() {
     attachmentsUnavailable ||
     !!localAttachments.pending ||
     attachments.length >= imageLimits.attachments;
+  const reloadPage = () => {
+    if (
+      (attachments.length || localAttachments.pending || queueEditing) &&
+      !window.confirm(t('Reload this page? Unsent attachments or a queue edit may be lost.'))
+    )
+      return;
+    window.location.reload();
+  };
   const hasInput = !!draft.trim() || attachments.some((entry) => entry.kind === 'image');
   const connectionStatus = useCallback((status: string) => {
     setConnection(status);
@@ -2177,6 +2185,7 @@ function App() {
           onNavigation={() => setSidebar(true)}
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
+          onReload={reloadPage}
           onToggleTheme={() =>
             changePreferences({ ...preferences, theme: theme === 'dark' ? 'light' : 'dark' })
           }

@@ -1,6 +1,6 @@
 import { useInterfaceLanguage } from './interface-language';
 import { PanelMenu } from './PanelMenu';
-import { Icon } from './primitives';
+import { Icon, IconButton } from './primitives';
 
 type Panel = 'files' | 'diff';
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
   onNewConversation: () => void;
   onSettings: () => void;
   onToggleTheme: () => void;
+  onReload: () => void;
   onReview: () => void;
   onStatus: () => void;
   onPanel: (panel: Panel) => void;
@@ -30,6 +31,7 @@ const starters = [
 
 export function WorkspaceHeader(props: Props) {
   const { t } = useInterfaceLanguage();
+  const reloadLabel = t('Reload page');
   return (
     <header className="topbar">
       {!props.sidebarOpen && (
@@ -50,6 +52,12 @@ export function WorkspaceHeader(props: Props) {
           </span>
         )}
         <h1>{props.title}</h1>
+        <IconButton
+          className="compact-page-reload"
+          icon="refresh"
+          label={reloadLabel}
+          onClick={props.onReload}
+        />
       </div>
       <div className="top-actions">
         {!props.sidebarOpen && (
@@ -113,6 +121,12 @@ export function WorkspaceHeader(props: Props) {
           </button>
         </div>
         <div className="top-action-group" role="group" aria-label={t('Workspace tools')}>
+          <IconButton
+            className="page-reload"
+            icon="refresh"
+            label={reloadLabel}
+            onClick={props.onReload}
+          />
           <button
             type="button"
             aria-label={
