@@ -1,10 +1,14 @@
 import { useInterfaceLanguage } from './interface-language';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { message } from './api';
 import { PanelMenu } from './PanelMenu';
 import { Icon, IconButton } from './primitives';
 
 type Panel = 'files' | 'diff';
 interface Props {
   title: string;
+  conversationId?: string;
+  renameDisabled?: boolean;
   projectName?: string;
   sidebarOpen: boolean;
   connection: string;
@@ -22,12 +26,106 @@ interface Props {
   onStatus: () => void;
   onPanel: (panel: Panel) => void;
   onDraft: (text: string) => void;
+  onRename: (id: string, title: string) => Promise<void>;
 }
 const starters = [
   ['Explore this project', 'Explain the architecture of this project and its main entry points.'],
   ['Plan a change', 'Review this project and help me plan a small, verifiable improvement.'],
   ['Review the code', 'Review the current code for potential bugs and explain your findings.'],
 ] as const;
+
+function ConversationHeading({
+  title,
+  conversationId,
+  renameDisabled,
+  onRename,
+}: Pick<Props, 'title' | 'conversationId' | 'renameDisabled' | 'onRename'>) {
+  const { t } = useInterfaceLanguage();
+  const [name, setName] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const trigger = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (name === undefined && restoreFocus.current) {
+      restoreFocus.current = false;
+      trigger.current?.focus();
+    }
+  }, [name]);
+  const close = () => {
+    restoreFocus.current = true;
+    setName(undefined);
+    setError('');
+  };
+  if (name === undefined)
+    return (
+      <div className="conversation-heading">
+        <h1 title={title}>{title}</h1>
+        {conversationId && (
+          <IconButton
+            ref={trigger}
+            className="rename-conversation"
+            icon="edit"
+            label={t('Rename conversation')}
+            size={14}
+            disabled={renameDisabled}
+            onClick={() => setName(title)}
+          />
+        )}
+      </div>
+    );
+  const canSave =
+    !!conversationId && !!name.trim() && name.trim() !== title && !saving && !renameDisabled;
+  return (
+    <div className="conversation-title-editor">
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!canSave) return;
+          setSaving(true);
+          setError('');
+          try {
+            await onRename(conversationId, name.trim());
+            close();
+          } catch (error) {
+            setError(message(error));
+          } finally {
+            setSaving(false);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !saving) {
+            event.preventDefault();
+            close();
+          }
+        }}
+      >
+        <input
+          aria-label={t('Conversation title')}
+          value={name}
+          maxLength={80}
+          disabled={saving}
+          autoFocus
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <IconButton icon="close" label={t('Cancel')} size={14} disabled={saving} onClick={close} />
+        <IconButton
+          icon="check"
+          label={t('Save name')}
+          size={14}
+          type="submit"
+          disabled={!canSave}
+        />
+      </form>
+      {error && (
+        <p className="conversation-title-error" role="alert">
+          {t(error)}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function WorkspaceHeader(props: Props) {
   const { t } = useInterfaceLanguage();
@@ -51,7 +149,13 @@ export function WorkspaceHeader(props: Props) {
             {props.projectName}
           </span>
         )}
-        <h1>{props.title}</h1>
+        <ConversationHeading
+          key={props.conversationId ?? ''}
+          title={props.title}
+          conversationId={props.conversationId}
+          renameDisabled={props.renameDisabled}
+          onRename={props.onRename}
+        />
         <IconButton
           className="compact-page-reload"
           icon="refresh"

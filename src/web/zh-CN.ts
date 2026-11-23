@@ -17,7 +17,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Accepting tasks': '接收任务中',
   'Access sign-in is required on every address, followed by your Codes token.':
     '访问所有地址都需要先通过 Access 登录，再输入 Codes 令牌。',
-  'Actions for {title}': '{title} 的操作',
   'Active chats': '未归档会话',
   activities: '项活动',
   activity: '项活动',
@@ -68,6 +67,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Archive conversation': '归档会话',
   'Archive project': '归档项目',
   'Archive this conversation?': '归档此会话？',
+  'Archive {title}': '归档 {title}',
   Archived: '已归档',
   'Archived chats': '已归档会话',
   'Archived project': '已归档项目',
@@ -117,6 +117,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Check queue receipt': '检查队列回执',
   'Check result': '检查结果',
   'Check status': '查看状态',
+  'Check status for {title}': '检查 {title} 的状态',
   'Check the follow-up result.': '请检查追加消息的结果。',
   'Check the pending queue receipt before changing this draft.':
     '请先检查待确认的队列回执，再修改此草稿。',
@@ -150,6 +151,8 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Codex needs approval and an answer': 'Codex 正在等待审批和回答',
   'Codex permissions': 'Codex 权限',
   'Codex question': 'Codex 的提问',
+  'Codex may also archive conversations started from this one.':
+    'Codex 也可能一并归档从此会话创建的分支。',
   'Codex questions in Code mode': '允许 Codex 在代码模式中提问',
   'Codex task completed': 'Codex 任务已完成',
   'Codex task failed': 'Codex 任务失败',
@@ -180,10 +183,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Continue scrolling for newer messages': '继续滚动以查看较新的消息',
   Conversation: '会话',
   'Conversation actions': '会话操作',
-  'Conversation actions: {title}': '会话操作：{title}',
   'Conversation branch': '会话分支',
-  'Conversation link': '会话链接',
-  'Conversation link copied': '已复制会话链接',
   'Conversation loading': '会话加载',
   'Conversation management': '会话管理',
   'Conversation ownership': '会话占用情况',
@@ -194,7 +194,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Conversation workspace': '会话工作区',
   Conversations: '会话',
   Copied: '已复制',
-  'Copy link': '复制链接',
   'Copy message': '复制消息',
   'Copy the conversation through this completed turn into a new conversation. Later turns and queued messages stay in the source conversation. Both conversations use the current project files; files are not copied or rolled back. The branch starts in Read only.':
     '将截至本轮的历史复制到新会话。后续轮次和排队消息留在原会话。两者共享当前项目文件，分支以只读权限开始。',
@@ -298,7 +297,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Latest context usage': '当前上下文用量',
   Light: '浅色',
   'Lines {start}–{end}': '第 {start}–{end} 行',
-  'Link copied': '已复制链接',
   'Listen address': '监听地址',
   'Listen port': '监听端口',
   'Live conversations': '进行中的会话',
@@ -470,6 +468,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Remove image: {name}': '移除图片：{name}',
   'Remove {name}': '移除 {name}',
   Rename: '重命名',
+  'Rename conversation': '重命名会话',
   Renamed: '已重命名',
   Reply: '回复',
   'Reply actions': '回复操作',
@@ -483,6 +482,9 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
     '恢复此浏览器的默认语言、主题、字号、交互和通知设置。',
   'Restore pending draft': '恢复待发送草稿',
   'Restore project': '恢复项目',
+  'Restore this conversation anytime from Archived projects and chats. Its history and project files are kept.':
+    '可随时在「已归档项目和会话」中恢复此会话。会话历史和项目文件会保留。',
+  'Restore {title}': '恢复 {title}',
   'Restore Read only, the native model and reasoning defaults, Execution mode, and Standard speed for future conversations.':
     '将新会话恢复为只读权限、Codex 默认模型和推理强度、执行模式及标准速度。',
   'Restore this conversation to continue…': '恢复会话后继续…',
@@ -641,8 +643,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Waiting for Codex…': '正在等待 Codex…',
   'Waiting · Editable': '等待中 · 可编辑',
   'Where do I find my token?': '在哪里找到访问令牌？',
-  'will move to the archived view. Project files and history are kept. Codex may also archive chats spawned by this conversation.':
-    '将移到归档列表。项目文件和历史会保留。Codex 也可能归档由此会话创建的分支。',
   'Work history': '工作记录',
   'Worked for {elapsed}': '耗时 {elapsed}',
   Working: '工作中',

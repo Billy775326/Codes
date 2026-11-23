@@ -259,19 +259,6 @@
 .conversation-queue.tone-error {
   color: var(--status-error);
 }
-.conversation-menu-trigger {
-  width: 32px;
-  height: 32px;
-  color: var(--muted);
-  flex-shrink: 0;
-  opacity: 0;
-}
-.conversation-row:hover .conversation-menu-trigger,
-.conversation-row:focus-within .conversation-menu-trigger,
-.conversation-menu-trigger[aria-expanded='true'],
-.conversation-row.selected .conversation-menu-trigger {
-  opacity: 1;
-}
 .conversation-actions {
   display: flex;
   gap: 2px;
@@ -295,9 +282,6 @@
 }
 .sidebar-action > span {
   display: none;
-}
-.sidebar-action.with-label > span {
-  display: inline;
 }
 .conversation-actions .sidebar-action:hover:not(:disabled),
 .conversation-actions .sidebar-action:focus-visible {
@@ -329,16 +313,6 @@
   font-size: 12px;
   padding: 7px 8px;
   border-radius: 5px;
-}
-.conversation-link {
-  display: block;
-  padding: 4px 8px 8px;
-  font-size: 12px;
-}
-.conversation-link input {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
 }
 .conversation-pagination {
   display: flex;
@@ -386,18 +360,36 @@
 .conversation-confirm p {
   overflow-wrap: anywhere;
 }
-.conversation-confirm p strong {
+.conversation-confirm-target {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--hover);
+}
+.conversation-confirm-target svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.conversation-confirm-target strong {
   font-weight: 500;
   color: var(--fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .conversation-confirm-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 9px;
 }
 .conversation-confirm-actions button {
   font-size: 14px;
   min-height: var(--control-size);
+}
+.conversation-confirm .conversation-confirm-actions button.primary {
+  margin-top: 0;
 }
 .conversation-lock-banner {
   display: flex;
@@ -425,11 +417,6 @@
   color: #c1acd8;
 }
 @media (max-width: 700px) {
-  .conversation-menu-trigger {
-    opacity: 1;
-    width: 36px;
-    height: 36px;
-  }
   .conversation-search input {
     font-size: 16px;
   }
@@ -466,8 +453,5 @@
   }
   .conversations .thread-link {
     min-height: 36px;
-  }
-  .conversation-menu-trigger {
-    opacity: 1;
   }
 }

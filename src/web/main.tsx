@@ -2175,6 +2175,8 @@ function App() {
       >
         <WorkspaceHeader
           title={loadingConversation ? t('Conversation') : (thread?.title ?? t('New conversation'))}
+          conversationId={thread?.id === threadId ? threadId : undefined}
+          renameDisabled={busy || !!thread?.managementPending}
           projectName={project?.name}
           sidebarOpen={sidebar}
           connection={connection}
@@ -2196,6 +2198,13 @@ function App() {
               setPanel(panel === kind ? null : kind);
           }}
           onDraft={changeDraft}
+          onRename={async (id, name) => {
+            const result = await post<Summary>('/threads/' + encodeURIComponent(id) + '/rename', {
+              operationId: crypto.randomUUID(),
+              name,
+            });
+            conversationUpdated(result);
+          }}
           showStarters={!loadingConversation && !thread?.messages.length && !active}
         />
         {system?.runtime === 'mock' && (

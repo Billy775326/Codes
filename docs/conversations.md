@@ -14,9 +14,9 @@ For the single workspace owner, the sidebar provides native Codex conversation d
 
 ## Rename, archive, and restore
 
-Open the row's actions button. **Rename** accepts a trimmed title of 1–80 characters and writes it through `thread/name/set`. A rename does not cancel an active task or clear its execution receipt. Escape cancels editing.
+Select a conversation and use **Rename conversation** beside its title. Edit the title in place and press Enter or **Save name**. Escape cancels editing. Titles are trimmed to 1–80 characters and saved through `thread/name/set`. Active tasks retain their execution receipts.
 
-**Archive** asks for confirmation, then calls native `thread/archive`. History and project files are retained. Codex may also archive conversations spawned by that conversation; the confirmation explains this native behavior. Running tasks, pending approvals/questions, and unresolved execution receipts block archiving. A cheap native turn-metadata check also rejects unfinished turns that codes did not dispatch.
+Use the archive icon on the conversation row, then confirm. The dialog names the conversation and explains how to restore it. Native `thread/archive` retains history and project files and may also archive conversations spawned by that conversation. Running tasks, pending approvals or questions, and unresolved execution receipts block archiving. A native turn-metadata check also rejects unfinished turns from other clients.
 
 An archived conversation can be read, including after reload. Sending is disabled until **Restore** or **Restore conversation** calls native `thread/unarchive`. Restoring does not resend a previous task. This preview does not offer permanent deletion. Waiting queued messages must be removed before archiving. See [questions, queues, and branches](conversation-workflow.md) for in-conversation actions.
 

@@ -468,8 +468,7 @@ for (const width of [1440, 320])
     }
     if (width <= 1099)
       await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
-    await page.locator('.conversation-menu-trigger').first().click();
-    await page.getByRole('button', { name: 'Archive', exact: true }).click();
+    await page.locator('.conversation-row.selected .conversation-row-action').click();
     const confirmation = page.getByRole('dialog', {
       name: 'Archive this conversation?',
       exact: true,

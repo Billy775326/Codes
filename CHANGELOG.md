@@ -4,6 +4,8 @@
 
 ### Removed
 
+- Remove the conversation row's actions drawer and Copy link button. Existing conversation links still open in their registered projects.
+
 - Remove the preview-only global task write-root policy and its forced permission, network, temporary-directory and tool overrides. Restore the existing native conversation permission presets and approval callbacks while preserving saved conversation/default settings and the Files / Changes interface. Retired `CODES_TASK_WRITE_ROOT` and `task-policy.json` configuration no longer applies.
 
 ### Added
@@ -22,7 +24,7 @@
 - Choose Cloudflare Access in Network & access. Validate signed Access assertions before serving the workspace, retain Codes token sign-in, and close event streams when the Access token expires.
 - Configure the loopback listener, port, and allowed browser addresses in Network & access. Saved settings apply after restart. Keep Codes token sign-in for local, Tailscale, and Access-protected proxy entry points.
 - Turn off automatic scrolling as replies arrive, retry a failed browser settings save, and separately restore browser settings and new-conversation defaults.
-- Rename and pin projects from their sidebar cards, remember each card's open state, search by project or conversation name, and copy direct links from conversation actions.
+- Rename and pin projects from their sidebar cards, remember each card's open state, and search by project or conversation name.
 - Preview project PNG, JPEG, and WebP files in Files or through Markdown image references. Open a sandboxed visual preview for HTML source files and HTML in Codex replies.
 - Prepare maintenance from Session status to pause new tasks and queue dispatch while existing work finishes. The pause expires after five minutes and can be canceled.
 
@@ -56,7 +58,7 @@
 - Queue up to ten messages per conversation, edit or remove waiting entries, and pause/resume sequential execution. Persist queues across browser closure; service restarts, stopped/failed tasks, and unknown outcomes hold the queue for review. Bound broadcast previews while preserving full editable messages.
 - Create a native conversation branch through a completed turn, retain source navigation, and start the branch in Read only. Branching preserves later source history, shares current project files, and does not copy queued messages.
 
-- Browse native conversations with title search, date groups, and cursor pagination beyond the local summary window. Rename, archive, and restore conversations from the sidebar; archived conversations retain their history and must be restored before sending.
+- Browse native conversations with title search, date groups, and cursor pagination beyond the local summary window. Archived conversations retain their history and must be restored before sending.
 - Protect running and uncertain executions from archiving, and retain a protected state when an archive acknowledgement is lost.
 
 - Introduce a single-owner Linux web workspace with project conversations, streaming replies, host-side Codex CLI execution, and a responsive desktop/mobile interface.
@@ -66,6 +68,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Rename conversations in the workspace header. Archive or restore from the sidebar row and confirm archiving in a dialog that names the conversation and explains restoration.
 
 - Open external web links in chat in a new tab and keep workspace links in the current tab.
 

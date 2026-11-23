@@ -149,6 +149,39 @@
 .app .breadcrumb .compact-page-reload {
   display: none;
 }
+.conversation-heading,
+.conversation-title-editor form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.conversation-title-editor {
+  position: relative;
+  min-width: 0;
+  max-width: 420px;
+}
+.conversation-title-editor input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 16px;
+}
+.conversation-title-error {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: var(--popup);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--status-error);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .app .breadcrumb h1 {
   display: block;
   max-width: none;
@@ -845,9 +878,11 @@
     gap: 10px;
     align-items: baseline;
   }
-  .app .breadcrumb h1 {
+  .app .breadcrumb :is(.conversation-heading, .conversation-title-editor) {
     order: 0;
     flex: 1;
+  }
+  .app .breadcrumb h1 {
     font-size: 14.3px;
     line-height: 20px;
   }

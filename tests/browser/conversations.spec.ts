@@ -19,11 +19,17 @@ async function create(page: Page, title: string) {
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
 }
 async function rename(page: Page, old: string, title: string) {
-  await page.getByRole('button', { name: 'Actions for ' + old, exact: true }).click();
-  await page.getByRole('button', { name: 'Rename', exact: true }).click();
-  await page.getByLabel('Conversation title', { exact: true }).fill(title);
-  await page.getByLabel('Conversation title', { exact: true }).press('Enter');
-  await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
+  const heading = page.getByRole('heading', { level: 1 });
+  await expect(heading).toHaveText(old);
+  const trigger = page.getByRole('button', { name: 'Rename conversation', exact: true });
+  await trigger.click();
+  const input = page.getByRole('textbox', { name: 'Conversation title', exact: true });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue(old);
+  await input.fill(title);
+  await input.press('Enter');
+  await expect(heading).toHaveText(title);
+  await expect(trigger).toBeFocused();
 }
 test('rename, search, draft preservation, archive, reload, and restoration keep native history', async ({
   page,
@@ -44,12 +50,16 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await page.getByLabel('Search projects and chats', { exact: true }).fill(renamed.toUpperCase());
   await expect(page.locator('.thread-link')).toHaveCount(1);
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Actions for ' + renamed, exact: true }).click();
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await expect(page.locator('.conversation-row.selected').getByRole('button')).toHaveCount(2);
+  const archive = page.getByRole('button', { name: 'Archive ' + renamed, exact: true });
+  await archive.click();
   await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('dialog')).toContainText(renamed);
+  await expect(page.getByRole('dialog')).toContainText('Restore this conversation anytime');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await expect(archive).toBeFocused();
+  await archive.click();
   await page.getByRole('button', { name: 'Archive conversation', exact: true }).click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Message Codex')).toHaveAttribute('readonly', '');
@@ -61,7 +71,7 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   const archives = page.getByRole('button', { name: 'Archived projects and chats', exact: true });
   await archives.click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Restore conversation', exact: true }).click();
+  await page.getByRole('button', { name: 'Restore ' + renamed, exact: true }).click();
   await expect(page.getByLabel('Message Codex')).not.toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
   await archives.click();
@@ -161,6 +171,7 @@ test('another client sees metadata changes, and renaming never clears a live exe
     await reconnectUpdates(owner);
     await expect(owner.locator('.connection')).toHaveText('Connected');
     await observer.getByRole('button', { name: title, exact: true }).click();
+    await owner.bringToFront();
     const newTitle = 'Active renamed ' + Date.now();
     const id = await owner.evaluate(() => localStorage.getItem('codes.thread'));
     await rename(owner, title, newTitle);
@@ -168,11 +179,11 @@ test('another client sees metadata changes, and renaming never clears a live exe
     expect(
       await owner.evaluate((id) => localStorage.getItem('codes.operation.' + id), id),
     ).toBeTruthy();
-    await owner.getByRole('button', { name: 'Actions for ' + newTitle, exact: true }).click();
-    await expect(owner.getByRole('button', { name: 'Archive', exact: true })).toBeDisabled();
+    const archive = owner.getByRole('button', { name: 'Archive ' + newTitle, exact: true });
+    await expect(archive).toBeDisabled();
     await observer.getByRole('button', { name: 'Decline', exact: true }).click();
     await expect(owner.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
-    await owner.getByRole('button', { name: 'Archive', exact: true }).click();
+    await archive.click();
     await owner.getByRole('button', { name: 'Archive conversation', exact: true }).click();
     await expect(
       observer.getByRole('button', { name: 'Restore conversation', exact: true }),
@@ -188,7 +199,16 @@ test.describe('touch sidebar controls', () => {
   test('mobile row actions and archive confirmation fit narrow screens', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page);
-    await create(page, 'Mobile managed ' + Date.now());
+    const original = 'Mobile managed ' + Date.now();
+    const title = 'A longer mobile conversation title that needs to wrap in the archive dialog';
+    await create(page, original);
+    await page.setViewportSize({ width: 320, height: 740 });
+    const edit = page.getByRole('button', { name: 'Rename conversation', exact: true });
+    await edit.tap();
+    await page.getByRole('textbox', { name: 'Conversation title' }).press('Escape');
+    await expect(edit).toBeFocused();
+    await rename(page, original, title);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
     await page.getByRole('button', { name: 'Open navigation' }).click();
     const card = activeProjectCard(page);
     const projectName = await card.locator('.project-card-name').innerText();
@@ -198,22 +218,24 @@ test.describe('touch sidebar controls', () => {
       await expect(action.getByText(label, { exact: true })).toBeVisible();
       expect((await action.boundingBox())?.height).toBeGreaterThanOrEqual(40);
     }
-    const row = page.locator('.conversation-row.selected');
-    await row.getByRole('button', { name: 'Actions for', exact: false }).tap();
-    const archive = row.getByRole('button', { name: 'Archive', exact: true });
-    await expect(archive.getByText('Archive', { exact: true })).toBeVisible();
+    const archive = page.getByRole('button', { name: 'Archive ' + title, exact: true });
+    await expect(archive).toBeVisible();
+    expect((await archive.boundingBox())?.height).toBeGreaterThanOrEqual(40);
     await archive.tap();
     await expect(
       page.getByRole('dialog', { name: 'Archive this conversation?', exact: true }),
     ).toBeVisible();
-    await page.setViewportSize({ width: 320, height: 740 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    const bounds = await page
-      .getByRole('dialog', { name: 'Archive this conversation?', exact: true })
-      .boundingBox();
+    const dialog = page.getByRole('dialog', { name: 'Archive this conversation?', exact: true });
+    const bounds = await dialog.boundingBox();
     expect(bounds!.width).toBeLessThanOrEqual(320);
+    const cancel = await dialog.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
+    const confirm = await dialog
+      .getByRole('button', { name: 'Archive conversation', exact: true })
+      .boundingBox();
+    expect(confirm?.y).toBe(cancel?.y);
     await page.screenshot({
       path: 'test-results/conversation-management-mobile.png',
       fullPage: true,

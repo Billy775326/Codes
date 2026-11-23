@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useRef, useState, type ComponentProps } f
 import { createPortal } from 'react-dom';
 import type { ConversationPage, Project, ProjectUpdate, Summary } from '../shared/types';
 import { message, post, request } from './api';
-import { Icon } from './primitives';
+import { Icon, IconButton } from './primitives';
 import { InteractionDialog } from './InteractionDialog';
 import { conversationStatus } from './conversation-status';
 import { formatMessageTime } from './MessageTime';
@@ -14,19 +14,17 @@ function SidebarAction({
   icon,
   label,
   description,
-  keepLabel = false,
   ...props
 }: Pick<ComponentProps<'button'>, 'onClick' | 'disabled'> & {
   icon: string;
   label: string;
   description?: string;
-  keepLabel?: boolean;
 }) {
   return (
     <button
       {...props}
       type="button"
-      className={keepLabel ? 'sidebar-action with-label' : 'sidebar-action'}
+      className="sidebar-action"
       aria-label={label}
       aria-description={description}
       data-tooltip={description ? label + ' · ' + description : ''}
@@ -317,14 +315,10 @@ const ProjectCard = memo(function ProjectCard({
   const [loading, setLoading] = useState(filtering);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const [menu, setMenu] = useState('');
   const [projectMenu, setProjectMenu] = useState(false);
   const [projectEdit, setProjectEdit] = useState<{ original: string; name: string }>();
   const [savingProject, setSavingProject] = useState(false);
   const [projectError, setProjectError] = useState('');
-  const [copied, setCopied] = useState<{ id: string; fallback?: string }>();
-  const [editing, setEditing] = useState('');
-  const [name, setName] = useState('');
   const [pending, setPending] = useState('');
   const [confirmation, saveConfirmation] = useState<Summary>();
   const setConfirmation = useCallback(
@@ -434,8 +428,6 @@ const ProjectCard = memo(function ProjectCard({
     setCursor(undefined);
     setPrevious([]);
     setRevision((v) => v + 1);
-    setMenu('');
-    setEditing('');
   };
   const renameProject = async () => {
     if (!projectEdit || savingProject) return;
@@ -479,33 +471,18 @@ const ProjectCard = memo(function ProjectCard({
       setSavingProject(false);
     }
   };
-  const copyConversation = async (row: Summary) => {
-    const url = new URL(location.pathname, location.origin);
-    url.searchParams.set('conversation', row.id);
-    try {
-      await navigator.clipboard.writeText(url.href);
-      setCopied({ id: row.id });
-    } catch {
-      setCopied({ id: row.id, fallback: url.href });
-    }
-  };
-  const mutate = async (row: Summary, action: 'rename' | 'archive' | 'check') => {
+  const mutate = async (row: Summary, action: 'archive' | 'check') => {
     if (pending) return;
     setPending(row.id);
     setError('');
     try {
       const result = await post<Summary>(
         '/threads/' + row.id + '/' + (action === 'check' ? 'management-status' : action),
-        action === 'check'
-          ? {}
-          : action === 'rename'
-            ? { operationId: crypto.randomUUID(), name: name.trim() }
-            : { operationId: crypto.randomUUID(), archived: !row.archived },
+        action === 'check' ? {} : { operationId: crypto.randomUUID(), archived: !row.archived },
       );
       onUpdated(result);
-      setEditing('');
-      setMenu('');
       setConfirmation(undefined);
+      if (!!result.archived !== !!row.archived) requestAnimationFrame(onArchiveChange);
       setPage((old) => ({
         ...old,
         data: old.data
@@ -523,15 +500,11 @@ const ProjectCard = memo(function ProjectCard({
     if (!page.nextCursor || loading) return;
     setPrevious((old) => [...old.slice(-127), cursor]);
     setCursor(page.nextCursor);
-    setMenu('');
-    setEditing('');
   };
   const back = () => {
     if (!previous.length || loading) return;
     setCursor(previous.at(-1));
     setPrevious((old) => old.slice(0, -1));
-    setMenu('');
-    setEditing('');
   };
   const rows = collapsed
     ? noUpdates
@@ -612,14 +585,12 @@ const ProjectCard = memo(function ProjectCard({
               setProjectMenu(!projectMenu);
               setProjectEdit(undefined);
               setProjectError('');
-              setMenu('');
-              setEditing('');
             }}
           >
             <Icon name="more" size={16} />
           </button>
         )}
-        {!collapsed && !keepOpen && !editing && (
+        {!collapsed && !keepOpen && (
           <button
             className="icon-button project-card-collapse"
             aria-label={t('Collapse {project}', { project: project.name })}
@@ -627,7 +598,6 @@ const ProjectCard = memo(function ProjectCard({
             aria-controls={listId}
             aria-expanded="true"
             onClick={() => {
-              setMenu('');
               setProjectMenu(false);
               onSidebarPreference(projectId, { expanded: false });
               projectName.current?.focus();
@@ -834,124 +804,37 @@ const ProjectCard = memo(function ProjectCard({
                     )}
                   </span>
                 </button>
-                <button
-                  className="icon-button conversation-menu-trigger"
-                  aria-label={t('Actions for {title}', { title: row.title })}
-                  data-tooltip=""
-                  aria-expanded={menu === row.id}
-                  disabled={!!pending}
-                  onClick={() => {
-                    setMenu(menu === row.id ? '' : row.id);
-                    setEditing('');
-                    setError('');
-                    setCopied(undefined);
-                    if (!projectEdit) setProjectMenu(false);
-                  }}
-                >
-                  <Icon name="more" size={16} />
-                </button>
-              </div>
-              {menu === row.id && (
-                <div
-                  className="conversation-actions"
-                  role="group"
-                  aria-label={t('Conversation actions: {title}', { title: row.title })}
-                >
-                  <SidebarAction
-                    icon="edit"
-                    label={t('Rename')}
-                    disabled={!!pending || row.managementPending}
-                    onClick={() => {
-                      setEditing(row.id);
-                      setName(row.title);
-                    }}
-                  />
-                  <SidebarAction
-                    icon={copied?.id === row.id && !copied.fallback ? 'check' : 'link'}
-                    label={
-                      copied?.id === row.id && !copied.fallback ? t('Link copied') : t('Copy link')
-                    }
-                    onClick={() => void copyConversation(row)}
-                  />
-                  {row.managementPending ? (
-                    <SidebarAction
-                      icon="refresh"
-                      label={t('Check status')}
-                      keepLabel
-                      disabled={!!pending}
-                      onClick={() => void mutate(row, 'check')}
-                    />
-                  ) : (
-                    <SidebarAction
-                      icon={row.archived ? 'unarchive' : 'archive'}
-                      label={row.archived ? t('Restore') : t('Archive')}
-                      disabled={!!pending || isWorking(row)}
-                      description={
-                        isWorking(row)
-                          ? t(
-                              'Finish or stop the task, confirm its result, and remove queued messages first.',
-                            )
-                          : undefined
-                      }
-                      onClick={() =>
-                        row.archived
-                          ? void mutate(row, 'archive')
-                          : (setConfirmation(row), setError(''))
-                      }
-                    />
-                  )}
-                </div>
-              )}
-              {menu === row.id &&
-                copied?.id === row.id &&
-                (copied.fallback ? (
-                  <label className="conversation-link">
-                    {t('Conversation link')}
-                    <input
-                      value={copied.fallback}
-                      readOnly
-                      onFocus={(event) => event.target.select()}
-                    />
-                  </label>
-                ) : (
-                  <span className="visually-hidden" role="status">
-                    {t('Conversation link copied')}
-                  </span>
-                ))}
-              {editing === row.id && (
-                <form
-                  className="conversation-rename"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (name.trim() && name.trim() !== row.title) void mutate(row, 'rename');
-                  }}
-                >
-                  <label htmlFor={'rename-' + row.id}>{t('Conversation title')}</label>
-                  <input
-                    id={'rename-' + row.id}
-                    aria-label={t('Conversation title')}
-                    value={name}
-                    maxLength={80}
+                {row.managementPending ? (
+                  <IconButton
+                    className="conversation-row-action"
+                    icon="refresh"
+                    label={t('Check status for {title}', { title: row.title })}
                     disabled={!!pending}
-                    onChange={(e) => setName(e.target.value)}
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') setEditing('');
-                    }}
+                    onClick={() => void mutate(row, 'check')}
                   />
-                  <div>
-                    <button type="button" onClick={() => setEditing('')} disabled={!!pending}>
-                      {t('Cancel')}
-                    </button>
-                    <button
-                      className="primary"
-                      disabled={!!pending || !name.trim() || name.trim() === row.title}
-                    >
-                      {pending ? t('Saving…') : t('Save name')}
-                    </button>
-                  </div>
-                </form>
-              )}
+                ) : (
+                  <IconButton
+                    className="conversation-row-action"
+                    icon={row.archived ? 'unarchive' : 'archive'}
+                    label={t(row.archived ? 'Restore {title}' : 'Archive {title}', {
+                      title: row.title,
+                    })}
+                    disabled={!!pending || isWorking(row)}
+                    hint={
+                      isWorking(row)
+                        ? t(
+                            'Finish or stop the task, confirm its result, and remove queued messages first.',
+                          )
+                        : undefined
+                    }
+                    onClick={() =>
+                      row.archived
+                        ? void mutate(row, 'archive')
+                        : (setConfirmation(row), setError(''))
+                    }
+                  />
+                )}
+              </div>
             </div>
           );
         })}
@@ -1004,13 +887,16 @@ const ProjectCard = memo(function ProjectCard({
                 void mutate(confirmation, 'archive');
               }}
             >
-              <p>
+              <div className="conversation-confirm-target">
+                <Icon name="archive" size={18} />
                 <strong>{confirmation.title}</strong>
-                {' ' +
-                  t(
-                    'will move to the archived view. Project files and history are kept. Codex may also archive chats spawned by this conversation.',
-                  )}
+              </div>
+              <p>
+                {t(
+                  'Restore this conversation anytime from Archived projects and chats. Its history and project files are kept.',
+                )}
               </p>
+              <p>{t('Codex may also archive conversations started from this one.')}</p>
               {error && (
                 <p className="error-text" role="alert">
                   {t(error)}
@@ -1026,8 +912,12 @@ const ProjectCard = memo(function ProjectCard({
                 >
                   {t('Cancel')}
                 </button>
-                <button className="primary" disabled={!!pending}>
-                  {pending ? t('Archiving…') : t('Archive conversation')}
+                <button
+                  className="primary"
+                  aria-label={pending ? t('Archiving…') : t('Archive conversation')}
+                  disabled={!!pending}
+                >
+                  {pending ? t('Archiving…') : t('Archive')}
                 </button>
               </div>
             </form>

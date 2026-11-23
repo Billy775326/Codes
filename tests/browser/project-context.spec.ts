@@ -482,7 +482,6 @@ test('adding a project validates the path and reuses a registered directory', as
 
 test('project management and conversation links survive reload and keep the verified owner', async ({
   page,
-  context,
 }) => {
   await login(page);
   const { a, b, first, second, path } = await fixture(page);
@@ -553,15 +552,10 @@ test('project management and conversation links survive reload and keep the veri
   await expect(projectName).toHaveAttribute('aria-expanded', 'false');
 
   await projectName.click();
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await card.getByRole('button', { name: 'Actions for ' + second.title, exact: true }).click();
-  await card.getByRole('button', { name: 'Copy link', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Link copied', exact: true })).toBeVisible();
-  const link = await page.evaluate(() => navigator.clipboard.readText());
-  expect(new URL(link).searchParams.get('conversation')).toBe(second.id);
+  const link = new URL('/?conversation=' + encodeURIComponent(second.id), origin);
   await projectCard(page, a.id).getByRole('button', { name: first.title, exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(first.title);
-  await page.goto(link);
+  await page.goto(link.href);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
   await expect(projectName).toHaveAttribute('aria-current', 'true');
   await actions(renamed).click();
