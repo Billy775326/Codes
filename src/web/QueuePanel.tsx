@@ -57,13 +57,17 @@ export function QueuePanel({
   };
   const entryBeingEdited = state.items.find((entry) => entry.id === editing);
   const editable = entryBeingEdited?.state === 'queued';
+  const canSave =
+    !busy &&
+    editable &&
+    (!!text.trim() || entryBeingEdited.attachments.some((item) => item.kind === 'image'));
   const editor = editing ? (
     <form
       className="composer queued-text-editor"
       aria-label={t('Queued message editor')}
       onSubmit={(event) => {
         event.preventDefault();
-        if (!editable) return;
+        if (!canSave) return;
         void run(
           () =>
             request<QueueState>('/threads/' + threadId + '/queue/' + editing, {
@@ -74,15 +78,13 @@ export function QueuePanel({
         );
       }}
     >
-      <p>
-        {editable
-          ? t(
-              'Queue paused for editing. Queue position, model, permissions and attachments stay unchanged.',
-            )
-          : t(
-              'This message is no longer waiting. Your local edit was not submitted; copy it before closing.',
-            )}
-      </p>
+      {!editable && (
+        <p>
+          {t(
+            'This message is no longer waiting. Your local edit was not submitted; copy it before closing.',
+          )}
+        </p>
+      )}
       <textarea
         aria-label={t('Edit queued message')}
         value={text}
@@ -92,25 +94,37 @@ export function QueuePanel({
         readOnly={!editable}
         autoFocus
       />
-      <div className="composer-toolbar queue-editor-actions">
+      <div className="queue-editor-actions">
         {onStop && (
-          <button type="button" aria-label={t('Stop task')} disabled={busy} onClick={onStop}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={t('Stop task')}
+            data-tooltip={t('Stop current task and pause queue')}
+            disabled={busy}
+            onClick={onStop}
+          >
             <Icon name="stop" size={16} />
-            {t('Stop')}
           </button>
         )}
-        <button type="button" disabled={busy} onClick={() => setEditing('')}>
-          {editable ? t('Cancel edit') : t('Close edit')}
+        <button
+          className="icon-button"
+          type="button"
+          aria-label={editable ? t('Cancel edit') : t('Close edit')}
+          data-tooltip=""
+          disabled={busy}
+          onClick={() => setEditing('')}
+        >
+          <Icon name="close" size={16} />
         </button>
         <button
           className="send-button"
-          disabled={
-            busy ||
-            !editable ||
-            (!text.trim() && !entryBeingEdited?.attachments.some((item) => item.kind === 'image'))
-          }
+          type="submit"
+          aria-label={t('Save queued message')}
+          data-tooltip=""
+          disabled={!canSave}
         >
-          {t('Save queued message')}
+          <Icon name="check" size={18} />
         </button>
       </div>
     </form>
@@ -128,6 +142,10 @@ export function QueuePanel({
         </strong>
         {state.items.length > 0 && (
           <button
+            className="icon-button"
+            type="button"
+            aria-label={state.paused ? t('Resume queue') : t('Pause queue')}
+            data-tooltip=""
             disabled={busy || !!editing}
             onClick={() =>
               void run(() =>
@@ -137,7 +155,7 @@ export function QueuePanel({
               )
             }
           >
-            {state.paused ? t('Resume queue') : t('Pause queue')}
+            <Icon name={state.paused ? 'play' : 'pause'} size={16} />
           </button>
         )}
       </div>

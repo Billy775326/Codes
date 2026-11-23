@@ -64,6 +64,7 @@
 ### Changed
 
 - Make the indicator at the end of an in-progress Codex reply larger and easier to see in both themes.
+- Fit queue editing controls on narrow screens with labeled icons for saving, canceling, stopping, and pausing or resuming the queue.
 
 - Move Add project above the sidebar cards, accept an optional display name, and keep form errors and retry input in the add-project dialog. Reuse an existing project when the path resolves to a registered directory.
 - Replace the Chats dropdown with an archive toggle, shorten the project action labels, and show message destination and stop behavior in the shared tooltips.

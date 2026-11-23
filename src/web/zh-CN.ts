@@ -393,6 +393,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Patch preview is truncated. Counts describe the displayed portion; inspect the workspace for the complete change.':
     '补丁预览已截断。计数仅对应显示部分，完整变更请在工作区查看。',
   'Pause queue': '暂停队列',
+  'Paused by you.': '已手动暂停。',
   Paused: '已暂停',
   Pending: '等待中',
   'Permission approval': '权限审批',
@@ -431,8 +432,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.':
     '消息将进入等待列表，可继续编辑。队列暂停时，请恢复队列以继续。',
   'Queue message': '将消息加入队列',
-  'Queue paused for editing. Queue position, model, permissions and attachments stay unchanged.':
-    '编辑期间队列已暂停。消息的位置、模型、权限和附件会保留。',
   'Queue paused. Resume when ready.': '队列已暂停，可手动恢复。',
   'Queue runs after this task completes. Waiting text can be edited or removed.':
     '排队消息将在当前任务结束后运行。等待中的文本可以编辑或移除。',

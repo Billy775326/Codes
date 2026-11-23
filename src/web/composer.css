@@ -241,6 +241,10 @@
 .app .compact-queue > p:empty {
   display: none;
 }
+.app .compact-queue .queue-heading > .icon-button {
+  padding: 0;
+  border: 0;
+}
 .app .compact-queue ol {
   max-height: 150px;
   overflow-y: auto;
@@ -321,14 +325,16 @@
   max-height: 180px;
   margin: 0;
 }
-.app .queued-text-editor .queue-editor-actions {
+.app .queue-editor-actions {
   display: flex;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 10px 9px;
 }
-.app .queue-editor-actions button {
-  min-height: 36px;
-  font-size: 12px;
+.app .queue-editor-actions > .send-button {
+  flex: none;
+  width: var(--control-size);
+  height: var(--control-size);
 }
 @media (max-width: 700px) {
   .app .compact-queue .queue-entry {

@@ -80,19 +80,51 @@ for (const width of [1440, 320])
 test('a queue edit locks at dispatch and remains recoverable if the entry leaves the queue', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
   await login(page);
   await send(page, '[approve] Queue editing boundary fixture');
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
   await page.getByLabel('Message Codex').fill('Original waiting text');
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
+  const tooltip = page.locator('.control-tooltip');
+  await queue.getByRole('button', { name: 'Pause queue', exact: true }).hover();
+  await expect(tooltip).toHaveText('Pause queue');
   await queue.getByRole('button', { name: 'Queued message actions', exact: true }).first().click();
   await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
-  await expect(queue).toContainText(
-    'Queue position, model, permissions and attachments stay unchanged',
-  );
+  await expect(queue).toContainText('Paused by you.');
+  const editor = queue.getByRole('form', { name: 'Queued message editor', exact: true });
+  const controls = editor.getByRole('button');
+  await expect(controls).toHaveCount(3);
+  for (const [name, hint] of [
+    ['Stop task', 'Stop current task and pause queue'],
+    ['Cancel edit', 'Cancel edit'],
+    ['Save queued message', 'Save queued message'],
+  ] as const) {
+    const action = editor.getByRole('button', { name, exact: true });
+    await expect(action).toHaveText('');
+    await action.hover();
+    await expect(tooltip).toHaveText(hint);
+    await expect(tooltip).toBeVisible();
+  }
+  expect(
+    await controls.evaluateAll((buttons) => {
+      const bounds = buttons.map((button) => button.getBoundingClientRect());
+      return bounds.every(
+        (box) =>
+          box.width >= 40 &&
+          box.height >= 40 &&
+          box.left >= 0 &&
+          box.right <= innerWidth &&
+          box.top === bounds[0]?.top,
+      );
+    }),
+  ).toBe(true);
+  await editor.getByLabel('Edit queued message').press('Tab');
+  await expect(editor.getByRole('button', { name: 'Stop task', exact: true })).toBeFocused();
+  await expect(tooltip).toHaveText('Stop current task and pause queue');
   await queue.getByLabel('Edit queued message').fill('Keep this unsubmitted local correction');
-  await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeVisible();
+  await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeDisabled();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue(
     'Keep this unsubmitted local correction',
   );

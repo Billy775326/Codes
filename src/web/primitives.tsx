@@ -108,6 +108,8 @@ const iconPaths: Record<string, React.ReactNode> = {
   ),
   attach: <path d="m8 12 6-6a4 4 0 0 1 6 6l-8 8a6 6 0 0 1-8-8l8-8m-5 11 8-8" />,
   stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
+  pause: <path d="M9 5v14m6-14v14" />,
+  play: <path d="M8 5v14l11-7Z" />,
   terminal: (
     <>
       <path d="m4 5 6 7-6 7m9 0h7" />
