@@ -69,6 +69,11 @@
 
 ### Changed
 
+- Show one three-dot task indicator in the conversation, with distinct colors for running, questions, approvals, reconnecting and unknown results. Only running animates and reduced-motion preferences are respected.
+- Keep project menus compact, confirm project archiving, and edit queued messages directly from their cards.
+- Select a file range explicitly, including on touchscreens. Remember the Changes layout and copy individual code blocks from finished replies.
+- Expand each work-history segment independently around questions; terminal groups still start collapsed.
+
 - Rename conversations in the workspace header. Archive or restore from the sidebar row and confirm archiving in a dialog that names the conversation and explains restoration.
 
 - Open external web links in chat in a new tab and keep workspace links in the current tab.
@@ -133,6 +138,10 @@
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 
 ### Fixed
+
+- Keep the header's conversation menu in the viewport on phones and close project menus before closing navigation with Escape.
+- Preserve unsaved Network & access and Runtime edits while switching settings sections, and confirm discarding them when closing.
+- Check queue receipts after restoring the selected conversation and preserve newer draft edits during recovery.
 
 - Show answers directly on their original Codex question card. Keep ordinary follow-up receipts separate, and offer an answer-specific status check when delivery is uncertain.
 

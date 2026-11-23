@@ -10,6 +10,15 @@
   overflow: hidden;
   background: var(--panel);
 }
+.preferences-page:not([hidden]) {
+  display: contents;
+}
+.preferences-discard h3 {
+  margin: 0 0 8px;
+}
+.preferences-discard .network-actions button {
+  min-height: var(--control-size);
+}
 .preferences-dialog > .modal-heading {
   flex: 0 0 auto;
   padding: 16px 20px;

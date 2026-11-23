@@ -35,7 +35,12 @@ test('new drafts and attachments remain in their project when navigating without
   await page.getByLabel('Message Codex').fill('Draft for the original project');
   await page.getByRole('button', { name: 'Browse files', exact: true }).click();
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
-  await page.getByRole('button', { name: 'Attach lines', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'File lines', exact: true })
+    .getByRole('button')
+    .first()
+    .click();
+  await page.getByRole('button', { name: /^Attach lines/ }).click();
   await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
   await openProject(page, added.id);
   await expect(page.getByLabel('Message Codex')).toHaveValue('');
@@ -140,7 +145,12 @@ test('phone drawers own focus and attaching context returns to the running conve
       .evaluate((element) => element.contains(document.activeElement)),
   ).toBe(true);
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
-  await page.getByRole('button', { name: 'Attach lines', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'File lines', exact: true })
+    .getByRole('button')
+    .first()
+    .click();
+  await page.getByRole('button', { name: /^Attach lines/ }).click();
   await expect(page.locator('.context-panel')).toHaveCount(0);
   await expect(page.getByLabel('Message Codex')).toBeFocused();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the running follow-up');

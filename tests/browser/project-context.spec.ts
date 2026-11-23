@@ -89,6 +89,10 @@ test('project archive survives reload, preserves native chat states, and syncs r
     await expect(mirror).toBeVisible();
     await menu.click();
     await card.getByRole('button', { name: 'Archive project', exact: true }).click();
+    const confirmation = page.getByRole('dialog', { name: 'Archive this project?', exact: true });
+    await expect(confirmation).toContainText(b.name);
+    await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await confirmation.getByRole('button', { name: 'Archive project', exact: true }).click();
     await expect(card).toHaveCount(0);
     await expect(archive).toBeFocused();
     await expect(mirror).toHaveCount(0);
@@ -492,20 +496,20 @@ test('project management and conversation links survive reload and keep the veri
   const actions = (name: string) =>
     card.getByRole('button', { name: 'Project actions for ' + name, exact: true });
   const projectMenu = (name: string) =>
-    card.getByRole('group', { name: 'Project actions: ' + name, exact: true });
+    card.getByRole('dialog', { name: 'Project actions for ' + name, exact: true });
   await actions(b.name).click();
-  const rename = projectMenu(b.name).getByRole('button', { name: 'Rename', exact: true });
+  const rename = projectMenu(b.name).getByRole('button', { name: 'Rename project', exact: true });
   const pin = projectMenu(b.name).getByRole('button', { name: 'Pin', exact: true });
-  const hint = page.locator('.control-tooltip');
-  await expect(rename.getByText('Rename', { exact: true })).toBeHidden();
-  await rename.hover();
-  await expect(hint).toHaveText('Rename');
+  await expect(rename).toHaveText('Rename project');
+  await actions(b.name).press('Tab');
+  await expect(rename).toBeFocused();
   await rename.press('Tab');
   await expect(pin).toBeFocused();
-  await expect(hint).toHaveText('Pin');
   await pin.press('Tab');
   await expect(projectMenu(b.name).getByRole('button', { name: 'Archive project' })).toBeFocused();
-  await expect(hint).toContainText('Its files and conversations are kept.');
+  await page.keyboard.press('Escape');
+  await expect(actions(b.name)).toBeFocused();
+  await actions(b.name).click();
   await rename.click();
   const renamed = 'zz Sidebar ' + randomUUID();
   await card.getByLabel('Project name', { exact: true }).fill('  ' + renamed + '  ');

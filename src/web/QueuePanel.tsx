@@ -5,8 +5,7 @@ import { useEffect, useState } from 'react';
 import type { QueueState, QueueItem, Settings } from '../shared/types';
 import { sameSettings } from '../shared/types';
 import { message, post, request } from './api';
-import { Icon } from './primitives';
-import { PanelMenu } from './PanelMenu';
+import { Icon, IconButton } from './primitives';
 import './workflow.css';
 export function QueuePanel({
   threadId,
@@ -97,14 +96,16 @@ export function QueuePanel({
       <div className="queue-editor-actions">
         {onStop && (
           <button
-            className="icon-button"
+            className="queue-editor-stop"
             type="button"
             aria-label={t('Stop task')}
+            aria-description={t('Stop current task and pause queue')}
             data-tooltip={t('Stop current task and pause queue')}
             disabled={busy}
             onClick={onStop}
           >
             <Icon name="stop" size={16} />
+            {t('Stop task')}
           </button>
         )}
         <button
@@ -159,7 +160,7 @@ export function QueuePanel({
           </button>
         )}
       </div>
-      <p>{state.paused && t(state.reason ?? 'Queue paused. Resume when ready.')}</p>
+      {state.paused && <p>{t(state.reason ?? 'Queue paused. Resume when ready.')}</p>}
       <ol>
         {state.items.map((entry, index) => (
           <li key={entry.id}>
@@ -233,40 +234,33 @@ export function QueuePanel({
                     </button>
                   )}
                   {entry.state === 'queued' && (
-                    <PanelMenu
-                      label={t('Queued message actions')}
-                      trigger={<Icon name="more" size={16} />}
-                      className="queue-entry-menu"
-                      iconOnly
-                    >
-                      <button
-                        disabled={busy || !!editing}
-                        data-close-menu
-                        onClick={() =>
-                          void run(async () => {
-                            // Pausing first prevents this client from dispatching the message during editing.
-                            // Another client may still resume it; the server's queued-state check remains authoritative.
-                            if (!state.paused) {
-                              const paused = await post<QueueState>(
-                                '/threads/' + threadId + '/queue/control',
-                                { paused: true },
-                              );
-                              onChange(paused);
-                            }
-                            const full = await request<QueueItem>(
-                              '/threads/' + threadId + '/queue/' + entry.id,
+                    <IconButton
+                      icon="edit"
+                      size={15}
+                      label={t('Edit message')}
+                      hint={t('Edit message and pause the queue')}
+                      disabled={busy || !!editing}
+                      onClick={() =>
+                        void run(async () => {
+                          // Pausing first prevents this client from dispatching the message during editing.
+                          // Another client may still resume it; the server's queued-state check remains authoritative.
+                          if (!state.paused) {
+                            const paused = await post<QueueState>(
+                              '/threads/' + threadId + '/queue/control',
+                              { paused: true },
                             );
-                            if (full.state !== 'queued')
-                              throw new Error('This message has already started.');
-                            setEditing(entry.id);
-                            setText(full.text);
-                          })
-                        }
-                      >
-                        <Icon name="edit" size={14} />
-                        {t('Edit message')}
-                      </button>
-                    </PanelMenu>
+                            onChange(paused);
+                          }
+                          const full = await request<QueueItem>(
+                            '/threads/' + threadId + '/queue/' + entry.id,
+                          );
+                          if (full.state !== 'queued')
+                            throw new Error('This message has already started.');
+                          setEditing(entry.id);
+                          setText(full.text);
+                        })
+                      }
+                    />
                   )}
                   {['queued', 'failed'].includes(entry.state) && (
                     <button

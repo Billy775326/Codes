@@ -1,3 +1,4 @@
+import { taskActivity } from './conversation-status';
 import {
   InterfaceLanguageContext,
   interfaceLanguages,
@@ -61,7 +62,7 @@ import { Login } from './Login';
 import { Conversations } from './Conversations';
 import { QueuePanel } from './QueuePanel';
 import { Approval } from './Approval';
-import { DiffView } from './DiffView';
+import { DiffView, type DiffLayout } from './DiffView';
 import { FilesPanel } from './FilesPanel';
 import { PanelMenu } from './PanelMenu';
 import { usePanelFocus } from './usePanelFocus';
@@ -136,7 +137,6 @@ const MessageView = memo(function MessageView({
   projectPath,
   item,
   streaming,
-  running = false,
   onReply,
   onFork,
   disabled,
@@ -154,7 +154,6 @@ const MessageView = memo(function MessageView({
   projectPath?: string;
   item: Message;
   streaming: boolean;
-  running?: boolean;
   actions?: boolean;
   changes?: Message;
   timestamp?: number;
@@ -219,14 +218,6 @@ const MessageView = memo(function MessageView({
       data-testid={`message-${item.kind}`}
     >
       <div className="message-body">
-        <div className="message-label">
-          {streaming && running && (
-            <span className="thinking">
-              {t('Working')}
-              <span>•••</span>
-            </span>
-          )}
-        </div>
         {!!item.images?.length && (
           <div className="message-images">
             {item.images.map((image, index) => (
@@ -257,7 +248,6 @@ const MessageView = memo(function MessageView({
               {item.text}
             </Markdown>
           )}
-          {streaming && running && <span className="caret" aria-hidden="true" />}
         </div>
         {changes && (
           <ChangeSummary
@@ -507,6 +497,9 @@ function App() {
   usePanelFocus(navigationElement, narrow && sidebar, closeNavigation, '[data-open-navigation]');
   usePanelFocus(contextElement, narrow && !!panel && !sidebar, closeContext, '[data-browse-files]');
   const [diffTurn, setDiffTurn] = useState('');
+  const [diffLayout, setDiffLayout] = useState<DiffLayout>(() =>
+    saved('codes.diff-layout') === 'split' ? 'split' : 'unified',
+  );
   const [diffPath, setDiffPath] = useState('');
   const [adding, setAdding] = useState(false);
   const openAddProject = useCallback(() => setAdding(true), []);
@@ -1234,18 +1227,19 @@ function App() {
     }
   };
   const checkQueueReceipt = async () => {
-    if (!queueRequest || !threadId) return;
+    if (!queueRequest || !threadId || loadingConversation || busy) return;
+    const version = draftRevision.current;
+    const acceptedDraft = sameQueueDraft(
+      { text: draft, settings, attachments },
+      queueRequest.payload,
+    );
     setBusy(true);
     setError('');
     try {
       await request('/threads/' + threadId + '/queue/' + queueRequest.operationId);
       const before = queueRevision.current;
       const queue = await request<QueueState>('/threads/' + threadId + '/queue');
-      if (sameQueueDraft({ text: draft, settings, attachments }, queueRequest.payload)) {
-        save('codes.draft.' + threadId, '');
-        setDraft('');
-        setAttachments([]);
-      }
+      if (acceptedDraft) clearAcceptedDraft(threadId, version);
       save('codes.queue-request.' + threadId, '');
       setQueueRequest(undefined);
       setThread((current) =>
@@ -1500,6 +1494,8 @@ function App() {
     (!!thread &&
       !thread.writerConflict &&
       ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
+  const activity =
+    thread && !loadingConversation ? taskActivity(thread, connection === 'Connected') : undefined;
   const outcome = isTurnOutcome(thread?.state) ? thread.state : undefined;
   const finishedTurn = outcome
     ? thread?.turns?.findLast((turn) => turn.id === thread.turnId && turn.status === outcome)
@@ -2509,7 +2505,6 @@ function App() {
                               : undefined
                           }
                           disabled={busy || forkBusy || thread.managementPending}
-                          running={thread.state === 'running'}
                           streaming={
                             m.kind === 'assistant' &&
                             m.id === assistantTail.get(m.turnId) &&
@@ -2583,6 +2578,21 @@ function App() {
                       ))}
                     </ol>
                   </section>
+                )}
+                {activity && (!history || timelineLatest) && (
+                  <div
+                    className="task-activity"
+                    data-state={activity.state}
+                    role="status"
+                    aria-label={t(activity.label)}
+                    data-tooltip=""
+                    tabIndex={0}
+                  >
+                    <i aria-hidden="true" />
+                    <i aria-hidden="true" />
+                    <i aria-hidden="true" />
+                    <span className="visually-hidden">{t(activity.label)}</span>
+                  </div>
                 )}
               </>
             )}
@@ -2667,7 +2677,10 @@ function App() {
               <span>
                 {t('A queue receipt needs confirmation. Check before sending another message.')}
               </span>
-              <button disabled={busy} onClick={() => void checkQueueReceipt()}>
+              <button
+                disabled={busy || loadingConversation}
+                onClick={() => void checkQueueReceipt()}
+              >
                 {t('Check queue receipt')}
               </button>
               <button
@@ -3115,6 +3128,9 @@ function App() {
           </form>
         </InteractionDialog>
       )}
+      {panel && narrow && !sidebar && !modalOpen && (
+        <div className="context-scrim" aria-hidden="true" onClick={closeContext} />
+      )}
       {panel && (
         <aside
           ref={contextElement}
@@ -3186,6 +3202,11 @@ function App() {
                   }
                   openFile={openChangedFile}
                   focusPath={diffPath}
+                  layout={diffLayout}
+                  onLayoutChange={(layout) => {
+                    setDiffLayout(layout);
+                    save('codes.diff-layout', layout);
+                  }}
                 />
               ) : (
                 <div className="panel-empty">

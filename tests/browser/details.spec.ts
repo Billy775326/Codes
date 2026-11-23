@@ -84,7 +84,7 @@ test('file previews show per-file counts, line numbers, layouts and safe literal
   await login(page);
   await send(page, '[changes] Detailed patch fixture ' + Date.now());
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+  await page.getByRole('button', { name: 'View changes', exact: true }).click();
   const panel = page.locator('.context-panel');
   await expect(panel.locator('.diff-overview')).toContainText('2 files');
   const first = panel.getByRole('region', { name: 'Changes in example.ts', exact: true });
@@ -111,6 +111,11 @@ test('file previews show per-file counts, line numbers, layouts and safe literal
   await first.getByRole('button', { name: 'Open file', exact: true }).click();
   await expect(panel.locator('.file-title')).toContainText('example.ts');
   await expect(panel.locator('.file-preview')).toContainText('READ ONLY');
+  await panel.getByRole('button', { name: 'Changes', exact: true }).click();
+  await expect(split).toHaveAttribute('aria-pressed', 'true');
+  await page.reload();
+  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await expect(split).toHaveAttribute('aria-pressed', 'true');
 });
 test('earlier turn changes remain inspectable after a later turn and reload', async ({ page }) => {
   await login(page);
@@ -120,7 +125,7 @@ test('earlier turn changes remain inspectable after a later turn and reload', as
   await expect(page.getByTestId('message-assistant')).toHaveCount(2);
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+  await page.getByRole('button', { name: 'View changes', exact: true }).click();
   const panel = page.locator('.context-panel');
   await expect(panel).toContainText('No changes to review');
   await panel.getByLabel('Change scope').selectOption({ index: 1 });
@@ -153,7 +158,7 @@ test('long patch text wraps in Unified and Side by side on desktop and phones', 
     await route.fulfill({ json: base });
   });
   await page.reload();
-  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+  await page.getByRole('button', { name: 'View changes', exact: true }).click();
   const panel = page.locator('.context-panel');
   const file = panel.getByRole('region', { name: 'Changes in example.ts', exact: true });
   const patch = file.getByLabel('Patch for example.ts', { exact: true });
@@ -188,7 +193,7 @@ test('long patches use bounded line windows and fit phone screens', async ({ pag
   await login(page);
   await send(page, '[changes] [large-patch] Window fixture ' + Date.now());
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+  await page.getByRole('button', { name: 'View changes', exact: true }).click();
   const panel = page.locator('.context-panel');
   const added = panel.getByRole('region', { name: 'Changes in new-file.txt', exact: true });
   await added.locator('.diff-file-toggle').click();
@@ -206,7 +211,7 @@ test('oversized patches disclose truncation and proposed file patches can be dec
   await login(page);
   await send(page, '[changes] [truncated-patch] Truncated fixture ' + Date.now());
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+  await page.getByRole('button', { name: 'View changes', exact: true }).click();
   await expect(page.locator('.context-panel')).toContainText('This change preview is incomplete');
   await page.getByRole('button', { name: 'Close panel', exact: true }).click();
   await send(page, '[file-approve] Proposed patch ' + Date.now());

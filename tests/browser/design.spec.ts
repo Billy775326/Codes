@@ -11,7 +11,7 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
 }) => {
   await login(page);
   const files = page.getByRole('button', { name: 'Browse files', exact: true });
-  const changes = page.getByRole('button', { name: 'Review changes', exact: true });
+  const changes = page.getByRole('button', { name: 'View changes', exact: true });
   const settings = page.getByRole('button', { name: 'Interaction settings', exact: true });
   const send = page.getByRole('button', { name: 'Send message', exact: true });
   for (const control of [files, changes, settings, send]) {
@@ -33,7 +33,7 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
   await files.focus();
   await page.keyboard.press('Tab');
   await expect(changes).toBeFocused();
-  await expect(tooltip).toHaveText('Review changes');
+  await expect(tooltip).toHaveText('View changes');
   await expect(tooltip).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(changes).toHaveAttribute('aria-pressed', 'true');
@@ -171,4 +171,35 @@ test('a phone archive confirmation owns the modal while navigation stays inert',
     page.getByRole('dialog', { name: 'Workspace navigation', exact: true }),
   ).toBeVisible();
   await expect(archive).toBeFocused();
+});
+
+for (const width of [320, 390]) {
+  test(`conversation actions fit the viewport at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await login(page);
+    const trigger = page.getByRole('button', { name: 'Conversation actions', exact: true });
+    await trigger.click();
+    const popup = page.getByRole('dialog', { name: 'Conversation actions', exact: true });
+    const box = (await popup.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    const status = popup.getByRole('button', { name: 'Session status', exact: true });
+    await expect(status).toBeInViewport({ ratio: 1 });
+    await status.click();
+    await expect(page.getByRole('dialog', { name: 'Session status', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
+  });
+}
+
+test('dismissing the tablet context drawer returns focus to its launcher', async ({ page }) => {
+  await page.setViewportSize({ width: 850, height: 800 });
+  await login(page);
+  const changes = page.getByRole('button', { name: 'View changes', exact: true });
+  await changes.click();
+  const panel = page.getByRole('dialog', { name: 'Project context', exact: true });
+  await expect(panel).toBeVisible();
+  await page.locator('.context-scrim').click({ position: { x: 20, y: 430 } });
+  await expect(panel).toHaveCount(0);
+  await expect(changes).toBeFocused();
 });

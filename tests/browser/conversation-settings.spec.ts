@@ -337,8 +337,24 @@ test('queued receipt checks preserve settings semantics across serialization and
     record.payload.settings = { permission, ...other };
     localStorage.setItem(key, JSON.stringify(record));
   }, id);
+  let releaseSnapshot!: () => void;
+  const waitingForSnapshot = new Promise<void>((resolve) => (releaseSnapshot = resolve));
+  await page.route(
+    '**/api/threads/' + id + '/snapshot',
+    async (route) => {
+      await waitingForSnapshot;
+      await route.continue();
+    },
+    { times: 1 },
+  );
   await page.reload();
-  await page.getByRole('button', { name: 'Check queue receipt', exact: true }).click();
+  const check = page.getByRole('button', { name: 'Check queue receipt', exact: true });
+  try {
+    await expect(check).toBeDisabled();
+  } finally {
+    releaseSnapshot();
+  }
+  await check.click();
   await expect(page.getByLabel('Message Codex')).toHaveValue('');
   await expect(
     page.getByRole('region', { name: 'Queued messages', exact: true }).locator('li'),

@@ -184,7 +184,7 @@ test('long source lines wrap inside Files at desktop and phone widths', async ({
     await expect(lines.getByRole('button')).toHaveCount(3);
   }
   await wrappedLine.click();
-  await expect(page.getByText('Lines 2–2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Attach lines 2–2', exact: true })).toBeEnabled();
 });
 
 test('long source files render one page of selectable lines at a time', async ({ page }) => {
@@ -217,10 +217,34 @@ test('long source files render one page of selectable lines at a time', async ({
   await code
     .getByRole('button', { name: '202 Example line 202', exact: true })
     .click({ modifiers: ['Shift'] });
-  await expect(preview.getByText('Lines 199–202', { exact: true })).toBeVisible();
+  await expect(
+    preview.getByRole('button', { name: 'Attach lines 199–202', exact: true }),
+  ).toBeVisible();
   await preview.getByRole('button', { name: 'Next lines' }).click();
   await expect(code.getByRole('button')).toHaveCount(11);
   await expect(preview.getByRole('button', { name: 'Next lines' })).toBeDisabled();
-  await preview.getByRole('button', { name: 'Attach lines' }).click();
+  await preview.getByRole('button', { name: 'Attach lines 199–202', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
+});
+
+test.describe('touch range selection', () => {
+  test.use({ viewport: { width: 320, height: 690 }, hasTouch: true, isMobile: true });
+  test('nothing is selected before the user chooses a file range', async ({ page }) => {
+    await openFiles(page);
+    await page.getByRole('button', { name: 'example.ts', exact: true }).tap();
+    const preview = page.getByRole('region', { name: 'File preview', exact: true });
+    const attach = preview.getByRole('button', { name: /^Attach lines/ });
+    await expect(attach).toBeDisabled();
+    await expect(preview.locator('.file-lines [aria-pressed="true"]')).toHaveCount(0);
+    await preview.getByRole('button', { name: 'Select range' }).tap();
+    await preview.getByLabel('Start line').fill('2');
+    await preview.getByLabel('End line').fill('1');
+    await expect(attach).toBeDisabled();
+    await preview.getByLabel('End line').fill('3');
+    await expect(attach).toHaveText('Attach lines 2–3');
+    await attach.tap();
+    await expect(
+      page.getByRole('button', { name: 'Remove example.ts', exact: true }),
+    ).toBeVisible();
+  });
 });

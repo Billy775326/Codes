@@ -93,8 +93,7 @@ function Turn({
   showStandaloneTime: boolean;
 }) {
   const { t } = useInterfaceLanguage();
-  const [choice, setChoice] = useState<boolean>();
-  const open = choice ?? turn.active;
+  const [choices, setChoices] = useState<Record<number, boolean>>({});
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!turn.active || turn.info?.startedAtMs === undefined) return;
@@ -105,8 +104,8 @@ function Turn({
   const elapsed = workDuration(turn.info, turn.active ? now : undefined, t);
   const label = turn.active
     ? elapsed
-      ? t('Working · {elapsed}', { elapsed })
-      : t('Working')
+      ? t('Work history · {elapsed}', { elapsed })
+      : t('Work history')
     : elapsed
       ? t('Worked for {elapsed}', { elapsed })
       : t('Work history');
@@ -120,6 +119,7 @@ function Turn({
   }
   if (!segments.length && elapsed !== undefined) segments.push([]);
   const disclosure = (items: Message[], index: number) => {
+    const open = choices[index] ?? turn.active;
     const tools = items.filter(isActivity);
     const counts = commandCounts(tools);
     return (
@@ -128,7 +128,7 @@ function Turn({
           className="work-history-toggle"
           aria-expanded={open}
           aria-controls={`work-${turn.id}-${index}`}
-          onClick={() => setChoice(!open)}
+          onClick={() => setChoices((previous) => ({ ...previous, [index]: !open }))}
         >
           <span>{label}</span>
           <Icon name="chevron" size={12} />

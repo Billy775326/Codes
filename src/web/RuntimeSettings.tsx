@@ -5,13 +5,18 @@ import { ApiError, message, request } from './api';
 
 const path = '/settings/runtime';
 
-export function RuntimeSettings() {
+export function RuntimeSettings({
+  onDraft,
+}: {
+  onDraft: (value: { changed: boolean; busy: boolean }) => void;
+}) {
   const { t, locale } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<RuntimeSettingsSnapshot>();
   const [questions, setQuestions] = useState(true);
   const [timeout, setTimeout] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [reload, setReload] = useState(0);
   const [needsReload, setNeedsReload] = useState(false);
 
@@ -32,9 +37,18 @@ export function RuntimeSettings() {
   function loadAgain() {
     setError('');
     setSnapshot(undefined);
+    setSaved(false);
     setNeedsReload(false);
     setReload((value) => value + 1);
   }
+
+  const settings = snapshot?.settings;
+  const changed =
+    !!settings &&
+    (questions !== settings.codeQuestions || timeout !== String(settings.requestTimeoutMs));
+  useEffect(() => {
+    onDraft({ changed, busy: saving });
+  }, [changed, saving, onDraft]);
 
   if (!snapshot)
     return (
@@ -52,12 +66,10 @@ export function RuntimeSettings() {
       </div>
     );
 
-  const changed =
-    questions !== snapshot.settings.codeQuestions ||
-    timeout !== String(snapshot.settings.requestTimeoutMs);
   async function saveSettings() {
     if (!snapshot || !changed || saving || needsReload) return;
     setSaving(true);
+    setSaved(false);
     setError('');
     try {
       populate(
@@ -69,6 +81,7 @@ export function RuntimeSettings() {
           }),
         }),
       );
+      setSaved(true);
     } catch (failure) {
       setError(message(failure));
       setNeedsReload(failure instanceof ApiError && (failure.status === 409 || failure.uncertain));
@@ -124,7 +137,7 @@ export function RuntimeSettings() {
           <code>{snapshot.dataDirectory}</code>
         </dd>
       </dl>
-      {snapshot.restartRequired && (
+      {snapshot.restartRequired ? (
         <p role="status">
           {t(
             'Saved. Restart Codes to apply. Active timeout {timeout} ms. Code-mode questions {state}.',
@@ -134,7 +147,9 @@ export function RuntimeSettings() {
             },
           )}
         </p>
-      )}
+      ) : saved && !changed ? (
+        <p role="status">{t('Runtime settings saved.')}</p>
+      ) : null}
       {error && <p role="alert">{t(error)}</p>}
       <div className="network-actions">
         {needsReload && (

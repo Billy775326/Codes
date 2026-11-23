@@ -215,7 +215,7 @@ export function WorkspaceHeader(props: Props) {
             <Icon name="folder" size={17} />
           </button>
           <button
-            aria-label={t('Review changes')}
+            aria-label={t('View changes')}
             aria-pressed={props.panel === 'diff'}
             data-tooltip=""
             className={'icon-button ' + (props.panel === 'diff' ? 'selected' : '')}

@@ -213,11 +213,16 @@ test.describe('touch sidebar controls', () => {
     const card = activeProjectCard(page);
     const projectName = await card.locator('.project-card-name').innerText();
     await card.getByRole('button', { name: 'Project actions for ' + projectName }).tap();
-    for (const label of ['Rename', 'Pin', 'Archive project']) {
+    for (const label of ['Rename project', 'Pin', 'Archive project']) {
       const action = card.getByRole('button', { name: label, exact: true });
       await expect(action.getByText(label, { exact: true })).toBeVisible();
       expect((await action.boundingBox())?.height).toBeGreaterThanOrEqual(40);
     }
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Workspace navigation' })).toBeVisible();
+    await expect(
+      card.getByRole('button', { name: 'Project actions for ' + projectName }),
+    ).toBeFocused();
     const archive = page.getByRole('button', { name: 'Archive ' + title, exact: true });
     await expect(archive).toBeVisible();
     expect((await archive.boundingBox())?.height).toBeGreaterThanOrEqual(40);
@@ -273,7 +278,7 @@ test('a delayed list response cannot undo a title already received through live 
     },
     { times: 1 },
   );
-  await page.getByRole('button', { name: 'Refresh conversations' }).click();
+  await page.getByRole('button', { name: 'Refresh projects and chats' }).click();
   await ready;
   const renamed = 'Live event wins ' + Date.now();
   try {
@@ -314,7 +319,8 @@ test('sidebar keeps task and paused queue status across selection, reload, theme
         .locator('.conversation-status')
         .evaluate((status) => getComputedStyle(status, '::before').animationName),
     )
-    .toBe('sidebar-activity-pulse');
+    .toBe('none');
+  await expect(row.locator('.conversation-status')).toHaveAttribute('data-indicator', 'approval');
   await expect(row.locator('.thread-link')).toHaveAccessibleDescription(/Needs approval.*Updated:/);
   await expect(row.locator('time')).toHaveAttribute('datetime', /T/);
   await page.getByLabel('Message Codex').fill('Waiting sidebar follow-up');

@@ -62,9 +62,7 @@ for (const width of [1440, 320])
     await queueInstead.click();
     const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
     await expect(queue).toContainText('Waiting · Editable');
-    await expect(
-      queue.getByRole('button', { name: 'Queued message actions', exact: true }),
-    ).toBeVisible();
+    await expect(queue.getByRole('button', { name: 'Edit message', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -99,7 +97,6 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
   const tooltip = page.locator('.control-tooltip');
   await queue.getByRole('button', { name: 'Pause queue', exact: true }).hover();
   await expect(tooltip).toHaveText('Pause queue');
-  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).first().click();
   await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
   await expect(queue).toContainText('Paused by you.');
   const editor = queue.getByRole('form', { name: 'Queued message editor', exact: true });
@@ -111,7 +108,7 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
     ['Save queued message', 'Save queued message'],
   ] as const) {
     const action = editor.getByRole('button', { name, exact: true });
-    await expect(action).toHaveText('');
+    await expect(action).toHaveText(name === 'Stop task' ? 'Stop task' : '');
     await action.hover();
     await expect(tooltip).toHaveText(hint);
     await expect(tooltip).toBeVisible();

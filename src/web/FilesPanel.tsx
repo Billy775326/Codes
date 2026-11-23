@@ -65,12 +65,24 @@ function TextPreview({
 }: AttachmentControls & { file: FileContent }) {
   const { t } = useInterfaceLanguage();
   const [page, setPage] = useState(0);
-  const [range, setRange] = useState<[number, number]>([1, Math.min(file.lines, 50)]);
+  const [range, setRange] = useState<[number, number]>();
+  const [choosingRange, setChoosingRange] = useState(false);
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
   const lines = useMemo(() => file.text.split('\n'), [file.text]);
   const offset = page * linesPerPage;
   const visible = lines.slice(offset, offset + linesPerPage);
-  const from = Math.min(...range);
-  const to = Math.max(...range);
+  const first = Number(start);
+  const last = Number(end);
+  const validRange =
+    Number.isInteger(first) &&
+    Number.isInteger(last) &&
+    first >= 1 &&
+    first <= last &&
+    last <= file.lines;
+  const selected = choosingRange ? (validRange ? [first, last] : undefined) : range;
+  const from = selected ? Math.min(...selected) : 0;
+  const to = selected ? Math.max(...selected) : 0;
   const scroller = useRef<HTMLDivElement>(null);
   const changePage = (next: number) => {
     setPage(next);
@@ -84,7 +96,7 @@ function TextPreview({
           className="file-lines"
           role="group"
           aria-label={t('File lines')}
-          aria-description={t('Hold Shift to select a range.')}
+          aria-description={t('Hold Shift or use Select range to select multiple lines.')}
         >
           {visible.map((line, index) => {
             const number = offset + index + 1;
@@ -92,9 +104,10 @@ function TextPreview({
               <button
                 key={number}
                 aria-pressed={number >= from && number <= to}
-                onClick={(event) =>
-                  setRange(event.shiftKey ? [range[0], number] : [number, number])
-                }
+                onClick={(event) => {
+                  setChoosingRange(false);
+                  setRange(event.shiftKey && range ? [range[0], number] : [number, number]);
+                }}
               >
                 <span>{number}</span>
                 <code>{line || ' '}</code>
@@ -133,8 +146,51 @@ function TextPreview({
         </div>
       )}
       <div className="selection-toolbar">
-        <span>{t('Lines {start}–{end}', { start: from, end: to })}</span>
+        {choosingRange && (
+          <div className="file-range" role="group" aria-label={t('Line range')}>
+            <label>
+              {t('Start line')}
+              <input
+                type="number"
+                min={1}
+                max={file.lines}
+                value={start}
+                inputMode="numeric"
+                onChange={(event) => setStart(event.target.value)}
+              />
+            </label>
+            <label>
+              {t('End line')}
+              <input
+                type="number"
+                min={1}
+                max={file.lines}
+                value={end}
+                inputMode="numeric"
+                onChange={(event) => setEnd(event.target.value)}
+              />
+            </label>
+            {start && end && !validRange && (
+              <span role="status">
+                {t('Choose a range within the file, with the start before or equal to the end.')}
+              </span>
+            )}
+          </div>
+        )}
         <div className="selection-actions" role="group" aria-label={t('Attach file context')}>
+          <button
+            aria-expanded={choosingRange}
+            onClick={() => {
+              if (choosingRange) setRange(selected ? [from, to] : undefined);
+              else {
+                setStart(from ? String(from) : '');
+                setEnd(to ? String(to) : '');
+              }
+              setChoosingRange(!choosingRange);
+            }}
+          >
+            {t(choosingRange ? 'Hide range fields' : 'Select range')}
+          </button>
           <button onClick={() => onAttach(file, 1, file.lines)} disabled={attachmentBlocked}>
             {t('Attach file')}
           </button>
@@ -142,9 +198,11 @@ function TextPreview({
             className="primary"
             aria-description={t('Attach the selected line range.')}
             onClick={() => onAttach(file, from, to)}
-            disabled={attachmentBlocked}
+            disabled={attachmentBlocked || !selected}
           >
-            {t('Attach lines')}
+            {selected
+              ? t('Attach lines {start}–{end}', { start: from, end: to })
+              : t('Attach lines')}
           </button>
         </div>
       </div>

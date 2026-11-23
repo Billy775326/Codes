@@ -31,7 +31,11 @@ function allowedAddresses(settings: NetworkSettingsSnapshot['settings'], port: s
     .join('\n');
 }
 
-export function NetworkSettings() {
+export function NetworkSettings({
+  onDraft,
+}: {
+  onDraft: (value: { changed: boolean; busy: boolean }) => void;
+}) {
   const { t } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<NetworkSettingsSnapshot>();
   const [host, setHost] = useState<(typeof loopbackHosts)[number]>('127.0.0.1');
@@ -79,6 +83,20 @@ export function NetworkSettings() {
     setReload((value) => value + 1);
   }
 
+  const settings = snapshot?.settings;
+  const addresses = origins ?? (settings ? allowedAddresses(settings, port) : '');
+  const changed =
+    !!settings &&
+    (host !== settings.host ||
+      port !== String(settings.port) ||
+      addresses !== settings.origins.join('\n') ||
+      authMode !== settings.authMode ||
+      (settings.authMode === 'cloudflare-access' &&
+        (issuer !== settings.issuer || audience !== settings.audience)));
+  useEffect(() => {
+    onDraft({ changed, busy: saving || importing });
+  }, [changed, saving, importing, onDraft]);
+
   if (!snapshot)
     return (
       <div className="preferences-content">
@@ -95,16 +113,6 @@ export function NetworkSettings() {
       </div>
     );
 
-  const addresses = origins ?? allowedAddresses(snapshot.settings, port);
-  const authChanged =
-    authMode !== snapshot.settings.authMode ||
-    (snapshot.settings.authMode === 'cloudflare-access' &&
-      (issuer !== snapshot.settings.issuer || audience !== snapshot.settings.audience));
-  const changed =
-    host !== snapshot.settings.host ||
-    port !== String(snapshot.settings.port) ||
-    addresses !== snapshot.settings.origins.join('\n') ||
-    authChanged;
   async function importConfiguration(file: File) {
     if (saving || importing || reloadRequired) return;
     setError('');

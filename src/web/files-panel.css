@@ -196,8 +196,24 @@
 .selection-toolbar {
   flex-wrap: wrap;
 }
-.selection-toolbar > span {
-  flex: 1 0 auto;
+.file-range {
+  display: grid;
+  flex: 1 0 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.file-range label {
+  display: grid;
+  gap: 3px;
+}
+.file-range input {
+  min-width: 0;
+  min-height: var(--control-size);
+  padding: 3px 8px;
+  font-size: 16px;
+}
+.file-range > span {
+  grid-column: 1 / -1;
 }
 .selection-actions {
   display: flex;
@@ -213,6 +229,7 @@
 }
 .selection-toolbar .primary {
   color: var(--primary-ink);
+  margin: 0;
 }
 @media (max-width: 1099px) {
   .file-entry {

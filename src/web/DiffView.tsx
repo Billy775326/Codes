@@ -11,7 +11,7 @@ import type { FileChange } from '../shared/types';
 import { Icon, IconButton } from './primitives';
 import './diff.css';
 
-type Layout = 'unified' | 'split';
+export type DiffLayout = 'unified' | 'split';
 interface SplitLine {
   left?: DiffLine;
   right?: DiffLine;
@@ -49,7 +49,7 @@ const FileDiff = memo(function FileDiff({
   focused,
 }: {
   file: DiffFile;
-  layout: Layout;
+  layout: DiffLayout;
   expanded: boolean;
   openFile?: (path: string) => void;
   focused?: boolean;
@@ -239,6 +239,8 @@ export const DiffView = memo(function DiffView({
   title = 'File changes',
   openFile,
   focusPath,
+  layout: selectedLayout,
+  onLayoutChange,
 }: {
   patch?: string;
   files?: FileChange[];
@@ -246,9 +248,13 @@ export const DiffView = memo(function DiffView({
   title?: string;
   openFile?: (path: string) => void;
   focusPath?: string;
+  layout?: DiffLayout;
+  onLayoutChange?: (layout: DiffLayout) => void;
 }) {
   const { t } = useInterfaceLanguage();
-  const [layout, setLayout] = useState<Layout>('unified');
+  const [localLayout, setLocalLayout] = useState<DiffLayout>('unified');
+  const layout = selectedLayout ?? localLayout;
+  const setLayout = onLayoutChange ?? setLocalLayout;
   const entries = useMemo(
     () => (files?.length ? parseFileDiffs(files) : parseUnifiedDiff(patch ?? '')),
     [patch, files],

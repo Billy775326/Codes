@@ -66,23 +66,67 @@ test('a streaming Codex reply renders Markdown before the task finishes', async 
   await expect(reply.getByRole('heading', { name: 'A clear path forward' })).toBeVisible();
   await expect(reply.locator('strong')).toHaveText('simulated response');
   await expect(reply.getByRole('listitem')).toHaveCount(3);
-  const caret = reply.locator('.caret');
-  await expect(caret).toBeVisible();
-  await expect(caret).toHaveCSS('background-color', 'rgb(85, 204, 255)');
-  await expect(caret).toHaveCSS('animation-name', 'caret-pulse');
-  const size = (await caret.boundingBox())!;
-  expect(size.width).toBeGreaterThan(9);
-  expect(size.height).toBeGreaterThan(17);
+  const activity = page.getByRole('status', { name: 'Running', exact: true });
+  const dots = activity.locator('i');
+  await expect(activity).toBeVisible();
+  await expect(dots).toHaveCount(3);
+  await expect(dots.first()).toHaveCSS('background-color', 'rgb(85, 204, 255)');
+  await expect(dots.first()).toHaveCSS('animation-name', 'task-dot');
+  await expect(dots.nth(1)).toHaveCSS('animation-delay', '0.2s');
+  await expect(dots.nth(2)).toHaveCSS('animation-delay', '0.4s');
+  await expect(page.locator('.caret, .thinking')).toHaveCount(0);
   await page.getByRole('button', { name: 'Switch to light mode', exact: true }).click();
-  await expect(caret).toHaveCSS('background-color', 'rgb(0, 93, 156)');
+  await expect(dots.first()).toHaveCSS('background-color', 'rgb(0, 93, 156)');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(caret).toHaveCSS('animation-name', 'none');
+  await expect(dots.first()).toHaveCSS('animation-name', 'none');
   const stop = page.getByRole('button', { name: 'Stop task', exact: true });
   await expect(stop).toBeEnabled();
   await stop.click();
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
-  await expect(caret).toHaveCount(0);
+  await expect(activity).toHaveCount(0);
   await expect(reply.getByRole('heading', { name: 'A clear path forward' })).toBeVisible();
+});
+
+test('three-dot indicator distinguishes a pending answer from approval without animating', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  const input = page.getByLabel('Message Codex');
+  const send = page.getByRole('button', { name: 'Send message', exact: true });
+  const activity = page.locator('.task-activity');
+  await input.fill('[question] Waiting dot fixture');
+  await send.click();
+  await expect(activity).toHaveAccessibleName('Needs answer');
+  const dot = activity.locator('i').first();
+  await expect(dot).toHaveCSS('background-color', 'rgb(193, 175, 246)');
+  await expect(dot).toHaveCSS('animation-name', 'none');
+  await page.getByRole('button', { name: 'Skip question', exact: true }).click();
+  await expect(activity).toHaveCount(0);
+  await input.fill('[approve] Approval dot fixture');
+  await send.click();
+  await expect(activity).toHaveAccessibleName('Needs approval');
+  await expect(dot).toHaveCSS('background-color', 'rgb(223, 187, 128)');
+  await expect(dot).toHaveCSS('animation-name', 'none');
+  await page.getByRole('button', { name: 'Decline', exact: true }).click();
+});
+
+test('a finished reply can copy one fenced code block without copying the message', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const { base } = await fixture(page, 0);
+  base.thread.messages.find((message) => message.phase === 'final_answer')!.text =
+    'Example heading.\n\n```ts\nconst value = 42;\n```';
+  await reconnectUpdates(page);
+  await page.getByRole('button', { name: 'Copy code', exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe('const value = 42;');
+  await expect(page.getByText('Code copied', { exact: true })).toBeVisible();
 });
 
 test('external chat links open a separate tab and internal links stay in the workspace', async ({
@@ -221,6 +265,27 @@ test('HTML preview explains an empty JavaScript app shell and keeps its source v
   await expect(preview.locator('iframe')).toHaveCount(0);
   await expect(preview.getByRole('group', { name: 'File lines' })).toContainText('/src/main.tsx');
 });
+test('work sections around a question expand independently with commands collapsed', async ({
+  page,
+}) => {
+  const { base, commands } = await fixture(page, 2);
+  base.thread.messages.splice(base.thread.messages.indexOf(commands[1]!), 0, {
+    id: 'archived-question',
+    turnId: base.thread.turnId!,
+    kind: 'question',
+    text: 'One question',
+    answeredQuestions: [{ question: 'One question', answer: 'Already answered' }],
+  });
+  await reconnectUpdates(page);
+  const disclosures = page.locator('.work-history-toggle');
+  await expect(disclosures).toHaveCount(2);
+  await expect(disclosures.first()).toHaveAttribute('aria-expanded', 'false');
+  await disclosures.last().click();
+  await expect(disclosures.first()).toHaveAttribute('aria-expanded', 'false');
+  await expect(disclosures.last()).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.activity-group[open]')).toHaveCount(0);
+});
+
 test('the whole work history defaults collapsed with final answer, edits and one footer outside', async ({
   page,
 }) => {

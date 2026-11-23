@@ -179,7 +179,6 @@ test('queued images keep their preview and can be steered without placeholder te
   const queue = page.getByRole('region', { name: 'Queued messages' });
   await loadedImages(page, '.queued-images img', 1);
   await queue.getByRole('button', { name: 'Pause queue', exact: true }).click();
-  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).click();
   await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue('');
   await queue.getByLabel('Edit queued message').fill('Temporary caption');

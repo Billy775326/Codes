@@ -42,7 +42,12 @@ test('desktop layout, streamed response, reload, and file selection context', as
   await page.screenshot({ path: 'test-results/desktop-workspace.png', fullPage: true });
   await page.getByRole('button', { name: 'Browse files' }).click();
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
-  await page.getByRole('button', { name: 'Attach lines' }).click();
+  await page
+    .getByRole('group', { name: 'File lines', exact: true })
+    .getByRole('button')
+    .first()
+    .click();
+  await page.getByRole('button', { name: /^Attach lines/ }).click();
   await page.getByRole('button', { name: 'Close panel' }).click();
   const prompt = `Explain the selected function ${Date.now()}`;
   await send(page, prompt);

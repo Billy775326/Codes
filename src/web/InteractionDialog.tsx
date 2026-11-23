@@ -166,6 +166,36 @@ export function PreferencesDialog({
 }) {
   const { t } = useInterfaceLanguage();
   const [section, setSection] = useState<'preferences' | 'network' | 'runtime'>('preferences');
+  const [visited, setVisited] = useState({ preferences: true, network: false, runtime: false });
+  const [networkDraft, setNetworkDraft] = useState({ changed: false, busy: false });
+  const [runtimeDraft, setRuntimeDraft] = useState({ changed: false, busy: false });
+  const [discarding, setDiscarding] = useState(false);
+  const sectionButton = useRef<HTMLButtonElement>(null);
+  const discardBusy = networkDraft.busy || runtimeDraft.busy;
+  const selectSection = (value: typeof section) => {
+    setVisited((previous) => (previous[value] ? previous : { ...previous, [value]: true }));
+    setSection(value);
+  };
+  const returnFocus = useRef(false);
+  const stay = () => {
+    returnFocus.current = true;
+    setDiscarding(false);
+  };
+  useEffect(() => {
+    if (!discarding && returnFocus.current) {
+      returnFocus.current = false;
+      sectionButton.current?.focus();
+    }
+  }, [discarding]);
+  const requestClose = () => {
+    if (discarding) {
+      stay();
+    } else if (networkDraft.changed || runtimeDraft.changed) {
+      setDiscarding(true);
+    } else {
+      close();
+    }
+  };
   const preferences = (
     <>
       <div className="preferences-content">
@@ -414,7 +444,12 @@ export function PreferencesDialog({
           )}
           reset={() => change(defaultBrowserPreferences)}
         />
-        <button className="preferences-done" type="button" onClick={close}>
+        <button
+          className="preferences-done"
+          type="button"
+          onClick={requestClose}
+          disabled={discardBusy}
+        >
           {t('Done')}
         </button>
       </div>
@@ -423,38 +458,68 @@ export function PreferencesDialog({
   return (
     <InteractionDialog
       title={t('Interaction settings')}
-      close={close}
+      close={requestClose}
+      busy={discardBusy}
       className="preferences-dialog"
     >
-      <div className="preferences-nav" role="group" aria-label={t('Settings sections')}>
-        <button
-          type="button"
-          aria-pressed={section === 'preferences'}
-          onClick={() => setSection('preferences')}
-        >
-          {t('Preferences')}
-        </button>
-        <button
-          type="button"
-          aria-pressed={section === 'network'}
-          onClick={() => setSection('network')}
-        >
-          {t('Network & access')}
-        </button>
-        <button
-          type="button"
-          aria-pressed={section === 'runtime'}
-          onClick={() => setSection('runtime')}
-        >
-          {t('Runtime')}
-        </button>
+      <div className="preferences-page" hidden={discarding}>
+        <div className="preferences-nav" role="group" aria-label={t('Settings sections')}>
+          <button
+            type="button"
+            ref={section === 'preferences' ? sectionButton : undefined}
+            aria-pressed={section === 'preferences'}
+            onClick={() => selectSection('preferences')}
+          >
+            {t('Preferences')}
+          </button>
+          <button
+            type="button"
+            ref={section === 'network' ? sectionButton : undefined}
+            aria-pressed={section === 'network'}
+            onClick={() => selectSection('network')}
+          >
+            {t('Network & access')}
+          </button>
+          <button
+            type="button"
+            ref={section === 'runtime' ? sectionButton : undefined}
+            aria-pressed={section === 'runtime'}
+            onClick={() => selectSection('runtime')}
+          >
+            {t('Runtime')}
+          </button>
+        </div>
+        <div className="preferences-page" hidden={section !== 'preferences'}>
+          {preferences}
+        </div>
+        {visited.network && (
+          <div className="preferences-page" hidden={section !== 'network'}>
+            <NetworkSettings onDraft={setNetworkDraft} />
+          </div>
+        )}
+        {visited.runtime && (
+          <div className="preferences-page" hidden={section !== 'runtime'}>
+            <RuntimeSettings onDraft={setRuntimeDraft} />
+          </div>
+        )}
       </div>
-      {section === 'network' ? (
-        <NetworkSettings />
-      ) : section === 'runtime' ? (
-        <RuntimeSettings />
-      ) : (
-        preferences
+      {discarding && (
+        <div
+          className="preferences-content preferences-discard"
+          role="group"
+          aria-labelledby="discard-settings-heading"
+        >
+          <h3 id="discard-settings-heading">{t('Discard unsaved settings?')}</h3>
+          <p>{t('Unsaved Network & access and Runtime edits will be lost.')}</p>
+          <div className="network-actions">
+            <button type="button" autoFocus onClick={stay}>
+              {t('Keep editing')}
+            </button>
+            <button type="button" onClick={close}>
+              {t('Discard changes')}
+            </button>
+          </div>
+        </div>
       )}
     </InteractionDialog>
   );

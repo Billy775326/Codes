@@ -29,7 +29,12 @@ it('keeps uncertain receipts visible over terminal state and queue metadata', ()
       queueCount: 2,
       queuePaused: true,
     }),
-  ).toEqual({ label: 'Check result', tone: 'attention', queue: '2 in queue · Paused' });
+  ).toEqual({
+    label: 'Check result',
+    tone: 'attention',
+    queue: '2 in queue · Paused',
+    indicator: 'unknown',
+  });
   expect(conversationStatus({ ...row, executionPending: true }).label).toBe('Confirming result');
   expect(conversationStatus({ ...row, managementPending: true }).label).toBe('Check archive');
 });
@@ -40,7 +45,7 @@ it('retains the task status alongside paused, failed, and uncertain queue entrie
     label: 'Needs approval',
     tone: 'attention',
     queue: '2 in queue · Paused',
-    motion: 'attention',
+    indicator: 'approval',
   });
   expect(
     conversationStatus({ ...row, queueCount: 1, queuePaused: true, queueIssue: 'failed' }).queue,
@@ -50,15 +55,21 @@ it('retains the task status alongside paused, failed, and uncertain queue entrie
   );
   expect(conversationStatus({ ...row, queuePaused: true }).queue).toBeUndefined();
 });
-it('animates live work and interactions while keeping unconfirmed results static', () => {
-  expect(conversationStatus({ ...row, state: 'running' }).motion).toBe('running');
+it('distinguishes running work, outstanding interactions, and unconfirmed results', () => {
+  expect(conversationStatus({ ...row, state: 'running' }).indicator).toBe('running');
   expect(
-    conversationStatus({ ...row, state: 'running', sidebarActivity: 'optionalInput' }).motion,
-  ).toBe('attention');
-  expect(conversationStatus({ ...row, state: 'waitingInput' }).motion).toBe('attention');
-  expect(
-    conversationStatus({ ...row, state: 'running', executionUnknown: true }).motion,
-  ).toBeUndefined();
-  expect(conversationStatus({ ...row, executionPending: true }).motion).toBeUndefined();
-  expect(conversationStatus(row).motion).toBeUndefined();
+    conversationStatus({ ...row, state: 'running', sidebarActivity: 'optionalInput' }).indicator,
+  ).toBe('answer');
+  expect(conversationStatus({ ...row, state: 'waitingInput' }).indicator).toBe('answer');
+  expect(conversationStatus({ ...row, state: 'running', executionUnknown: true }).indicator).toBe(
+    'unknown',
+  );
+  expect(conversationStatus({ ...row, sidebarActivity: 'approvalAndInput' }).indicator).toBe(
+    'answer-and-approval',
+  );
+  expect(conversationStatus({ ...row, sidebarActivity: 'responding' }).indicator).toBe(
+    'submitting',
+  );
+  expect(conversationStatus({ ...row, executionPending: true }).indicator).toBeUndefined();
+  expect(conversationStatus(row).indicator).toBeUndefined();
 });

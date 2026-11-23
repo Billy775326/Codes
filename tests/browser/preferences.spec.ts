@@ -155,6 +155,37 @@ test('runtime settings save independently of the active configuration and surviv
     expect(restored.ok()).toBe(true);
   }
 });
+test('network and runtime drafts survive a tab switch and require confirmation to discard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await fixture(page, 'Settings drafts fixture');
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const network = dialog.getByRole('button', { name: 'Network & access', exact: true });
+  const runtime = dialog.getByRole('button', { name: 'Runtime', exact: true });
+  const port = dialog.getByLabel('Listen port');
+  const timeout = dialog.getByLabel('Native request timeout (milliseconds)');
+  await network.click();
+  await port.fill('28787');
+  await runtime.click();
+  await timeout.fill('77123');
+  await network.click();
+  await expect(port).toHaveValue('28787');
+  await runtime.click();
+  await expect(timeout).toHaveValue('77123');
+  await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  const discard = dialog.getByRole('group', { name: 'Discard unsaved settings?' });
+  const keep = discard.getByRole('button', { name: 'Keep editing' });
+  await expect(keep).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(runtime).toBeFocused();
+  await expect(timeout).toHaveValue('77123');
+  await page.keyboard.press('Escape');
+  await discard.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(dialog).toHaveCount(0);
+});
+
 test('browser notifications are opt-in and use the open background connection', async ({
   page,
 }) => {
@@ -402,7 +433,7 @@ test('turning off reply scrolling preserves the reading position and keeps a man
   await expect(
     page
       .getByTestId('message-assistant')
-      .filter({ has: page.locator('.caret') })
+      .last()
       .getByRole('heading', { name: 'A clear path forward' }),
   ).toBeVisible();
   const back = page.getByRole('button', { name: 'Back to latest messages', exact: true });

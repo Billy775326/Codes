@@ -1,39 +1,15 @@
 import { useInterfaceLanguage } from './interface-language';
-import { memo, useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ConversationPage, Project, ProjectUpdate, Summary } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon, IconButton } from './primitives';
 import { InteractionDialog } from './InteractionDialog';
+import { PanelMenu } from './PanelMenu';
 import { conversationStatus } from './conversation-status';
 import { formatMessageTime } from './MessageTime';
 import type { ProjectSidebarPreference } from './project-navigation';
 import './conversations.css';
-
-function SidebarAction({
-  icon,
-  label,
-  description,
-  ...props
-}: Pick<ComponentProps<'button'>, 'onClick' | 'disabled'> & {
-  icon: string;
-  label: string;
-  description?: string;
-}) {
-  return (
-    <button
-      {...props}
-      type="button"
-      className="sidebar-action"
-      aria-label={label}
-      aria-description={description}
-      data-tooltip={description ? label + ' · ' + description : ''}
-    >
-      <Icon name={icon} size={15} />
-      <span>{label}</span>
-    </button>
-  );
-}
 
 interface Props {
   projects: Project[];
@@ -196,7 +172,7 @@ export const Conversations = memo(function Conversations({
           </button>
           <button
             className="icon-button"
-            aria-label={t('Refresh conversations')}
+            aria-label={t('Refresh projects and chats')}
             data-tooltip=""
             onClick={() => {
               onRefreshProjects();
@@ -315,14 +291,14 @@ const ProjectCard = memo(function ProjectCard({
   const [loading, setLoading] = useState(filtering);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const [projectMenu, setProjectMenu] = useState(false);
+  const projectMenu = useRef<HTMLDetailsElement>(null);
   const [projectEdit, setProjectEdit] = useState<{ original: string; name: string }>();
   const [savingProject, setSavingProject] = useState(false);
   const [projectError, setProjectError] = useState('');
   const [pending, setPending] = useState('');
-  const [confirmation, saveConfirmation] = useState<Summary>();
+  const [confirmation, saveConfirmation] = useState<Summary | 'project'>();
   const setConfirmation = useCallback(
-    (value?: Summary) => {
+    (value?: Summary | 'project') => {
       saveConfirmation(value);
       onModalChange(!!value);
     },
@@ -347,6 +323,12 @@ const ProjectCard = memo(function ProjectCard({
   const shouldLoad = filtering || archiveView || isExpanded;
   const keepOpen = !!(filtering || archiveView || error || pending || confirmation || projectEdit);
   const collapsed = !keepOpen && !isExpanded;
+  const projectConfirmation = confirmation === 'project';
+  const archiveBusy = projectConfirmation ? savingProject : !!pending;
+  const closeProjectEdit = () => {
+    setProjectEdit(undefined);
+    projectMenu.current?.querySelector('summary')?.focus();
+  };
   const seenRefresh = useRef(refreshVersion);
 
   useEffect(() => {
@@ -442,7 +424,6 @@ const ProjectCard = memo(function ProjectCard({
       });
       onProjectUpdated({ id: projectId, name: updated.name }, { name: projectEdit.original });
       setProjectEdit(undefined);
-      setProjectMenu(false);
       projectName.current?.focus();
     } catch (error) {
       setProjectError(message(error));
@@ -463,8 +444,9 @@ const ProjectCard = memo(function ProjectCard({
           body: JSON.stringify({ archived }),
         },
       );
+      setConfirmation(undefined);
       onProjectUpdated(updated, { archived: !archived });
-      onArchiveChange();
+      requestAnimationFrame(onArchiveChange);
     } catch (error) {
       setProjectError(message(error));
     } finally {
@@ -575,20 +557,45 @@ const ProjectCard = memo(function ProjectCard({
           </button>
         )}
         {!collapsed && (
-          <button
-            className="icon-button"
-            aria-label={t('Project actions for {project}', { project: project.name })}
-            aria-expanded={projectMenu}
-            data-tooltip=""
+          <PanelMenu
+            label={t('Project actions for {project}', { project: project.name })}
+            className="project-action-menu"
+            trigger={<Icon name="more" size={16} />}
+            controller={projectMenu}
             disabled={savingProject}
-            onClick={() => {
-              setProjectMenu(!projectMenu);
-              setProjectEdit(undefined);
-              setProjectError('');
-            }}
+            iconOnly
+            floating
           >
-            <Icon name="more" size={16} />
-          </button>
+            <button
+              data-close-menu
+              onClick={() => {
+                setProjectEdit({ original: project.name, name: project.name });
+                setProjectError('');
+              }}
+            >
+              <Icon name="edit" size={15} />
+              {t('Rename project')}
+            </button>
+            <button
+              data-close-menu
+              onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}
+            >
+              <Icon name={preference?.pinned ? 'pin-off' : 'pin'} size={15} />
+              {t(preference?.pinned ? 'Unpin' : 'Pin')}
+            </button>
+            <button
+              data-close-menu
+              onClick={() => {
+                setProjectEdit(undefined);
+                setProjectError('');
+                if (project.archived) void changeProjectArchive();
+                else setConfirmation('project');
+              }}
+            >
+              <Icon name={project.archived ? 'unarchive' : 'archive'} size={15} />
+              {t(project.archived ? 'Restore project' : 'Archive project')}
+            </button>
+          </PanelMenu>
         )}
         {!collapsed && !keepOpen && (
           <button
@@ -598,7 +605,6 @@ const ProjectCard = memo(function ProjectCard({
             aria-controls={listId}
             aria-expanded="true"
             onClick={() => {
-              setProjectMenu(false);
               onSidebarPreference(projectId, { expanded: false });
               projectName.current?.focus();
             }}
@@ -607,43 +613,7 @@ const ProjectCard = memo(function ProjectCard({
           </button>
         )}
       </header>
-      {projectMenu && (
-        <div
-          className="conversation-actions"
-          role="group"
-          aria-label={t('Project actions: {project}', { project: project.name })}
-        >
-          <SidebarAction
-            icon="edit"
-            label={t('Rename')}
-            disabled={savingProject}
-            onClick={() => {
-              setProjectEdit({ original: project.name, name: project.name });
-              setProjectError('');
-            }}
-          />
-          <SidebarAction
-            icon={preference?.pinned ? 'pin-off' : 'pin'}
-            label={preference?.pinned ? t('Unpin') : t('Pin')}
-            onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}
-          />
-          <SidebarAction
-            icon={project.archived ? 'unarchive' : 'archive'}
-            label={project.archived ? t('Restore project') : t('Archive project')}
-            disabled={savingProject}
-            description={
-              project.archived
-                ? t('Return this project to the main sidebar.')
-                : t('Move this project to the archive view. Its files and conversations are kept.')
-            }
-            onClick={() => {
-              setProjectEdit(undefined);
-              void changeProjectArchive();
-            }}
-          />
-        </div>
-      )}
-      {projectError && !projectEdit && (
+      {projectError && !projectEdit && !projectConfirmation && (
         <p className="conversation-error" role="alert">
           {t(projectError)}
         </p>
@@ -665,7 +635,10 @@ const ProjectCard = memo(function ProjectCard({
             autoFocus
             onChange={(event) => setProjectEdit({ ...projectEdit, name: event.target.value })}
             onKeyDown={(event) => {
-              if (event.key === 'Escape' && !savingProject) setProjectEdit(undefined);
+              if (event.key === 'Escape' && !savingProject) {
+                event.stopPropagation();
+                closeProjectEdit();
+              }
             }}
           />
           {projectError && (
@@ -674,11 +647,7 @@ const ProjectCard = memo(function ProjectCard({
             </p>
           )}
           <div>
-            <button
-              type="button"
-              disabled={savingProject}
-              onClick={() => setProjectEdit(undefined)}
-            >
+            <button type="button" disabled={savingProject} onClick={closeProjectEdit}>
               {t('Cancel')}
             </button>
             <button
@@ -779,7 +748,7 @@ const ProjectCard = memo(function ProjectCard({
                     id={'conversation-status-' + row.id}
                   >
                     <span
-                      data-motion={status.motion}
+                      data-indicator={status.indicator}
                       className={
                         'conversation-status tone-' +
                         status.tone +
@@ -874,9 +843,9 @@ const ProjectCard = memo(function ProjectCard({
       {confirmation &&
         createPortal(
           <InteractionDialog
-            title={t('Archive this conversation?')}
+            title={t(projectConfirmation ? 'Archive this project?' : 'Archive this conversation?')}
             close={() => setConfirmation(undefined)}
-            busy={!!pending}
+            busy={archiveBusy}
             className="conversation-confirm"
             closeOnBackdrop
             initialFocus="[data-confirm-cancel]"
@@ -884,22 +853,27 @@ const ProjectCard = memo(function ProjectCard({
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                void mutate(confirmation, 'archive');
+                if (confirmation === 'project') void changeProjectArchive();
+                else void mutate(confirmation, 'archive');
               }}
             >
               <div className="conversation-confirm-target">
                 <Icon name="archive" size={18} />
-                <strong>{confirmation.title}</strong>
+                <strong>{confirmation === 'project' ? project.name : confirmation.title}</strong>
               </div>
               <p>
                 {t(
-                  'Restore this conversation anytime from Archived projects and chats. Its history and project files are kept.',
+                  projectConfirmation
+                    ? 'Restore this project anytime from Archived projects and chats. Its files and conversations are kept.'
+                    : 'Restore this conversation anytime from Archived projects and chats. Its history and project files are kept.',
                 )}
               </p>
-              <p>{t('Codex may also archive conversations started from this one.')}</p>
-              {error && (
+              {!projectConfirmation && (
+                <p>{t('Codex may also archive conversations started from this one.')}</p>
+              )}
+              {(projectConfirmation ? projectError : error) && (
                 <p className="error-text" role="alert">
-                  {t(error)}
+                  {t(projectConfirmation ? projectError : error)}
                 </p>
               )}
               <div className="conversation-confirm-actions">
@@ -907,17 +881,23 @@ const ProjectCard = memo(function ProjectCard({
                   type="button"
                   className="secondary"
                   data-confirm-cancel
-                  disabled={!!pending}
+                  disabled={archiveBusy}
                   onClick={() => setConfirmation(undefined)}
                 >
                   {t('Cancel')}
                 </button>
                 <button
                   className="primary"
-                  aria-label={pending ? t('Archiving…') : t('Archive conversation')}
-                  disabled={!!pending}
+                  aria-label={t(
+                    archiveBusy
+                      ? 'Archiving…'
+                      : projectConfirmation
+                        ? 'Archive project'
+                        : 'Archive conversation',
+                  )}
+                  disabled={archiveBusy}
                 >
-                  {pending ? t('Archiving…') : t('Archive')}
+                  {archiveBusy ? t('Archiving…') : t('Archive')}
                 </button>
               </div>
             </form>

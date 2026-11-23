@@ -35,8 +35,8 @@ export function ChangeSummary({
           </small>
         </div>
         {review && (
-          <button aria-label={t('Review edited files')} onClick={() => review()}>
-            {t('Review')}
+          <button aria-label={t('View changes for edited files')} onClick={() => review()}>
+            {t('View changes')}
           </button>
         )}
       </div>
@@ -45,6 +45,7 @@ export function ChangeSummary({
           <button
             key={file.path + ':' + index}
             onClick={() => review?.(file.path)}
+            disabled={!review}
             title={file.path}
           >
             <span>{file.path}</span>
@@ -54,7 +55,7 @@ export function ChangeSummary({
         ))}
       </div>
       {files.length > 4 && (
-        <button className="edit-summary-more" onClick={() => setAll(!all)}>
+        <button className="edit-summary-more" aria-expanded={all} onClick={() => setAll(!all)}>
           {all ? t('Show fewer files') : t('Show all {count} edits', { count: files.length })}
         </button>
       )}

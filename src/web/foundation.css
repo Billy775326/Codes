@@ -17,6 +17,8 @@
   --primary-ink: #202328;
   --link: #a8c8eb;
   --status-running: #55ccff;
+  --status-answer: #c1aff6;
+  --status-response: #85cdb5;
   --status-attention: #dfbb80;
   --status-error: #e39b9b;
   --control-size: 36px;
@@ -43,6 +45,8 @@
   --primary-ink: #fff;
   --link: #245c91;
   --status-running: #005d9c;
+  --status-answer: #6640a4;
+  --status-response: #13755d;
   --status-attention: #795516;
   --status-error: #a52b36;
   color-scheme: only light;

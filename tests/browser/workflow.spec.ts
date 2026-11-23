@@ -227,7 +227,6 @@ test('queue controls retain full long messages, recover lost receipts, and pause
   const queue = page.getByRole('region', { name: 'Queued messages' });
   await expect(queue.locator('li')).toHaveCount(1);
   await queue.getByRole('button', { name: 'Pause queue', exact: true }).click();
-  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).first().click();
   await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue(long);
   await queue.getByLabel('Edit queued message').fill(long + ' edited');
@@ -316,7 +315,6 @@ test('editing a queued card uses the composer area, pauses dispatch, and restore
   await expect(page.getByLabel('Message Codex')).toHaveValue('');
   await page.getByLabel('Message Codex').fill('My separate unsent draft');
   const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
-  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).click();
   await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeHidden();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue('Queued content to revise');
@@ -325,7 +323,6 @@ test('editing a queued card uses the composer area, pauses dispatch, and restore
   await queue.getByRole('button', { name: 'Cancel edit', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toHaveValue('My separate unsent draft');
   await expect(queue).toContainText('Queued content to revise');
-  await queue.getByRole('button', { name: 'Queued message actions', exact: true }).click();
   await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
   await queue.getByLabel('Edit queued message').fill('Saved queued correction');
   await queue.getByRole('button', { name: 'Save queued message', exact: true }).click();

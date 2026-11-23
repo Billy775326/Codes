@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { MarkdownLink } from './MarkdownLink';
 import { projectImageType, projectImageUrl } from '../shared/images';
 import { limits } from '../shared/types';
+import { IconButton } from './primitives';
 import './content-preview.css';
 
 function htmlPreviewIssue(html: string) {
@@ -123,21 +124,40 @@ function imagePath(url: string | undefined, root: string | undefined) {
 }
 
 const PreviewCodeBlock: Components['pre'] = ({ node, children, ...props }) => {
+  const { t } = useInterfaceLanguage();
+  const [copyStatus, setCopyStatus] = useState('');
   const code = node?.children[0];
+  const content =
+    code?.type === 'element' && code.tagName === 'code' ? code.children[0] : undefined;
+  const source = content?.type === 'text' ? content.value : undefined;
+  const classes = code?.type === 'element' ? code.properties.className : undefined;
   const html =
-    code?.type === 'element' &&
-    code.tagName === 'code' &&
-    Array.isArray(code.properties.className) &&
-    code.properties.className.some(
-      (name) => typeof name === 'string' && /^language-html?$/i.test(name),
-    ) &&
-    code.children[0]?.type === 'text'
-      ? code.children[0].value
-      : undefined;
+    source &&
+    Array.isArray(classes) &&
+    classes.some((name) => typeof name === 'string' && /^language-html?$/i.test(name));
+  const copy = async () => {
+    if (source === undefined) return;
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      // Markdown adds one terminal newline to fenced-code nodes.
+      await navigator.clipboard.writeText(source.replace(/\n$/, ''));
+      setCopyStatus('Code copied');
+    } catch {
+      setCopyStatus('Copy unavailable. Select the code text.');
+    }
+  };
   return (
     <>
-      <pre {...props}>{children}</pre>
-      {html && <HtmlPreview html={html} />}
+      <div className="code-block">
+        {source !== undefined && (
+          <div className="code-block-actions">
+            {copyStatus && <span role="status">{t(copyStatus)}</span>}
+            <IconButton icon="copy" label={t('Copy code')} size={15} onClick={() => void copy()} />
+          </div>
+        )}
+        <pre {...props}>{children}</pre>
+      </div>
+      {html && source && <HtmlPreview html={source} />}
     </>
   );
 };

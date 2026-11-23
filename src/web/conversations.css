@@ -221,22 +221,34 @@
 .conversation-status.tone-running {
   color: var(--status-running);
 }
-.conversation-status[data-motion] {
+.conversation-status[data-indicator] {
   gap: 7px;
   font-weight: 650;
 }
-.conversation-status[data-motion]::before {
+.conversation-status[data-indicator]::before {
   width: 8px;
   height: 8px;
   outline: 2px solid color-mix(in srgb, currentColor 28%, transparent);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .conversations[data-live='true'] .conversation-status[data-motion='running']::before {
+  .conversations[data-live='true'] .conversation-status[data-indicator='running']::before {
     animation: sidebar-activity-pulse 1.15s ease-in-out infinite;
   }
-  .conversations[data-live='true'] .conversation-status[data-motion='attention']::before {
-    animation: sidebar-activity-pulse 1.9s ease-in-out infinite;
-  }
+}
+.conversation-status:is([data-indicator='answer'], [data-indicator='answer-and-approval'])::before {
+  color: var(--status-answer);
+}
+.conversation-status[data-indicator='answer-and-approval']::before {
+  box-shadow: 0 0 0 2px var(--status-attention);
+}
+.conversation-status[data-indicator='submitting']::before {
+  color: var(--status-response);
+}
+.conversations[data-live='false'] .conversation-status[data-indicator='running']::before {
+  color: var(--muted);
+}
+.conversation-status[data-indicator='unknown']::before {
+  color: var(--status-error);
 }
 @keyframes sidebar-activity-pulse {
   50% {
@@ -259,34 +271,29 @@
 .conversation-queue.tone-error {
   color: var(--status-error);
 }
-.conversation-actions {
-  display: flex;
-  gap: 2px;
-  padding: 0 6px 4px;
-  flex-wrap: wrap;
+.app .project-action-menu > summary {
+  display: grid;
+  place-items: center;
+  width: var(--control-size);
+  height: var(--control-size);
 }
-.conversation-actions .sidebar-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 32px;
-  min-height: 30px;
-  font-size: 12px;
-  padding: 4px 6px;
-  color: var(--muted);
-  border-radius: 5px;
-}
-.sidebar-action > svg {
-  flex-shrink: 0;
-}
-.sidebar-action > span {
-  display: none;
-}
-.conversation-actions .sidebar-action:hover:not(:disabled),
-.conversation-actions .sidebar-action:focus-visible {
+.project-action-menu .panel-menu-content {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  margin: 0;
+  width: min(196px, calc(100vw - 16px));
+  padding: 5px;
+  overflow-y: auto;
   color: var(--fg);
-  background: var(--hover);
+}
+.project-action-menu .panel-menu-content > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--control-size);
+  text-align: left;
 }
 .conversation-rename {
   padding: 2px 8px 12px;
@@ -421,8 +428,7 @@
     font-size: 16px;
   }
   .conversation-controls select,
-  .conversation-search button,
-  .conversation-actions .sidebar-action {
+  .conversation-search button {
     min-height: 36px;
   }
   .conversation-rename input {
@@ -442,12 +448,6 @@
   }
 }
 @media (hover: none) {
-  .conversation-actions .sidebar-action {
-    min-height: 40px;
-  }
-  .sidebar-action > span {
-    display: inline;
-  }
   .project-card-name {
     min-height: 38px;
   }

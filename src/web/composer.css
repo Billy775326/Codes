@@ -275,8 +275,7 @@
   grid-row: 2;
   gap: 2px;
 }
-.app .compact-queue .queue-actions > button,
-.app .queue-entry-menu summary {
+.app .compact-queue .queue-actions > button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -288,23 +287,6 @@
 .app .compact-queue .queue-error,
 .app .compact-queue .queue-edit-scope {
   grid-column: 1 / -1;
-}
-.app .compact-queue .queue-entry-menu {
-  position: static;
-}
-.app .compact-queue {
-  position: relative;
-}
-.app .queue-entry-menu .panel-menu-content {
-  bottom: 100%;
-  right: 0;
-  width: 190px;
-}
-.app .queue-entry-menu .panel-menu-content button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
 }
 .app .compact-queue.is-editing {
   padding-bottom: 0;
@@ -331,6 +313,14 @@
   gap: 6px;
   padding: 4px 10px 9px;
 }
+.app .queue-editor-actions > .queue-editor-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: var(--control-size);
+  padding-inline: 8px;
+  margin-inline-end: auto;
+}
 .app .queue-editor-actions > .send-button {
   flex: none;
   width: var(--control-size);
@@ -345,8 +335,7 @@
     grid-row: 3;
     justify-content: flex-end;
   }
-  .app .compact-queue .queue-actions > button,
-  .app .queue-entry-menu summary {
+  .app .compact-queue .queue-actions > button {
     min-height: 40px;
   }
   .app .compact-queue ol {

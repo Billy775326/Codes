@@ -35,3 +35,18 @@
   max-height: 420px;
   object-fit: contain;
 }
+
+.code-block {
+  min-width: 0;
+}
+.code-block-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.app .code-block pre {
+  margin-top: 0;
+}
