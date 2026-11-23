@@ -123,17 +123,6 @@
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
-.queue-send {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 10px;
-  font-size: 11px;
-  border: 1px solid #b6a1ec30;
-  border-radius: 6px;
-  color: #c8b5eb;
-  white-space: nowrap;
-}
 .question {
   border: 0;
   margin: 16px 0;
@@ -193,10 +182,6 @@
   .queue-actions button {
     min-height: 34px;
   }
-  .queue-send {
-    font-size: 10px;
-    padding: 7px;
-  }
   .message-queue {
     padding: 10px;
     max-height: 230px;
@@ -210,32 +195,5 @@
   }
   .question-options button {
     min-height: 44px;
-  }
-  .composer-toolbar {
-    gap: 6px;
-  }
-}
-
-.composer-dispatch-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-@media (max-width: 700px) {
-  .composer-toolbar {
-    flex-wrap: wrap;
-  }
-  .composer-toolbar select {
-    min-width: 0;
-    max-width: 110px;
-    flex-shrink: 1;
-  }
-  .composer-dispatch-actions {
-    gap: 6px;
-  }
-  .composer-toolbar .toolbar-divider {
-    display: none;
   }
 }

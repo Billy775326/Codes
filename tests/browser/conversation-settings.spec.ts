@@ -185,9 +185,21 @@ test('changing future settings does not reconfigure the active task or existing 
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   await permission(page, 'Ask for approval');
   await model(page, 'high');
-  await page.getByLabel('Message Codex').fill('New queued settings');
-  await expect(page.getByRole('button', { name: 'Add now instead', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Queue message', exact: true }).click();
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  await page
+    .getByRole('combobox', { name: 'Follow-up delivery', exact: true })
+    .selectOption('steer');
+  await page.keyboard.press('Escape');
+  const draft = page.getByLabel('Message Codex');
+  await draft.fill('New queued settings');
+  await expect(
+    page.getByRole('button', { name: 'Add to current task', exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled();
+  await draft.press('Enter');
+  await expect(page.getByRole('region', { name: 'Queued messages' })).toContainText(
+    'New queued settings',
+  );
   const snapshot = await (await page.request.get('/api/threads/' + id + '/snapshot')).json();
   expect(snapshot.thread.settings.permission).toBe('read-only');
   expect(

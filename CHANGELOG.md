@@ -69,6 +69,8 @@
 
 ### Changed
 
+- Group composer buttons by purpose and put Queue, Add now and Stop together while a task runs. Highlight the action used by the send shortcut, with accessible labels and hints for each action.
+
 - Prefill Add project with the configured startup project directory, or the Codes installation directory when unset.
 
 - Show one three-dot task indicator in the conversation, with distinct colors for running, questions, approvals, reconnecting and unknown results. Only running animates and reduced-motion preferences are respected.

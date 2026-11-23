@@ -195,56 +195,6 @@
 .composer textarea::placeholder {
   color: #72717e;
 }
-.composer-toolbar {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 5px 12px 11px;
-  min-height: 47px;
-}
-.composer-toolbar select {
-  font-size: 10px;
-  color: #a29baf;
-  padding: 4px;
-  max-width: 150px;
-}
-.toolbar-divider {
-  height: 11px;
-  width: 1px;
-  background: #ffffff10;
-  margin: 0 3px;
-}
-.toolbar-spacer {
-  flex: 1;
-}
-.send-button {
-  background: #b7a4f4;
-  color: #221b31;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-}
-.send-button:hover {
-  background: #d0bfff;
-}
-.send-button:disabled {
-  background: #53505e;
-  color: #9991ac;
-  opacity: 0.6;
-}
-.stop-button {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 10px;
-  border: 1px solid #b8a6f32a;
-  padding: 7px 10px;
-  border-radius: 6px;
-  color: #bcb1d3;
-}
 .desktop-hint span {
   margin: 0 5px;
   color: #42424b;
@@ -825,14 +775,6 @@
     font-size: 13px;
     min-height: 80px;
     padding: 15px 14px 5px;
-  }
-  .composer-toolbar {
-    padding: 5px 9px 10px;
-    gap: 3px;
-  }
-  .composer-toolbar select {
-    max-width: 120px;
-    font-size: 10px;
   }
   .desktop-hint {
     display: none;

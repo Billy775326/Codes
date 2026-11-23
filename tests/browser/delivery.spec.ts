@@ -21,16 +21,24 @@ for (const width of [1440, 320])
     await send(page, '[slow] Explicit delivery fixture');
     await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
     await page.getByLabel('Message Codex').fill('Correct the current task');
-    await expect(page.locator('.composer-dispatch-actions')).toContainText('Queue');
-    await expect(page.locator('.composer-dispatch-actions')).toContainText('Stop');
+    const dispatch = page.getByRole('group', { name: 'Message actions', exact: true });
+    const buttons = dispatch.getByRole('button');
+    await expect(buttons).toHaveText(['Queue', 'Add now', 'Stop']);
+    await expect(dispatch.getByRole('button', { name: 'Queue message', exact: true })).toHaveClass(
+      'delivery-primary',
+    );
     await expect(page.locator('#message-delivery-help')).toContainText(
       'Waiting text can be edited',
     );
-    const alternate = page.getByRole('button', { name: 'Add now instead', exact: true });
+    const alternate = page.getByRole('button', { name: 'Add to current task', exact: true });
     await alternate.hover();
     const hint = page.locator('.control-tooltip');
     await expect(hint).toHaveText(
-      'Add this draft to the running task. Accepted additions cannot be edited.',
+      'Add this draft to the running task. Accepted additions cannot be edited. · Ctrl/Cmd+Shift+Enter',
+    );
+    await expect(alternate).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Control+Shift+Enter Meta+Shift+Enter',
     );
     await expect(hint).toBeVisible();
     const steer = page.waitForRequest(
@@ -50,15 +58,19 @@ for (const width of [1440, 320])
     await page.getByLabel('Message Codex').fill('Do this in the next turn');
     const addNow = page.getByRole('button', { name: 'Add to current task', exact: true });
     await expect(addNow).toBeEnabled();
+    await expect(addNow).toHaveClass('delivery-primary');
+    await expect(buttons).toHaveText(['Queue', 'Add now', 'Stop']);
     await addNow.hover();
     await expect(hint).toContainText('Add to current task');
     await expect(hint).toBeVisible();
     await expect(page.locator('#message-delivery-help')).toContainText(
       'Accepted additions cannot be edited',
     );
-    const queueInstead = page.getByRole('button', { name: 'Queue instead', exact: true });
+    const queueInstead = page.getByRole('button', { name: 'Queue message', exact: true });
     await queueInstead.hover();
-    await expect(hint).toHaveText('Wait for a new turn. Waiting text stays editable.');
+    await expect(hint).toHaveText(
+      'Wait for a new turn. Waiting text stays editable. · Ctrl/Cmd+Shift+Enter',
+    );
     await queueInstead.click();
     const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
     await expect(queue).toContainText('Waiting · Editable');
@@ -69,6 +81,9 @@ for (const width of [1440, 320])
     const controls = await page.locator('.composer-dispatch-actions').boundingBox();
     expect(controls!.x).toBeGreaterThanOrEqual(0);
     expect(controls!.x + controls!.width).toBeLessThanOrEqual(width);
+    const tools = await page.locator('.composer-tools').boundingBox();
+    if (width <= 320) expect(controls!.y).toBeGreaterThanOrEqual(tools!.y + tools!.height);
+    else expect(controls!.y).toBeCloseTo(tools!.y, 0);
     expect(
       await page.locator('.composer-dispatch-actions > button').evaluateAll((buttons) =>
         buttons.every((button) => {
@@ -76,7 +91,12 @@ for (const width of [1440, 320])
           if (!label) return true;
           const bounds = button.getBoundingClientRect();
           const text = label.getBoundingClientRect();
-          return text.left >= bounds.left && text.right <= bounds.right;
+          return (
+            text.left >= bounds.left &&
+            text.right <= bounds.right &&
+            bounds.top === buttons[0]?.getBoundingClientRect().top &&
+            bounds.height >= (innerWidth <= 700 ? 40 : 36)
+          );
         }),
       ),
     ).toBe(true);

@@ -80,7 +80,8 @@ export function ComposerControls({
         disabled={disabled || !modesReady}
         trigger={
           <>
-            <span>{t(permissionLabel(settings.permission))}</span>
+            <Icon name="shield" size={15} />
+            <span className="permission-selection">{t(permissionLabel(settings.permission))}</span>
             <Icon name="chevron" size={11} />
           </>
         }
@@ -112,10 +113,10 @@ export function ComposerControls({
           disabled={disabled}
           onClick={() => change({ ...settings, mode: 'default' })}
         >
-          {t('Plan ×')}
+          <span>{t('Plan')}</span>
+          <Icon name="close" size={12} />
         </button>
       )}
-      <div className="toolbar-spacer" />
       <PanelMenu
         label={t('Model and reasoning')}
         description={`${modelLabel} · ${effortLabel}${!settings.effort ? ' ' + t('(model default)') : ''}${settings.fast ? ' · ' + t('Fast') : ''} · ${t(settings.mode === 'plan' ? 'Plan' : 'Execution')} · ${t('Future tasks in this conversation')}`}

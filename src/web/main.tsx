@@ -478,6 +478,13 @@ function App() {
   const navigationElement = useRef<HTMLElement>(null);
   const contextElement = useRef<HTMLElement>(null);
   const [narrow, setNarrow] = useState(window.innerWidth <= 1099);
+  const [phoneLayout, setPhoneLayout] = useState(window.innerWidth <= 700);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 700px)');
+    const resize = () => setPhoneLayout(media.matches);
+    media.addEventListener('change', resize);
+    return () => media.removeEventListener('change', resize);
+  }, []);
   const closeNavigation = useCallback(() => {
     setSidebar(false);
     requestAnimationFrame(() =>
@@ -1618,10 +1625,11 @@ function App() {
     thread.pending?.kind !== 'review' &&
     !thread.archived &&
     !thread.managementPending;
+  const matchesTaskSettings = !!thread && sameSettings(settings, thread.settings);
   const deliveryMode =
-    active && preferences.followUp === 'steer' && thread && sameSettings(settings, thread.settings)
-      ? 'steer'
-      : 'queue';
+    canSteer && preferences.followUp === 'steer' && matchesTaskSettings ? 'steer' : 'queue';
+  const alternateDelivery = deliveryMode === 'queue' ? 'steer' : 'queue';
+  const hasFollowUps = active || !!thread?.queue?.items.length;
   const deliveryBlocked =
     connection !== 'Connected' ||
     busy ||
@@ -1638,52 +1646,47 @@ function App() {
     !!thread?.archived ||
     !!thread?.managementPending;
   const queueBlocked = deliveryBlocked || (thread?.queue?.items.length ?? 0) >= 10;
-  const addBlocked = deliveryBlocked || !canSteer || !sameSettings(settings, thread!.settings);
-  const deliveryHelp =
-    active || !!thread?.queue?.items.length
-      ? deliveryMode === 'queue'
-        ? (thread?.queue?.items.length ?? 0) >= 10
-          ? t(
-              'Queue is full (10 messages). Edit or remove a waiting entry, or use Add now if available.',
-            )
-          : active
-            ? t('Queue runs after this task completes. Waiting text can be edited or removed.') +
-              (!canSteer
-                ? ' ' + t('Add now waits until the pending request or result is resolved.')
-                : !sameSettings(settings, thread!.settings)
-                  ? ' ' + t('Queue to use the updated conversation settings.')
-                  : '')
-            : t(
-                'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.',
-              )
-        : canSteer
-          ? t(
-              'Add now updates this running task using its current settings. Accepted additions cannot be edited.',
-            )
+  const addBlocked = deliveryBlocked || !canSteer || !matchesTaskSettings;
+  const deliveryHelp = hasFollowUps
+    ? deliveryMode === 'queue'
+      ? (thread?.queue?.items.length ?? 0) >= 10
+        ? t(
+            'Queue is full (10 messages). Edit or remove a waiting entry, or use Add now if available.',
+          )
+        : active
+          ? t('Queue runs after this task completes. Waiting text can be edited or removed.') +
+            (!canSteer
+              ? ' ' + t('Add now waits until the pending request or result is resolved.')
+              : !matchesTaskSettings
+                ? ' ' + t('Queue to use the updated conversation settings.')
+                : '')
           : t(
-              'Add now is unavailable while awaiting approval, input, or confirmation. Queue a message for later.',
+              'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.',
             )
-      : t('Send starts a new turn. Edit this draft before sending; sent history stays unchanged.');
+      : t(
+          'Add now updates this running task using its current settings. Accepted additions cannot be edited.',
+        )
+    : t('Send starts a new turn. Edit this draft before sending; sent history stays unchanged.');
   const shortcut =
-    window.innerWidth <= 700 ||
+    phoneLayout ||
     preferences.enter === 'cmdAlways' ||
     (preferences.enter === 'cmdIfMultiline' && draft.includes('\n'))
       ? 'Ctrl/Cmd+Enter'
       : 'Enter';
-  const followUpHint =
-    deliveryMode === 'steer'
-      ? 'Add to current task'
-      : !active || thread?.queue?.paused
-        ? t('Add to waiting queue')
-        : 'Queue for next turn';
-  const alternateDeliveryHint =
-    deliveryMode === 'steer'
-      ? t('Wait for a new turn. Waiting text stays editable.')
-      : !canSteer
-        ? t('Add now waits until the pending request or result is resolved.')
-        : !sameSettings(settings, thread!.settings)
-          ? t('Add now needs the running task settings. Queue to use the updated settings.')
-          : t('Add this draft to the running task. Accepted additions cannot be edited.');
+  const keyShortcut = shortcut === 'Enter' ? 'Enter' : 'Control+Enter Meta+Enter';
+  const alternateShortcut = 'Ctrl/Cmd+Shift+Enter';
+  const alternateKeyShortcut = 'Control+Shift+Enter Meta+Shift+Enter';
+  const queueHint = t(
+    !active || thread?.queue?.paused ? 'Add to waiting queue' : 'Queue for next turn',
+  );
+  const queueDescription = t('Wait for a new turn. Waiting text stays editable.');
+  const addNowDescription = t(
+    !canSteer
+      ? 'Add now waits until the pending request or result is resolved.'
+      : !matchesTaskSettings
+        ? 'Add now needs the running task settings. Queue to use the updated settings.'
+        : 'Add this draft to the running task. Accepted additions cannot be edited.',
+  );
   const commands = [
     {
       name: '/model',
@@ -1854,18 +1857,16 @@ function App() {
       setBusy(false);
     }
   };
-  const followUp = (reverse = false) => {
+  const followUp = (behavior: Preferences['followUp'] = deliveryMode) => {
     if (draft.trimStart().startsWith('/')) {
       runCommand(draft.trim());
       return;
     }
-    const behavior = reverse
-      ? preferences.followUp === 'queue'
-        ? 'steer'
-        : 'queue'
-      : preferences.followUp;
-    if (active && behavior === 'steer') void steer();
-    else void enqueue();
+    if (behavior === 'steer') {
+      if (!addBlocked) void steer();
+    } else if (!queueBlocked) {
+      void enqueue();
+    }
   };
   const startReview = async (target: ReviewTarget, delivery: Preferences['review']) => {
     if (!projectId || busy) throw new Error('Choose a project and wait for the current request.');
@@ -2863,7 +2864,7 @@ function App() {
               onPaste={localAttachments.paste}
               aria-label={t('Message Codex')}
               aria-describedby="message-delivery-help"
-              aria-keyshortcuts={shortcut === 'Enter' ? 'Enter' : 'Control+Enter Meta+Enter'}
+              aria-keyshortcuts={keyShortcut}
               ref={composer}
               value={draft}
               readOnly={!!thread?.archived || !!thread?.managementPending}
@@ -2890,121 +2891,155 @@ function App() {
                 const modifier = e.ctrlKey || e.metaKey;
                 if (modifier && e.shiftKey && active) {
                   e.preventDefault();
-                  if (!busy && !steerReceipt && !queueRequest) followUp(true);
+                  if (!busy && !steerReceipt && !queueRequest) followUp(alternateDelivery);
                   return;
                 }
                 const sendKey =
                   modifier ||
-                  (window.innerWidth > 700 &&
+                  (!phoneLayout &&
                     preferences.enter !== 'cmdAlways' &&
                     (preferences.enter !== 'cmdIfMultiline' || !draft.includes('\n')));
                 if (!e.shiftKey && sendKey) {
                   e.preventDefault();
                   if (busy || steerReceipt || queueRequest) return;
-                  if (active || thread?.queue?.items.length) followUp();
+                  if (hasFollowUps) followUp();
                   else if (!receipt) void send();
                 }
               }}
             />
             <div className="composer-toolbar">
-              <PanelMenu
-                label={t('Attach files')}
-                className="composer-attachment-menu"
-                disabled={attachmentBlocked}
-                iconOnly
-                trigger={<Icon name="plus" size={17} />}
-              >
-                <button
-                  type="button"
-                  data-close-menu
-                  onClick={() => localAttachments.picker.current?.click()}
+              <div className="composer-tools">
+                <PanelMenu
+                  label={t('Attach files')}
+                  className="composer-attachment-menu"
+                  disabled={attachmentBlocked}
+                  iconOnly
+                  trigger={<Icon name="plus" size={17} />}
                 >
-                  <Icon name="upload" size={16} />
-                  {t('Upload from device')}
-                </button>
-                <button type="button" data-close-menu onClick={() => setPanel('files')}>
-                  <Icon name="folder" size={16} />
-                  {t('Browse project files')}
-                </button>
-              </PanelMenu>
-              <input
-                hidden
-                ref={localAttachments.picker}
-                type="file"
-                multiple
-                aria-label={t('Choose local files')}
-                onChange={localAttachments.choose}
-              />
-              <ComposerControls
-                ref={composerControls}
-                settings={settings}
-                autoReviewReady={autoReviewReady}
-                change={changeSettings}
-                models={models}
-                resolvedModel={thread?.resolvedModel}
-                modesReady={modes.some((entry) => entry.mode === 'default')}
-                planReady={modes.some((entry) => entry.mode === 'plan')}
-                disabled={
-                  busy ||
-                  loadingConversation ||
-                  profile.loading ||
-                  !profile.saved ||
-                  !!thread?.archived ||
-                  !!thread?.managementPending
-                }
-              />
-              <div className="composer-dispatch-actions">
-                {(active || !!thread?.queue?.items.length) && (
                   <button
-                    className="queue-send"
-                    aria-label={
-                      deliveryMode === 'steer' ? t('Add to current task') : t('Queue message')
-                    }
-                    data-tooltip={t(followUpHint) + ' · ' + shortcut}
-                    aria-describedby="message-delivery-help"
-                    disabled={deliveryMode === 'steer' ? addBlocked : queueBlocked}
-                    onClick={() => followUp()}
+                    type="button"
+                    data-close-menu
+                    onClick={() => localAttachments.picker.current?.click()}
                   >
-                    <Icon name={deliveryMode === 'steer' ? 'steer' : 'queue'} size={15} />
-                    <span className="action-label">
-                      {deliveryMode === 'steer' ? t('Add now') : t('Queue')}
-                    </span>
+                    <Icon name="upload" size={16} />
+                    {t('Upload from device')}
                   </button>
-                )}
-                {active ? (
+                  <button type="button" data-close-menu onClick={() => setPanel('files')}>
+                    <Icon name="folder" size={16} />
+                    {t('Browse project files')}
+                  </button>
+                </PanelMenu>
+                <input
+                  hidden
+                  ref={localAttachments.picker}
+                  type="file"
+                  multiple
+                  aria-label={t('Choose local files')}
+                  onChange={localAttachments.choose}
+                />
+                <ComposerControls
+                  ref={composerControls}
+                  settings={settings}
+                  autoReviewReady={autoReviewReady}
+                  change={changeSettings}
+                  models={models}
+                  resolvedModel={thread?.resolvedModel}
+                  modesReady={modes.some((entry) => entry.mode === 'default')}
+                  planReady={modes.some((entry) => entry.mode === 'plan')}
+                  disabled={
+                    busy ||
+                    loadingConversation ||
+                    profile.loading ||
+                    !profile.saved ||
+                    !!thread?.archived ||
+                    !!thread?.managementPending
+                  }
+                />
+              </div>
+              <div
+                className="composer-dispatch-actions"
+                role="group"
+                aria-label={t('Message actions')}
+                data-follow-up={hasFollowUps || undefined}
+              >
+                {hasFollowUps ? (
                   <button
-                    className="stop-button"
-                    aria-label={t('Stop task')}
-                    data-tooltip={t('Stop current task and pause queue')}
-                    aria-description={t(
-                      'Stop the current task and pause queued work. Completed file changes remain.',
-                    )}
-                    disabled={
-                      busy ||
-                      !thread?.turnId ||
-                      !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
+                    type="button"
+                    className={deliveryMode === 'queue' ? 'delivery-primary' : undefined}
+                    aria-label={t('Queue message')}
+                    aria-keyshortcuts={
+                      deliveryMode === 'queue' ? keyShortcut : alternateKeyShortcut
                     }
-                    onClick={() => {
-                      setBusy(true);
-                      void post(`/threads/${threadId}/interrupt`)
-                        .catch(notice)
-                        .finally(() => setBusy(false));
-                    }}
+                    aria-description={queueDescription}
+                    data-tooltip={
+                      deliveryMode === 'queue'
+                        ? queueHint + ' · ' + shortcut
+                        : queueDescription + ' · ' + alternateShortcut
+                    }
+                    disabled={queueBlocked}
+                    onClick={() => followUp('queue')}
                   >
-                    <Icon name="stop" size={16} />
-                    <span className="action-label">{t('Stop')}</span>
+                    <Icon name="queue" size={15} />
+                    <span className="action-label">{t('Queue')}</span>
                   </button>
                 ) : (
-                  <button
+                  <IconButton
                     className="send-button"
-                    aria-label={t('Send message')}
+                    icon="arrow"
+                    size={18}
+                    label={t('Send message')}
+                    aria-keyshortcuts={keyShortcut}
                     aria-describedby="message-delivery-help"
-                    data-tooltip={t('Send message') + ' · ' + shortcut}
+                    hint={t('Send message') + ' · ' + shortcut}
                     onClick={() => void send()}
-                    disabled={deliveryBlocked || !!receipt || !!thread?.queue?.items.length}
-                  >
-                    <Icon name="arrow" size={18} />
-                  </button>
+                    disabled={deliveryBlocked || !!receipt}
+                  />
+                )}
+                {active && (
+                  <>
+                    <button
+                      type="button"
+                      className={deliveryMode === 'steer' ? 'delivery-primary' : undefined}
+                      aria-label={t('Add to current task')}
+                      aria-keyshortcuts={
+                        deliveryMode === 'steer' ? keyShortcut : alternateKeyShortcut
+                      }
+                      aria-description={addNowDescription}
+                      data-tooltip={
+                        deliveryMode === 'steer'
+                          ? t('Add to current task') + ' · ' + shortcut
+                          : addNowDescription + ' · ' + alternateShortcut
+                      }
+                      disabled={addBlocked}
+                      onClick={() => followUp('steer')}
+                    >
+                      <Icon name="steer" size={15} />
+                      <span className="action-label">{t('Add now')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="stop-button"
+                      aria-label={t('Stop task')}
+                      data-tooltip={t('Stop current task and pause queue')}
+                      aria-description={t(
+                        'Stop the current task and pause queued work. Completed file changes remain.',
+                      )}
+                      disabled={
+                        busy ||
+                        !thread?.turnId ||
+                        !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
+                      }
+                      onClick={() => {
+                        setBusy(true);
+                        void post(`/threads/${threadId}/interrupt`)
+                          .catch(notice)
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      <Icon name="stop" size={16} />
+                      <span className="action-label">{t('Stop')}</span>
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -3012,19 +3047,6 @@ function App() {
           <span hidden id="message-delivery-help">
             {deliveryHelp}
           </span>
-          <div className="composer-footer" style={{ display: queueEditing ? 'none' : undefined }}>
-            {active && (
-              <button
-                type="button"
-                disabled={deliveryMode === 'queue' ? addBlocked : queueBlocked}
-                data-tooltip={alternateDeliveryHint}
-                aria-description={alternateDeliveryHint}
-                onClick={() => followUp(true)}
-              >
-                {deliveryMode === 'queue' ? t('Add now instead') : t('Queue instead')}
-              </button>
-            )}
-          </div>
         </div>
       </main>
       {dialog === 'preferences' && (

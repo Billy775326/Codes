@@ -48,11 +48,8 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Add a correction to this running task…': '为当前任务补充说明…',
   'Add a project': '添加项目',
   'Add now': '立即加入',
-  'Add now instead': '改为立即加入',
   'Add now is unavailable because this message uses different task settings. Leave it queued for its own turn.':
     '这条消息的任务设置不同，无法加入当前任务。请保留在队列中，等待单独执行。',
-  'Add now is unavailable while awaiting approval, input, or confirmation. Queue a message for later.':
-    '等待审批、回答或确认时，消息可以先排队。',
   'Add now needs the running task settings. Queue to use the updated settings.':
     '立即加入需要沿用当前任务设置。排队可使用更新后的设置。',
   'Add now updates this running task using its current settings. Accepted additions cannot be edited.':
@@ -349,6 +346,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   max: '最高',
   Medium: '中',
   medium: '中',
+  'Message actions': '消息发送操作',
   'Message Codex': '给 Codex 发送消息',
   Minimal: '最低',
   minimal: '最低',
@@ -436,7 +434,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   Plan: '计划',
   'Plan a change': '规划改动',
   'Plan mode only': '仅计划模式',
-  'Plan ×': '计划 ×',
   Preferences: '偏好设置',
   'Prepare maintenance': '准备维护',
   'Preview HTML': '预览 HTML',
@@ -456,7 +453,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Question expired · Check result': '问题已过期 · 检查结果',
   Queue: '排队',
   'Queue for next turn': '排队到下一轮',
-  'Queue instead': '改为排队',
   'Queue is full (10 messages). Edit or remove a waiting entry, or use Add now if available.':
     '队列已满（10 条）。可以编辑或移除等待中的消息，或者在可用时立即加入。',
   'Queue joins the waiting list. Waiting text stays editable; resume a paused queue to continue.':

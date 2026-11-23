@@ -71,6 +71,9 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
   await page
     .getByRole('combobox', { name: 'Send shortcut', exact: true })
     .selectOption('cmdIfMultiline');
+  await page
+    .getByRole('combobox', { name: 'Follow-up delivery', exact: true })
+    .selectOption('steer');
   await page.keyboard.press('Escape');
   const input = page.getByLabel('Message Codex');
   const send = page.getByRole('button', { name: 'Send message', exact: true });
@@ -79,6 +82,10 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
   await send.hover();
   await expect(tooltip).toHaveText('Send message · Enter');
   await expect(tooltip).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await send.hover();
+  await expect(tooltip).toHaveText('Send message · Ctrl/Cmd+Enter');
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await input.hover();
   await expect(tooltip).toBeHidden();
   await input.fill('First line\nSecond line');
@@ -90,6 +97,10 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
   await input.fill('Waiting follow-up');
   const queue = page.getByRole('button', { name: 'Queue message', exact: true });
+  await expect(queue).toHaveClass('delivery-primary');
+  await expect(
+    page.getByRole('button', { name: 'Add to current task', exact: true }),
+  ).toBeDisabled();
   await queue.hover();
   await expect(tooltip).toHaveText('Queue for next turn · Enter');
   await expect(tooltip).toBeVisible();
@@ -170,6 +181,11 @@ for (const viewport of [
       ).toBe(true);
       await option.click();
       await expect(picker).toHaveText(label);
+      expect(
+        await picker
+          .locator('.permission-selection')
+          .evaluate((text) => text.scrollWidth <= text.clientWidth),
+      ).toBe(true);
       const request = page.waitForRequest(
         (request) => request.url().endsWith('/send') && request.method() === 'POST',
       );

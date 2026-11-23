@@ -24,20 +24,50 @@
 }
 .app .composer-toolbar {
   position: relative;
-  gap: 6px;
-  padding: 6px 10px 10px;
-  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  padding: 4px 8px 8px;
 }
-.app .composer-attachment-menu > summary {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  padding: 8px;
-  border-radius: 7px;
+.app .composer-tools {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  gap: 2px;
 }
-.app .composer-attachment-menu > summary[aria-disabled='true'] {
+.app .composer-tools > .panel-menu > summary,
+.app .composer-tools > .plan-mode {
+  min-height: var(--control-size);
+  padding: 4px 7px;
+  border-radius: 6px;
+  gap: 4px;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.app .composer-tools > .panel-menu > summary:focus-visible,
+.app .composer-tools > .plan-mode:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}
+.app .composer-tools > .panel-menu > summary[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
+}
+.app .composer-tools > .panel-menu > summary > svg,
+.app .composer-tools > .plan-mode > svg {
+  flex: none;
+}
+.app .composer-tools > :is(.permission-menu, .model-menu) > summary > svg:last-child {
+  transform: rotate(90deg);
+}
+.app .composer-attachment-menu {
+  flex: none;
+}
+.app .composer-attachment-menu > summary {
+  width: var(--control-size);
+  padding: 0;
 }
 .app .composer-attachment-menu .panel-menu-content {
   left: 0;
@@ -46,17 +76,13 @@
   padding: 5px;
 }
 .app .permission-menu {
-  position: relative;
+  flex-shrink: 0;
+  max-width: 56%;
 }
-.app .permission-menu summary {
-  min-height: 36px;
-  padding: 6px 8px;
-  gap: 6px;
-  font-size: 14px;
-}
-.app .permission-menu summary[aria-disabled='true'] {
-  opacity: 0.5;
-  cursor: default;
+.permission-selection {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .app .permission-menu .panel-menu-content {
   left: 0;
@@ -84,11 +110,18 @@
   line-height: 1.5;
 }
 .app .plan-mode {
-  padding: 6px;
-  font-size: 12px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  background: var(--selected);
+  color: var(--fg);
+}
+.app .plan-mode:hover:not(:disabled) {
+  background: var(--hover);
 }
 .app .model-menu {
-  max-width: 260px;
+  margin-inline-start: auto;
+  max-width: min(228px, 50%);
 }
 .app .model-menu .model-field {
   display: flex;
@@ -98,15 +131,6 @@
 }
 .app .model-menu .model-field select {
   max-width: 62%;
-}
-.app .model-menu summary {
-  min-height: 36px;
-  padding: 6px 8px;
-  gap: 6px;
-  font-size: 14px;
-}
-.app .model-menu summary > span {
-  max-width: 230px;
 }
 .app .model-menu .model-selection {
   display: flex;
@@ -173,61 +197,82 @@
   max-height: min(300px, calc(100dvh - 220px));
   overflow-y: auto;
 }
-.app .composer-dispatch-actions > button {
-  min-height: 36px;
-  height: 36px;
-  padding: 7px 10px;
-  border-radius: 8px;
+.app .composer-dispatch-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  margin-inline-start: auto;
+  gap: 4px;
 }
-.app .composer-dispatch-actions > .send-button {
+.app .composer-dispatch-actions > button,
+.app .send-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-size);
+  padding: 4px 9px;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--fg);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.app .composer-dispatch-actions > .stop-button {
+  border-color: var(--border);
+  margin-inline-start: 4px;
+}
+.app .composer-dispatch-actions > button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.app .composer-dispatch-actions > .delivery-primary,
+.app .composer-dispatch-actions > .send-button,
+.app .send-button {
+  background: var(--fg);
+  color: var(--primary-ink);
+}
+.app .composer-dispatch-actions > :is(.send-button, .delivery-primary):hover:not(:disabled),
+.app .send-button:hover:not(:disabled) {
+  background: var(--accent);
+}
+.app .composer-dispatch-actions > .send-button,
+.app .send-button {
   width: var(--control-size);
+  height: var(--control-size);
   padding: 0;
 }
-@container (max-width: 460px) {
-  .composer-attachment-menu {
-    grid-column: 1;
-    grid-row: 1;
+.app .composer-dispatch-actions > button > svg {
+  flex: none;
+}
+@container (max-width: 530px) {
+  .app .composer-toolbar:has(.plan-mode, [data-follow-up]) .composer-tools {
+    flex-basis: 100%;
   }
-  .app .composer-toolbar {
-    gap: 6px;
-    padding: 6px 8px 8px;
-  }
-  .app .composer-toolbar .permission-menu {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: start;
+  .app .composer-toolbar .panel-menu {
     position: static;
   }
-  .app .composer-toolbar .permission-menu .panel-menu-content {
+  .app .composer-toolbar .panel-menu-content {
+    max-width: calc(100% - 16px);
+    right: 8px;
+  }
+  .app .composer-toolbar :is(.composer-attachment-menu, .permission-menu) .panel-menu-content {
     left: 8px;
     right: auto;
-    width: min(264px, calc(100% - 16px));
   }
-  .app .composer-toolbar .plan-mode {
-    grid-column: 3;
-    grid-row: 1;
+}
+@container (max-width: 320px) {
+  .app .composer-tools:has(.plan-mode) > .permission-menu {
+    max-width: 41%;
   }
-  .app .composer-toolbar .model-menu {
-    max-width: 100%;
-  }
-  .app .composer-toolbar .model-menu summary > span {
-    max-width: 100%;
+  .app .composer-toolbar:not(:has([data-follow-up])) .permission-menu > summary > svg:first-child,
+  .app .composer-tools:has(.plan-mode) > .permission-menu > summary > svg:first-child,
+  .app .composer-tools:has(.plan-mode) > .model-menu > summary > svg:last-child {
+    display: none;
   }
 }
 @media (max-width: 700px) {
   .app .composer textarea {
     font-size: 16px;
-  }
-  .app .composer-attachment-menu > summary,
-  .app .composer-toolbar > select,
-  .app .model-menu summary,
-  .app .permission-menu summary,
-  .app .composer-dispatch-actions > button {
-    min-height: 40px;
-  }
-  .app .composer-attachment-menu > summary,
-  .app .composer-dispatch-actions > button {
-    height: 40px;
   }
 }
 
@@ -341,21 +386,6 @@
   .app .compact-queue ol {
     max-height: 120px;
   }
-}
-
-.composer-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.composer-footer:empty {
-  display: none;
-}
-.composer-footer > button {
-  min-height: var(--control-size);
-  color: var(--muted);
-  font-size: 12px;
-  padding: 6px 2px;
 }
 
 /* Image bodies load separately; the composer keeps a bounded horizontal preview strip. */

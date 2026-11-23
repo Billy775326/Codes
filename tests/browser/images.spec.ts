@@ -188,7 +188,7 @@ test('queued images keep their preview and can be steered without placeholder te
   await loadedImages(page, '.queued-images img', 1);
   await choose(page, 'steer.png');
   await loadedImages(page, '.attachments img', 1);
-  await page.getByRole('button', { name: 'Add now instead', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to current task', exact: true }).click();
   await loadedImages(page, '[data-testid="message-user"] img', 1);
   await expect(page.locator('.attachments img')).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop task', exact: true }).click();
