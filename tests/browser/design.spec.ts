@@ -101,17 +101,29 @@ test('composer commands retain focus and permissions without dispatching a task'
     if (request.method() === 'POST' && /\/(send|steer|queue|review)$/.test(request.url()))
       dispatches.push(request.url());
   });
+  const input = page.getByLabel('Message Codex');
+  const modelButton = page.getByRole('button', { name: 'Model and reasoning', exact: true });
+  await input.fill('/model');
+  // Dismiss the picker before the browser reports the native disclosure toggle.
+  await input.evaluate((element) => {
+    const press = (target: Element, key: string) =>
+      target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    press(element, 'Enter');
+    if (document.activeElement?.getAttribute('aria-label') !== 'Model')
+      throw new Error('The Model field did not receive focus');
+    press(document.activeElement, 'Escape');
+  });
+  await expect(modelButton).toBeFocused();
+  await expect(modelButton).toHaveAttribute('aria-expanded', 'false');
   for (const [command, label] of [
     ['/model', 'Model'],
     ['/reasoning', 'Reasoning effort'],
   ] as const) {
-    await page.getByLabel('Message Codex').fill(command);
-    await page.getByLabel('Message Codex').press('Enter');
+    await input.fill(command);
+    await input.press('Enter');
     await expect(page.getByLabel(label, { exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
-    await expect(
-      page.getByRole('button', { name: 'Model and reasoning', exact: true }),
-    ).toBeFocused();
+    await expect(modelButton).toBeFocused();
   }
   await page.getByLabel('Message Codex').fill('/approve');
   await page.getByLabel('Message Codex').press('Enter');

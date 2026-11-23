@@ -38,30 +38,38 @@ test('long running conversations scroll inside the workspace at desktop and phon
   page,
 }) => {
   await login(page);
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  await settings.getByRole('switch', { name: 'Scroll with replies', exact: true }).uncheck();
+  await settings.getByRole('button', { name: 'Done', exact: true }).click();
   await send(
     page,
     '[hold] Long scroll fixture\n\n' + 'A long message stays inside the transcript.\n\n'.repeat(65),
   );
   const status = page.getByRole('status', { name: 'Running', exact: true });
   await expect(status).toBeVisible();
+  await expect(page.getByTestId('message-assistant').last()).toContainText(
+    'You can continue the conversation, attach a file, or start a separate task.',
+  );
   const transcript = page.locator('.conversation');
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 720 });
-    const metrics = await transcript.evaluate((element) => {
-      element.scrollTop = 0;
+    const metrics = await status.evaluate((element) => {
+      const conversation = element.closest('.conversation')!;
+      conversation.scrollTop = 0;
       window.scrollTo(0, document.documentElement.scrollHeight);
       return {
         pageScroll: window.scrollY,
         documentHeight: document.documentElement.scrollHeight,
         viewportHeight: window.innerHeight,
-        transcriptScrollable: element.scrollHeight > element.clientHeight,
+        transcriptScrollable: conversation.scrollHeight > conversation.clientHeight,
+        statusTop: element.getBoundingClientRect().top,
       };
     });
     expect(metrics.pageScroll).toBe(0);
     expect(metrics.documentHeight).toBe(metrics.viewportHeight);
     expect(metrics.transcriptScrollable).toBe(true);
-    const bounds = await status.boundingBox();
-    expect(bounds!.y).toBeGreaterThan(720);
+    expect(metrics.statusTop).toBeGreaterThan(metrics.viewportHeight);
     await transcript.evaluate((element) => (element.scrollTop = element.scrollHeight));
     await expect(status).toBeInViewport();
     await expect(page.getByLabel('Message Codex')).toBeInViewport({ ratio: 1 });

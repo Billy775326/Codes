@@ -143,6 +143,8 @@
 
 ### Fixed
 
+- Restore keyboard focus to the composer menu button when Escape dismisses a model or reasoning picker opened by a slash command.
+
 - Keep the workspace at the viewport boundary while a long conversation is running.
 
 - Keep the header's conversation menu in the viewport on phones and close project menus before closing navigation with Escape.

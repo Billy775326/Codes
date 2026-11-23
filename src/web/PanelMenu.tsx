@@ -24,8 +24,6 @@ export function PanelMenu({
   const ref = controller ?? local;
   const [open, setOpen] = useState(false);
   useLayoutEffect(() => {
-    if (!open) return;
-    const trigger = ref.current?.querySelector('summary');
     const outside = (event: PointerEvent) => {
       if (ref.current?.open && !ref.current.contains(event.target as Node))
         ref.current.open = false;
@@ -35,16 +33,17 @@ export function PanelMenu({
         event.preventDefault();
         event.stopImmediatePropagation();
         ref.current.open = false;
-        trigger?.focus();
+        ref.current.querySelector('summary')?.focus();
       }
     };
+    // A slash command can focus the popup before the native toggle event is delivered.
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape, true);
     return () => {
       document.removeEventListener('pointerdown', outside);
       document.removeEventListener('keydown', escape, true);
     };
-  }, [open, ref]);
+  }, [ref]);
   return (
     <details
       className={'panel-menu ' + className}
