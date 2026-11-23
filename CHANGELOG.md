@@ -8,6 +8,7 @@
 
 ### Added
 
+- Archive and restore projects from the sidebar, including projects with no active conversations. In the archive view, browse a project's active and archived chats without changing individual conversation states.
 - Choose English or Simplified Chinese in Settings → Appearance. English is the default, and the selection is saved in the current browser.
 - Enable optional browser notifications for task results, approvals and questions while the workspace is open in the background.
 - Save native request timeout and Code-mode questions in Runtime settings. Review the active configuration and apply changes on the next restart.

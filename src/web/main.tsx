@@ -42,6 +42,7 @@ import type {
   Operation,
   Project,
   ProjectContext,
+  ProjectUpdate,
   Settings,
   Summary,
   System,
@@ -338,16 +339,21 @@ function App() {
   useEffect(() => {
     save('codes.project-sidebar', JSON.stringify(sidebarPreferences));
   }, [sidebarPreferences]);
-  const projectUpdated = useCallback((project: Project, expectedName?: string) => {
-    projectMetadataRevision.current++;
-    setProjects((list) =>
-      list.map((old) =>
-        old.id === project.id && (expectedName === undefined || old.name === expectedName)
-          ? { ...old, name: project.name }
-          : old,
-      ),
-    );
-  }, []);
+  const projectUpdated = useCallback(
+    (project: ProjectUpdate, expected?: Omit<ProjectUpdate, 'id'>) => {
+      projectMetadataRevision.current++;
+      setProjects((list) =>
+        list.map((old) =>
+          old.id === project.id &&
+          (expected?.name === undefined || old.name === expected.name) &&
+          (expected?.archived === undefined || !!old.archived === expected.archived)
+            ? { ...old, ...project }
+            : old,
+        ),
+      );
+    },
+    [],
+  );
   const views = useRef<Record<string, string>>({});
   const recentProject = useRef<string | undefined>(undefined);
   const [selection, setSelection] = useState(() => {
@@ -643,6 +649,9 @@ function App() {
     }, notice);
   }, [notice]);
   useEffect(() => {
+    if (auth === 'ready' && connection === 'Connected') refreshProjects();
+  }, [auth, connection, refreshProjects]);
+  useEffect(() => {
     if (auth === 'ready') return onAuthenticationRequired(notice);
   }, [auth, notice]);
   const init = async () => {
@@ -654,7 +663,8 @@ function App() {
       setSystem(system);
       setProjects(projects);
       if (!projects.some((p) => p.id === projectId)) {
-        setSelection((current) => ({ ...current, projectId: projects[0]?.id ?? '' }));
+        const project = projects.find((p) => !p.archived) ?? projects[0];
+        setSelection((current) => ({ ...current, projectId: project?.id ?? '' }));
       }
       setAuth('ready');
     } catch (e) {
@@ -806,7 +816,10 @@ function App() {
               interfaceLanguages[latestPreferences.current.language].t,
             );
           conversationUpdated(row, false);
-        } else if (event.kind === 'project') projectUpdated(event.data as Project);
+        } else if (event.kind === 'project') {
+          const { id, name } = event.data as Project;
+          projectUpdated({ id, name });
+        } else if (event.kind === 'project-archive') projectUpdated(event.data as ProjectUpdate);
         else if (event.kind === 'defaults') defaultSettings.sync(event.data as SettingsProfile);
         else if (event.kind === 'runtime') setSystem(event.data as System);
       },
@@ -932,7 +945,12 @@ function App() {
         return;
       }
       if (e.kind === 'project') {
-        projectUpdated(e.data as Project);
+        const { id, name } = e.data as Project;
+        projectUpdated({ id, name });
+        return;
+      }
+      if (e.kind === 'project-archive') {
+        projectUpdated(e.data as ProjectUpdate);
         return;
       }
       if (e.threadId !== threadId) return;
@@ -1985,7 +2003,7 @@ function App() {
           activeProjectId={projectId}
           selectedId={threadId}
           updates={threads}
-          connection={t(connection)}
+          connection={connection}
           disabled={busy}
           sidebarPreferences={sidebarPreferences}
           onSidebarPreference={changeSidebarPreference}
@@ -2065,7 +2083,7 @@ function App() {
           title={loadingConversation ? t('Conversation') : (thread?.title ?? t('New conversation'))}
           projectName={project?.name}
           sidebarOpen={sidebar}
-          connection={t(connection)}
+          connection={connection}
           theme={theme}
           panel={panel}
           busy={busy}

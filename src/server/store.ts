@@ -18,6 +18,10 @@ import { AppError } from '../shared/errors.js';
 import { QueueStore, queueSchema } from './queue-store.js';
 
 const retainedTurnUsage = 1000;
+const projectArchiveStatus =
+  'EXISTS (SELECT 1 FROM project_archives a WHERE a.project_id=p.id) AS archived';
+
+type ProjectRow = Omit<Project, 'archived'> & { archived: number };
 
 export class Store {
   readonly db: DatabaseSync;
@@ -78,6 +82,9 @@ export class Store {
         throw error;
       }
     } else this.db.exec(queueSchema);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS project_archives (
+      project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE
+    );`);
     this.db.exec(`CREATE TABLE IF NOT EXISTS setting_profiles (
       scope TEXT PRIMARY KEY, revision INTEGER NOT NULL, settings TEXT NOT NULL);
       INSERT OR IGNORE INTO setting_profiles SELECT 'thread:'||id,0,settings FROM threads;`);
@@ -104,16 +111,18 @@ export class Store {
     );
   }
   projects(): Project[] {
-    return this.db.prepare('SELECT * FROM projects ORDER BY name').all() as unknown as Project[];
+    return this.readProjects(`SELECT p.*, ${projectArchiveStatus} FROM projects p ORDER BY p.name`);
   }
   projectsWithActivity(): Project[] {
-    return this.db
-      .prepare(
-        `SELECT p.*, coalesce(
-          (SELECT max(t.updated_at) FROM threads t WHERE t.project_id=p.id), 0
-        ) AS latestConversationAt FROM projects p ORDER BY p.name`,
-      )
-      .all() as unknown as Project[];
+    return this.readProjects(`SELECT p.*, ${projectArchiveStatus}, coalesce(
+      (SELECT max(t.updated_at) FROM threads t WHERE t.project_id=p.id), 0
+    ) AS latestConversationAt FROM projects p ORDER BY p.name`);
+  }
+  private readProjects(sql: string): Project[] {
+    const rows = this.db.prepare(sql).all() as unknown as ProjectRow[];
+    return rows.map(({ archived, ...project }) =>
+      archived ? { ...project, archived: true } : project,
+    );
   }
   latestConversationAt(projectId: string) {
     const row = this.db
@@ -203,6 +212,12 @@ export class Store {
   }
   renameProject(id: string, name: string) {
     this.db.prepare('UPDATE projects SET name=? WHERE id=?').run(name, id);
+  }
+  setProjectArchived(id: string, archived: boolean) {
+    const sql = archived
+      ? 'INSERT INTO project_archives(project_id) VALUES(?) ON CONFLICT DO NOTHING'
+      : 'DELETE FROM project_archives WHERE project_id=?';
+    this.db.prepare(sql).run(id);
   }
   summaries(projectId: string): Summary[] {
     return (

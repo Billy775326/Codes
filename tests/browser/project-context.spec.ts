@@ -65,6 +65,61 @@ test.afterEach(async ({ page }) => {
       headers: { Origin: origin },
     });
 });
+test('project archive survives reload, preserves native chat states, and syncs restoration', async ({
+  page,
+  browser,
+}) => {
+  await login(page);
+  const { b, second } = await fixture(page);
+  const archivedChat = await page.request.post('/api/threads/' + second.id + '/archive', {
+    data: { operationId: randomUUID(), archived: true },
+    headers: { Origin: origin },
+  });
+  expect(archivedChat.ok()).toBe(true);
+  await page.reload();
+  await expect(page.locator('.connection')).toHaveText('Connected');
+  const card = projectCard(page, b.id);
+  const archive = page.getByRole('button', { name: 'Archived projects and chats', exact: true });
+  const menu = card.getByRole('button', { name: 'Project actions for ' + b.name, exact: true });
+  const observerContext = await browser.newContext();
+  try {
+    const observer = await observerContext.newPage();
+    await login(observer);
+    const mirror = projectCard(observer, b.id);
+    await expect(mirror).toBeVisible();
+    await menu.click();
+    await card.getByRole('button', { name: 'Archive project', exact: true }).click();
+    await expect(card).toHaveCount(0);
+    await expect(archive).toBeFocused();
+    await expect(mirror).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('.connection')).toHaveText('Connected');
+    await expect(card).toHaveCount(0);
+    await archive.click();
+    await expect(
+      card.getByRole('button', { name: b.name, exact: true }),
+    ).toHaveAccessibleDescription('Archived project');
+    const filters = card.getByRole('combobox', { name: 'Chats in ' + b.name });
+    const savedChat = card.getByRole('button', { name: second.title, exact: true });
+    await expect(savedChat).toBeVisible();
+    await filters.selectOption('active');
+    await expect(card.getByText('No active chats', { exact: true })).toBeVisible();
+    await filters.selectOption('archived');
+    await savedChat.click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
+    await expect(page.getByLabel('Message Codex')).toHaveAttribute('readonly', '');
+    await menu.click();
+    await card.getByRole('button', { name: 'Restore project', exact: true }).click();
+    await expect(mirror).toBeVisible();
+    await expect(filters).toHaveCount(0);
+    await expect(savedChat).toBeVisible();
+    await archive.click();
+    await expect(card).toBeVisible();
+    await expect(savedChat).toHaveCount(0);
+  } finally {
+    await observerContext.close();
+  }
+});
 for (const width of [1440, 390])
   test(
     'a stale project selection follows the verified conversation owner at ' + width,

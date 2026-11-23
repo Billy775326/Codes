@@ -272,6 +272,15 @@ export class Service {
     this.events.publish('project', updated);
     return updated;
   }
+  archiveProject(id: string, archived: boolean) {
+    const project = this.project(id);
+    const update = { id, archived };
+    if (!!project.archived !== archived) {
+      this.store.setProjectArchived(id, archived);
+      this.events.publish('project-archive', update);
+    }
+    return update;
+  }
   async projectContext(id: string) {
     const project = this.project(id);
     return { project, directory: await directoryStatus(project) };

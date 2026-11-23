@@ -132,6 +132,14 @@
 .project-conversations:not(:empty) {
   padding: 0 2px 2px;
 }
+.project-chat-filter {
+  padding: 0 7px 4px;
+}
+.project-chat-filter select {
+  max-width: 100%;
+  padding: 3px 6px;
+  font-size: 12px;
+}
 .conversation-row {
   border-radius: 5px;
 }

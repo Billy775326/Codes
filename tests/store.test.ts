@@ -41,6 +41,26 @@ it('persists independent settings and defaults without changing execution snapsh
     reopened.close();
   }
 });
+it('keeps project archives across restart and preserves the original conversation metadata', () => {
+  const { store, directory, project } = fixture();
+  store.setMetadata('b', { archived: true });
+  const active = store.thread('a');
+  const archived = store.thread('b');
+  store.setProjectArchived(project.id, true);
+  store.close();
+  const reopened = new Store(directory);
+  try {
+    expect(reopened.projects()).toEqual([{ ...project, archived: true }]);
+    expect(reopened.thread('a')).toEqual(active);
+    expect(reopened.thread('b')).toEqual(archived);
+    reopened.setProjectArchived(project.id, false);
+    expect(reopened.projects()).toEqual([project]);
+    expect(reopened.thread('a')).toEqual(active);
+    expect(reopened.thread('b')).toEqual(archived);
+  } finally {
+    reopened.close();
+  }
+});
 it('seeds existing conversation settings once and rejects corrupt preference values', () => {
   const { store, directory } = fixture();
   store.db
@@ -109,7 +129,7 @@ function fixture() {
     { id: 'b', projectId: p.id, title: 'Other', state: 'idle', updatedAt: Date.now() },
     { permission: 'read-only' },
   );
-  return { store, directory };
+  return { store, directory, project: p };
 }
 it('returns the same receipt and refuses conflicting input or conversation reuse', () => {
   const { store } = fixture();

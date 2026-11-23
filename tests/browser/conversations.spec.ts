@@ -58,7 +58,7 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
-  const archives = page.getByRole('button', { name: 'Archived conversations', exact: true });
+  const archives = page.getByRole('button', { name: 'Archived projects and chats', exact: true });
   await archives.click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Restore conversation', exact: true }).click();

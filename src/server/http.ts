@@ -287,6 +287,13 @@ export async function application(
               .parse(await body(request));
             return json(response, service.renameProject(projectId, name, expectedName));
           }
+          if (segments.length === 4 && segments[3] === 'archive' && method === 'PUT') {
+            const { archived } = z
+              .object({ archived: z.boolean() })
+              .strict()
+              .parse(await body(request));
+            return json(response, service.archiveProject(projectId, archived));
+          }
           if (segments[3] === 'context' && method === 'GET')
             return json(response, await service.projectContext(projectId));
           if (segments[3] === 'images' || segments[3] === 'uploaded-files') {

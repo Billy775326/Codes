@@ -25,7 +25,10 @@ for (const width of [1440, 390, 320]) {
     await expect(
       page.getByRole('button', { name: 'Interaction settings', exact: true }),
     ).toHaveCount(1);
-    const view = navigation.getByRole('button', { name: 'Archived conversations', exact: true });
+    const view = navigation.getByRole('button', {
+      name: 'Archived projects and chats',
+      exact: true,
+    });
     await expect(view).toHaveAttribute('aria-pressed', 'false');
     await expect(view).toHaveText('');
     const chatsWidth = (await view.boundingBox())!.width;

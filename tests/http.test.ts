@@ -257,6 +257,28 @@ it('keeps simulator seeding unavailable in the normal application', async () => 
   ).toBe(404);
 });
 
+it('archives and restores an empty project through an authenticated, repeatable API', async () => {
+  const project = await service.addProject(directory);
+  const path = origin + '/api/projects/' + project.id + '/archive';
+  const put = (archived: unknown, session = cookie, url = path) =>
+    fetch(url, {
+      method: 'PUT',
+      headers: { origin, cookie: session },
+      body: JSON.stringify({ archived }),
+    });
+  expect((await put(true, '')).status).toBe(401);
+  expect((await put('true')).status).toBe(400);
+  expect((await put(true, cookie, origin + '/api/projects/missing/archive')).status).toBe(404);
+  const read = async () =>
+    (await (await fetch(origin + '/api/projects', { headers: { cookie } })).json())[0];
+  expect(await (await put(true)).json()).toEqual({ id: project.id, archived: true });
+  expect(await (await put(true)).json()).toEqual({ id: project.id, archived: true });
+  expect(await read()).toEqual({ ...project, archived: true, latestConversationAt: 0 });
+  expect(await service.addProject(directory)).toEqual({ ...project, archived: true });
+  expect(await (await put(false)).json()).toEqual({ id: project.id, archived: false });
+  expect(await read()).toEqual({ ...project, latestConversationAt: 0 });
+});
+
 it('validates conversation mutations and exposes only the native-shaped management API', async () => {
   async function post(path: string, body: unknown) {
     return fetch(origin + '/api' + path, {

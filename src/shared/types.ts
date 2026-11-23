@@ -11,9 +11,11 @@ export interface Project {
   id: string;
   name: string;
   path: string;
+  archived?: boolean;
   /** Sidebar bootstrap timestamp in milliseconds. Zero means no known conversations. */
   latestConversationAt?: number;
 }
+export type ProjectUpdate = Pick<Project, 'id'> & Partial<Pick<Project, 'name' | 'archived'>>;
 export interface DirectoryStatus {
   available: boolean;
   code?: 'DIRECTORY_UNAVAILABLE' | 'DIRECTORY_ACCESS';
