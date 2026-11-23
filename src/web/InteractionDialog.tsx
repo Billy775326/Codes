@@ -10,6 +10,7 @@ import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
 import { message } from './api';
 import { NetworkSettings } from './NetworkSettings';
 import { RuntimeSettings } from './RuntimeSettings';
+import { IconButton } from './primitives';
 import { NotificationSettings } from './NotificationSettings';
 export function InteractionDialog({
   title,
@@ -77,9 +78,7 @@ export function InteractionDialog({
       >
         <div className="modal-heading">
           <h2>{title}</h2>
-          <button type="button" aria-label={t('Close dialog')} disabled={busy} onClick={close}>
-            ×
-          </button>
+          <IconButton icon="close" label={t('Close dialog')} disabled={busy} onClick={close} />
         </div>
         {children}
       </div>
@@ -415,12 +414,7 @@ export function PreferencesDialog({
           )}
           reset={() => change(defaultBrowserPreferences)}
         />
-        <button
-          className="preferences-done"
-          type="button"
-          title={t('Preferences are saved in this browser')}
-          onClick={close}
-        >
+        <button className="preferences-done" type="button" onClick={close}>
           {t('Done')}
         </button>
       </div>

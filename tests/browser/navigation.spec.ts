@@ -35,7 +35,7 @@ test('new drafts and attachments remain in their project when navigating without
   await page.getByLabel('Message Codex').fill('Draft for the original project');
   await page.getByRole('button', { name: 'Browse files', exact: true }).click();
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
-  await page.getByRole('button', { name: 'Attach selection', exact: true }).click();
+  await page.getByRole('button', { name: 'Attach lines', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
   await openProject(page, added.id);
   await expect(page.getByLabel('Message Codex')).toHaveValue('');
@@ -98,9 +98,7 @@ test('switching projects aborts a delayed file preview and cannot attach its old
     await page.getByRole('button', { name: 'Browse files', exact: true }).click();
     await expect(page.locator('.file-preview')).toHaveCount(0);
     await expect(page.locator('.file-breadcrumb')).toContainText(added.name);
-    await expect(page.getByRole('button', { name: 'Attach selection', exact: true })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole('button', { name: 'Attach lines', exact: true })).toHaveCount(0);
     await page.screenshot({
       path: 'test-results/web-workspace-project-context.png',
       fullPage: true,
@@ -142,7 +140,7 @@ test('phone drawers own focus and attaching context returns to the running conve
       .evaluate((element) => element.contains(document.activeElement)),
   ).toBe(true);
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
-  await page.getByRole('button', { name: 'Attach selection', exact: true }).click();
+  await page.getByRole('button', { name: 'Attach lines', exact: true }).click();
   await expect(page.locator('.context-panel')).toHaveCount(0);
   await expect(page.getByLabel('Message Codex')).toBeFocused();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the running follow-up');

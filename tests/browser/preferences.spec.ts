@@ -41,8 +41,15 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
     await expect(save).toBeDisabled();
     await listenPort.fill('8787');
     await expect(addresses).toHaveValue('http://127.0.0.1:8787');
+    await expect(dialog.getByLabel('Import network settings file')).toBeHidden();
+    const exportSaved = dialog.getByRole('button', { name: 'Export saved', exact: true });
+    await expect(exportSaved).toHaveText('');
+    await exportSaved.hover();
+    await expect(page.locator('.control-tooltip')).toHaveText(
+      'Download the saved network settings.',
+    );
     const downloaded = page.waitForEvent('download');
-    await dialog.getByRole('button', { name: 'Export saved', exact: true }).click();
+    await exportSaved.click();
     const exported = JSON.parse(await readFile((await (await downloaded).path())!, 'utf8'));
     expect(exported).toEqual({
       format: 'codes-network-settings',

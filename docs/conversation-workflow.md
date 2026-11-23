@@ -57,7 +57,7 @@ Immediate steering, queue Add now, Plan/Code, reasoning effort, native reviews, 
 
 - **Send** starts a new native turn. The composer draft is editable until submission; accepted history is not edited in place.
 - **Queue** waits for a later turn, preserving FIFO order. Waiting text can be edited or removed; once dispatch starts it is locked.
-- **Guide now** on a queued card applies that waiting message to the current turn, using the existing atomic queue-to-steer operation. It removes the message from the queue after acceptance.
+- **Add now** on a queued card applies that waiting message to the current turn, using the existing atomic queue-to-steer operation. It removes the message from the queue after acceptance.
 - **Add now** appends the draft to the currently running turn using its existing settings. Accepted additions cannot be edited or recalled. When an approval, question or uncertain result blocks steering, the button is disabled and the delivery hint explains the available next step.
 - **Add now instead / Queue instead** applies the alternate behavior for this message without changing the saved default. Ctrl/Cmd+Shift+Enter retains the same one-message inversion.
 - **Stop** requests native cancellation and pauses queued work. It does not undo file changes that already happened.

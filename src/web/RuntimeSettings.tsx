@@ -145,9 +145,10 @@ export function RuntimeSettings() {
         <button
           type="submit"
           className="preferences-done"
+          aria-label={saving ? t('Saving…') : t('Save runtime settings')}
           disabled={!changed || saving || needsReload}
         >
-          {saving ? t('Saving…') : t('Save runtime settings')}
+          {saving ? t('Saving…') : t('Save')}
         </button>
       </div>
     </form>

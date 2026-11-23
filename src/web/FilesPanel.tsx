@@ -133,16 +133,19 @@ function TextPreview({
       )}
       <div className="selection-toolbar">
         <span>{t('Lines {start}–{end}', { start: from, end: to })}</span>
-        <button onClick={() => onAttach(file, 1, file.lines)} disabled={attachmentBlocked}>
-          {t('Attach file')}
-        </button>
-        <button
-          className="primary"
-          onClick={() => onAttach(file, from, to)}
-          disabled={attachmentBlocked}
-        >
-          {t('Attach selection')}
-        </button>
+        <div className="selection-actions" role="group" aria-label={t('Attach file context')}>
+          <button onClick={() => onAttach(file, 1, file.lines)} disabled={attachmentBlocked}>
+            {t('Attach file')}
+          </button>
+          <button
+            className="primary"
+            aria-description={t('Attach the selected line range.')}
+            onClick={() => onAttach(file, from, to)}
+            disabled={attachmentBlocked}
+          >
+            {t('Attach lines')}
+          </button>
+        </div>
       </div>
     </>
   );

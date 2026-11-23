@@ -2,6 +2,7 @@ import { useInterfaceLanguage } from './interface-language';
 import { useState } from 'react';
 import type { ImageAttachment } from '../shared/types';
 import { imageUrl } from '../shared/images';
+import { IconButton } from './primitives';
 export function ImageAttachmentView({
   image,
   projectId,
@@ -35,13 +36,12 @@ export function ImageAttachmentView({
         </a>
       )}
       {remove && (
-        <button
-          type="button"
-          aria-label={t('Remove image: {name}', { name: image.name })}
+        <IconButton
+          icon="close"
+          size={14}
+          label={t('Remove image: {name}', { name: image.name })}
           onClick={remove}
-        >
-          ×
-        </button>
+        />
       )}
     </span>
   );

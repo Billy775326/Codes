@@ -1,6 +1,6 @@
 import { useInterfaceLanguage } from './interface-language';
 import { useState } from 'react';
-import { Brand, Icon } from './primitives';
+import { Brand, Icon, IconButton } from './primitives';
 import './login.css';
 
 interface LoginProps {
@@ -55,16 +55,15 @@ export function Login({
               placeholder={t('Paste your token')}
               aria-describedby={error ? 'login-error' : undefined}
             />
-            <button
-              type="button"
+            <IconButton
               className="login-visibility"
-              aria-label={visible ? t('Hide access token') : t('Show access token')}
+              icon={visible ? 'hidden' : 'eye'}
+              size={18}
+              label={visible ? t('Hide access token') : t('Show access token')}
               aria-pressed={visible}
               disabled={pending}
               onClick={() => setVisible((value) => !value)}
-            >
-              <Icon name={visible ? 'hidden' : 'eye'} size={18} />
-            </button>
+            />
           </div>
           {error && (
             <div className="login-error" id="login-error" role="alert">

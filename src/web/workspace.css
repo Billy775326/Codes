@@ -120,6 +120,12 @@
 }
 
 .app .top-actions {
+  gap: 5px;
+}
+.top-action-group {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
   gap: 1px;
 }
 .app .icon-button {
@@ -697,6 +703,9 @@
   padding: 0 12px;
 }
 .app .panel-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14.3px;
   color: var(--muted);
 }
@@ -719,9 +728,6 @@
 .app .diff-file-heading {
   background: transparent;
   padding: 7px 6px;
-}
-.app .diff-file-tools {
-  padding: 6px;
 }
 .app .diff-table {
   font-size: 13.2px;
@@ -847,10 +853,9 @@
     max-width: 35%;
     margin: 0;
   }
-  .app .top-actions {
+  .app .top-actions,
+  .top-action-group {
     gap: 0;
-  }
-  .app .icon-button {
   }
   .app .conversation-inner,
   .app.has-panel .conversation-inner {
@@ -1072,9 +1077,7 @@
   font-size: 13px;
 }
 .app .history-navigation button {
-  flex-shrink: 0;
-  padding: 5px 8px;
-  font-size: 13px;
+  margin-inline-start: auto;
 }
 
 .app .message-footer {

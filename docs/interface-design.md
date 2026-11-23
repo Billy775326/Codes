@@ -38,6 +38,15 @@ Keep approval questions, permission boundaries, task errors, unknown outcomes, a
 
 Workspace tools such as Files, Changes, Settings, and Send use familiar icons and precise accessible names. Their shared hint appears on mouse hover and keyboard focus, and Escape dismisses it. Menus use text for touched or clicked choices. Selected permissions, model and reasoning, Queue, Add now, and Stop retain visible labels.
 
+| Surface                | Controls and hints                                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign-in and dialogs    | Use eye and close icons with hints. Keep sign-in, cancellation, submission and reset confirmations labeled.                                                                                       |
+| Header and sidebar     | Group Files and Changes apart from workspace tools. Keep project and conversation names visible, with labeled management actions in their menus. Explain what project archive and restore change. |
+| Composer and queue     | Keep delivery and permission choices visible. Use compact icons for attachment removal, pause and resume, and editor actions. Queued message removal keeps a text label.                          |
+| Files and Changes      | Keep file and selected-line attachment actions distinct. Group patch layout, viewed state, and file navigation in their toolbars. Keep filenames, change counts and pagination ranges visible.    |
+| Settings               | Group configuration import and download together. The import hint explains that it fills the form for review. Keep settings section names, save actions and restart requirements visible.         |
+| Approvals and recovery | Keep decisions and their consequences in the card or confirmation. Leave retry, status checks, recovery and other consequential actions labeled and reachable by touch.                           |
+
 ## Validation boundaries
 
 Browser regressions cover desktop and narrow layouts, both themes, keyboard navigation, project/conversation switching, drafts, popup hit targets, approval/question flows, queues, stopping, reconnection, and paginated history. The design-specific suite checks the shared modal, local-command focus, retained starter actions, and theme inheritance.

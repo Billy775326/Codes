@@ -30,7 +30,7 @@
   margin: 16px 0 8px;
 }
 .interaction-dialog select,
-.interaction-dialog input {
+.interaction-dialog input:not([hidden]) {
   display: block;
   margin-top: 8px;
   padding: 10px;
@@ -39,7 +39,7 @@
   color: inherit;
   border-radius: 6px;
 }
-.interaction-dialog input {
+.interaction-dialog input:not([hidden]) {
   width: 100%;
 }
 .interaction-dialog p {

@@ -632,12 +632,17 @@ const ProjectCard = memo(function ProjectCard({
           </button>
           <button
             disabled={savingProject}
+            data-tooltip={
+              project.archived
+                ? t('Return this project to the main sidebar.')
+                : t('Move this project to the archive view. Its files and conversations are kept.')
+            }
             onClick={() => {
               setProjectEdit(undefined);
               void changeProjectArchive();
             }}
           >
-            <Icon name={project.archived ? 'refresh' : 'archive'} size={12} />
+            <Icon name={project.archived ? 'unarchive' : 'archive'} size={12} />
             {project.archived ? t('Restore project') : t('Archive project')}
           </button>
         </div>
@@ -861,7 +866,7 @@ const ProjectCard = memo(function ProjectCard({
                           : (setConfirmation(row), setError(''))
                       }
                     >
-                      <Icon name={row.archived ? 'refresh' : 'archive'} size={12} />
+                      <Icon name={row.archived ? 'unarchive' : 'archive'} size={12} />
                       {row.archived ? t('Restore') : t('Archive')}
                     </button>
                   )}

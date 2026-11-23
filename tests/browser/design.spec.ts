@@ -25,7 +25,8 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
   await files.hover();
   await expect(tooltip).toHaveText('Browse files');
   await expect(tooltip).toBeVisible();
-  await tooltip.hover();
+  const hintBounds = (await tooltip.boundingBox())!;
+  await page.mouse.move(hintBounds.x + hintBounds.width / 2, hintBounds.y + hintBounds.height / 2);
   await expect(tooltip).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(tooltip).toBeHidden();

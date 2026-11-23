@@ -8,7 +8,7 @@ import {
   type DiffLine,
 } from '../shared/diff';
 import type { FileChange } from '../shared/types';
-import { Icon } from './primitives';
+import { Icon, IconButton } from './primitives';
 import './diff.css';
 
 type Layout = 'unified' | 'split';
@@ -69,6 +69,7 @@ const FileDiff = memo(function FileDiff({
     () => JSON.stringify([file.path, file.previousPath, file.kind, file.truncated, file.lines]),
     [file],
   );
+  const isViewed = viewed === revision;
   const rows = useMemo(
     () => (layout === 'split' && open ? splitLines(file.lines) : []),
     [file, layout, open],
@@ -79,7 +80,7 @@ const FileDiff = memo(function FileDiff({
   return (
     <section
       ref={element}
-      className={'diff-file' + (viewed === revision ? ' viewed' : '')}
+      className="diff-file"
       aria-label={t('Changes in {path}', { path: file.path })}
     >
       <div className="diff-file-heading">
@@ -100,14 +101,23 @@ const FileDiff = memo(function FileDiff({
           <span className="diff-additions">+{file.additions}</span>
           <span className="diff-deletions">−{file.deletions}</span>
         </button>
-        <button
-          className="diff-viewed"
-          aria-label={t('Mark {path} as viewed', { path: file.path })}
-          aria-pressed={viewed === revision}
-          onClick={() => setViewed(viewed === revision ? '' : revision)}
-        >
-          {viewed === revision ? t('Viewed') : t('Mark viewed')}
-        </button>
+        <div className="diff-file-actions">
+          {open && openFile && file.kind !== 'delete' && (
+            <IconButton
+              icon="open-file"
+              label={t('Open file')}
+              hint={t('Open this file in the Files panel.')}
+              onClick={() => openFile(file.path)}
+            />
+          )}
+          <IconButton
+            icon="check"
+            label={t('Mark {path} as viewed', { path: file.path })}
+            hint={isViewed ? t('Mark as unviewed') : t('Mark viewed')}
+            aria-pressed={isViewed}
+            onClick={() => setViewed(isViewed ? '' : revision)}
+          />
+        </div>
       </div>
       {open && (
         <>
@@ -116,14 +126,6 @@ const FileDiff = memo(function FileDiff({
               {file.previousPath} → {file.path}
             </p>
           )}
-          <div className="diff-file-tools">
-            <span>
-              {layout === 'split' ? t('Before / After') : t('Before and after line numbers')}
-            </span>
-            {openFile && file.kind !== 'delete' && (
-              <button onClick={() => openFile(file.path)}>{t('Open file')}</button>
-            )}
-          </div>
           {file.truncated && (
             <p className="diff-truncated" role="status">
               {t(
@@ -135,6 +137,9 @@ const FileDiff = memo(function FileDiff({
             className={'diff-table-scroll ' + layout}
             tabIndex={0}
             aria-label={t('Patch for {path}', { path: file.path })}
+            aria-description={t(
+              layout === 'split' ? 'Before / After' : 'Before and after line numbers',
+            )}
           >
             <table className="diff-table">
               <colgroup>
@@ -199,22 +204,26 @@ const FileDiff = memo(function FileDiff({
           </div>
           {count > diffLimits.window && (
             <div className="diff-pagination">
-              <button disabled={!currentPage} onClick={() => setPage(currentPage - 1)}>
-                {t('Previous patch lines')}
-              </button>
-              <span>
+              <IconButton
+                className="diff-page-previous"
+                icon="chevron"
+                label={t('Previous patch lines')}
+                disabled={!currentPage}
+                onClick={() => setPage(currentPage - 1)}
+              />
+              <span role="status">
                 {t('{start}–{end} of {total} rows', {
                   start: start + 1,
                   end: Math.min(start + diffLimits.window, count),
                   total: count,
                 })}
               </span>
-              <button
+              <IconButton
+                icon="chevron"
+                label={t('Next patch lines')}
                 disabled={start + diffLimits.window >= count}
                 onClick={() => setPage(currentPage + 1)}
-              >
-                {t('Next patch lines')}
-              </button>
+              />
             </div>
           )}
         </>
@@ -263,12 +272,18 @@ export const DiffView = memo(function DiffView({
         <span className="diff-additions">+{totals.add}</span>
         <span className="diff-deletions">−{totals.del}</span>
         <div role="group" aria-label={t('Diff layout')}>
-          <button aria-pressed={layout === 'unified'} onClick={() => setLayout('unified')}>
-            {t('Unified')}
-          </button>
-          <button aria-pressed={layout === 'split'} onClick={() => setLayout('split')}>
-            {t('Side by side')}
-          </button>
+          <IconButton
+            icon="diff-unified"
+            label={t('Unified')}
+            aria-pressed={layout === 'unified'}
+            onClick={() => setLayout('unified')}
+          />
+          <IconButton
+            icon="diff-split"
+            label={t('Side by side')}
+            aria-pressed={layout === 'split'}
+            onClick={() => setLayout('split')}
+          />
         </div>
       </div>
       {(truncated || entries.some((file) => file.truncated)) && (

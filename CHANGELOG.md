@@ -63,6 +63,8 @@
 
 ### Changed
 
+- Group toolbar actions by task. Use named icons for patch layout, viewed state, file navigation, configuration transfer, and compact attachment controls. Keep visible labels for sending, approvals, recovery, and file attachment scope.
+
 - Make live replies and sidebar activity easier to spot with a brighter running cursor and larger indicators for active tasks, approvals, and questions. Keep indicators static while reconnecting or when reduced motion is enabled.
 
 - Make the indicator at the end of an in-progress Codex reply larger and easier to see in both themes.

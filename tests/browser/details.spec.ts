@@ -91,12 +91,15 @@ test('file previews show per-file counts, line numbers, layouts and safe literal
   await expect(first.locator('.diff-file-heading')).toContainText('+1');
   await expect(first.locator('.diff-file-heading')).toContainText('−1');
   await expect(first.locator('.line-number').filter({ hasText: /^2$/ })).toHaveCount(2);
-  await first.getByRole('button', { name: 'Mark example.ts as viewed' }).click();
-  await expect(first.getByRole('button', { name: 'Mark example.ts as viewed' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await panel.getByRole('button', { name: 'Side by side', exact: true }).click();
+  const viewed = first.getByRole('button', { name: 'Mark example.ts as viewed' });
+  await viewed.click();
+  await expect(viewed).toHaveAttribute('aria-pressed', 'true');
+  const split = panel.getByRole('button', { name: 'Side by side', exact: true });
+  await expect(split).toHaveText('');
+  await split.hover();
+  await expect(page.locator('.control-tooltip')).toHaveText('Side by side');
+  await split.click();
+  await expect(split).toHaveAttribute('aria-pressed', 'true');
   await expect(first.locator('.diff-table-scroll')).toHaveClass(/split/);
   await expect(first.locator('.diff-code.deletion')).toContainText('Hello');
   await expect(first.locator('.diff-code.addition')).toContainText('Welcome');

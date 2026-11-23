@@ -55,7 +55,7 @@ import type {
 } from '../shared/types';
 import { ApiError, message, post, request, onAuthenticationRequired } from './api';
 import { Feed } from './feed';
-import { Brand, Icon } from './primitives';
+import { Brand, Icon, IconButton } from './primitives';
 import { Login } from './Login';
 import { Conversations } from './Conversations';
 import { QueuePanel } from './QueuePanel';
@@ -1977,7 +1977,10 @@ function App() {
     connectionError ||
     (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
   const withLanguage = (view: React.ReactNode) => (
-    <InterfaceLanguageContext value={interfaceLanguage}>{view}</InterfaceLanguageContext>
+    <InterfaceLanguageContext value={interfaceLanguage}>
+      {view}
+      <ControlTooltip />
+    </InterfaceLanguageContext>
   );
   if (auth !== 'ready')
     return withLanguage(
@@ -2535,9 +2538,11 @@ function App() {
                     : t('Earlier messages · Scroll down to continue')
                   : t('More recent messages below')}
               </span>
-              <button onClick={returnToLatest} aria-label={t('Back to latest messages')}>
-                {t('Back to latest ↓')}
-              </button>
+              <IconButton
+                icon="latest"
+                label={t('Back to latest messages')}
+                onClick={returnToLatest}
+              />
             </div>
           )}
           {!!unresolvedQuestions.length && (
@@ -2744,17 +2749,17 @@ function App() {
                           ? a.name
                           : `${a.path}:${a.fromLine}–${a.toLine}`}
                       </span>
-                      <button
-                        aria-label={t('Remove {name}', {
+                      <IconButton
+                        icon="close"
+                        size={14}
+                        label={t('Remove {name}', {
                           name: a.kind === 'uploaded-file' ? a.name : a.path,
                         })}
                         onClick={() => {
                           draftRevision.current++;
                           setAttachments((list) => list.filter((x) => x !== a));
                         }}
-                      >
-                        ×
-                      </button>
+                      />
                     </span>
                   ),
                 )}
@@ -3064,12 +3069,13 @@ function App() {
           aria-modal={narrow && !sidebar && !modalOpen ? true : undefined}
         >
           <div className="panel-heading">
-            <div className="panel-tabs">
+            <div className="panel-tabs" role="group" aria-label={t('Project views')}>
               <button
                 className={panel === 'files' ? 'active' : ''}
                 aria-pressed={panel === 'files'}
                 onClick={() => setPanel('files')}
               >
+                <Icon name="folder" size={15} />
                 {t('Files')}
               </button>
               <button
@@ -3077,6 +3083,7 @@ function App() {
                 aria-pressed={panel === 'diff'}
                 onClick={() => setPanel('diff')}
               >
+                <Icon name="diff" size={15} />
                 {t('Changes')}
                 {thread?.diff && <i />}
               </button>
@@ -3151,7 +3158,6 @@ function App() {
         </aside>
       )}
       {adding && <AddProjectDialog close={() => setAdding(false)} added={projectAdded} />}
-      <ControlTooltip />
     </div>,
   );
 }

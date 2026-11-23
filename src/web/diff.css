@@ -4,7 +4,6 @@
 }
 .diff-overview,
 .diff-file-heading,
-.diff-file-tools,
 .diff-pagination {
   display: flex;
   align-items: center;
@@ -15,23 +14,15 @@
   padding: 12px;
   border-bottom: 1px solid var(--line);
 }
-.diff-overview [role='group'] {
+.diff-overview [role='group'],
+.diff-file-actions {
   display: flex;
-  margin-left: auto;
+  margin-inline-start: auto;
   gap: 3px;
 }
-.diff-overview button,
-.diff-file-tools button,
-.diff-pagination button,
-.diff-viewed {
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 5px 7px;
-  font-size: 10px;
-}
-.diff-overview button[aria-pressed='true'] {
-  background: #ae9cff20;
-  color: var(--accent);
+.diff-view .icon-button[aria-pressed='true'] {
+  background: var(--selected);
+  color: var(--fg);
 }
 .diff-additions {
   color: #79dca5;
@@ -69,18 +60,6 @@
 .diff-file-toggle small {
   color: var(--muted);
   font-size: 9px;
-}
-.diff-viewed {
-  color: var(--muted);
-}
-.viewed .diff-viewed {
-  color: #79dca5;
-}
-.diff-file-tools {
-  padding: 7px 10px;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 10px;
 }
 .diff-rename,
 .diff-truncated,
@@ -158,10 +137,13 @@
   background: #ffffff04;
 }
 .diff-pagination {
-  justify-content: space-between;
-  padding: 9px;
+  justify-content: center;
+  padding: 4px 9px;
   color: var(--muted);
   font-size: 10px;
+}
+.diff-page-previous svg {
+  transform: rotate(180deg);
 }
 .diff-panel .diff-view {
   padding: 0 12px 12px;
@@ -183,16 +165,5 @@
 @media (max-width: 700px) {
   .diff-overview {
     padding: 8px;
-  }
-  .diff-viewed {
-    font-size: 9px;
-  }
-  .diff-file-tools {
-    gap: 4px;
-  }
-  .diff-pagination span {
-    order: -1;
-    width: 100%;
-    text-align: center;
   }
 }

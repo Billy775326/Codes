@@ -403,8 +403,9 @@
   position: absolute;
   right: 0;
   top: 0;
-  min-width: 26px;
-  min-height: 26px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--popup);
   color: var(--fg);
@@ -437,8 +438,9 @@
 }
 @media (max-width: 700px) {
   .image-attachment > button {
-    min-width: 32px;
-    min-height: 32px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
   }
 }
 

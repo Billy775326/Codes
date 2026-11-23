@@ -90,56 +90,62 @@ export function WorkspaceHeader(props: Props) {
             {t('Session status')}
           </button>
         </PanelMenu>
-        <button
-          data-browse-files=""
-          aria-label={t('Browse files')}
-          disabled={!props.hasProject || props.busy}
-          aria-pressed={props.panel === 'files'}
-          data-tooltip=""
-          className={'icon-button ' + (props.panel === 'files' ? 'selected' : '')}
-          onClick={() => props.onPanel('files')}
-        >
-          <Icon name="folder" size={17} />
-        </button>
-        <button
-          aria-label={t('Review changes')}
-          aria-pressed={props.panel === 'diff'}
-          data-tooltip=""
-          className={'icon-button ' + (props.panel === 'diff' ? 'selected' : '')}
-          onClick={() => props.onPanel('diff')}
-        >
-          <Icon name="diff" size={17} />
-        </button>
-        <button
-          type="button"
-          aria-label={props.theme === 'dark' ? t('Switch to light mode') : t('Switch to dark mode')}
-          data-tooltip=""
-          className="icon-button"
-          onClick={props.onToggleTheme}
-        >
-          <Icon name={props.theme === 'dark' ? 'sun' : 'moon'} size={17} />
-        </button>
-        {!props.sidebarOpen && (
+        <div className="top-action-group" role="group" aria-label={t('Project views')}>
           <button
-            aria-label={t('Interaction settings')}
+            data-browse-files=""
+            aria-label={t('Browse files')}
+            disabled={!props.hasProject || props.busy}
+            aria-pressed={props.panel === 'files'}
+            data-tooltip=""
+            className={'icon-button ' + (props.panel === 'files' ? 'selected' : '')}
+            onClick={() => props.onPanel('files')}
+          >
+            <Icon name="folder" size={17} />
+          </button>
+          <button
+            aria-label={t('Review changes')}
+            aria-pressed={props.panel === 'diff'}
+            data-tooltip=""
+            className={'icon-button ' + (props.panel === 'diff' ? 'selected' : '')}
+            onClick={() => props.onPanel('diff')}
+          >
+            <Icon name="diff" size={17} />
+          </button>
+        </div>
+        <div className="top-action-group" role="group" aria-label={t('Workspace tools')}>
+          <button
+            type="button"
+            aria-label={
+              props.theme === 'dark' ? t('Switch to light mode') : t('Switch to dark mode')
+            }
             data-tooltip=""
             className="icon-button"
-            onClick={props.onSettings}
+            onClick={props.onToggleTheme}
           >
-            <Icon name="settings" size={16} />
+            <Icon name={props.theme === 'dark' ? 'sun' : 'moon'} size={17} />
           </button>
-        )}
-        {!props.sidebarOpen && (
-          <button
-            aria-label={t('New conversation')}
-            data-tooltip=""
-            className="icon-button"
-            disabled={props.busy}
-            onClick={props.onNewConversation}
-          >
-            <Icon name="newchat" size={16} />
-          </button>
-        )}
+          {!props.sidebarOpen && (
+            <button
+              aria-label={t('Interaction settings')}
+              data-tooltip=""
+              className="icon-button"
+              onClick={props.onSettings}
+            >
+              <Icon name="settings" size={16} />
+            </button>
+          )}
+          {!props.sidebarOpen && (
+            <button
+              aria-label={t('New conversation')}
+              data-tooltip=""
+              className="icon-button"
+              disabled={props.busy}
+              onClick={props.onNewConversation}
+            >
+              <Icon name="newchat" size={16} />
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

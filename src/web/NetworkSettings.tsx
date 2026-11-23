@@ -7,6 +7,7 @@ import {
   type NetworkSettings,
 } from '../shared/network-settings';
 import { ApiError, message, request } from './api';
+import { IconButton } from './primitives';
 
 const path = '/settings/network';
 
@@ -318,16 +319,22 @@ export function NetworkSettings() {
             if (file) void importConfiguration(file);
           }}
         />
-        <button
-          type="button"
-          onClick={() => importInput.current?.click()}
-          disabled={saving || importing || reloadRequired}
-        >
-          {t('Import configuration')}
-        </button>
-        <button type="button" onClick={exportConfiguration} disabled={saving}>
-          {t('Export saved')}
-        </button>
+        <div className="network-transfer" role="group" aria-label={t('Network configuration file')}>
+          <IconButton
+            icon="upload"
+            label={t('Import configuration')}
+            hint={t('Load a configuration file into the form for review.')}
+            onClick={() => importInput.current?.click()}
+            disabled={saving || importing || reloadRequired}
+          />
+          <IconButton
+            icon="download"
+            label={t('Export saved')}
+            hint={t('Download the saved network settings.')}
+            onClick={exportConfiguration}
+            disabled={saving}
+          />
+        </div>
         {reloadRequired && (
           <button type="button" onClick={loadAgain}>
             {t('Reload settings')}
@@ -336,9 +343,10 @@ export function NetworkSettings() {
         <button
           className="preferences-done"
           type="submit"
+          aria-label={saving ? t('Saving…') : t('Save network settings')}
           disabled={!changed || saving || importing || reloadRequired}
         >
-          {saving ? t('Saving…') : t('Save network settings')}
+          {saving ? t('Saving…') : t('Save')}
         </button>
       </div>
     </form>

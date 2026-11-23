@@ -29,7 +29,7 @@ for (const width of [1440, 320]) {
     await entry.click();
     const preview = panel.getByRole('region', { name: 'File preview' });
     await expect(preview).toContainText('export function hello');
-    const attach = preview.getByRole('button', { name: 'Attach selection' });
+    const attach = preview.getByRole('button', { name: 'Attach lines' });
     await expect(attach).toBeInViewport();
     const close = preview.getByRole('button', {
       name: narrow ? 'Back to files' : 'Close file preview',
@@ -176,6 +176,6 @@ test('long source files render one page of selectable lines at a time', async ({
   await preview.getByRole('button', { name: 'Next lines' }).click();
   await expect(code.getByRole('button')).toHaveCount(11);
   await expect(preview.getByRole('button', { name: 'Next lines' })).toBeDisabled();
-  await preview.getByRole('button', { name: 'Attach selection' }).click();
+  await preview.getByRole('button', { name: 'Attach lines' }).click();
   await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
 });

@@ -64,6 +64,7 @@ const iconPaths: Record<string, React.ReactNode> = {
       <path d="M4 8h16v13H4ZM3 3h18v5H3Zm6 10h6" />
     </>
   ),
+  unarchive: <path d="M4 8H3V3h18v5h-1M4 8v13h16V8M3 8h18m-9 10v-7m-3 3 3-3 3 3" />,
   refresh: (
     <>
       <path d="M20 7v5h-5M4 17v-5h5M20 12a8 8 0 0 0-13-6M4 12a8 8 0 0 0 13 6" />
@@ -71,6 +72,7 @@ const iconPaths: Record<string, React.ReactNode> = {
   ),
   plus: <path d="M12 5v14M5 12h14" />,
   arrow: <path d="M12 19V5m-6 6 6-6 6 6" />,
+  latest: <path d="M12 4v12m-5-5 5 5 5-5M5 20h14" />,
   chevron: <path d="m9 5 7 7-7 7" />,
   sidebar: (
     <>
@@ -88,6 +90,9 @@ const iconPaths: Record<string, React.ReactNode> = {
   'folder-add': <path d="M3 7V5h7l2 2h9v13H3ZM12 10v7m-3.5-3.5h7" />,
   pin: <path d="M9 4h6l-1 6 4 4H6l4-4-1-6ZM12 14v7" />,
   diff: <path d="M7 3H4v18h3M17 3h3v18h-3M9 8h6m-3-3v6m-3 5h6" />,
+  'diff-unified': <path d="M5 4h14v16H5ZM8 8h8m-8 4h8m-8 4h8" />,
+  'diff-split': <path d="M3 4h18v16H3Zm9 0v16M6 8h3m6 0h3M6 12h3m6 0h3M6 16h3m6 0h3" />,
+  'open-file': <path d="M12 4H5v16h14v-7M14 4h6v6m0-6-8 8" />,
   review: (
     <>
       <path d="M11 3H4v18h8m-1-18 4 4h-4Zm-4 9h3m-3 4h2m10 2 3 3" />
@@ -96,6 +101,8 @@ const iconPaths: Record<string, React.ReactNode> = {
   ),
   activity: <path d="M3 12h4l3-7 4 14 3-7h4" />,
   upload: <path d="M12 16V4m-5 5 5-5 5 5M4 16v4h16v-4" />,
+  download: <path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4" />,
+  trash: <path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7" />,
   queue: <path d="M3 6h17M3 12h10M3 18h10m5-5v7m-3.5-3.5h7" />,
   steer: <path d="M4 18v-4a5 5 0 0 1 5-5h11m-5-5 5 5-5 5" />,
   close: <path d="m6 6 12 12M6 18 18 6" />,
@@ -156,6 +163,35 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
     >
       {iconPaths[name] ?? iconPaths.file}
     </svg>
+  );
+}
+type IconButtonProps = Omit<React.ComponentPropsWithRef<'button'>, 'children' | 'aria-label'> & {
+  icon: string;
+  label: string;
+  hint?: string;
+  size?: number;
+};
+
+export function IconButton({
+  icon,
+  label,
+  hint,
+  size = 16,
+  type = 'button',
+  className,
+  ...attributes
+}: IconButtonProps) {
+  return (
+    <button
+      {...attributes}
+      type={type}
+      aria-label={label}
+      aria-description={attributes['aria-description'] ?? hint}
+      data-tooltip={hint ?? ''}
+      className={className ? 'icon-button ' + className : 'icon-button'}
+    >
+      <Icon name={icon} size={size} />
+    </button>
   );
 }
 export function Brand() {

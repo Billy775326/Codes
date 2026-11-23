@@ -37,7 +37,14 @@ test('sign-in keeps token visibility, pending controls, errors, and keyboard sub
   const input = page.getByLabel('Workspace access token');
   await expect(input).toBeEnabled();
   await input.fill('incorrect-test-token-for-signin');
-  await page.getByRole('button', { name: 'Show access token', exact: true }).click();
+  const visibility = page.getByRole('button', { name: 'Show access token', exact: true });
+  await visibility.hover();
+  const tooltip = page.locator('.control-tooltip');
+  await expect(tooltip).toHaveText('Show access token');
+  await expect(tooltip).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(tooltip).toBeHidden();
+  await visibility.click();
   await expect(input).toHaveAttribute('type', 'text');
   await page.getByRole('button', { name: 'Hide access token', exact: true }).click();
   await expect(input).toHaveAttribute('type', 'password');

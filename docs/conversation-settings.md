@@ -22,7 +22,7 @@ See [official Auto-review behavior](https://learn.chatgpt.com/docs/sandboxing/au
 
 Conversation preferences are separate from the configuration captured for an executing task. Editing the preferences does not reconfigure an active task or rewrite already queued messages. New queued entries capture the current conversation settings. When those entries later execute, they do not overwrite newer conversation preferences.
 
-Immediate additions use the running task's settings. If the draft's selected settings differ, Queue becomes the primary follow-up action and Add now is unavailable for that draft. A queued entry can still use Guide now if its own captured settings match the running task. Session status describes the actual task settings; the composer shows the saved configuration for future work.
+Immediate additions use the running task's settings. If the draft's selected settings differ, Queue becomes the primary follow-up action and Add now is unavailable for that draft. A queued entry can still use Add now if its own captured settings match the running task. Session status describes the actual task settings; the composer shows the saved configuration for future work.
 
 ## Saving and recovery
 

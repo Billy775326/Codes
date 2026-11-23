@@ -211,7 +211,10 @@ export function QueuePanel({
                         !sameSettings(entry.settings, settings)
                       }
                       aria-label={t('Add queued message to current task')}
-                      title={t(
+                      data-tooltip={t(
+                        'Apply this waiting message to the running task; it stops being editable after acceptance',
+                      )}
+                      aria-description={t(
                         'Apply this waiting message to the running task; it stops being editable after acceptance',
                       )}
                       onClick={() =>
@@ -225,8 +228,8 @@ export function QueuePanel({
                         )
                       }
                     >
-                      <Icon name="reply" size={14} />
-                      {t('Guide now')}
+                      <Icon name="steer" size={14} />
+                      {t('Add now')}
                     </button>
                   )}
                   {entry.state === 'queued' && (
@@ -234,6 +237,7 @@ export function QueuePanel({
                       label={t('Queued message actions')}
                       trigger={<Icon name="more" size={16} />}
                       className="queue-entry-menu"
+                      iconOnly
                     >
                       <button
                         disabled={busy || !!editing}
@@ -275,7 +279,7 @@ export function QueuePanel({
                         )
                       }
                     >
-                      <Icon name="close" size={14} />
+                      <Icon name="trash" size={14} />
                       {t('Remove')}
                     </button>
                   )}
