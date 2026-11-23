@@ -63,6 +63,8 @@
 
 ### Changed
 
+- Use compact icon rows for project and conversation actions in the sidebar. Show action names on hover and keyboard focus, and keep labels visible on touch devices.
+
 - Show hover and keyboard hints for reply and branch actions, the model and permission pickers, and alternate delivery actions. Enlarge reply controls on narrow screens and label the error close action on hover.
 
 - Group toolbar actions by task. Use named icons for patch layout, viewed state, file navigation, configuration transfer, and compact attachment controls. Keep visible labels for sending, approvals, recovery, and file attachment scope.

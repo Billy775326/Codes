@@ -274,22 +274,34 @@
 }
 .conversation-actions {
   display: flex;
-  gap: 5px;
-  padding: 1px 6px 5px;
+  gap: 2px;
+  padding: 0 6px 4px;
   flex-wrap: wrap;
 }
-.conversation-actions button {
-  display: flex;
+.conversation-actions .sidebar-action {
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  gap: 4px;
+  min-width: 32px;
+  min-height: 30px;
   font-size: 12px;
-  padding: 6px 7px;
-  color: var(--fg);
-  background: var(--field);
-  border: 1px solid var(--line);
+  padding: 4px 6px;
+  color: var(--muted);
   border-radius: 5px;
 }
-.conversation-actions button:hover:not(:disabled) {
+.sidebar-action > svg {
+  flex-shrink: 0;
+}
+.sidebar-action > span {
+  display: none;
+}
+.sidebar-action.with-label > span {
+  display: inline;
+}
+.conversation-actions .sidebar-action:hover:not(:disabled),
+.conversation-actions .sidebar-action:focus-visible {
+  color: var(--fg);
   background: var(--hover);
 }
 .conversation-rename {
@@ -412,17 +424,6 @@
   font-size: 10px;
   color: #c1acd8;
 }
-@media (hover: none) {
-  .project-card-name {
-    min-height: 38px;
-  }
-  .conversations .thread-link {
-    min-height: 36px;
-  }
-  .conversation-menu-trigger {
-    opacity: 1;
-  }
-}
 @media (max-width: 700px) {
   .conversation-menu-trigger {
     opacity: 1;
@@ -434,7 +435,7 @@
   }
   .conversation-controls select,
   .conversation-search button,
-  .conversation-actions button {
+  .conversation-actions .sidebar-action {
     min-height: 36px;
   }
   .conversation-rename input {
@@ -451,5 +452,22 @@
   }
   .conversation-lock-banner > span {
     display: block;
+  }
+}
+@media (hover: none) {
+  .conversation-actions .sidebar-action {
+    min-height: 40px;
+  }
+  .sidebar-action > span {
+    display: inline;
+  }
+  .project-card-name {
+    min-height: 38px;
+  }
+  .conversations .thread-link {
+    min-height: 36px;
+  }
+  .conversation-menu-trigger {
+    opacity: 1;
   }
 }

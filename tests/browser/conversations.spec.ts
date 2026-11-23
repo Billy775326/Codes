@@ -183,31 +183,46 @@ test('another client sees metadata changes, and renaming never clears a live exe
     await second.close();
   }
 });
-test('mobile row actions and archive confirmation fit narrow screens', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await login(page);
-  await create(page, 'Mobile managed ' + Date.now());
-  await page.getByRole('button', { name: 'Open navigation' }).click();
-  const row = page.locator('.conversation-row.selected');
-  await row.getByRole('button', { name: 'Actions for', exact: false }).click();
-  await row.getByRole('button', { name: 'Archive', exact: true }).click();
-  await expect(
-    page.getByRole('dialog', { name: 'Archive this conversation?', exact: true }),
-  ).toBeVisible();
-  await page.setViewportSize({ width: 320, height: 740 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const bounds = await page
-    .getByRole('dialog', { name: 'Archive this conversation?', exact: true })
-    .boundingBox();
-  expect(bounds!.width).toBeLessThanOrEqual(320);
-  await page.screenshot({
-    path: 'test-results/conversation-management-mobile.png',
-    fullPage: true,
+test.describe('touch sidebar controls', () => {
+  test.use({ hasTouch: true });
+  test('mobile row actions and archive confirmation fit narrow screens', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page);
+    await create(page, 'Mobile managed ' + Date.now());
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+    const card = activeProjectCard(page);
+    const projectName = await card.locator('.project-card-name').innerText();
+    await card.getByRole('button', { name: 'Project actions for ' + projectName }).tap();
+    for (const label of ['Rename', 'Pin', 'Archive project']) {
+      const action = card.getByRole('button', { name: label, exact: true });
+      await expect(action.getByText(label, { exact: true })).toBeVisible();
+      expect((await action.boundingBox())?.height).toBeGreaterThanOrEqual(40);
+    }
+    const row = page.locator('.conversation-row.selected');
+    await row.getByRole('button', { name: 'Actions for', exact: false }).tap();
+    const archive = row.getByRole('button', { name: 'Archive', exact: true });
+    await expect(archive.getByText('Archive', { exact: true })).toBeVisible();
+    await archive.tap();
+    await expect(
+      page.getByRole('dialog', { name: 'Archive this conversation?', exact: true }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 320, height: 740 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    const bounds = await page
+      .getByRole('dialog', { name: 'Archive this conversation?', exact: true })
+      .boundingBox();
+    expect(bounds!.width).toBeLessThanOrEqual(320);
+    await page.screenshot({
+      path: 'test-results/conversation-management-mobile.png',
+      fullPage: true,
+    });
+    await page.keyboard.press('Escape');
+    await expect(
+      page.getByRole('dialog', { name: 'Archive this conversation?', exact: true }),
+    ).toHaveCount(0);
   });
-  await page.keyboard.press('Escape');
-  await expect(
-    page.getByRole('dialog', { name: 'Archive this conversation?', exact: true }),
-  ).toHaveCount(0);
 });
 
 test('a delayed list response cannot undo a title already received through live events', async ({

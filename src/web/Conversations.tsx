@@ -1,5 +1,5 @@
 import { useInterfaceLanguage } from './interface-language';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import { createPortal } from 'react-dom';
 import type { ConversationPage, Project, ProjectUpdate, Summary } from '../shared/types';
 import { message, post, request } from './api';
@@ -9,6 +9,33 @@ import { conversationStatus } from './conversation-status';
 import { formatMessageTime } from './MessageTime';
 import type { ProjectSidebarPreference } from './project-navigation';
 import './conversations.css';
+
+function SidebarAction({
+  icon,
+  label,
+  description,
+  keepLabel = false,
+  ...props
+}: Pick<ComponentProps<'button'>, 'onClick' | 'disabled'> & {
+  icon: string;
+  label: string;
+  description?: string;
+  keepLabel?: boolean;
+}) {
+  return (
+    <button
+      {...props}
+      type="button"
+      className={keepLabel ? 'sidebar-action with-label' : 'sidebar-action'}
+      aria-label={label}
+      aria-description={description}
+      data-tooltip={description ? label + ' · ' + description : ''}
+    >
+      <Icon name={icon} size={15} />
+      <span>{label}</span>
+    </button>
+  );
+}
 
 interface Props {
   projects: Project[];
@@ -616,23 +643,25 @@ const ProjectCard = memo(function ProjectCard({
           role="group"
           aria-label={t('Project actions: {project}', { project: project.name })}
         >
-          <button
+          <SidebarAction
+            icon="edit"
+            label={t('Rename')}
             disabled={savingProject}
             onClick={() => {
               setProjectEdit({ original: project.name, name: project.name });
               setProjectError('');
             }}
-          >
-            <Icon name="edit" size={12} />
-            {t('Rename')}
-          </button>
-          <button onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}>
-            <Icon name="pin" size={12} />
-            {preference?.pinned ? t('Unpin') : t('Pin')}
-          </button>
-          <button
+          />
+          <SidebarAction
+            icon={preference?.pinned ? 'pin-off' : 'pin'}
+            label={preference?.pinned ? t('Unpin') : t('Pin')}
+            onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}
+          />
+          <SidebarAction
+            icon={project.archived ? 'unarchive' : 'archive'}
+            label={project.archived ? t('Restore project') : t('Archive project')}
             disabled={savingProject}
-            data-tooltip={
+            description={
               project.archived
                 ? t('Return this project to the main sidebar.')
                 : t('Move this project to the archive view. Its files and conversations are kept.')
@@ -641,10 +670,7 @@ const ProjectCard = memo(function ProjectCard({
               setProjectEdit(undefined);
               void changeProjectArchive();
             }}
-          >
-            <Icon name={project.archived ? 'unarchive' : 'archive'} size={12} />
-            {project.archived ? t('Restore project') : t('Archive project')}
-          </button>
+          />
         </div>
       )}
       {projectError && !projectEdit && (
@@ -831,29 +857,36 @@ const ProjectCard = memo(function ProjectCard({
                   role="group"
                   aria-label={t('Conversation actions: {title}', { title: row.title })}
                 >
-                  <button
+                  <SidebarAction
+                    icon="edit"
+                    label={t('Rename')}
                     disabled={!!pending || row.managementPending}
                     onClick={() => {
                       setEditing(row.id);
                       setName(row.title);
                     }}
-                  >
-                    <Icon name="edit" size={12} />
-                    {t('Rename')}
-                  </button>
-                  <button onClick={() => void copyConversation(row)}>
-                    <Icon name="link" size={12} />
-                    {copied?.id === row.id && !copied.fallback ? t('Link copied') : t('Copy link')}
-                  </button>
+                  />
+                  <SidebarAction
+                    icon={copied?.id === row.id && !copied.fallback ? 'check' : 'link'}
+                    label={
+                      copied?.id === row.id && !copied.fallback ? t('Link copied') : t('Copy link')
+                    }
+                    onClick={() => void copyConversation(row)}
+                  />
                   {row.managementPending ? (
-                    <button disabled={!!pending} onClick={() => void mutate(row, 'check')}>
-                      <Icon name="refresh" size={12} />
-                      {t('Check status')}
-                    </button>
+                    <SidebarAction
+                      icon="refresh"
+                      label={t('Check status')}
+                      keepLabel
+                      disabled={!!pending}
+                      onClick={() => void mutate(row, 'check')}
+                    />
                   ) : (
-                    <button
+                    <SidebarAction
+                      icon={row.archived ? 'unarchive' : 'archive'}
+                      label={row.archived ? t('Restore') : t('Archive')}
                       disabled={!!pending || isWorking(row)}
-                      title={
+                      description={
                         isWorking(row)
                           ? t(
                               'Finish or stop the task, confirm its result, and remove queued messages first.',
@@ -865,10 +898,7 @@ const ProjectCard = memo(function ProjectCard({
                           ? void mutate(row, 'archive')
                           : (setConfirmation(row), setError(''))
                       }
-                    >
-                      <Icon name={row.archived ? 'unarchive' : 'archive'} size={12} />
-                      {row.archived ? t('Restore') : t('Archive')}
-                    </button>
+                    />
                   )}
                 </div>
               )}

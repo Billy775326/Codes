@@ -89,6 +89,7 @@ const iconPaths: Record<string, React.ReactNode> = {
   folder: <path d="M3 7V5h7l2 2h9v13H3Z" />,
   'folder-add': <path d="M3 7V5h7l2 2h9v13H3ZM12 10v7m-3.5-3.5h7" />,
   pin: <path d="M9 4h6l-1 6 4 4H6l4-4-1-6ZM12 14v7" />,
+  'pin-off': <path d="m4 4 16 16M9 4h6l-1 6 4 4h-4m-5-4-3 4h4m2 0v7" />,
   diff: <path d="M7 3H4v18h3M17 3h3v18h-3M9 8h6m-3-3v6m-3 5h6" />,
   'diff-unified': <path d="M5 4h14v16H5ZM8 8h8m-8 4h8m-8 4h8" />,
   'diff-split': <path d="M3 4h18v16H3Zm9 0v16M6 8h3m6 0h3M6 12h3m6 0h3M6 16h3m6 0h3" />,

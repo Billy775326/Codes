@@ -495,7 +495,19 @@ test('project management and conversation links survive reload and keep the veri
   const projectMenu = (name: string) =>
     card.getByRole('group', { name: 'Project actions: ' + name, exact: true });
   await actions(b.name).click();
-  await projectMenu(b.name).getByRole('button', { name: 'Rename', exact: true }).click();
+  const rename = projectMenu(b.name).getByRole('button', { name: 'Rename', exact: true });
+  const pin = projectMenu(b.name).getByRole('button', { name: 'Pin', exact: true });
+  const hint = page.locator('.control-tooltip');
+  await expect(rename.getByText('Rename', { exact: true })).toBeHidden();
+  await rename.hover();
+  await expect(hint).toHaveText('Rename');
+  await rename.press('Tab');
+  await expect(pin).toBeFocused();
+  await expect(hint).toHaveText('Pin');
+  await pin.press('Tab');
+  await expect(projectMenu(b.name).getByRole('button', { name: 'Archive project' })).toBeFocused();
+  await expect(hint).toContainText('Its files and conversations are kept.');
+  await rename.click();
   const renamed = 'zz Sidebar ' + randomUUID();
   await card.getByLabel('Project name', { exact: true }).fill('  ' + renamed + '  ');
   await card.getByRole('button', { name: 'Save project name', exact: true }).click();
