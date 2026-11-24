@@ -6,6 +6,7 @@ export function usePanelFocus(
   active: boolean,
   close: () => void,
   fallback: string,
+  initialFocus?: string,
 ) {
   useEffect(() => {
     if (!active) return;
@@ -16,7 +17,8 @@ export function usePanelFocus(
           'button:not(:disabled),select:not(:disabled),input:not(:disabled),textarea:not(:disabled),summary,a[href]',
         ) ?? [],
       ).filter((element) => element.checkVisibility());
-    controls()[0]?.focus();
+    const items = controls();
+    (items.find((element) => initialFocus && element.matches(initialFocus)) ?? items[0])?.focus();
     const key = (event: KeyboardEvent) => {
       // Portaled confirmations own their keyboard handling while focused.
       if (!ref.current?.contains(document.activeElement)) return;
@@ -44,5 +46,5 @@ export function usePanelFocus(
         else document.querySelector<HTMLElement>(fallback)?.focus();
       });
     };
-  }, [ref, active, close, fallback]);
+  }, [ref, active, close, fallback, initialFocus]);
 }

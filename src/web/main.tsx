@@ -529,7 +529,13 @@ function App() {
     return () => media.removeEventListener('change', resize);
   }, []);
   usePanelFocus(navigationElement, narrow && sidebar, closeNavigation, '[data-open-navigation]');
-  usePanelFocus(contextElement, narrow && !!panel && !sidebar, closeContext, '[data-browse-files]');
+  usePanelFocus(
+    contextElement,
+    narrow && !!panel && !sidebar,
+    closeContext,
+    '[data-browse-files]',
+    '.context-close',
+  );
   const [diffTurn, setDiffTurn] = useState('');
   const [diffLayout, setDiffLayout] = useState<DiffLayout>(() =>
     saved('codes.diff-layout') === 'split' ? 'split' : 'unified',
@@ -3212,13 +3218,6 @@ function App() {
           aria-modal={narrow && !sidebar && !modalOpen ? true : undefined}
         >
           <div className="panel-heading">
-            <IconButton
-              className="context-close"
-              icon="sidebar"
-              label={t('Close panel')}
-              size={17}
-              onClick={dismissContext}
-            />
             <div className="panel-tabs" role="group" aria-label={t('Project views')}>
               <button
                 className={panel === 'files' ? 'active' : ''}
@@ -3238,6 +3237,13 @@ function App() {
                 {thread?.diff && <i />}
               </button>
             </div>
+            <IconButton
+              className="context-close"
+              icon="sidebar"
+              label={t('Close panel')}
+              size={17}
+              onClick={dismissContext}
+            />
           </div>
           {panel === 'diff' ? (
             <div className="diff-panel">

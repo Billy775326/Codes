@@ -134,8 +134,14 @@ test('phone drawers own focus and attaching context returns to the running conve
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
   await page.getByLabel('Message Codex').fill('Keep the running follow-up');
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  const files = page.getByRole('button', { name: 'Browse files', exact: true });
+  await files.click();
   await expect(page.getByRole('dialog', { name: 'Project context', exact: true })).toBeVisible();
+  const closePanel = page.getByRole('button', { name: 'Close panel', exact: true });
+  await expect(closePanel).toBeFocused();
+  await closePanel.press('Enter');
+  await expect(files).toBeFocused();
+  await files.click();
   await expect(page.locator('.main')).toHaveAttribute('inert', '');
   await page
     .getByLabel('Message Codex')

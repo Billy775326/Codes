@@ -53,9 +53,16 @@ test('desktop sidebars resize independently and keep their widths through reload
   await input.fill('Keep this draft while resizing');
   await files.click();
   const closeContext = context.getByRole('button', { name: 'Close panel', exact: true });
-  expect((await closeContext.boundingBox())!.x).toBeLessThan(
-    (await context.getByRole('button', { name: 'Files', exact: true }).boundingBox())!.x,
-  );
+  const expectCloseAtRightEdge = async () => {
+    const close = (await closeContext.boundingBox())!;
+    const changes = (await context
+      .getByRole('button', { name: 'Changes', exact: true })
+      .boundingBox())!;
+    const heading = (await context.locator('.panel-heading').boundingBox())!;
+    expect(close.x).toBeGreaterThanOrEqual(changes.x + changes.width);
+    expect(heading.x + heading.width - (close.x + close.width)).toBeLessThanOrEqual(13);
+  };
+  await expectCloseAtRightEdge();
   const width = (element: typeof navigation) =>
     element.evaluate((node) => node.getBoundingClientRect().width);
   const beginDrag = async (handle: typeof left, distance: number) => {
@@ -108,6 +115,7 @@ test('desktop sidebars resize independently and keep their widths through reload
   await expect(right).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Project context' })).toBeVisible();
   expect((await context.boundingBox())!.width).toBe(390);
+  await expectCloseAtRightEdge();
   await closeContext.click();
   await page.setViewportSize({ width: 1500, height: 900 });
   await files.click();

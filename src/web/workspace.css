@@ -676,7 +676,6 @@
   min-height: 44px;
   border-color: var(--line);
   padding: 0 12px;
-  justify-content: flex-start;
   gap: 8px;
 }
 .app .context-close svg {
