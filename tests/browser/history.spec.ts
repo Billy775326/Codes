@@ -127,6 +127,7 @@ test('a long active turn keeps the original prompt in history without recreating
   await expect(bar).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeVisible();
   base.thread.messages = [prompt, ...work, commentary];
   await reconnectUpdates(page);
   await scrollToEnd();
