@@ -1,7 +1,7 @@
 import { nativePermissions, permissionPresets } from '../src/shared/permissions.js';
 /** Metadata-only compatibility check. No account, prompt, command, or model execution. */
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rename, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Driver } from '../src/codex/driver.js';
@@ -13,6 +13,10 @@ delete process.env.OPENAI_API_KEY;
 delete process.env.CODEX_API_KEY;
 await mkdir(process.env.CODEX_HOME);
 await mkdir(join(directory, 'project'));
+const configPath = join(process.env.CODEX_HOME, 'config.toml');
+const config =
+  'model = "gpt-5.2"\nmodel_reasoning_effort = "high"\nplan_mode_reasoning_effort = "medium"\nservice_tier = "priority"\n';
+await writeFile(configPath, config);
 const service = new Service(
   new Store(join(directory, 'data')),
   new Driver('codex', {
@@ -24,7 +28,14 @@ try {
   const project = await service.addProject(join(directory, 'project'));
   const configuration = await service.driver.call('config/read', { includeLayers: false });
   assert.equal(configuration.config.features.default_mode_request_user_input, true);
-  assert.equal(configuration.config.features.fast_mode, true);
+  const defaults = await service.modelSettings.defaults(project.path);
+  assert.deepEqual(defaults, {
+    model: 'gpt-5.2',
+    effort: 'high',
+    planEffort: 'medium',
+    fast: true,
+    fastAvailable: true,
+  });
   const models = await service.modelSettings.models();
   assert.ok(models.length > 0);
   assert.ok(models.every((model) => typeof model.supportsImages === 'boolean'));
@@ -34,11 +45,13 @@ try {
   assert.ok(modes.some((entry) => entry.mode === 'default'));
   const thread = await service.create(project.id, { permission: 'read-only' });
   assert.ok(thread.id);
-  const mode = await service.modelSettings.resolve(
+  const { collaborationMode: mode, serviceTier } = await service.modelSettings.resolve(
     { permission: 'read-only', mode: 'plan' },
-    thread.resolvedModel,
+    project.path,
   );
   assert.equal(mode.mode, 'plan');
+  assert.equal(mode.settings.reasoning_effort, 'medium');
+  assert.equal(serviceTier, 'priority');
   await service.driver.call('thread/settings/update', {
     threadId: thread.id,
     cwd: project.path,
@@ -88,6 +101,12 @@ try {
   const afterSpeedChange = await service.driver.call('config/read', { includeLayers: false });
   assert.equal(afterSpeedChange.config.service_tier, configuration.config.service_tier);
   assert.equal(afterSpeedChange.config.approvals_reviewer, configuration.config.approvals_reviewer);
+  await writeFile(configPath, config + '\n[features]\nfast_mode = false\n');
+  assert.deepEqual(await service.modelSettings.defaults(project.path), {
+    ...defaults,
+    fast: false,
+    fastAvailable: false,
+  });
   assert.equal((await service.modelSettings.permissions()).autoReview, true);
   for (const preset of permissionPresets) {
     const configured = await service.create(project.id, { permission: preset.id });

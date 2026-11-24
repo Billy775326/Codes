@@ -82,8 +82,6 @@ export class Driver extends EventEmitter {
             'stdio://',
             '-c',
             'features.default_mode_request_user_input=' + (this.options.codeQuestions !== false),
-            '-c',
-            'features.fast_mode=true',
           ];
     const child = spawn(binary, args, {
       stdio: ['pipe', 'pipe', 'pipe'],

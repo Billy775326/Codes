@@ -62,7 +62,7 @@ it('uses native Plan instructions and catalog reasoning without replacing a requ
   await service.interrupt(thread.id);
 });
 it('rejects unadvertised reasoning before dispatch and preserves custom model identifiers', async () => {
-  const { service, thread } = await fixture();
+  const { service, thread, project } = await fixture();
   const invalid = randomUUID();
   await expect(
     service.send(thread.id, invalid, 'No execution', {
@@ -73,11 +73,57 @@ it('rejects unadvertised reasoning before dispatch and preserves custom model id
   ).rejects.toMatchObject({ code: 'EFFORT_UNAVAILABLE' });
   expect(thread.messages).toHaveLength(0);
   expect(service.store.operation(invalid)?.state).toBe('failed');
-  const mode = await service.modelSettings.resolve({
+  const { collaborationMode } = await service.modelSettings.resolve(
+    { permission: 'read-only', model: 'custom-exact-name' },
+    project.path,
+  );
+  expect(collaborationMode.settings.model).toBe('custom-exact-name');
+});
+
+it('restores the current project Codex model, effort and speed after explicit turn overrides', async () => {
+  const { service, thread, project } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  const config = {
+    model: 'first-configured-model',
+    model_reasoning_effort: 'medium',
+    plan_mode_reasoning_effort: 'high',
+    service_tier: 'priority',
+  };
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation((method, params, timeout) =>
+      method === 'config/read' ? Promise.resolve({ config }) : call(method, params, timeout),
+    );
+  await service.send(thread.id, randomUUID(), 'Explicit overrides', {
     permission: 'read-only',
-    model: 'custom-exact-name',
+    model: 'simulated-model',
+    effort: 'low',
+    fast: false,
   });
-  expect(mode.settings.model).toBe('custom-exact-name');
+  await until(() => thread.state === 'completed');
+  const lastStart = () => spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)?.[1];
+  expect(lastStart()).toMatchObject({
+    collaborationMode: { settings: { model: 'simulated-model', reasoning_effort: 'low' } },
+    serviceTierForTurn: 'default',
+  });
+  config.model = 'new-configured-model';
+  await service.send(thread.id, randomUUID(), 'Inherit current project', {
+    permission: 'read-only',
+  });
+  await until(() => thread.state === 'completed');
+  expect(spy).toHaveBeenCalledWith('config/read', { cwd: project.path, includeLayers: false });
+  expect(lastStart()).toMatchObject({
+    collaborationMode: { settings: { model: 'new-configured-model', reasoning_effort: 'medium' } },
+    serviceTierForTurn: 'priority',
+  });
+  await service.send(thread.id, randomUUID(), 'Inherit Plan effort', {
+    permission: 'read-only',
+    mode: 'plan',
+  });
+  await until(() => thread.state === 'completed');
+  expect(lastStart()).toMatchObject({
+    collaborationMode: { settings: { reasoning_effort: 'high' } },
+  });
 });
 it('steers the same active turn once without replacing its execution receipt', async () => {
   const { service, thread } = await fixture();

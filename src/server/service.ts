@@ -1529,7 +1529,7 @@ export class Service {
     await this.requireProject(thread.projectId);
     const nativeInput = await this.input(thread.projectId, prompt, attachments);
     if (nativeInput.some((entry) => entry.type === 'localImage'))
-      await this.modelSettings.resolve(thread.settings, thread.resolvedModel, true);
+      await this.modelSettings.checkImages(thread.resolvedModel ?? thread.settings.model);
     const active = this.store.active(id);
     // Check again after file I/O; never promote a stale follow-up into a new task.
     if (
@@ -1692,9 +1692,9 @@ export class Service {
         this.loaded.add(id);
       }
       thread.writerConflict = false;
-      const collaborationMode = await this.modelSettings.resolve(
+      const { collaborationMode, serviceTier } = await this.modelSettings.resolve(
         settings,
-        thread.resolvedModel,
+        project.path,
         nativeInput.some((entry) => entry.type === 'localImage'),
       );
       await this.modelSettings.checkPermissions(settings);
@@ -1717,7 +1717,7 @@ export class Service {
           approvalPolicy,
           approvalsReviewer,
           collaborationMode,
-          serviceTier: settings.fast ? 'priority' : 'default',
+          serviceTier,
         });
       }
       thread.resolvedModel = collaborationMode.settings.model;
@@ -1749,7 +1749,7 @@ export class Service {
               approvalPolicy,
               approvalsReviewer,
               collaborationMode,
-              serviceTierForTurn: settings.fast ? 'priority' : 'default',
+              serviceTierForTurn: serviceTier,
             },
       );
       if (typeof result.turn?.id !== 'string')

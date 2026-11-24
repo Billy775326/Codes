@@ -1,6 +1,6 @@
 import { useInterfaceLanguage } from './interface-language';
 import { useImperativeHandle, useRef, type Ref } from 'react';
-import type { Model, Settings } from '../shared/types';
+import type { CodexDefaults, Model, Settings } from '../shared/types';
 import { permissionLabel, permissionPresets } from '../shared/permissions';
 import { PanelMenu } from './PanelMenu';
 import { Icon } from './primitives';
@@ -24,13 +24,24 @@ export interface ComposerControlsHandle {
   openPermissions: () => void;
 }
 
+function modelSelection(settings: Settings, models: Model[], defaults?: CodexDefaults) {
+  const model = settings.model ?? defaults?.model;
+  return {
+    model,
+    selectedModel: model
+      ? models.find((entry) => entry.id === model || entry.model === model)
+      : models.find((entry) => entry.isDefault),
+    nativeEffort: settings.mode === 'plan' ? defaults?.planEffort : defaults?.effort,
+  };
+}
+
 /** Presentation and popup focus only. Task dispatch and durable receipts stay with the workspace. */
 export function ComposerControls({
   settings,
   autoReviewReady,
   change,
   models,
-  resolvedModel,
+  codexDefaults,
   modesReady,
   planReady,
   disabled,
@@ -40,7 +51,7 @@ export function ComposerControls({
   autoReviewReady?: boolean;
   change: (settings: Settings) => void;
   models: Model[];
-  resolvedModel?: string;
+  codexDefaults?: CodexDefaults;
   modesReady: boolean;
   planReady: boolean;
   disabled: boolean;
@@ -71,18 +82,14 @@ export function ComposerControls({
     }),
     [disabled, modesReady],
   );
-  const selectedModel =
-    models.find(
-      (entry) =>
-        entry.id === (settings.model || resolvedModel) ||
-        entry.model === (settings.model || resolvedModel),
-    ) ?? (!settings.model && !resolvedModel ? models.find((entry) => entry.isDefault) : undefined);
-  const effort = settings.effort || selectedModel?.defaultReasoningEffort;
+  const { model, selectedModel, nativeEffort } = modelSelection(settings, models, codexDefaults);
+  const effort = settings.effort ?? nativeEffort ?? selectedModel?.defaultReasoningEffort;
   const effortLabel = effort ? t(effort.charAt(0).toUpperCase() + effort.slice(1)) : t('Default');
-  const modelLabel =
-    selectedModel?.displayName ?? settings.model ?? resolvedModel ?? t('Default model');
-  const fastLabel = settings.fast ? ' · ' + t('Fast') : '';
-  const defaultEffort = settings.effort ? '' : ' ' + t('(model default)');
+  const modelLabel = selectedModel?.displayName ?? model ?? t('Default model');
+  const fastLabel = (settings.fast ?? codexDefaults?.fast) ? ' · ' + t('Fast') : '';
+  const defaultEffort = settings.effort
+    ? ''
+    : ' ' + t(nativeEffort ? '(Codex default)' : '(model default)');
   const modeLabel = t(settings.mode === 'plan' ? 'Plan' : 'Execution');
   return (
     <>
@@ -165,7 +172,7 @@ export function ComposerControls({
           settings={settings}
           change={change}
           models={models}
-          resolvedModel={resolvedModel}
+          codexDefaults={codexDefaults}
           modesReady={modesReady}
           planReady={planReady}
           disabled={disabled}
@@ -181,7 +188,7 @@ export function ModelSettingsFields({
   settings,
   change,
   models,
-  resolvedModel,
+  codexDefaults,
   modesReady,
   planReady,
   disabled,
@@ -192,7 +199,7 @@ export function ModelSettingsFields({
   settings: Settings;
   change: (value: Settings) => void;
   models: Model[];
-  resolvedModel?: string;
+  codexDefaults?: CodexDefaults;
   modesReady: boolean;
   planReady: boolean;
   disabled: boolean;
@@ -201,12 +208,10 @@ export function ModelSettingsFields({
   defaults?: boolean;
 }) {
   const { t } = useInterfaceLanguage();
-  const selectedModel =
-    models.find(
-      (entry) =>
-        entry.id === (settings.model || resolvedModel) ||
-        entry.model === (settings.model || resolvedModel),
-    ) ?? (!settings.model && !resolvedModel ? models.find((entry) => entry.isDefault) : undefined);
+  const { selectedModel, nativeEffort } = modelSelection(settings, models, codexDefaults);
+  const defaultEffort = nativeEffort ?? selectedModel?.defaultReasoningEffort;
+  const fast = settings.fast ?? codexDefaults?.fast ?? false;
+  const supportsFast = !!selectedModel?.supportsFast && codexDefaults?.fastAvailable !== false;
   return (
     <>
       <label className="model-field">
@@ -220,12 +225,12 @@ export function ModelSettingsFields({
               ...settings,
               model: e.target.value || undefined,
               effort: undefined,
-              fast: false,
+              fast: settings.fast === undefined ? undefined : false,
             })
           }
           disabled={disabled}
         >
-          <option value="">{t('Default')}</option>
+          <option value="">{t('Codex default')}</option>
           {settings.model && !models.some((entry) => entry.id === settings.model) && (
             <option value={settings.model}>{settings.model}</option>
           )}
@@ -246,8 +251,8 @@ export function ModelSettingsFields({
           onChange={(event) => change({ ...settings, effort: event.target.value || undefined })}
         >
           <option value="">
-            {t('Default')}
-            {selectedModel ? ' (' + t(selectedModel.defaultReasoningEffort ?? '') + ')' : ''}
+            {t('Codex default')}
+            {defaultEffort ? ' (' + t(defaultEffort) + ')' : ''}
           </option>
           {settings.effort &&
             !selectedModel?.supportedReasoningEfforts.some(
@@ -285,18 +290,30 @@ export function ModelSettingsFields({
         <span>
           {t('Fast')}
           <small>
-            {selectedModel?.supportsFast ? t('Higher usage') : t('Unavailable for this model')}
+            {supportsFast
+              ? t(settings.fast === undefined ? 'Codex default' : 'Higher usage')
+              : t('Fast unavailable')}
           </small>
         </span>
         <input
           type="checkbox"
           role="switch"
           aria-label={defaults ? t('Default fast mode') : t('Fast mode')}
-          checked={!!settings.fast}
-          disabled={disabled || (!selectedModel?.supportsFast && !settings.fast)}
+          checked={fast}
+          disabled={disabled || (!supportsFast && !fast)}
           onChange={(event) => change({ ...settings, fast: event.target.checked })}
         />
       </label>
+      {settings.fast !== undefined && (
+        <button
+          type="button"
+          className="preference-reset-speed"
+          disabled={disabled}
+          onClick={() => change({ ...settings, fast: undefined })}
+        >
+          {t('Use Codex default speed')}
+        </button>
+      )}
     </>
   );
 }

@@ -222,6 +222,14 @@
   opacity: 0.45;
   cursor: default;
 }
+.preference-reset-speed {
+  justify-self: start;
+  align-self: start;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+}
 
 .app .composer-toolbar .panel-menu-content {
   max-height: min(300px, calc(100dvh - 220px));

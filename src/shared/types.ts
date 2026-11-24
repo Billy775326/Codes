@@ -28,7 +28,7 @@ export interface ProjectContext {
 export interface Settings {
   model?: string;
   effort?: string;
-  /** Standard when absent; independent of reasoning effort. */
+  /** Inherits the effective Codex speed when absent. */
   fast?: boolean;
   mode?: 'default' | 'plan';
   permission: 'read-only' | 'workspace-write' | 'auto-review' | 'danger-full-access';
@@ -36,6 +36,13 @@ export interface Settings {
 export interface SettingsProfile {
   revision: number;
   settings: Settings;
+}
+export interface CodexDefaults {
+  model?: string;
+  effort?: string;
+  planEffort?: string;
+  fast: boolean;
+  fastAvailable: boolean;
 }
 export interface Message {
   id: string;
@@ -277,6 +284,6 @@ export function sameSettings(a: Settings, b: Settings): boolean {
     (a.model ?? '') === (b.model ?? '') &&
     (a.effort ?? '') === (b.effort ?? '') &&
     (a.mode ?? 'default') === (b.mode ?? 'default') &&
-    !!a.fast === !!b.fast
+    a.fast === b.fast
   );
 }

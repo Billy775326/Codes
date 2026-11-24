@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Driver } from '../codex/driver.js';
-import type { Settings } from '../shared/types.js';
+import type { CodexDefaults, Settings } from '../shared/types.js';
 import { AppError } from '../shared/errors.js';
 
 const modelSchema = z.object({
@@ -40,9 +40,41 @@ const modesSchema = z
   )
   .max(20);
 
+const configSchema = z.object({
+  config: z.object({
+    model: z.string().min(1).max(150).nullish(),
+    model_reasoning_effort: z.string().min(1).max(80).nullish(),
+    plan_mode_reasoning_effort: z.string().min(1).max(80).nullish(),
+    service_tier: z.string().min(1).max(80).nullish(),
+    features: z.object({ fast_mode: z.boolean().nullish() }).nullish(),
+  }),
+});
+
 /** Public metadata only; config/read and authentication documents never reach the browser. */
 export class ModelSettings {
   constructor(private driver: Driver) {}
+  private async configuration(cwd: string) {
+    const response = await this.driver.call('config/read', { cwd, includeLayers: false });
+    const parsed = configSchema.safeParse(response);
+    if (!parsed.success)
+      throw new AppError('PROTOCOL_ERROR', 'The CLI returned invalid execution defaults.', 502);
+    const config = parsed.data.config;
+    // Fast is enabled by default in the pinned CLI, and can be disabled by native config.
+    const fastAvailable = config.features?.fast_mode !== false;
+    const tier =
+      config.service_tier === 'priority' && !fastAvailable ? 'default' : config.service_tier;
+    return {
+      model: config.model ?? undefined,
+      effort: config.model_reasoning_effort ?? undefined,
+      planEffort: config.plan_mode_reasoning_effort ?? undefined,
+      serviceTier: tier ?? 'default',
+      fastAvailable,
+    };
+  }
+  async defaults(cwd: string): Promise<CodexDefaults> {
+    const { serviceTier, ...defaults } = await this.configuration(cwd);
+    return { ...defaults, fast: serviceTier === 'priority' };
+  }
   async permissions() {
     const response = await this.driver.call('configRequirements/read', {});
     const parsed = z
@@ -99,13 +131,25 @@ export class ModelSettings {
       throw new AppError('PROTOCOL_ERROR', 'The CLI returned invalid mode metadata.', 502);
     return parsed.data;
   }
-  async resolve(settings: Settings, resolvedModel?: string, hasImages = false) {
-    const modes = await this.modes();
+  async checkImages(model?: string) {
+    if (
+      !(await this.models()).some(
+        (entry) => (entry.id === model || entry.model === model) && entry.supportsImages,
+      )
+    )
+      throw new AppError(
+        'IMAGES_UNAVAILABLE',
+        'The selected model does not advertise image input. Choose an image-capable model.',
+        409,
+      );
+  }
+  async resolve(settings: Settings, cwd: string, hasImages = false) {
+    const [modes, native] = await Promise.all([this.modes(), this.configuration(cwd)]);
     const mode = settings.mode ?? 'default';
     const preset = modes.find((entry) => entry.mode === mode);
     if (!preset)
       throw new AppError('MODE_UNAVAILABLE', 'This CLI does not support the selected mode.', 412);
-    const model = settings.model || resolvedModel || preset.model;
+    const model = settings.model || native.model || preset.model;
     if (!model)
       throw new AppError('MODEL_UNKNOWN', 'Choose a model before starting this task.', 409);
     if (settings.effort || settings.fast || hasImages) {
@@ -118,7 +162,7 @@ export class ModelSettings {
           'The selected model does not advertise image input. Choose an image-capable model.',
           409,
         );
-      if (settings.fast && !metadata?.supportsFast)
+      if (settings.fast && (!native.fastAvailable || !metadata?.supportsFast))
         throw new AppError(
           'FAST_UNAVAILABLE',
           'Fast mode is unavailable for the selected model.',
@@ -136,9 +180,14 @@ export class ModelSettings {
           409,
         );
     }
+    const effort = settings.effort ?? (mode === 'plan' ? native.planEffort : native.effort);
     return {
-      mode,
-      settings: { model, reasoning_effort: settings.effort ?? null, developer_instructions: null },
+      collaborationMode: {
+        mode,
+        settings: { model, reasoning_effort: effort ?? null, developer_instructions: null },
+      },
+      serviceTier:
+        settings.fast === undefined ? native.serviceTier : settings.fast ? 'priority' : 'default',
     };
   }
 }

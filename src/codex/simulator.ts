@@ -109,6 +109,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         platformOs: 'linux',
       });
     if (method === 'configRequirements/read') return result(id, { requirements: null });
+    if (method === 'config/read') return result(id, { config: {} });
     if (method === 'model/list')
       return result(id, {
         data: [

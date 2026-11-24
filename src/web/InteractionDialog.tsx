@@ -3,7 +3,7 @@ import { chatFontSizes, codeFontSizes, defaultTextSize } from './font-sizes';
 import { defaultBrowserPreferences, type Preferences } from './browser-preferences';
 import { ModelSettingsFields } from './ComposerControls';
 import { permissionPresets } from '../shared/permissions';
-import type { Model } from '../shared/types';
+import type { CodexDefaults, Model } from '../shared/types';
 import { permissionLabel } from '../shared/permissions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
@@ -162,6 +162,7 @@ export function PreferencesDialog({
     change: (value: Settings) => void;
     retry: () => void;
     models: Model[];
+    codexDefaults?: CodexDefaults;
     autoReviewReady: boolean;
     modesReady: boolean;
     planReady: boolean;
@@ -343,6 +344,7 @@ export function PreferencesDialog({
                   settings={defaults.settings}
                   change={defaults.change}
                   models={defaults.models}
+                  codexDefaults={defaults.codexDefaults}
                   modesReady={defaults.modesReady}
                   planReady={defaults.planReady}
                   disabled={defaults.loading}
@@ -685,7 +687,7 @@ export function StatusDialog({
         <dt>{t('Model')}</dt>
         <dd>{settings.model || thread?.resolvedModel || t('CLI default')}</dd>
         <dt>{t('Reasoning')}</dt>
-        <dd>{t(settings.effort || 'Model default')}</dd>
+        <dd>{t(settings.effort || 'Codex default')}</dd>
         <dt>{t('Mode')}</dt>
         <dd>{settings.mode === 'plan' ? t('Plan') : t('Code')}</dd>
         <dt>{t('Clarification questions')}</dt>

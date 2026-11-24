@@ -435,6 +435,10 @@ export async function application(
           }
           if (segments[3] === 'threads' && method === 'GET')
             return json(response, await service.list(projectId));
+          if (segments[3] === 'codex-defaults' && !segments[4] && method === 'GET') {
+            const project = await service.requireProject(projectId);
+            return json(response, await service.modelSettings.defaults(project.path));
+          }
           if (segments[3] === 'threads' && method === 'POST')
             return json(
               response,

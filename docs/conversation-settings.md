@@ -2,7 +2,7 @@
 
 Permissions and **Model and reasoning** belong to the selected conversation. A change saves immediately on the server, without sending a model prompt. The selection persists when switching conversations, reloading, restarting codes, or opening the same conversation on another device. It includes model, reasoning effort, Fast, and Execution / Plan mode. Choosing another model resets its reasoning and Fast overrides to compatible defaults.
 
-Use **Interaction settings → New conversation defaults** for the starting permissions, model, reasoning effort, mode, and Fast setting of subsequent normal conversations. Defaults are shared by this single-owner workspace. Existing conversations retain their own settings. The initial default remains Read only, with the native default model/effort, Execution, and Standard speed. Changing these preferences does not edit global Codex configuration.
+Use **Interaction settings → New conversation defaults** for the starting permissions, model, reasoning effort, mode, and Fast setting of subsequent normal conversations. Explicit selections are shared by this single-owner workspace. Existing conversations retain their own selections. The initial profile uses Read only, Execution, and the project's effective Codex configuration for model, reasoning effort and speed. Choose **Codex default** for model and reasoning or **Use Codex default speed** to remove an explicit speed override. Use the Codex configuration file to change inherited values.
 
 **Reset new conversation defaults** restores that initial workspace profile through the same save and revision checks. **Reset browser settings** restores appearance and interaction preferences for the current browser. These include **Scroll with replies**, which is enabled by default. Turn it off to keep the current reading position as new text arrives, and use **Back to latest** for a manual jump. **Retry save** saves the current browser preferences again after a storage error.
 
@@ -20,7 +20,7 @@ See [official Auto-review behavior](https://learn.chatgpt.com/docs/sandboxing/au
 
 ## Running and queued work
 
-Conversation preferences are separate from the configuration captured for an executing task. Editing the preferences does not reconfigure an active task or rewrite already queued messages. New queued entries capture the current conversation settings. When those entries later execute, they do not overwrite newer conversation preferences.
+Conversation preferences are separate from the configuration captured for an executing task. Editing the preferences does not reconfigure an active task or rewrite already queued messages. Queue entries keep their explicit selections. Each new execution resolves inherited values against the effective Codex configuration for its project directory. Queued work does not overwrite newer conversation preferences.
 
 Immediate additions use the running task's settings. If the draft's selected settings differ, Queue becomes the primary follow-up action and Add now is unavailable for that draft. A queued entry can still use Add now if its own captured settings match the running task. Session status describes the actual task settings; the composer shows the saved configuration for future work.
 
@@ -44,5 +44,7 @@ Authenticated endpoints:
 Responses contain `{ revision, settings }`. PUT sends the same shape; permissions are required, and model, effort, fast and mode are optional. A stale, different update returns `409 SETTINGS_CONFLICT`; repeating an already saved selection returns the current profile. Invalid data returns 400, an unknown conversation returns 404, and archived or managed conversations reject changes with 409. PUT is idempotent for the selected value. `POST /api/projects/:id/threads` also accepts `{}` to create using the current defaults; explicit settings remain supported.
 
 Thread snapshots include `composerSettings` alongside the task's `settings`. Scoped `settings` events update the selected conversation profile; global `defaults` events synchronize workspace defaults. No additional event stream is opened. Stored invalid profile data reports an error rather than silently resetting permissions.
+
+`GET /api/projects/:id/codex-defaults` reads the Codex defaults for the registered project directory and returns the model, Code and Plan effort, and Fast settings. It exposes only display fields from the native response.
 
 Simulator regressions cover storage/restart, independent conversations, captured execution and queue settings, conflicts, lost acknowledgements, retries, rapid edits, and desktop/mobile modal behavior. Native metadata checks and actual preview checks are separate from model execution acceptance.

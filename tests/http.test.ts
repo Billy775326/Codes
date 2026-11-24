@@ -17,6 +17,33 @@ let service: Service;
 let origin: string;
 let cookie: string;
 const token = 'test-only-access-token-not-a-real-secret';
+it('returns only effective execution defaults for an authenticated registered project', async () => {
+  const project = await service.addProject(directory);
+  const url = origin + '/api/projects/' + project.id + '/codex-defaults';
+  const call = service.driver.call.bind(service.driver);
+  const spy = vi.spyOn(service.driver, 'call').mockImplementation((method, params, timeout) =>
+    method === 'config/read'
+      ? Promise.resolve({
+          config: {
+            model: 'fixture-default',
+            model_reasoning_effort: 'high',
+            service_tier: 'priority',
+            features: { fast_mode: false },
+            mcp_servers: { private: { env: { TOKEN: 'private-fixture-only' } } },
+          },
+          origins: { model: { source: 'private-config.toml' } },
+        })
+      : call(method, params, timeout),
+  );
+  expect((await fetch(url)).status).toBe(401);
+  expect(await (await fetch(url, { headers: { cookie } })).json()).toEqual({
+    model: 'fixture-default',
+    effort: 'high',
+    fast: false,
+    fastAvailable: false,
+  });
+  expect(spy).toHaveBeenCalledWith('config/read', { cwd: project.path, includeLayers: false });
+});
 it('edits only the authenticated project instructions and rejects stale revisions and symlinks', async () => {
   const root = join(directory, 'project');
   await mkdir(root);

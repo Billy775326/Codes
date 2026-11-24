@@ -157,6 +157,8 @@
 
 ### Fixed
 
+- Use the effective project Codex configuration for inherited model, reasoning effort, and speed. Clearing an override restores the current Codex default.
+
 - Preview Markdown and source file links from Codex replies even when the linked file belongs to another registered project. Keep the conversation and draft open.
 
 - Preview local screenshots in conversation links across projects, including direct image exports under the Codes data directory. Keep Files browsing scoped to its project.

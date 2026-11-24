@@ -1,4 +1,29 @@
 import { expect, test } from '@playwright/test';
+
+test('the composer shows inherited Codex effort and restores speed after an explicit override', async ({
+  page,
+}) => {
+  await page.route('**/api/projects/*/codex-defaults', (route) =>
+    route.fulfill({
+      json: { model: 'simulated-model', effort: 'high', fast: true, fastAvailable: true },
+    }),
+  );
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  const picker = page.getByRole('button', { name: 'Model and reasoning', exact: true });
+  await expect(picker).toHaveAccessibleDescription(/Demo model.*High.*Codex default.*Fast/);
+  await picker.click();
+  const speed = page.getByRole('switch', { name: 'Fast mode', exact: true });
+  const effort = page.getByLabel('Reasoning effort', { exact: true });
+  await expect(effort.locator('option:checked')).toHaveText(/Codex default.*high/);
+  await expect(speed).toBeChecked();
+  await speed.uncheck();
+  await expect(speed).not.toBeChecked();
+  await page.getByRole('button', { name: 'Use Codex default speed', exact: true }).click();
+  await expect(speed).toBeChecked();
+});
+
 for (const viewport of [
   { width: 1440, height: 1000 },
   { width: 320, height: 640 },

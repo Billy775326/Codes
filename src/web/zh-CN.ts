@@ -98,6 +98,10 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Runtime settings saved.': '运行环境设置已保存。',
   'Reconnecting…': '正在重连…',
   '(model default)': '（模型默认）',
+  '(Codex default)': '（Codex 默认）',
+  'Codex default': 'Codex 默认',
+  'Fast unavailable': '快速模式不可用',
+  'Use Codex default speed': '使用 Codex 默认速度',
   '(unavailable)': '（不可用）',
   'A conversation change needs confirmation. Check its status before sending.':
     '有一项会话变更待确认。请检查状态后再发送。',

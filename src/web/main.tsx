@@ -35,6 +35,7 @@ import { createRoot } from 'react-dom/client';
 import type {
   Action,
   Attachment,
+  CodexDefaults,
   SettingsProfile,
   Envelope,
   FileContent,
@@ -369,6 +370,12 @@ function App() {
   const contextBase = threadId ? '/threads/' + threadId : '/projects/' + projectId;
   const contextReady = !!contextProjectId && context?.project.id === contextProjectId;
   const directoryBlocked = contextReady && !context.directory.available;
+  const [nativeDefaults, setNativeDefaults] = useState<{
+    projectId: string;
+    value: CodexDefaults;
+  }>();
+  const codexDefaults =
+    nativeDefaults?.projectId === contextProjectId ? nativeDefaults.value : undefined;
   const remember = (owner: string, id: string) => {
     if (!owner) return;
     views.current = rememberProject(views.current, owner, id);
@@ -697,6 +704,26 @@ function App() {
   useEffect(() => {
     if (auth === 'ready' && connection === 'Connected') refreshProjects();
   }, [auth, connection, refreshProjects]);
+  useEffect(() => {
+    if (auth !== 'ready' || !contextProjectId || connection !== 'Connected') return;
+    const controller = new AbortController();
+    void request<CodexDefaults>(
+      '/projects/' + contextProjectId + '/codex-defaults',
+      {},
+      controller.signal,
+    ).then(
+      (value) => {
+        if (!controller.signal.aborted) setNativeDefaults({ projectId: contextProjectId, value });
+      },
+      () => {
+        if (!controller.signal.aborted)
+          setNativeDefaults((current) =>
+            current?.projectId === contextProjectId ? undefined : current,
+          );
+      },
+    );
+    return () => controller.abort();
+  }, [auth, contextProjectId, connection]);
   useEffect(() => {
     if (auth === 'ready') return onAuthenticationRequired(notice);
   }, [auth, notice]);
@@ -3008,7 +3035,7 @@ function App() {
                   autoReviewReady={autoReviewReady}
                   change={changeSettings}
                   models={models}
-                  resolvedModel={thread?.resolvedModel}
+                  codexDefaults={codexDefaults}
                   modesReady={modes.some((entry) => entry.mode === 'default')}
                   planReady={modes.some((entry) => entry.mode === 'plan')}
                   disabled={
@@ -3138,6 +3165,7 @@ function App() {
             change: defaultSettings.change,
             retry: () => void defaultSettings.retry(),
             models,
+            codexDefaults,
             autoReviewReady,
             modesReady: modes.some((entry) => entry.mode === 'default'),
             planReady: modes.some((entry) => entry.mode === 'plan'),
