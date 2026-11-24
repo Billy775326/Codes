@@ -48,6 +48,7 @@ test('Approve for me persists per conversation, is available for defaults, and s
     'Approve for me',
   );
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  await page.getByRole('button', { name: 'New conversation defaults', exact: true }).click();
   await page.getByLabel('Default permissions', { exact: true }).selectOption('auto-review');
   await expect
     .poll(
@@ -80,6 +81,7 @@ test('managed restrictions disable Auto-review in both menus without replacing e
   await expect(autoReview).toHaveAccessibleDescription('Auto-review unavailable');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  await page.getByRole('button', { name: 'New conversation defaults', exact: true }).click();
   await expect(
     page.getByLabel('Default permissions').getByRole('option', { name: 'Approve for me' }),
   ).toHaveJSProperty('disabled', true);

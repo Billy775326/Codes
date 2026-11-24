@@ -21,6 +21,7 @@ test('native permission presets, approval callbacks and Files / Changes remain a
     'Ask for approval',
   );
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  await page.getByRole('button', { name: 'New conversation defaults', exact: true }).click();
   const defaults = page.getByLabel('Default permissions', { exact: true });
   await expect(defaults.locator('option[value="danger-full-access"]')).toHaveJSProperty(
     'disabled',

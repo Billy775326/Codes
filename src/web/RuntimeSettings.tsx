@@ -98,43 +98,49 @@ export function RuntimeSettings({
         void saveSettings();
       }}
     >
-      <label className="preference-row">
-        <span>{t('Codex questions in Code mode')}</span>
-        <input
-          className="preference-checkbox"
-          type="checkbox"
-          role="switch"
-          checked={questions}
-          onChange={(event) => setQuestions(event.target.checked)}
-          disabled={saving}
-        />
-      </label>
-      <label>
-        {t('Native request timeout (milliseconds)')}
-        <input
-          type="number"
-          min={runtimeRequestTimeout.min}
-          max={runtimeRequestTimeout.max}
-          step="1"
-          required
-          value={timeout}
-          onChange={(event) => setTimeout(event.target.value)}
-          disabled={saving}
-        />
-      </label>
-      <p className="preference-help">
-        {t('1,000–300,000 ms. Applies to CLI requests, such as loading metadata.')}
-      </p>
-      <dl className="runtime-paths">
-        <dt>{t('Codex executable')}</dt>
-        <dd>
-          <code>{snapshot.executable}</code>
-        </dd>
-        <dt>{t('Data directory')}</dt>
-        <dd>
-          <code>{snapshot.dataDirectory}</code>
-        </dd>
-      </dl>
+      <section className="preferences-section" aria-labelledby="native-requests-heading">
+        <h3 id="native-requests-heading">{t('Native requests')}</h3>
+        <label className="preference-row">
+          <span>{t('Codex questions in Code mode')}</span>
+          <input
+            className="preference-checkbox"
+            type="checkbox"
+            role="switch"
+            checked={questions}
+            onChange={(event) => setQuestions(event.target.checked)}
+            disabled={saving}
+          />
+        </label>
+        <label>
+          {t('Native request timeout (milliseconds)')}
+          <input
+            type="number"
+            min={runtimeRequestTimeout.min}
+            max={runtimeRequestTimeout.max}
+            step="1"
+            required
+            value={timeout}
+            onChange={(event) => setTimeout(event.target.value)}
+            disabled={saving}
+          />
+        </label>
+        <p className="preference-help">
+          {t('1,000–300,000 ms. Applies to CLI requests, such as loading metadata.')}
+        </p>
+      </section>
+      <section className="preferences-section" aria-labelledby="runtime-paths-heading">
+        <h3 id="runtime-paths-heading">{t('Runtime paths')}</h3>
+        <dl className="runtime-paths">
+          <dt>{t('Codex executable')}</dt>
+          <dd>
+            <code>{snapshot.executable}</code>
+          </dd>
+          <dt>{t('Data directory')}</dt>
+          <dd>
+            <code>{snapshot.dataDirectory}</code>
+          </dd>
+        </dl>
+      </section>
       {snapshot.restartRequired ? (
         <p role="status">
           {t(

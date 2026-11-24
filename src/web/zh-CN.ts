@@ -1,6 +1,13 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
   Settings: '设置',
+  'Settings categories': '设置分类',
+  Workspace: '工作区',
+  'This browser': '当前浏览器',
+  Listener: '监听',
+  'Browser access': '浏览器访问',
+  'Native requests': '原生请求',
+  'Runtime paths': '运行路径',
   'Search settings': '搜索设置',
   'Clear settings search': '清空设置搜索',
   'No matching settings.': '没有匹配的设置。',

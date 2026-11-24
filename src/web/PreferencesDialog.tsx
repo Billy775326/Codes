@@ -16,19 +16,29 @@ import { MaintenanceSettings } from './MaintenanceSettings';
 const settingsSections = [
   {
     id: 'preferences',
+    scope: 'browser',
     label: 'Preferences',
     icon: 'settings',
     keywords:
-      'appearance theme language font text size interaction shortcut review defaults model reasoning permissions fast queue scroll 外观 主题 语言 字号 字体 交互 快捷键 复查 默认 模型 推理 权限 排队 滚动',
+      'appearance theme language font text size interaction shortcut review queue scroll 外观 主题 语言 字号 字体 交互 快捷键 复查 排队 滚动',
   },
   {
     id: 'notifications',
+    scope: 'browser',
     label: 'Notifications',
     icon: 'bell',
     keywords: 'browser alerts desktop 通知 浏览器 提醒 桌面',
   },
   {
+    id: 'defaults',
+    scope: 'workspace',
+    label: 'New conversation defaults',
+    icon: 'newchat',
+    keywords: 'model reasoning permissions fast plan default 默认 模型 推理 权限 计划',
+  },
+  {
     id: 'network',
+    scope: 'workspace',
     label: 'Network & access',
     icon: 'link',
     keywords:
@@ -36,12 +46,14 @@ const settingsSections = [
   },
   {
     id: 'runtime',
+    scope: 'workspace',
     label: 'Runtime',
     icon: 'terminal',
     keywords: 'cli codex questions timeout executable 运行时 提问 超时 可执行文件',
   },
   {
     id: 'maintenance',
+    scope: 'workspace',
     label: 'Data & maintenance',
     icon: 'archive',
     keywords:
@@ -49,12 +61,17 @@ const settingsSections = [
   },
   {
     id: 'instructions',
+    scope: 'workspace',
     label: 'AGENTS.md',
     icon: 'file',
     keywords: 'project instructions rules 项目 指令 规则',
   },
 ] as const;
 type SettingsSection = (typeof settingsSections)[number]['id'];
+const settingsScopes = [
+  { id: 'browser', label: 'This browser' },
+  { id: 'workspace', label: 'Workspace' },
+] as const;
 
 function ResetSettings({
   label,
@@ -152,6 +169,7 @@ export function PreferencesDialog({
   const [section, setSection] = useState<SettingsSection>('preferences');
   const [visited, setVisited] = useState({
     preferences: true,
+    defaults: false,
     network: false,
     runtime: false,
     instructions: false,
@@ -163,11 +181,17 @@ export function PreferencesDialog({
   const [instructionsDraft, setInstructionsDraft] = useState({ changed: false, busy: false });
   const [discarding, setDiscarding] = useState(false);
   const sectionButton = useRef<HTMLButtonElement>(null);
+  const categoryButton = useRef<HTMLButtonElement>(null);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const currentCategory = settingsSections.find(({ id }) => id === section)!;
   const searchInput = useRef<HTMLInputElement>(null);
   const discardBusy = networkDraft.busy || runtimeDraft.busy || instructionsDraft.busy;
   const selectSection = (value: typeof section) => {
     setVisited((previous) => (previous[value] ? previous : { ...previous, [value]: true }));
     setSection(value);
+    setQuery('');
+    setCategoriesOpen(false);
+    if (categoryButton.current?.checkVisibility()) categoryButton.current.focus();
   };
   const returnFocus = useRef(false);
   const [query, setQuery] = useState('');
@@ -183,7 +207,13 @@ export function PreferencesDialog({
   useEffect(() => {
     if (!discarding && returnFocus.current) {
       returnFocus.current = false;
-      (sectionButton.current ?? searchInput.current)?.focus();
+      const selected = sectionButton.current;
+      (selected?.checkVisibility()
+        ? selected
+        : categoryButton.current?.checkVisibility()
+          ? categoryButton.current
+          : searchInput.current
+      )?.focus();
     }
   }, [discarding]);
   const requestClose = () => {
@@ -196,233 +226,161 @@ export function PreferencesDialog({
     }
   };
   const preferences = (
-    <>
-      <div className="preferences-content">
-        <section className="preferences-section" aria-labelledby="preferences-appearance">
-          <h3 id="preferences-appearance">{t('Appearance')}</h3>
-          <label className="preference-row">
-            <span className="preference-description">{t('Language')}</span>
+    <div className="preferences-content">
+      <section className="preferences-section" aria-labelledby="preferences-appearance">
+        <h3 id="preferences-appearance">{t('Appearance')}</h3>
+        <label className="preference-row">
+          <span className="preference-description">{t('Language')}</span>
+          <select
+            value={value.language}
+            onChange={(event) =>
+              change({ ...value, language: event.target.value === 'zh-CN' ? 'zh-CN' : 'en' })
+            }
+          >
+            <option value="en" lang="en">
+              English
+            </option>
+            <option value="zh-CN" lang="zh-CN">
+              简体中文
+            </option>
+          </select>
+        </label>
+        <label className="preference-row">
+          <span className="preference-description">{t('Theme')}</span>
+          <select
+            aria-label={t('Theme')}
+            value={value.theme}
+            onChange={(event) =>
+              change({ ...value, theme: event.target.value as Preferences['theme'] })
+            }
+          >
+            <option value="dark">{t('Dark')}</option>
+            <option value="light">{t('Light')}</option>
+            <option value="system">{t('System')}</option>
+          </select>
+        </label>
+        <div className="preferences-fonts">
+          <label>
+            {t('Chat text size')}
             <select
-              value={value.language}
+              aria-label={t('Chat text size')}
+              value={value.chatFontSize ?? ''}
               onChange={(event) =>
-                change({ ...value, language: event.target.value === 'zh-CN' ? 'zh-CN' : 'en' })
+                change({
+                  ...value,
+                  chatFontSize: event.target.value ? Number(event.target.value) : undefined,
+                })
               }
             >
-              <option value="en" lang="en">
-                English
-              </option>
-              <option value="zh-CN" lang="zh-CN">
-                简体中文
-              </option>
+              <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
+              {chatFontSizes.map((size) => (
+                <option key={size} value={size}>
+                  {size} px
+                </option>
+              ))}
             </select>
           </label>
-          <label className="preference-row">
-            <span className="preference-description">{t('Theme')}</span>
+          <label>
+            {t('Code text size')}
             <select
-              aria-label={t('Theme')}
-              value={value.theme}
+              aria-label={t('Code text size')}
+              value={value.codeFontSize ?? ''}
               onChange={(event) =>
-                change({ ...value, theme: event.target.value as Preferences['theme'] })
+                change({
+                  ...value,
+                  codeFontSize: event.target.value ? Number(event.target.value) : undefined,
+                })
               }
             >
-              <option value="dark">{t('Dark')}</option>
-              <option value="light">{t('Light')}</option>
-              <option value="system">{t('System')}</option>
+              <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
+              {codeFontSizes.map((size) => (
+                <option key={size} value={size}>
+                  {size} px
+                </option>
+              ))}
             </select>
           </label>
-          <div className="preferences-fonts">
-            <label>
-              {t('Chat text size')}
-              <select
-                aria-label={t('Chat text size')}
-                value={value.chatFontSize ?? ''}
-                onChange={(event) =>
-                  change({
-                    ...value,
-                    chatFontSize: event.target.value ? Number(event.target.value) : undefined,
-                  })
-                }
-              >
-                <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
-                {chatFontSizes.map((size) => (
-                  <option key={size} value={size}>
-                    {size} px
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t('Code text size')}
-              <select
-                aria-label={t('Code text size')}
-                value={value.codeFontSize ?? ''}
-                onChange={(event) =>
-                  change({
-                    ...value,
-                    codeFontSize: event.target.value ? Number(event.target.value) : undefined,
-                  })
-                }
-              >
-                <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
-                {codeFontSizes.map((size) => (
-                  <option key={size} value={size}>
-                    {size} px
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="preferences-preview" role="region" aria-label={t('Text preview')}>
-            <div className="prose">
-              <p>
-                {t('Aa Bb Cc · 0123456789')}
-                <br />
-                中文字体预览。
-              </p>
-              <pre>
-                <code>const message = "Hello, Codex";</code>
-              </pre>
-            </div>
-          </div>
-        </section>
-        <section
-          className="preferences-section"
-          aria-labelledby="preferences-defaults"
-          role="region"
-          aria-label={t('New conversation defaults')}
-        >
-          <h3 id="preferences-defaults">{t('New conversation defaults')}</h3>
-          {defaults.settings && (
-            <>
-              <label className="preference-row">
-                <span className="preference-description">{t('Permissions')}</span>
-                <select
-                  aria-label={t('Default permissions')}
-                  value={defaults.settings.permission}
-                  disabled={defaults.loading}
-                  onChange={(event) =>
-                    defaults.change({
-                      ...defaults.settings!,
-                      permission: event.target.value as Settings['permission'],
-                    })
-                  }
-                >
-                  {permissionPresets.map((preset) => (
-                    <option
-                      key={preset.id}
-                      value={preset.id}
-                      disabled={preset.id === 'auto-review' && !defaults.autoReviewReady}
-                    >
-                      {t(preset.label)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="preference-help">
-                {t(
-                  permissionPresets.find((preset) => preset.id === defaults.settings!.permission)
-                    ?.description ?? '',
-                )}
-              </p>
-              <div className="default-model-settings">
-                <ModelSettingsFields
-                  defaults
-                  settings={defaults.settings}
-                  change={defaults.change}
-                  models={defaults.models}
-                  codexDefaults={defaults.codexDefaults}
-                  modesReady={defaults.modesReady}
-                  planReady={defaults.planReady}
-                  disabled={defaults.loading}
-                />
-              </div>
-              <ResetSettings
-                label={t('Reset new conversation defaults')}
-                detail={t('Restore default permissions, model, reasoning, mode, and speed.')}
-                disabled={defaults.loading || defaults.conflict}
-                reset={() => defaults.change({ permission: 'read-only' })}
-              />
-            </>
-          )}
-          {defaults.loading && <p role="status">{t('Loading defaults…')}</p>}
-          {defaults.saving && <p role="status">{t('Saving defaults…')}</p>}
-          {defaults.error && (
-            <p role="alert">
-              {t(defaults.error)}{' '}
-              <button onClick={defaults.retry}>
-                {defaults.conflict ? t('Reload default settings') : t('Retry default settings')}
-              </button>
-            </p>
-          )}
-        </section>
-        <section className="preferences-section" aria-labelledby="preferences-interaction">
-          <h3 id="preferences-interaction">{t('Interaction')}</h3>
-          <label className="preference-row">
-            <span className="preference-description">{t('Follow-up delivery')}</span>
-            <select
-              aria-label={t('Follow-up delivery')}
-              value={value.followUp}
-              onChange={(event) =>
-                change({ ...value, followUp: event.target.value as Preferences['followUp'] })
-              }
-            >
-              <option value="queue">{t('Queue for next turn')}</option>
-              <option value="steer">{t('Add to running task')}</option>
-            </select>
-          </label>
-          <label className="preference-row">
-            <span className="preference-description">{t('Send shortcut')}</span>
-            <select
-              aria-label={t('Send shortcut')}
-              value={value.enter}
-              onChange={(event) =>
-                change({ ...value, enter: event.target.value as Preferences['enter'] })
-              }
-            >
-              <option value="enter">{t('Enter')}</option>
-              <option value="cmdIfMultiline">{t('Multiline: Ctrl/Cmd+Enter')}</option>
-              <option value="cmdAlways">Ctrl/Cmd+Enter</option>
-            </select>
-          </label>
-          <label className="preference-row">
-            <span className="preference-description">{t('Review location')}</span>
-            <select
-              aria-label={t('Review location')}
-              value={value.review}
-              onChange={(event) =>
-                change({ ...value, review: event.target.value as Preferences['review'] })
-              }
-            >
-              <option value="inline">{t('Current conversation')}</option>
-              <option value="detached">{t('Separate conversation')}</option>
-            </select>
-          </label>
-          <label className="preference-row">
-            <span>{t('Scroll with replies')}</span>
-            <input
-              className="preference-checkbox"
-              type="checkbox"
-              role="switch"
-              checked={value.autoScroll}
-              onChange={(event) => change({ ...value, autoScroll: event.target.checked })}
-            />
-          </label>
-          <details className="preferences-help">
-            <summary>{t('Editing and shortcuts')}</summary>
+        </div>
+        <div className="preferences-preview" role="region" aria-label={t('Text preview')}>
+          <div className="prose">
             <p>
-              {t(
-                'Shift+Enter adds a line. On phones, Enter adds a line. Ctrl/Cmd+Shift+Enter switches delivery for one follow-up.',
-              )}
+              {t('Aa Bb Cc · 0123456789')}
+              <br />
+              中文字体预览。
             </p>
-            <p>
-              {t(
-                'Queued messages can be edited until dispatch. Immediate additions use the running task’s settings.',
-              )}
-            </p>
-          </details>
-        </section>
-      </div>
-    </>
+            <pre>
+              <code>const message = "Hello, Codex";</code>
+            </pre>
+          </div>
+        </div>
+      </section>
+      <section className="preferences-section" aria-labelledby="preferences-interaction">
+        <h3 id="preferences-interaction">{t('Interaction')}</h3>
+        <label className="preference-row">
+          <span className="preference-description">{t('Follow-up delivery')}</span>
+          <select
+            aria-label={t('Follow-up delivery')}
+            value={value.followUp}
+            onChange={(event) =>
+              change({ ...value, followUp: event.target.value as Preferences['followUp'] })
+            }
+          >
+            <option value="queue">{t('Queue for next turn')}</option>
+            <option value="steer">{t('Add to running task')}</option>
+          </select>
+        </label>
+        <label className="preference-row">
+          <span className="preference-description">{t('Send shortcut')}</span>
+          <select
+            aria-label={t('Send shortcut')}
+            value={value.enter}
+            onChange={(event) =>
+              change({ ...value, enter: event.target.value as Preferences['enter'] })
+            }
+          >
+            <option value="enter">{t('Enter')}</option>
+            <option value="cmdIfMultiline">{t('Multiline: Ctrl/Cmd+Enter')}</option>
+            <option value="cmdAlways">Ctrl/Cmd+Enter</option>
+          </select>
+        </label>
+        <label className="preference-row">
+          <span className="preference-description">{t('Review location')}</span>
+          <select
+            aria-label={t('Review location')}
+            value={value.review}
+            onChange={(event) =>
+              change({ ...value, review: event.target.value as Preferences['review'] })
+            }
+          >
+            <option value="inline">{t('Current conversation')}</option>
+            <option value="detached">{t('Separate conversation')}</option>
+          </select>
+        </label>
+        <label className="preference-row">
+          <span>{t('Scroll with replies')}</span>
+          <input
+            className="preference-checkbox"
+            type="checkbox"
+            role="switch"
+            checked={value.autoScroll}
+            onChange={(event) => change({ ...value, autoScroll: event.target.checked })}
+          />
+        </label>
+        <details className="preferences-help">
+          <summary>{t('Editing and shortcuts')}</summary>
+          <p>
+            {t(
+              'Shift+Enter adds a line. On phones, Enter adds a line. Ctrl/Cmd+Shift+Enter switches delivery for one follow-up.',
+            )}
+          </p>
+          <p>
+            {t(
+              'Queued messages can be edited until dispatch. Immediate additions use the running task’s settings.',
+            )}
+          </p>
+        </details>
+      </section>
+    </div>
   );
   return (
     <InteractionDialog
@@ -433,16 +391,32 @@ export function PreferencesDialog({
     >
       <div className="preferences-page" hidden={discarding}>
         <div className="settings-layout">
-          <div className="settings-navigation">
+          <div
+            className="settings-navigation"
+            data-show-categories={categoriesOpen || !!terms.length}
+          >
+            <button
+              className="settings-category-toggle settings-action"
+              ref={categoryButton}
+              type="button"
+              aria-label={t('Settings categories')}
+              aria-expanded={categoriesOpen || !!terms.length}
+              aria-controls="settings-categories"
+              onClick={() => {
+                if (terms.length) setQuery('');
+                setCategoriesOpen(!(categoriesOpen || terms.length));
+              }}
+            >
+              <Icon name={currentCategory.icon} size={16} />
+              <span>{t(currentCategory.label)}</span>
+              <Icon name="chevron" size={14} />
+            </button>
             <form
               className="settings-search"
               role="search"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (matches[0]) {
-                  selectSection(matches[0].id);
-                  setQuery('');
-                }
+                if (terms.length && matches[0]) selectSection(matches[0].id);
               }}
             >
               <Icon name="search" size={16} />
@@ -465,22 +439,34 @@ export function PreferencesDialog({
                 />
               )}
             </form>
-            <div className="preferences-nav" role="group" aria-label={t('Settings sections')}>
-              {matches.map(({ id, label, icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  ref={section === id ? sectionButton : undefined}
-                  aria-pressed={section === id}
-                  onClick={() => {
-                    selectSection(id);
-                    setQuery('');
-                  }}
-                >
-                  <Icon name={icon} size={16} />
-                  {t(label)}
-                </button>
-              ))}
+            <div
+              className="preferences-nav"
+              id="settings-categories"
+              role="group"
+              aria-label={t('Settings sections')}
+            >
+              {settingsScopes.map(({ id: scope, label: scopeLabel }) => {
+                const sections = matches.filter((item) => item.scope === scope);
+                return (
+                  sections.length > 0 && (
+                    <div className="settings-nav-group" key={scope}>
+                      <span className="settings-nav-label">{t(scopeLabel)}</span>
+                      {sections.map(({ id, label, icon }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          ref={section === id ? sectionButton : undefined}
+                          aria-pressed={section === id}
+                          onClick={() => selectSection(id)}
+                        >
+                          <Icon name={icon} size={16} />
+                          {t(label)}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                );
+              })}
               {!matches.length && <p role="status">{t('No matching settings.')}</p>}
             </div>
           </div>
@@ -488,6 +474,85 @@ export function PreferencesDialog({
             <div className="preferences-page" hidden={section !== 'preferences'}>
               {preferences}
             </div>
+            {visited.defaults && (
+              <div className="preferences-content" hidden={section !== 'defaults'}>
+                <section
+                  className="preferences-section"
+                  aria-labelledby="preferences-defaults"
+                  role="region"
+                  aria-label={t('New conversation defaults')}
+                >
+                  <h3 id="preferences-defaults">{t('New conversation defaults')}</h3>
+                  {defaults.settings && (
+                    <>
+                      <label className="preference-row">
+                        <span className="preference-description">{t('Permissions')}</span>
+                        <select
+                          aria-label={t('Default permissions')}
+                          value={defaults.settings.permission}
+                          disabled={defaults.loading}
+                          onChange={(event) =>
+                            defaults.change({
+                              ...defaults.settings!,
+                              permission: event.target.value as Settings['permission'],
+                            })
+                          }
+                        >
+                          {permissionPresets.map((preset) => (
+                            <option
+                              key={preset.id}
+                              value={preset.id}
+                              disabled={preset.id === 'auto-review' && !defaults.autoReviewReady}
+                            >
+                              {t(preset.label)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <p className="preference-help">
+                        {t(
+                          permissionPresets.find(
+                            (preset) => preset.id === defaults.settings!.permission,
+                          )?.description ?? '',
+                        )}
+                      </p>
+                      <div className="default-model-settings">
+                        <ModelSettingsFields
+                          defaults
+                          settings={defaults.settings}
+                          change={defaults.change}
+                          models={defaults.models}
+                          codexDefaults={defaults.codexDefaults}
+                          modesReady={defaults.modesReady}
+                          planReady={defaults.planReady}
+                          disabled={defaults.loading}
+                        />
+                      </div>
+                      <ResetSettings
+                        label={t('Reset new conversation defaults')}
+                        detail={t(
+                          'Restore default permissions, model, reasoning, mode, and speed.',
+                        )}
+                        disabled={defaults.loading || defaults.conflict}
+                        reset={() => defaults.change({ permission: 'read-only' })}
+                      />
+                    </>
+                  )}
+                  {defaults.loading && <p role="status">{t('Loading defaults…')}</p>}
+                  {defaults.saving && <p role="status">{t('Saving defaults…')}</p>}
+                  {defaults.error && (
+                    <p role="alert">
+                      {t(defaults.error)}{' '}
+                      <button onClick={defaults.retry}>
+                        {defaults.conflict
+                          ? t('Reload default settings')
+                          : t('Retry default settings')}
+                      </button>
+                    </p>
+                  )}
+                </section>
+              </div>
+            )}
             {visited.notifications && (
               <div className="preferences-content" hidden={section !== 'notifications'}>
                 <NotificationSettings enabled={value.notifications} change={changeNotifications} />

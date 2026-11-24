@@ -1,3 +1,4 @@
+import { chooseSettingsSection } from './settings-helpers';
 import { test, expect, type Page } from '@playwright/test';
 const origin = 'http://127.0.0.1:19140';
 let restoreDefaults: unknown;
@@ -116,6 +117,7 @@ test('new-conversation defaults persist on the server and leave an existing conv
   const other = await browser.newContext();
   try {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    await chooseSettingsSection(page, 'New conversation defaults');
     const section = page.getByRole('region', { name: 'New conversation defaults', exact: true });
     await section
       .getByLabel('Default permissions', { exact: true })
@@ -153,6 +155,7 @@ test('new-conversation defaults persist on the server and leave an existing conv
     ).toContainText('Low');
     await expect(observer.getByTestId('message-user')).toHaveCount(0);
     await observer.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    await chooseSettingsSection(observer, 'New conversation defaults');
     const resetScope = observer.getByRole('region', {
       name: 'New conversation defaults',
       exact: true,
@@ -416,7 +419,9 @@ for (const viewport of [
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
     for (const theme of ['dark', 'light']) {
+      await chooseSettingsSection(dialog, 'Preferences');
       await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
+      await chooseSettingsSection(dialog, 'New conversation defaults');
       for (const name of [
         'Default permissions',
         'Default model',

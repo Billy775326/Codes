@@ -78,6 +78,8 @@
 
 ### Changed
 
+- Group browser and workspace settings, put new conversation defaults on a dedicated page, and use a compact category picker on phones. Separate listener, browser access, and native runtime fields into labeled form sections.
+
 - Migrate workspace metadata to schema 5 with a private pre-upgrade backup. Diagnose slow reads and connection replay with correlated, bounded log records.
 
 - Keep the project card disclosure beside its name in both states. The chevron indicates whether conversations are visible and keeps keyboard focus when toggled.

@@ -199,100 +199,106 @@ export function NetworkSettings({
         void save();
       }}
     >
-      <div className="network-listener">
-        <label>
-          {t('Listen address')}
-          <select
-            value={host}
-            onChange={(event) => setHost(event.target.value as typeof host)}
-            disabled={saving}
-          >
-            {loopbackHosts.map((value) => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t('Listen port')}
-          <input
-            type="number"
-            min="1"
-            max="65535"
-            step="1"
-            required
-            value={port}
-            onChange={(event) => setPort(event.target.value)}
-            disabled={saving}
-          />
-        </label>
-      </div>
-      <div className="network-access-fields">
-        <div>
+      <section className="preferences-section" aria-labelledby="network-listener-heading">
+        <h3 id="network-listener-heading">{t('Listener')}</h3>
+        <div className="network-listener">
           <label>
-            {t('Allowed addresses')}
-            <textarea
-              rows={4}
-              value={addresses}
-              onChange={(event) => setOrigins(event.target.value)}
-              aria-describedby="network-address-help"
-              spellCheck={false}
-              required
-              disabled={saving}
-            />
-          </label>
-          <p className="preference-help" id="network-address-help">
-            {authMode === 'cloudflare-access'
-              ? t('One HTTPS origin per line.')
-              : t('One HTTP(S) origin per line.')}
-          </p>
-        </div>
-        <div>
-          <label>
-            {t('Authentication mode')}
+            {t('Listen address')}
             <select
-              value={authMode}
-              onChange={(event) => setAuthMode(event.target.value as NetworkSettings['authMode'])}
-              aria-describedby="network-auth-help"
+              value={host}
+              onChange={(event) => setHost(event.target.value as typeof host)}
               disabled={saving}
             >
-              <option value="local">{t('Local / Tailscale (local)')}</option>
-              <option value="cloudflare-access">Cloudflare Access</option>
+              {loopbackHosts.map((value) => (
+                <option key={value}>{value}</option>
+              ))}
             </select>
           </label>
-          <p className="preference-help" id="network-auth-help">
-            {authMode === 'cloudflare-access'
-              ? t('Sign in with Access, then your Codes token.')
-              : t('Use Cloudflare Access for public hostnames.')}
-          </p>
-        </div>
-      </div>
-      {authMode === 'cloudflare-access' && (
-        <div className="network-access-credentials">
           <label>
-            {t('Cloudflare team URL')}
+            {t('Listen port')}
             <input
-              type="url"
-              placeholder="https://your-team.cloudflareaccess.com"
-              value={issuer}
-              maxLength={128}
-              onChange={(event) => setIssuer(event.target.value)}
+              type="number"
+              min="1"
+              max="65535"
+              step="1"
               required
-              disabled={saving}
-            />
-          </label>
-          <label>
-            {t('Application Audience (AUD)')}
-            <input
-              value={audience}
-              maxLength={64}
-              spellCheck={false}
-              onChange={(event) => setAudience(event.target.value)}
-              required
+              value={port}
+              onChange={(event) => setPort(event.target.value)}
               disabled={saving}
             />
           </label>
         </div>
-      )}
+      </section>
+      <section className="preferences-section" aria-labelledby="network-access-heading">
+        <h3 id="network-access-heading">{t('Browser access')}</h3>
+        <div className="network-access-fields">
+          <div className="network-auth-mode">
+            <label>
+              {t('Authentication mode')}
+              <select
+                value={authMode}
+                onChange={(event) => setAuthMode(event.target.value as NetworkSettings['authMode'])}
+                aria-describedby="network-auth-help"
+                disabled={saving}
+              >
+                <option value="local">{t('Local / Tailscale (local)')}</option>
+                <option value="cloudflare-access">Cloudflare Access</option>
+              </select>
+            </label>
+            <p className="preference-help" id="network-auth-help">
+              {authMode === 'cloudflare-access'
+                ? t('Sign in with Access, then your Codes token.')
+                : t('Use Cloudflare Access for public hostnames.')}
+            </p>
+          </div>
+          {authMode === 'cloudflare-access' && (
+            <div className="network-access-credentials">
+              <label>
+                {t('Cloudflare team URL')}
+                <input
+                  type="url"
+                  placeholder="https://your-team.cloudflareaccess.com"
+                  value={issuer}
+                  maxLength={128}
+                  onChange={(event) => setIssuer(event.target.value)}
+                  required
+                  disabled={saving}
+                />
+              </label>
+              <label>
+                {t('Application Audience (AUD)')}
+                <input
+                  value={audience}
+                  maxLength={64}
+                  spellCheck={false}
+                  onChange={(event) => setAudience(event.target.value)}
+                  required
+                  disabled={saving}
+                />
+              </label>
+            </div>
+          )}
+          <div>
+            <label>
+              {t('Allowed addresses')}
+              <textarea
+                rows={4}
+                value={addresses}
+                onChange={(event) => setOrigins(event.target.value)}
+                aria-describedby="network-address-help"
+                spellCheck={false}
+                required
+                disabled={saving}
+              />
+            </label>
+            <p className="preference-help" id="network-address-help">
+              {authMode === 'cloudflare-access'
+                ? t('One HTTPS origin per line.')
+                : t('One HTTP(S) origin per line.')}
+            </p>
+          </div>
+        </div>
+      </section>
       {imported && (
         <p role="status">
           {changed

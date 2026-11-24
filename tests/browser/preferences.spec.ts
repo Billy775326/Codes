@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { chooseSettingsSection } from './settings-helpers';
 import type { NetworkSettingsSnapshot } from '../../src/shared/network-settings';
 import type { RuntimeSettingsSnapshot } from '../../src/shared/runtime-settings';
 import { readFile, rm, writeFile } from 'node:fs/promises';
@@ -63,7 +64,7 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const open = async () => {
     await settings.click();
-    await dialog.getByRole('button', { name: 'Network & access' }).click();
+    await chooseSettingsSection(dialog, 'Network & access');
   };
   const path = '/api/settings/network';
   const read = async (): Promise<NetworkSettingsSnapshot> => (await page.request.get(path)).json();
@@ -161,7 +162,7 @@ test('runtime settings save independently of the active configuration and surviv
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const open = async () => {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await dialog.getByRole('button', { name: 'Runtime', exact: true }).click();
+    await chooseSettingsSection(dialog, 'Runtime');
   };
   const path = '/api/settings/runtime';
   const get = async (): Promise<RuntimeSettingsSnapshot> => (await page.request.get(path)).json();
@@ -198,24 +199,24 @@ test('network and runtime drafts survive a tab switch and require confirmation t
   await fixture(page, 'Settings drafts fixture');
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
-  const network = dialog.getByRole('button', { name: 'Network & access', exact: true });
-  const runtime = dialog.getByRole('button', { name: 'Runtime', exact: true });
+  const categories = dialog.getByRole('button', { name: 'Settings categories', exact: true });
   const port = dialog.getByLabel('Listen port');
   const timeout = dialog.getByLabel('Native request timeout (milliseconds)');
-  await network.click();
+  await chooseSettingsSection(dialog, 'Network & access');
   await port.fill('28787');
-  await runtime.click();
+  await chooseSettingsSection(dialog, 'Runtime');
   await timeout.fill('77123');
-  await network.click();
+  await chooseSettingsSection(dialog, 'Network & access');
   await expect(port).toHaveValue('28787');
-  await runtime.click();
+  await chooseSettingsSection(dialog, 'Runtime');
   await expect(timeout).toHaveValue('77123');
   await dialog.getByRole('button', { name: 'Close dialog' }).click();
   const discard = dialog.getByRole('group', { name: 'Discard unsaved settings?' });
   const keep = discard.getByRole('button', { name: 'Keep editing' });
   await expect(keep).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(runtime).toBeFocused();
+  await expect(categories).toBeFocused();
+  await expect(categories).toHaveText('Runtime');
   await expect(timeout).toHaveValue('77123');
   await page.keyboard.press('Escape');
   await discard.getByRole('button', { name: 'Discard changes' }).click();
@@ -606,16 +607,17 @@ test('searches settings in both languages and downloads a database backup on a n
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const search = dialog.getByRole('searchbox', { name: 'Search settings' });
+  const categories = dialog.getByRole('button', { name: 'Settings categories', exact: true });
+  await expect(categories).toHaveAttribute('aria-expanded', 'false');
   await search.fill('backup');
   const settings = dialog.getByRole('group', { name: 'Settings sections' });
   await expect(settings.getByRole('button')).toHaveCount(1);
   await search.fill('数据库');
   await search.press('Enter');
   await expect(search).toHaveValue('');
-  await expect(settings.getByRole('button', { name: 'Data & maintenance' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(categories).toHaveText('Data & maintenance');
+  await expect(categories).toHaveAttribute('aria-expanded', 'false');
+  await expect(categories).toBeFocused();
   await dialog.getByRole('button', { name: 'Prepare maintenance' }).click();
   try {
     await expect(dialog.getByRole('status')).toHaveText('Ready');
@@ -634,6 +636,11 @@ test('searches settings in both languages and downloads a database backup on a n
   await expect(settings.getByRole('status')).toHaveText('No matching settings.');
   await dialog.getByRole('button', { name: 'Clear settings search' }).click();
   await expect(search).toBeFocused();
-  await expect(settings.getByRole('button')).toHaveCount(6);
+  await categories.click();
+  await expect(settings.getByRole('button')).toHaveCount(7);
+  await chooseSettingsSection(dialog, 'Network & access');
+  await expect(categories).toHaveAttribute('aria-expanded', 'false');
+  await expect(categories).toHaveText('Network & access');
+  await expect(dialog.getByLabel('Allowed addresses')).toBeVisible();
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
