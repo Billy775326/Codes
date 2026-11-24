@@ -536,6 +536,21 @@ const ProjectCard = memo(function ProjectCard({
       }
     >
       <header className="project-card-header">
+        <IconButton
+          className="project-card-disclosure"
+          icon="chevron"
+          size={14}
+          label={t(collapsed ? 'Expand {project}' : 'Collapse {project}', {
+            project: project.name,
+          })}
+          aria-controls={listId}
+          aria-expanded={!collapsed}
+          disabled={keepOpen}
+          onClick={() => {
+            setProjectMenu(false);
+            onSidebarPreference(projectId, { expanded: collapsed });
+          }}
+        />
         <h2 id={'project-heading-' + projectId}>
           <button
             ref={projectName}
@@ -557,11 +572,8 @@ const ProjectCard = memo(function ProjectCard({
               else onProject(projectId);
             }}
           >
-            {!collapsed && (
-              <Icon
-                name={project.archived ? 'archive' : preference?.pinned ? 'pin' : 'folder'}
-                size={16}
-              />
+            {(project.archived || preference?.pinned) && (
+              <Icon name={project.archived ? 'archive' : 'pin'} size={14} />
             )}
             <span>{project.name}</span>
           </button>
@@ -597,22 +609,6 @@ const ProjectCard = memo(function ProjectCard({
             }}
           >
             <Icon name="more" size={16} />
-          </button>
-        )}
-        {!collapsed && !keepOpen && (
-          <button
-            className="icon-button project-card-collapse"
-            aria-label={t('Collapse {project}', { project: project.name })}
-            data-tooltip=""
-            aria-controls={listId}
-            aria-expanded="true"
-            onClick={() => {
-              setProjectMenu(false);
-              onSidebarPreference(projectId, { expanded: false });
-              projectName.current?.focus();
-            }}
-          >
-            <Icon name="chevron" size={14} />
           </button>
         )}
       </header>

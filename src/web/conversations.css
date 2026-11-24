@@ -115,7 +115,10 @@
 .project-card-header > .icon-button {
   flex-shrink: 0;
 }
-.project-card-collapse svg {
+.app .project-card-header .project-card-disclosure {
+  color: var(--fg);
+}
+.project-card-disclosure[aria-expanded='true'] svg {
   transform: rotate(90deg);
 }
 .project-card-name svg {

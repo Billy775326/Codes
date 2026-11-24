@@ -73,6 +73,8 @@
 
 ### Changed
 
+- Keep the project card disclosure beside its name in both states. The chevron indicates whether conversations are visible and keeps keyboard focus when toggled.
+
 - Use 14 px as the default conversation and code text size.
 
 - Put the collapse control beside the Codes logo on desktop and mobile. Reopen the sidebar from the conversation header. The project panel close button sits next to its tabs.

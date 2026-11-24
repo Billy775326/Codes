@@ -22,6 +22,20 @@ for (const width of [1440, 390, 320]) {
         ? page.getByRole('dialog', { name: 'Workspace navigation', exact: true })
         : sidebar;
     await expect(navigation.locator('.project-card-name[aria-current="true"]')).toBeVisible();
+    const card = navigation.locator('.project-card').filter({
+      has: page.locator('.project-card-name[aria-current="true"]'),
+    });
+    const disclosure = card.locator('.project-card-disclosure');
+    const disclosureBox = (await disclosure.boundingBox())!;
+    expect(disclosureBox.x).toBeLessThan(
+      (await card.locator('.project-card-name').boundingBox())!.x,
+    );
+    expect(disclosureBox.width).toBeGreaterThanOrEqual(width < 700 ? 40 : 36);
+    await disclosure.click();
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    expect((await disclosure.boundingBox())!.x).toBe(disclosureBox.x);
+    await disclosure.press('Enter');
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     await expect(
       page.getByRole('button', { name: 'Interaction settings', exact: true }),
     ).toHaveCount(1);
