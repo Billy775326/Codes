@@ -39,7 +39,7 @@ test('long running conversations scroll inside the workspace at desktop and phon
 }) => {
   await login(page);
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  const settings = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
   await settings.getByRole('switch', { name: 'Scroll with replies', exact: true }).uncheck();
   await settings.getByRole('button', { name: 'Done', exact: true }).click();
   await send(

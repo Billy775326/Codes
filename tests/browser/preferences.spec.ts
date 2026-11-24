@@ -60,7 +60,7 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   const settings = page.getByRole('button', { name: 'Interaction settings', exact: true });
-  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const open = async () => {
     await settings.click();
     await dialog.getByRole('button', { name: 'Network & access' }).click();
@@ -158,7 +158,7 @@ test('runtime settings save independently of the active configuration and surviv
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const open = async () => {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
     await dialog.getByRole('button', { name: 'Runtime', exact: true }).click();
@@ -197,7 +197,7 @@ test('network and runtime drafts survive a tab switch and require confirmation t
   await page.setViewportSize({ width: 320, height: 700 });
   await fixture(page, 'Settings drafts fixture');
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const network = dialog.getByRole('button', { name: 'Network & access', exact: true });
   const runtime = dialog.getByRole('button', { name: 'Runtime', exact: true });
   const port = dialog.getByLabel('Listen port');
@@ -244,6 +244,7 @@ test('browser notifications are opt-in and use the open background connection', 
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
   const toggle = page.getByRole('switch', { name: 'Browser notifications' });
   await expect(toggle).not.toBeChecked();
   await toggle.check();
@@ -271,7 +272,7 @@ for (const width of [1440, 320]) {
     await page.getByLabel('Message Codex').fill('Keep this draft behind settings');
     const trigger = page.getByRole('button', { name: 'Interaction settings', exact: true });
     await trigger.click();
-    const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
     await expect(dialog.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
     await expect(dialog.locator('details')).not.toHaveAttribute('open');
     await expect(page.getByLabel('Display size')).toHaveCount(0);
@@ -403,7 +404,7 @@ test('a failed browser preference save keeps the current choice available to ret
   });
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
   await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('light');
-  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   await expect(dialog.getByRole('alert')).toHaveText(
     'Changes apply now, but this browser could not save them.',
   );
@@ -424,7 +425,7 @@ test('browser settings can be reset without changing workspace defaults or the d
   await page.getByLabel('Message Codex').fill('Keep this settings reset draft');
   const settings = page.getByRole('button', { name: 'Interaction settings', exact: true });
   await settings.click();
-  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const theme = dialog.getByRole('combobox', { name: 'Theme', exact: true });
   const autoScroll = dialog.getByRole('switch', { name: 'Scroll with replies', exact: true });
   await theme.selectOption('light');
@@ -460,7 +461,7 @@ test('turning off reply scrolling preserves the reading position and keeps a man
   await page.setViewportSize({ width: 320, height: 480 });
   await fixture(page);
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   await dialog.getByLabel('Chat text size').selectOption('24');
   await dialog.getByRole('switch', { name: 'Scroll with replies', exact: true }).uncheck();
   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
@@ -573,7 +574,7 @@ for (const width of [1440, 320]) {
       await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
       await expect(chat).toHaveValue(String(chatSize));
       await expect(code).toHaveValue(String(codeSize));
-      const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+      const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
       expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );
@@ -596,3 +597,43 @@ for (const width of [1440, 320]) {
     ).toBe('14px');
   });
 }
+
+test('searches settings in both languages and downloads a database backup on a narrow screen', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await fixture(page, 'Backup browser fixture');
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  const search = dialog.getByRole('searchbox', { name: 'Search settings' });
+  await search.fill('backup');
+  const settings = dialog.getByRole('group', { name: 'Settings sections' });
+  await expect(settings.getByRole('button')).toHaveCount(1);
+  await search.fill('数据库');
+  await search.press('Enter');
+  await expect(search).toHaveValue('');
+  await expect(settings.getByRole('button', { name: 'Data & maintenance' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await dialog.getByRole('button', { name: 'Prepare maintenance' }).click();
+  try {
+    await expect(dialog.getByRole('status')).toHaveText('Ready');
+    const downloaded = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Download database backup' }).click();
+    const download = await downloaded;
+    expect(download.suggestedFilename()).toMatch(/^codes-db-\d{4}-\d{2}-\d{2}\.sqlite$/);
+    expect((await readFile((await download.path())!)).subarray(0, 15).toString()).toBe(
+      'SQLite format 3',
+    );
+  } finally {
+    await dialog.getByRole('button', { name: 'Cancel maintenance' }).click();
+  }
+  await expect(dialog.getByRole('status')).toHaveText('Accepting tasks');
+  await search.fill('no-match-fixture');
+  await expect(settings.getByRole('status')).toHaveText('No matching settings.');
+  await dialog.getByRole('button', { name: 'Clear settings search' }).click();
+  await expect(search).toBeFocused();
+  await expect(settings.getByRole('button')).toHaveCount(6);
+  expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+});

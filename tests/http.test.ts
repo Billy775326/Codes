@@ -896,3 +896,41 @@ it('rejects fake image uploads, invalid names and oversized uploads without disp
   expect((await upload(imagePng, 'image/png', '%invalid')).status).toBe(400);
   expect((await upload(Buffer.alloc(8 * 1024 * 1024 + 1))).status).toBe(413);
 });
+
+it('exports a consistent authenticated database snapshot with current workspace records', async () => {
+  const project = await service.addProject(directory, 'Backup fixture');
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  const endpoint = origin + '/api/settings/backup';
+  expect((await fetch(endpoint, { method: 'POST', headers: { origin } })).status).toBe(401);
+  expect(
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: { origin: 'http://example.invalid', cookie },
+    }),
+  ).toMatchObject({ status: 403 });
+
+  const response = await fetch(endpoint, { method: 'POST', headers: { origin, cookie } });
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-type')).toBe('application/vnd.sqlite3');
+  expect(response.headers.get('cache-control')).toContain('no-store');
+  expect(response.headers.get('content-disposition')).toMatch(
+    /^attachment; filename="codes-db-\d{4}-\d{2}-\d{2}\.sqlite"$/,
+  );
+  const path = join(directory, 'downloaded.sqlite');
+  await writeFile(path, Buffer.from(await response.arrayBuffer()));
+  const { DatabaseSync } = await import('node:sqlite');
+  const exported = new DatabaseSync(path, { readOnly: true });
+  try {
+    expect(exported.prepare('PRAGMA integrity_check').get()).toMatchObject({
+      integrity_check: 'ok',
+    });
+    expect(exported.prepare('SELECT name FROM projects WHERE id = ?').get(project.id)).toEqual({
+      name: 'Backup fixture',
+    });
+    expect(exported.prepare('SELECT id FROM threads WHERE id = ?').get(thread.id)).toEqual({
+      id: thread.id,
+    });
+  } finally {
+    exported.close();
+  }
+});

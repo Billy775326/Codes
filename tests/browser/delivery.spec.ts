@@ -46,7 +46,7 @@ for (const width of [1440, 320])
     await steer;
     await expect(page.getByTestId('message-user')).toHaveCount(2);
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Interaction settings' })).toContainText(
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toContainText(
       'Queued messages can be edited until dispatch.',
     );
     await page

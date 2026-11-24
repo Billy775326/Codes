@@ -18,10 +18,11 @@ export function onAuthenticationRequired(listener: (error: ApiError) => void) {
 }
 const inactivityTimeoutMs = 35_000;
 const readDeadlineMs = 120_000;
-export async function request<T>(
+async function sendRequest<T>(
   path: string,
   init: RequestInit = {},
   signal?: AbortSignal,
+  readDownload?: (response: Response) => Promise<T>,
 ): Promise<T> {
   const writing = !['GET', 'HEAD', 'OPTIONS'].includes((init.method ?? 'GET').toUpperCase());
   const timeout = new AbortController();
@@ -49,6 +50,7 @@ export async function request<T>(
     let data: any;
     try {
       phase = 'body';
+      if (readDownload && response.ok) return await readDownload(response);
       if (!writing && response.body) {
         progress();
         const reader = response.body.getReader();
@@ -132,6 +134,19 @@ export async function request<T>(
     clearTimeout(idleTimer);
     clearTimeout(deadline);
   }
+}
+export function request<T>(path: string, init: RequestInit = {}, signal?: AbortSignal) {
+  return sendRequest<T>(path, init, signal);
+}
+export function downloadDatabaseBackup(signal: AbortSignal) {
+  return sendRequest('/settings/backup', { method: 'POST' }, signal, async (response) => {
+    const name = response.headers
+      .get('content-disposition')
+      ?.match(/^attachment; filename="(codes-db-\d{4}-\d{2}-\d{2}\.sqlite)"$/)?.[1];
+    if (!name || response.headers.get('content-type') !== 'application/vnd.sqlite3')
+      throw new ApiError('The service returned an invalid backup.', 'INVALID_RESPONSE');
+    return { name, file: await response.blob() };
+  });
 }
 export const post = <T>(path: string, data: unknown = {}) =>
   request<T>(path, { method: 'POST', body: JSON.stringify(data) });

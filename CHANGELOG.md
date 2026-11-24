@@ -10,6 +10,8 @@
 
 ### Added
 
+- Search settings by English or Chinese keywords, open browser notifications in a dedicated section, and manage task admission and SQLite downloads under Data & maintenance.
+
 - Switch API-compatible web assets independently of the running service and restore the previous entry if needed.
 - Discover Codex CLI compatibility by the installed App Server protocol. Show the actual CLI version and gate optional native features.
 

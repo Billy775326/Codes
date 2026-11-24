@@ -21,6 +21,7 @@ import type { NetworkConfiguration } from './network-settings.js';
 import type { RuntimeConfiguration } from './runtime-settings.js';
 import type { JWTVerifyGetKey } from 'jose';
 import { cloudflareAuthenticator } from './cloudflare-access.js';
+import { WorkspaceBackup } from './workspace-backup.js';
 
 const sha256 = /^[a-f0-9]{64}$/;
 const fileAttachment = z
@@ -185,6 +186,7 @@ export async function application(
     const session = cookie ? sessions.get(cookie) : undefined;
     return !!session && session.expiry > Date.now() && session.subject === subject;
   };
+  const workspaceBackup = new WorkspaceBackup(service.store.db);
   let attachmentUploads = 0;
   server.on('request', (request, response) => {
     response.setHeader('x-content-type-options', 'nosniff');
@@ -289,6 +291,8 @@ export async function application(
           return json(response, await service.modelSettings.permissions());
         if (url.pathname === '/api/modes' && method === 'GET')
           return json(response, await service.modelSettings.modes());
+        if (url.pathname === '/api/settings/backup' && method === 'POST')
+          return await workspaceBackup.download(response);
         if (url.pathname === '/api/settings/defaults' && method === 'GET')
           return json(response, service.store.settingsProfile());
         if (url.pathname === '/api/settings/defaults' && method === 'PUT') {
@@ -846,6 +850,7 @@ export async function application(
       const closed = new Promise<void>((yes) => server.close(() => yes()));
       service.events.close();
       await vite?.close();
+      await workspaceBackup.close();
       await service.close();
       server.closeAllConnections();
       await closed;

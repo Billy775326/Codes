@@ -414,7 +414,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await login(page);
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Interaction settings', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
     for (const theme of ['dark', 'light']) {
       await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
       for (const name of [

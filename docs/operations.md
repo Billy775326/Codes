@@ -4,13 +4,21 @@ Run codes as the Linux account that owns the projects and is already signed in t
 
 ## Prepare maintenance
 
-Open **Session status** and choose **Prepare maintenance**. Codes stops admitting new tasks, follow-ups and queued messages. Existing tasks can finish, including answering questions and handling approvals. The dispatcher holds existing queued messages without changing their pause settings. **Maintenance ready** means Codes has no outstanding work it can identify, including receipts with an uncertain result. Maintenance expires after five minutes. **Cancel maintenance** resumes normal scheduling early.
+Open **Settings → Data & maintenance** or **Session status** and choose **Prepare maintenance**. Codes stops admitting new tasks, follow-ups and queued messages. Existing tasks can finish, including answering questions and handling approvals. The dispatcher holds existing queued messages without changing their pause settings. **Maintenance ready** means Codes has no outstanding work it can identify, including receipts with an uncertain result. Maintenance expires after five minutes. **Cancel maintenance** resumes normal scheduling early.
 
 An authenticated operator can also POST `{"action":"start"}` or `{"action":"cancel"}` to `/api/maintenance` and read `maintenance.ready` and `maintenance.expiresAt` from `GET /api/system`. Recheck readiness and the expiration immediately before switching. This control gates task admission in the current process. The operator still owns backup, restart and verification.
 
 Record when the old process reaches `maintenance.ready`, when the new build starts, and when it passes verification. This distinguishes a drain timeout from a failure to verify an already switched build. If verification stops after startup, confirm the running build and process before attempting another restart.
 
 After the new HTTP listener accepts authenticated requests, call `GET /api/models` first to initialize the Codex runtime without sending a model prompt. Then check `GET /api/system` for the expected runtime, CLI version and `ready` state. Reading `/api/system` alone can keep reporting `not_started` on a cold process. Verify the database, authenticated endpoints, event stream and browser after the runtime is ready.
+
+## Download a database backup
+
+Open **Settings → Data & maintenance → Download database backup** as a signed-in workspace operator. Codes uses SQLite’s online backup to produce one consistent database file while the service runs. The download contains the project list, conversation metadata, queues, operation records and saved conversation defaults. Keep it private. Codex conversation history, project files, uploaded files, server configuration and access credentials have their own backup locations.
+
+Codes prepares one download at a time and caps downloads at 64 MiB. For larger databases or a full recovery bundle, back up the data directory and the effective Codex home on the host. Use SQLite’s online backup for a running database or copy the database after a graceful stop.
+
+To restore the database on Linux, stop Codes and back up the current private data directory. Check that the snapshot is readable and its schema is supported by the build you will start. Replace `codes.sqlite` with the snapshot using the service account and mode `0600`. Move any matching `codes.sqlite-wal` and `codes.sqlite-shm` from the old database into the backup before restarting. Sign in and check projects, conversation history and queues. The restored database can reference native histories or attachments that must be restored separately. Review outstanding tasks before resuming a restored queue.
 
 ## Persistent state
 

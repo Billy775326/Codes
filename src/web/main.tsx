@@ -1,3 +1,4 @@
+import { PreferencesDialog } from './PreferencesDialog';
 import { taskActivity } from './conversation-status';
 import {
   InterfaceLanguageContext,
@@ -65,12 +66,7 @@ import { historyLimit, liveRevision } from './history';
 import { useConversationTimeline } from './useConversationTimeline';
 import { applyConversationEvent } from './conversation-events';
 import { useWebBuild } from './useWebBuild';
-import {
-  InteractionDialog,
-  PreferencesDialog,
-  ReviewDialog,
-  StatusDialog,
-} from './InteractionDialog';
+import { InteractionDialog, ReviewDialog, StatusDialog } from './InteractionDialog';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
 import { ControlTooltip } from './ControlTooltip';
 import { AddProjectDialog } from './AddProjectDialog';
@@ -558,12 +554,12 @@ function App() {
       controller.abort();
     };
   }, [auth, maintenanceExpiresAt]);
-  const changeMaintenance = async (action: 'start' | 'cancel') => {
+  const changeMaintenance = async (action: 'start' | 'cancel', report = notice) => {
     setMaintenanceBusy(true);
     try {
       setSystem(await post<System>('/maintenance', { action }));
     } catch (error) {
-      notice(error);
+      report(error);
     } finally {
       setMaintenanceBusy(false);
     }
@@ -2696,6 +2692,9 @@ function App() {
       )}
       {dialog === 'preferences' && (
         <PreferencesDialog
+          system={system}
+          maintenanceBusy={maintenanceBusy}
+          changeMaintenance={changeMaintenance}
           project={project}
           value={preferences}
           defaults={{

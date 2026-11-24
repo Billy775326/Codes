@@ -1,5 +1,22 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
+  Settings: '设置',
+  'Search settings': '搜索设置',
+  'Clear settings search': '清空设置搜索',
+  'No matching settings.': '没有匹配的设置。',
+  'Data & maintenance': '数据与维护',
+  'Task admission': '任务接收',
+  'Pause new tasks and queue dispatch for up to five minutes. Running tasks can finish.':
+    '暂停接收新任务和派发队列，最长五分钟。正在执行的任务可以继续。',
+  'Database backup': '数据库备份',
+  'Includes Codes project and conversation records, queues, and saved defaults. Back up Codex history, workspace files, uploads, and server configuration separately.':
+    '包含 Codes 项目与会话记录、队列及默认设置。Codex 对话原文、项目文件、上传文件和服务端配置需另行备份。',
+  'Download database backup': '下载数据库备份',
+  'Preparing backup…': '正在生成备份…',
+  'A database export is already in progress.': '正在生成数据库备份，请稍后再试。',
+  'This database exceeds the 64 MB download limit. Back it up on the server.':
+    '数据库超过 64 MB 下载上限，请在服务器上备份。',
+  'The service returned an invalid backup.': '服务返回的备份格式无效。',
   'Absolute path to an existing folder.': '现有目录的绝对路径。',
   'Accepted additions cannot be edited.': '已加入的消息无法编辑。',
   'Add now requires matching task settings.': '设置一致时才能立即加入。',

@@ -2,7 +2,7 @@
   z-index: 80;
 }
 .app .preferences-dialog {
-  width: 560px;
+  width: min(780px, 100%);
   max-height: min(800px, calc(100dvh - 40px));
   display: flex;
   flex-direction: column;
@@ -28,18 +28,98 @@
 .preferences-dialog > .modal-heading button {
   align-self: start;
 }
-.preferences-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--line);
+.settings-layout {
+  display: grid;
+  grid-template-columns: 204px minmax(0, 1fr);
+  min-height: 0;
 }
-.preferences-nav button {
+.settings-navigation {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  border-inline-end: 1px solid var(--line);
+}
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-height: var(--control-size);
-  padding: 4px 8px;
+  padding-inline: 8px;
+  border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--muted);
+  background: var(--field);
+}
+.settings-search:focus-within {
+  border-color: var(--link);
+}
+.app .preferences-dialog .settings-search input {
+  appearance: none;
+  min-width: 0;
+  flex: 1;
+  padding: 6px 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: var(--fg);
+}
+.settings-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.settings-search svg {
+  flex-shrink: 0;
+}
+.settings-search .icon-button {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+}
+.preferences-nav {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+}
+.preferences-nav button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-size);
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--muted);
+  text-align: start;
+}
+.preferences-nav button svg {
+  flex-shrink: 0;
+}
+.preferences-nav p {
+  margin: 4px 8px;
+  color: var(--muted);
+}
+.settings-panels {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.settings-action {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: var(--control-size);
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+}
+.settings-action:not(:disabled):hover {
+  background: var(--hover);
+}
+.settings-action:disabled {
+  opacity: 0.6;
 }
 .preferences-nav button:hover,
 .preferences-nav button[aria-pressed='true'] {
@@ -315,15 +395,31 @@
   .preferences-content {
     padding: 16px;
   }
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .settings-navigation {
+    padding: 8px 10px;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .app .preferences-dialog .settings-search input {
+    font-size: 16px;
+  }
   .preferences-nav {
-    display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
-    padding-inline: 10px;
+    margin-top: 6px;
   }
   .preferences-nav button {
+    justify-content: center;
+    text-align: center;
     padding-inline: 4px;
     line-height: 1.3;
+  }
+  .preferences-nav button svg {
+    display: none;
   }
   .app .preferences-dialog .preference-row {
     gap: 8px;
@@ -336,6 +432,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .preferences-done,
+  .settings-action,
   .preferences-nav button,
   .app .network-settings input,
   .preferences-dialog > .modal-heading button {
