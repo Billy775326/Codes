@@ -2087,6 +2087,14 @@ function App() {
                     turns={visibleTurns}
                     activeIds={activeTurnIds}
                     result={taskResult}
+                    viewport={transcript}
+                    projectId={contextProjectId}
+                    pending={thread.pending}
+                    loadEarlier={
+                      (history ? history.olderCursor : thread.olderCursor)
+                        ? () => loadHistory('older')
+                        : undefined
+                    }
                     render={(m, finalReply, changes, timestamp, completion) => {
                       if (m.kind === 'question') {
                         const action = inlineQuestions.get(m.id);

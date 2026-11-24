@@ -3,6 +3,7 @@ import { interfaceLanguages, type Translate } from './interface-language';
 
 export interface TurnActivity {
   id: string;
+  prompt?: Message;
   users: Message[];
   work: Message[];
   replies: Message[];
@@ -46,6 +47,7 @@ export function groupTurns(
       id,
       active,
       info: turns.find((turn) => turn.id === id),
+      prompt: items[0]?.kind === 'user' ? items[0] : undefined,
       users: items.filter((item) => item.kind === 'user'),
       work: items.filter(
         (item) => item.kind !== 'user' && !replyIds.has(item.id) && !changes.includes(item),

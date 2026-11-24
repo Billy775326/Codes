@@ -1,0 +1,65 @@
+.turn-prompt-overlay {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 5;
+}
+.turn-prompt-bar {
+  position: absolute;
+  inset: 0 0 auto;
+  overflow: hidden;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--status-response) 12%, var(--editor));
+  border: 1px solid color-mix(in srgb, var(--status-response) 28%, var(--line));
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 3px 12px #0002;
+}
+.turn-prompt-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: var(--control-size);
+  padding: 6px 10px;
+  text-align: start;
+  font-size: 13px;
+}
+.turn-prompt-toggle strong {
+  color: var(--status-response);
+  font-weight: 650;
+}
+.turn-prompt-toggle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.turn-prompt-toggle svg {
+  transform: rotate(90deg);
+}
+.turn-prompt-toggle[aria-expanded='true'] svg {
+  transform: rotate(-90deg);
+}
+.turn-prompt-toggle:focus-visible,
+.turn-prompt-detail:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: -3px;
+}
+.turn-prompt-detail {
+  max-height: min(38dvh, 320px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--line);
+  padding: 8px 10px;
+}
+.turn-prompt-detail p {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.turn-prompt-detail button {
+  min-height: var(--control-size);
+  padding: 4px 0;
+  color: var(--link);
+  text-decoration: underline;
+}

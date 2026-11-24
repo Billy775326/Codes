@@ -388,6 +388,9 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Draft settings apply now, but this browser could not save them.':
     '草稿设置已生效，但当前浏览器无法保存。',
   'Earlier messages': '较早的消息',
+  'Turn message': '本轮消息',
+  'Go to original message': '定位原消息',
+  Attachments: '附件',
   'Earlier turn {number} · {id}': '较早的第 {number} 轮 · {id}',
   'Edit message': '编辑消息',
   'Edit queued message': '编辑排队消息',

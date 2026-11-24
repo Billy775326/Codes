@@ -1,10 +1,12 @@
 import { useInterfaceLanguage } from './interface-language';
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { Message, TurnInfo } from '../shared/types';
+import { Fragment, useEffect, useMemo, useState, type ReactNode, type RefObject } from 'react';
+import type { Message, Thread, TurnInfo } from '../shared/types';
+import { parseQuestionReplies } from '../shared/question-replies';
 import { groupTurns, commandCounts, workDuration, type TurnActivity } from './activity';
 import { Icon } from './primitives';
 import { MessageTime } from './MessageTime';
 import { isTurnOutcome, TurnResult, type TurnOutcome } from './TurnResult';
+import { TurnPromptBar, type TurnPrompt } from './TurnPromptBar';
 
 type RenderMessage = (
   item: Message,
@@ -216,22 +218,49 @@ export function Transcript({
   turns,
   activeIds,
   result,
+  viewport,
+  projectId,
+  pending,
+  loadEarlier,
   render,
 }: {
   messages: Message[];
   turns?: TurnInfo[];
   activeIds?: string[];
   result?: { status: TurnOutcome; turn?: TurnInfo };
+  viewport: RefObject<HTMLDivElement | null>;
+  projectId: string;
+  pending?: Thread['pending'];
+  loadEarlier?: () => Promise<void>;
   render: RenderMessage;
 }) {
   const entries = useMemo(
     () => groupTurns(messages, turns, activeIds),
     [messages, turns, activeIds],
   );
+  const prompts = useMemo(() => {
+    const result = new Map<string, TurnPrompt>();
+    for (const turn of entries) {
+      const receipt = pending?.kind === 'send' && pending.turnId === turn.id ? pending : undefined;
+      const original = receipt
+        ? turn.users.find((message) => message.clientId === receipt.id)
+        : turn.prompt;
+      if (original) result.set(turn.id, { text: original.text, original });
+      else if (receipt && !parseQuestionReplies(receipt.text ?? ''))
+        result.set(turn.id, { text: receipt.text ?? '' });
+    }
+    return result;
+  }, [entries, pending]);
   const currentTurn = result?.turn && entries.find((turn) => turn.id === result.turn?.id);
   const currentInReply = !!(currentTurn?.replies.length && result?.turn?.usage);
   return (
     <>
+      <TurnPromptBar
+        viewport={viewport}
+        projectId={projectId}
+        prompts={prompts}
+        loadEarlier={loadEarlier}
+      />
       {entries.map((turn) => {
         const info = turn.info;
         const completion =

@@ -10,6 +10,8 @@
 
 ### Added
 
+- Keep a collapsible prompt summary at the top of the conversation while reading a long turn. Expand it to see the prompt and available attachments or find the original message.
+
 - Change the file-backed workspace access token after signing in and confirming the current token. Changing it revokes browser sessions while server tasks continue.
 
 - Select browser notification events and remember hidden-file visibility across reloads.

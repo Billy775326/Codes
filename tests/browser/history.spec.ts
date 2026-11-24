@@ -57,7 +57,10 @@ test('a long active turn keeps the original prompt in history without recreating
     turnId,
     kind: 'assistant',
     phase: 'commentary',
-    text: 'The long task is still working.',
+    text: [
+      'The long task is still working.',
+      ...Array(32).fill('Additional progress details.'),
+    ].join('\n\n'),
   };
   base.thread.state = 'running';
   base.thread.turnId = turnId;
@@ -70,28 +73,68 @@ test('a long active turn keeps the original prompt in history without recreating
   };
   base.thread.messages = [];
   const bubbles = page.getByTestId('message-user').filter({ hasText: prompt.text });
+  const timeline = page.getByRole('region', { name: 'Conversation timeline', exact: true });
+  const bar = page.getByRole('button', { name: /^Turn message/ });
+  const scrollToEnd = () => timeline.evaluate((entry) => (entry.scrollTop = entry.scrollHeight));
   await reconnectUpdates(page);
   await expect(bubbles).toHaveCount(1);
   await expect(bubbles).toHaveAttribute('data-message-id', prompt.clientId!);
 
   base.thread.pending = { ...base.thread.pending, state: 'acknowledged', turnId };
-  base.thread.messages = [prompt, commentary];
+  const older = 'earlier-long-turn';
+  base.thread.messages = [
+    { id: 'older-prompt', turnId: older, kind: 'user', text: 'Earlier request' },
+    { ...commentary, id: 'older-answer', turnId: older, phase: 'final_answer' },
+    prompt,
+    commentary,
+  ];
   await reconnectUpdates(page);
   await expect(bubbles).toHaveCount(1);
   await expect(bubbles).toHaveAttribute('data-message-id', prompt.id);
+  await bubbles.evaluate((entry) => entry.scrollIntoView({ block: 'start' }));
+  await expect(bar).toHaveCount(0);
+  await scrollToEnd();
+  await expect(bar).toBeVisible();
+  await expect(bar).toHaveAttribute('aria-expanded', 'false');
+  expect((await bar.boundingBox())!.y).toBeCloseTo((await timeline.boundingBox())!.y + 1, 0);
+  await bar.press('Space');
+  await expect(bar).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(bar).toBeFocused();
+  await expect(bar).toHaveAttribute('aria-expanded', 'false');
+  await bar.click();
+  await page.getByRole('button', { name: 'Go to original message' }).click();
+  await expect(bubbles).toBeFocused();
+  await expect(bar).toHaveCount(0);
 
+  await page
+    .getByTestId('message-assistant')
+    .first()
+    .evaluate((entry) => {
+      entry.scrollIntoView({ block: 'start' });
+    });
+  await expect(bar).toContainText('Earlier request');
+  await expect(bar).toHaveAttribute('aria-expanded', 'false');
+
+  await page.setViewportSize({ width: 390, height: 844 });
   base.thread.messages = [prompt, ...work, commentary];
   await reconnectUpdates(page);
+  await scrollToEnd();
   await expect(page.getByText('The long task is still working.', { exact: true })).toBeVisible();
   await expect(page.getByText('239 activities', { exact: true }).first()).toBeVisible();
   await expect(bubbles).toHaveCount(0);
+  await expect(bar).toContainText(prompt.text);
 
   await page.route('**/api/threads/*/history?cursor=*', (route) =>
     route.fulfill({ json: { messages: [prompt, ...work.slice(0, 9)], olderCursor: null } }),
   );
-  await page.getByRole('button', { name: 'Load earlier messages', exact: true }).click();
+  await bar.click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(timeline.locator('.turn-prompt-detail')).toContainText(prompt.text);
+  await page.getByRole('button', { name: 'Go to original message' }).click();
   await expect(bubbles).toHaveCount(1);
   await expect(bubbles).toHaveAttribute('data-message-id', prompt.id);
+  await expect(bubbles).toBeFocused();
   await expect(
     page.locator('[data-turn-id="long-active-turn"]').getByTestId('message-user'),
   ).toHaveCount(1);

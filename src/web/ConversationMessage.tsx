@@ -98,6 +98,7 @@ export const MessageView = memo(function MessageView({
       data-turn-id={item.turnId}
       className={`message ${item.kind}`}
       data-testid={`message-${item.kind}`}
+      tabIndex={item.kind === 'user' ? -1 : undefined}
     >
       <div className="message-body">
         {!!item.images?.length && (
