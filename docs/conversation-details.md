@@ -66,7 +66,7 @@ Responses belong to that native request and turn. When another signed-in device 
 Open **Review changes**, or select **Review** in an **Edited files** card in the conversation. File approvals include the proposed patch when the CLI provides one. The list shows changed paths, add/delete/rename information, and addition/deletion counts for the available patch.
 
 - **Unified** displays the original and resulting line numbers beside each patch row. **Side by side** aligns removed and added blocks; narrow screens can scroll the patch horizontally.
-- Expand a file to inspect it. **Open file** uses the read-only project file viewer with project scope, size and UTF-8 checks. Turn on **Show hidden files** in Files to read hidden paths. Deleted files have no Open action.
+- Expand a file to inspect it. **Open file** uses the read-only project file viewer with project scope, size and UTF-8 checks. Opening a hidden file from Changes or a reply previews that file without changing hidden entries in Files. Deleted files have no Open action.
 - **Mark viewed** records that displayed file revision in the mounted preview. Changed patch content resets the marker. Markers are not saved across a page reload.
 - **Change scope** defaults to the last native turn. Earlier turns that contain changes in the loaded history can be selected. This is not an aggregate Git working-tree diff or a complete search of unloaded history.
 

@@ -205,13 +205,49 @@ test('HTML anchors and Markdown links open project files without navigating the 
   await expect(page.getByRole('button', { name: 'Other raw HTML', exact: true })).toHaveCount(0);
 });
 
+test('explicit file previews work inside hidden project worktrees without showing hidden entries', async ({
+  page,
+}) => {
+  const { base } = await fixture(page, 0);
+  const root = base.context!.project.path;
+  const path = '.local/linked-worktree/report.md';
+  const absolute = join(root, path);
+  await mkdir(dirname(absolute), { recursive: true });
+  await writeFile(absolute, '# Hidden worktree report\nProject review notes.\n');
+  base.thread.messages.find((item) => item.phase === 'final_answer')!.text =
+    `[Open worktree report](${absolute})`;
+  base.thread.messages.find((item) => item.kind === 'change')!.files = [
+    { path: absolute, kind: 'update', diff: '@@ -1 +1 @@\n-old\n+new' },
+  ];
+  await reconnectUpdates(page);
+  await page.getByRole('button', { name: 'Open worktree report', exact: true }).click();
+  const preview = page.getByRole('dialog', { name: path, exact: true });
+  await expect(preview).toContainText('Project review notes.');
+  await page.keyboard.press('Escape');
+  await expect(preview).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  const change = page.getByRole('region', { name: `Changes in ${absolute}`, exact: true });
+  await change.getByRole('button', { name: 'Open file', exact: true }).click();
+  await expect(preview).toContainText('Project review notes.');
+  await page.keyboard.press('Escape');
+  await expect(change).toBeVisible();
+  await page.locator('.context-panel').getByRole('button', { name: 'Files', exact: true }).click();
+  const files = page.getByRole('region', { name: 'Project files', exact: true });
+  await expect(
+    files.getByRole('button', { name: 'Show hidden files', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false');
+  await expect(files.getByRole('button', { name: '.local', exact: true })).toHaveCount(0);
+});
+
 test('Codex replies open documents and source in another registered project', async ({ page }) => {
   const { base } = await fixture(page, 0);
   const root = dirname(base.context!.project.path);
   const docs = join(root, 'reference-docs');
   await mkdir(docs);
   await writeFile(join(docs, 'architecture.md'), '# Project architecture\nReference document.\n');
-  await writeFile(join(docs, 'store.ts'), 'export const source = "Reference project";\n');
+  await mkdir(join(docs, '.src'));
+  await writeFile(join(docs, '.src', 'store.ts'), 'export const source = "Reference project";\n');
   const registered = await page.request.post('/api/projects', {
     data: { path: root, name: 'zz Reference project' },
     headers: { Origin: new URL(page.url()).origin },
@@ -220,7 +256,7 @@ test('Codex replies open documents and source in another registered project', as
   base.thread.messages.find((item) => item.phase === 'final_answer')!.text =
     `| Item | Usage |\n| --- | --- |\n| Storage | SQLite |\n\n` +
     `实现依据：[Codes 架构](${docs}/architecture.md)、` +
-    `<a href="${docs}/store.ts:1">Codes 存储</a>、[Covro 架构](https://example.com/covro)。`;
+    `<a href="${docs}/.src/store.ts:1">Codes 存储</a>、[Covro 架构](https://example.com/covro)。`;
   await page.reload();
   const url = page.url();
   const input = page.getByLabel('Message Codex');
@@ -237,7 +273,7 @@ test('Codex replies open documents and source in another registered project', as
   await expect(architecture).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Codes 存储', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'reference-docs/store.ts' })).toContainText(
+  await expect(page.getByRole('dialog', { name: 'reference-docs/.src/store.ts' })).toContainText(
     'export const source',
   );
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);

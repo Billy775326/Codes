@@ -15,6 +15,7 @@ import {
 import { sameSettings } from '../shared/types';
 import { parseQuestionReplies, questionSourceItemId } from '../shared/question-replies';
 import { imageLimits } from '../shared/images';
+import { hasHiddenPathSegment } from '../shared/project-files';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
@@ -1414,11 +1415,15 @@ function App() {
       if (!contextReady || directoryBlocked) return;
       const prefix = project?.path?.replace(/\/?$/, '/');
       const relative = prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
+      if (!showHiddenFiles && hasHiddenPathSegment(relative)) {
+        setLinkedFile({ projectId: contextProjectId, path: relative });
+        return;
+      }
       setDirectory(relative.split('/').slice(0, -1).join('/'));
       setFilePath(relative);
       setPanel('files');
     },
-    [contextReady, directoryBlocked, project?.path],
+    [contextReady, directoryBlocked, project?.path, showHiddenFiles, contextProjectId],
   );
   const openLinkedFile = useCallback(
     (file: ProjectFileReference) => {
@@ -2703,7 +2708,7 @@ function App() {
         <LinkedFilePreview
           key={linkedFile.projectId + ':' + linkedFile.path}
           file={linkedFile}
-          showHidden={showHiddenFiles}
+          showHidden={showHiddenFiles || hasHiddenPathSegment(linkedFile.path)}
           close={() => setLinkedFile(undefined)}
         />
       )}

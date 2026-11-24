@@ -176,6 +176,8 @@
 
 ### Fixed
 
+- Preview files under hidden project folders directly from conversation links or Changes while keeping the selected Files visibility preference.
+
 - Keep accepted prompts in their original turns when long-running activity moves them out of the live window.
 
 - Give the selected conversation priority over historical pagination. Cancel unused reads and isolate identified oversized history responses from concurrent execution.

@@ -260,11 +260,21 @@ export function LinkedFilePreview({
       className="linked-file-dialog"
     >
       <section className="file-preview" aria-label={t('File preview')}>
-        <FileTextContents
-          apiBase={'/projects/' + file.projectId}
-          path={file.path}
-          showHidden={showHidden}
-        />
+        {projectImageType(file.path) ? (
+          <div className="file-preview-scroll file-image">
+            <ProjectImagePreview
+              projectId={file.projectId}
+              path={file.path}
+              showHidden={showHidden}
+            />
+          </div>
+        ) : (
+          <FileTextContents
+            apiBase={'/projects/' + file.projectId}
+            path={file.path}
+            showHidden={showHidden}
+          />
+        )}
       </section>
     </InteractionDialog>
   );
