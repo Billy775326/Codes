@@ -276,6 +276,7 @@
 }
 .project-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 2px;
   padding: 0 6px 4px;
   flex-wrap: wrap;
