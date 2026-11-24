@@ -2,9 +2,11 @@
 
 codes follows the published Codex IDE interaction contracts for native clarifications and local patch inspection. Use a desktop to review changes and a phone to answer a pending question. This is an independent Web implementation; it does not include VS Code editor integration or Git stage/revert actions.
 
-## Preview images and HTML
+## Preview documents, images and HTML
 
 External web links in chat open in a new tab. Links within the Codes workspace use the current tab.
+
+Absolute Markdown file links and simple HTML anchors in Codex replies open a preview of the linked file. Files in the current project open in the Files panel. Files in other registered projects open a read-only dialog and leave the conversation and its draft in place. The target project's file access and preview limits apply.
 
 Files previews project PNG, JPEG, and WebP images in place. In the conversation, local image links open a preview dialog and Markdown images display inline. Absolute paths refer to files on the Codes server, regardless of the selected project. Relative paths use the conversation's project root. Preview links require workspace sign-in. The Codes data directory allows direct raster exports and files in its `images` and `screenshots` folders. Other runtime subdirectories and the Codex home remain private. Images load on demand, are validated from a header of at most 512 KiB, and are limited to 8 MiB and 24 megapixels.
 

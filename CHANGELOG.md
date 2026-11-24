@@ -157,6 +157,8 @@
 
 ### Fixed
 
+- Preview Markdown and source file links from Codex replies even when the linked file belongs to another registered project. Keep the conversation and draft open.
+
 - Preview local screenshots in conversation links across projects, including direct image exports under the Codes data directory. Keep Files browsing scoped to its project.
 
 - Show one asynchronous question card when legacy history and live events use different IDs for the same request, including when history renumbers the item. Preserve confirmed answers on the original question.

@@ -5,7 +5,9 @@ import { hasHiddenPathSegment } from '../shared/project-files';
 import type { FileContent } from '../shared/types';
 import { message, request } from './api';
 import { HtmlPreview, ProjectImagePreview } from './ContentPreview';
+import { InteractionDialog } from './InteractionDialog';
 import { Icon, IconButton } from './primitives';
+import type { ProjectFileReference } from './remarkProjectFileLinks';
 import './files-panel.css';
 
 interface Entry {
@@ -58,11 +60,7 @@ interface AttachmentControls {
   attachmentBlocked: boolean;
 }
 
-function TextPreview({
-  file,
-  onAttach,
-  attachmentBlocked,
-}: AttachmentControls & { file: FileContent }) {
+function TextPreview({ file, attachment }: { file: FileContent; attachment?: AttachmentControls }) {
   const { t } = useInterfaceLanguage();
   const [page, setPage] = useState(0);
   const [range, setRange] = useState<[number, number]>();
@@ -96,11 +94,17 @@ function TextPreview({
           className="file-lines"
           role="group"
           aria-label={t('File lines')}
-          aria-description={t('Shift+click selects a range.')}
+          aria-description={attachment ? t('Shift+click selects a range.') : undefined}
         >
           {visible.map((line, index) => {
             const number = offset + index + 1;
-            return (
+            const content = (
+              <>
+                <span>{number}</span>
+                <code>{line || ' '}</code>
+              </>
+            );
+            return attachment ? (
               <button
                 key={number}
                 aria-pressed={number >= from && number <= to}
@@ -109,9 +113,10 @@ function TextPreview({
                   setRange(event.shiftKey && range ? [range[0], number] : [number, number]);
                 }}
               >
-                <span>{number}</span>
-                <code>{line || ' '}</code>
+                {content}
               </button>
+            ) : (
+              <div key={number}>{content}</div>
             );
           })}
         </div>
@@ -145,67 +150,123 @@ function TextPreview({
           </button>
         </div>
       )}
-      <div className="selection-toolbar">
-        {choosingRange && (
-          <div className="file-range" role="group" aria-label={t('Line range')}>
-            <label>
-              {t('Start line')}
-              <input
-                type="number"
-                min={1}
-                max={file.lines}
-                value={start}
-                inputMode="numeric"
-                onChange={(event) => setStart(event.target.value)}
-              />
-            </label>
-            <label>
-              {t('End line')}
-              <input
-                type="number"
-                min={1}
-                max={file.lines}
-                value={end}
-                inputMode="numeric"
-                onChange={(event) => setEnd(event.target.value)}
-              />
-            </label>
-            {start && end && !validRange && (
-              <span role="status">
-                {t('Choose a range within the file, with the start before or equal to the end.')}
-              </span>
-            )}
+      {attachment && (
+        <div className="selection-toolbar">
+          {choosingRange && (
+            <div className="file-range" role="group" aria-label={t('Line range')}>
+              <label>
+                {t('Start line')}
+                <input
+                  type="number"
+                  min={1}
+                  max={file.lines}
+                  value={start}
+                  inputMode="numeric"
+                  onChange={(event) => setStart(event.target.value)}
+                />
+              </label>
+              <label>
+                {t('End line')}
+                <input
+                  type="number"
+                  min={1}
+                  max={file.lines}
+                  value={end}
+                  inputMode="numeric"
+                  onChange={(event) => setEnd(event.target.value)}
+                />
+              </label>
+              {start && end && !validRange && (
+                <span role="status">
+                  {t('Choose a range within the file, with the start before or equal to the end.')}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="selection-actions" role="group" aria-label={t('Attach file context')}>
+            <button
+              aria-expanded={choosingRange}
+              onClick={() => {
+                if (choosingRange) setRange(selected ? [from, to] : undefined);
+                else {
+                  setStart(from ? String(from) : '');
+                  setEnd(to ? String(to) : '');
+                }
+                setChoosingRange(!choosingRange);
+              }}
+            >
+              {t(choosingRange ? 'Hide range fields' : 'Select range')}
+            </button>
+            <button
+              onClick={() => attachment.onAttach(file, 1, file.lines)}
+              disabled={attachment.attachmentBlocked}
+            >
+              {t('Attach file')}
+            </button>
+            <button
+              className="primary"
+              onClick={() => attachment.onAttach(file, from, to)}
+              disabled={attachment.attachmentBlocked || !selected}
+            >
+              {selected
+                ? t('Attach lines {start}–{end}', { start: from, end: to })
+                : t('Attach lines')}
+            </button>
           </div>
-        )}
-        <div className="selection-actions" role="group" aria-label={t('Attach file context')}>
-          <button
-            aria-expanded={choosingRange}
-            onClick={() => {
-              if (choosingRange) setRange(selected ? [from, to] : undefined);
-              else {
-                setStart(from ? String(from) : '');
-                setEnd(to ? String(to) : '');
-              }
-              setChoosingRange(!choosingRange);
-            }}
-          >
-            {t(choosingRange ? 'Hide range fields' : 'Select range')}
-          </button>
-          <button onClick={() => onAttach(file, 1, file.lines)} disabled={attachmentBlocked}>
-            {t('Attach file')}
-          </button>
-          <button
-            className="primary"
-            onClick={() => onAttach(file, from, to)}
-            disabled={attachmentBlocked || !selected}
-          >
-            {selected
-              ? t('Attach lines {start}–{end}', { start: from, end: to })
-              : t('Attach lines')}
-          </button>
         </div>
-      </div>
+      )}
     </>
+  );
+}
+
+function FileTextContents({
+  apiBase,
+  path,
+  showHidden,
+  attachment,
+}: {
+  apiBase: string;
+  path: string;
+  showHidden: boolean;
+  attachment?: AttachmentControls;
+}) {
+  const { t } = useInterfaceLanguage();
+  const { result, reload } = useRead<FileContent>(fileReadUrl(apiBase, 'file', path, showHidden));
+  if (!result)
+    return (
+      <p className="file-state" role="status">
+        {t('Loading file…')}
+      </p>
+    );
+  if ('error' in result) return <ReadError error={result.error} retry={reload} />;
+  return <TextPreview file={result.value} attachment={attachment} />;
+}
+
+export function LinkedFilePreview({
+  file,
+  showHidden,
+  close,
+}: {
+  file: ProjectFileReference;
+  showHidden: boolean;
+  close: () => void;
+}) {
+  const { t } = useInterfaceLanguage();
+  return (
+    <InteractionDialog
+      title={file.path}
+      close={close}
+      closeOnBackdrop
+      className="linked-file-dialog"
+    >
+      <section className="file-preview" aria-label={t('File preview')}>
+        <FileTextContents
+          apiBase={'/projects/' + file.projectId}
+          path={file.path}
+          showHidden={showHidden}
+        />
+      </section>
+    </InteractionDialog>
   );
 }
 
@@ -227,9 +288,6 @@ function FilePreview({
 }) {
   const { t } = useInterfaceLanguage();
   const image = projectImageType(path);
-  const { result, reload } = useRead<FileContent>(
-    image ? undefined : fileReadUrl(apiBase, 'file', path, showHidden),
-  );
   const back = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (narrow) back.current?.focus();
@@ -268,14 +326,13 @@ function FilePreview({
         <div className="file-preview-scroll file-image">
           <ProjectImagePreview projectId={projectId} path={path} showHidden={showHidden} />
         </div>
-      ) : !result ? (
-        <p className="file-state" role="status">
-          {t('Loading file…')}
-        </p>
-      ) : 'error' in result ? (
-        <ReadError error={result.error} retry={reload} />
       ) : (
-        <TextPreview file={result.value} {...attachment} />
+        <FileTextContents
+          apiBase={apiBase}
+          path={path}
+          showHidden={showHidden}
+          attachment={attachment}
+        />
       )}
     </section>
   );

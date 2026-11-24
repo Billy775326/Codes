@@ -204,6 +204,51 @@ test('HTML anchors and Markdown links open project files without navigating the 
   await expect(page.getByRole('button', { name: 'Other raw HTML', exact: true })).toHaveCount(0);
 });
 
+test('Codex replies open documents and source in another registered project', async ({ page }) => {
+  const { base } = await fixture(page, 0);
+  const root = dirname(base.context!.project.path);
+  const docs = join(root, 'reference-docs');
+  await mkdir(docs);
+  await writeFile(join(docs, 'architecture.md'), '# Project architecture\nReference document.\n');
+  await writeFile(join(docs, 'store.ts'), 'export const source = "Reference project";\n');
+  const registered = await page.request.post('/api/projects', {
+    data: { path: root, name: 'zz Reference project' },
+    headers: { Origin: new URL(page.url()).origin },
+  });
+  expect(registered.ok()).toBe(true);
+  base.thread.messages.find((item) => item.phase === 'final_answer')!.text =
+    `| Item | Usage |\n| --- | --- |\n| Storage | SQLite |\n\n` +
+    `实现依据：[Codes 架构](${docs}/architecture.md)、` +
+    `<a href="${docs}/store.ts:1">Codes 存储</a>、[Covro 架构](https://example.com/covro)。`;
+  await page.reload();
+  const url = page.url();
+  const input = page.getByLabel('Message Codex');
+  await input.fill('Keep this unsent message');
+  const architecture = page.getByRole('button', { name: 'Codes 架构', exact: true });
+  await architecture.click();
+  const dialog = page.getByRole('dialog', { name: 'reference-docs/architecture.md' });
+  await expect(dialog.getByRole('region', { name: 'File preview' })).toContainText(
+    'Reference document.',
+  );
+  await expect(dialog.getByRole('button', { name: 'Attach file' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(architecture).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Codes 存储', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'reference-docs/store.ts' })).toContainText(
+    'export const source',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(page).toHaveURL(url);
+  await expect(input).toHaveValue('Keep this unsent message');
+  await expect(page.getByRole('link', { name: 'Covro 架构', exact: true })).toHaveAttribute(
+    'target',
+    '_blank',
+  );
+});
+
 test('answers and project files preview raster images and isolated static HTML', async ({
   page,
 }) => {

@@ -134,7 +134,15 @@
 .file-lines {
   padding-block: 4px;
 }
-.file-lines button {
+.app .linked-file-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 100%);
+}
+.linked-file-dialog h2 {
+  overflow-wrap: anywhere;
+}
+.file-lines > :is(button, div) {
   display: grid;
   grid-template-columns: 6ch minmax(0, 1fr);
   align-items: start;
@@ -147,7 +155,7 @@
 .file-lines button:hover {
   background: var(--hover);
 }
-.file-lines button > span {
+.file-lines > :is(button, div) > span {
   color: var(--muted);
   text-align: right;
   user-select: none;

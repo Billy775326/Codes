@@ -4,9 +4,9 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MarkdownLink } from './MarkdownLink';
 import {
-  projectFilePath,
   remarkProjectFileLinks,
   workspaceImagePath,
+  type ProjectFileReference,
 } from './remarkProjectFileLinks';
 import { projectImageUrl, workspaceImageUrl } from '../shared/images';
 import { limits } from '../shared/types';
@@ -171,6 +171,7 @@ const liveMarkdownLimit = 24 * 1024;
 export const MessageMarkdown = memo(function MessageMarkdown({
   text,
   projectPath,
+  resolveFile,
   onOpenFile,
   onOpenImage,
   assistant,
@@ -178,7 +179,8 @@ export const MessageMarkdown = memo(function MessageMarkdown({
 }: {
   text: string;
   projectPath?: string;
-  onOpenFile?: (path: string) => void;
+  resolveFile: (href: string | undefined) => ProjectFileReference | undefined;
+  onOpenFile: (file: ProjectFileReference) => void;
   onOpenImage: (path: string) => void;
   assistant: boolean;
   streaming?: boolean;
@@ -203,15 +205,10 @@ export const MessageMarkdown = memo(function MessageMarkdown({
             </button>
           );
         }
-        const file = assistant ? projectFilePath(href, projectPath) : undefined;
+        const file = assistant ? resolveFile(href) : undefined;
         if (file) {
           return (
-            <button
-              type="button"
-              className="project-file-link"
-              disabled={!onOpenFile}
-              onClick={() => onOpenFile?.(file)}
-            >
+            <button type="button" className="project-file-link" onClick={() => onOpenFile(file)}>
               {children}
             </button>
           );
@@ -223,7 +220,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
         );
       },
     }),
-    [assistant, onOpenFile, onOpenImage, projectPath, streaming],
+    [assistant, onOpenFile, onOpenImage, projectPath, resolveFile, streaming],
   );
   if (streaming && text.length > liveMarkdownLimit)
     return <div className="stream-text">{text}</div>;
@@ -231,7 +228,9 @@ export const MessageMarkdown = memo(function MessageMarkdown({
     <>
       <Markdown
         remarkPlugins={
-          assistant ? [remarkGfm, [remarkProjectFileLinks, { projectPath }]] : [remarkGfm]
+          assistant
+            ? [remarkGfm, [remarkProjectFileLinks, { projectPath, resolveFile }]]
+            : [remarkGfm]
         }
         components={components}
       >

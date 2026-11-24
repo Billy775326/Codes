@@ -1,5 +1,6 @@
 import type { Parent, Root } from 'mdast';
 import { projectImageType } from '../shared/images';
+import type { Project } from '../shared/types';
 
 export function workspaceImagePath(url: string | undefined, projectPath: string | undefined) {
   if (!url) return;
@@ -21,8 +22,16 @@ export function workspaceImagePath(url: string | undefined, projectPath: string 
   return path.startsWith('/') ? path : projectPath && `${projectPath.replace(/\/$/, '')}/${path}`;
 }
 
-export function projectFilePath(href: string | undefined, projectPath: string | undefined) {
-  if (!projectPath || !href?.startsWith('/') || href.startsWith('//')) return;
+export interface ProjectFileReference {
+  projectId: string;
+  path: string;
+}
+
+export function resolveProjectFile(
+  href: string | undefined,
+  projects: readonly Project[],
+): ProjectFileReference | undefined {
+  if (!href?.startsWith('/') || href.startsWith('//')) return;
   let path: string;
   try {
     const pathname = href.split(/[?#]/, 1)[0]!.replace(/:\d+(?::\d+)?$/, '');
@@ -30,16 +39,34 @@ export function projectFilePath(href: string | undefined, projectPath: string | 
   } catch {
     return;
   }
-  const prefix = projectPath.endsWith('/') ? projectPath : projectPath + '/';
-  if (!path.startsWith(prefix)) return;
-  const relative = path.slice(prefix.length);
-  if (relative.includes('\\') || relative.includes('\0')) return;
-  if (relative.split('/').some((part) => part === '' || part === '.' || part === '..')) return;
-  return relative;
+  if (/[\\\x00-\x1f\x7f]/.test(path)) return;
+  if (
+    path
+      .slice(1)
+      .split('/')
+      .some((part) => part === '' || part === '.' || part === '..')
+  )
+    return;
+  let owner: Project | undefined;
+  let prefixLength = 0;
+  for (const project of projects) {
+    const prefix = project.path.replace(/\/$/, '') + '/';
+    if (prefix.length > prefixLength && path.startsWith(prefix) && path.length > prefix.length) {
+      owner = project;
+      prefixLength = prefix.length;
+    }
+  }
+  if (owner) return { projectId: owner.id, path: path.slice(prefixLength) };
 }
 
 /** Convert plain project-file anchors while keeping arbitrary HTML escaped. */
-export function remarkProjectFileLinks({ projectPath }: { projectPath?: string }) {
+export function remarkProjectFileLinks({
+  projectPath,
+  resolveFile,
+}: {
+  projectPath?: string;
+  resolveFile: (href: string | undefined) => ProjectFileReference | undefined;
+}) {
   return (tree: Root) => {
     const rewrite = ({ children }: Parent) => {
       for (let index = 0; index < children.length; index++) {
@@ -52,7 +79,7 @@ export function remarkProjectFileLinks({ projectPath }: { projectPath?: string }
           continue;
         const match = /^<a\s+href\s*=\s*(?:"([^"]+)"|'([^']+)')\s*>$/i.exec(node.value);
         const href = match?.[1] ?? match?.[2];
-        if (href && (projectFilePath(href, projectPath) || workspaceImagePath(href, projectPath))) {
+        if (href && (resolveFile(href) || workspaceImagePath(href, projectPath))) {
           children.splice(index, 3, { type: 'link', url: href, children: [label] });
         }
       }

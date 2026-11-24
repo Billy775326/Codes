@@ -61,7 +61,8 @@ import { Conversations } from './Conversations';
 import { QueuePanel } from './QueuePanel';
 import { Approval } from './Approval';
 import { DiffView, type DiffLayout } from './DiffView';
-import { FilesPanel } from './FilesPanel';
+import { FilesPanel, LinkedFilePreview } from './FilesPanel';
+import { resolveProjectFile, type ProjectFileReference } from './remarkProjectFileLinks';
 import { PanelMenu } from './PanelMenu';
 import { usePanelFocus } from './usePanelFocus';
 import { ChangeSummary } from './ChangeSummary';
@@ -136,6 +137,7 @@ const MessageView = memo(function MessageView({
   projectPath,
   item,
   streaming,
+  resolveFile,
   onOpenFile,
   onOpenImage,
   onReply,
@@ -148,7 +150,8 @@ const MessageView = memo(function MessageView({
   completion,
 }: {
   onReply?: (item: Message) => void;
-  onOpenFile?: (path: string) => void;
+  resolveFile: (href: string | undefined) => ProjectFileReference | undefined;
+  onOpenFile: (file: ProjectFileReference) => void;
   onOpenImage: (path: string) => void;
   onFork?: (item: Message) => void;
   disabled?: boolean;
@@ -242,6 +245,7 @@ const MessageView = memo(function MessageView({
           <MessageMarkdown
             text={item.text}
             projectPath={projectPath}
+            resolveFile={resolveFile}
             onOpenFile={onOpenFile}
             onOpenImage={onOpenImage}
             assistant={item.kind === 'assistant'}
@@ -317,6 +321,10 @@ function App() {
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const maintenanceExpiresAt = system?.maintenance?.expiresAt;
   const [projects, setProjects] = useState<Project[]>([]);
+  const resolveFile = useCallback(
+    (href: string | undefined) => resolveProjectFile(href, projects),
+    [projects],
+  );
   const projectMetadataRevision = useRef(0);
   const [sidebarPreferences, setSidebarPreferences] = useState(() =>
     projectSidebarPreferences(saved('codes.project-sidebar')),
@@ -371,6 +379,7 @@ function App() {
   const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
   const [previewedImage, setPreviewedImage] = useState<string>();
+  const [linkedFile, setLinkedFile] = useState<ProjectFileReference>();
   const [preferences, setPreferences] = useState(() =>
     readBrowserPreferences(saved('codes.preferences')),
   );
@@ -1664,6 +1673,14 @@ function App() {
     },
     [contextReady, directoryBlocked, project?.path],
   );
+  const openLinkedFile = useCallback(
+    (file: ProjectFileReference) => {
+      if (file.projectId === contextProjectId && contextReady && !directoryBlocked)
+        openProjectFile(file.path);
+      else setLinkedFile(file);
+    },
+    [contextProjectId, contextReady, directoryBlocked, openProjectFile],
+  );
   const canSteer =
     !!thread?.turnId &&
     thread.state === 'running' &&
@@ -2050,7 +2067,8 @@ function App() {
     anchorRevision,
   ]);
 
-  const modalOpen = adding || !!dialog || !!previewedImage || !!forking || conversationModalOpen;
+  const modalOpen =
+    adding || !!dialog || !!previewedImage || !!linkedFile || !!forking || conversationModalOpen;
   const conversationLoadError =
     connectionError ||
     (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
@@ -2536,9 +2554,8 @@ function App() {
                           onOpenImage={setPreviewedImage}
                           projectId={contextProjectId}
                           projectPath={project?.path}
-                          onOpenFile={
-                            contextReady && !directoryBlocked ? openProjectFile : undefined
-                          }
+                          resolveFile={resolveFile}
+                          onOpenFile={openLinkedFile}
                           key={m.id}
                           item={m}
                           actions={finalReply}
@@ -2591,6 +2608,8 @@ function App() {
                   !thread.messages.some((m) => m.clientId === thread.pending?.id) && (
                     <MessageView
                       onOpenImage={setPreviewedImage}
+                      resolveFile={resolveFile}
+                      onOpenFile={openLinkedFile}
                       projectId={contextProjectId}
                       item={{
                         id: thread.pending.id,
@@ -3097,6 +3116,14 @@ function App() {
       </main>
       {previewedImage && (
         <ImagePreviewDialog path={previewedImage} close={() => setPreviewedImage(undefined)} />
+      )}
+      {linkedFile && (
+        <LinkedFilePreview
+          key={linkedFile.projectId + ':' + linkedFile.path}
+          file={linkedFile}
+          showHidden={showHiddenFiles}
+          close={() => setLinkedFile(undefined)}
+        />
       )}
       {dialog === 'preferences' && (
         <PreferencesDialog
