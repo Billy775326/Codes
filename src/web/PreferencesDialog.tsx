@@ -19,6 +19,7 @@ import { MaintenanceSettings } from './MaintenanceSettings';
 import { WorkspaceSettings } from './WorkspaceSettings';
 import { DiagnosticsSettings } from './DiagnosticsSettings';
 import { BackupRestoreSettings } from './BackupRestoreSettings';
+import { AccessTokenSettings } from './AccessTokenSettings';
 
 const settingsSections = [
   {
@@ -50,7 +51,7 @@ const settingsSections = [
     label: 'Network & access',
     icon: 'link',
     keywords:
-      'listen host port origin authentication cloudflare tailscale login session expiry lifetime 网络 访问 监听 端口 域名 认证 登录 有效期',
+      'listen host port origin authentication cloudflare tailscale login session expiry lifetime access token 网络 访问 监听 端口 域名 认证 登录 有效期 令牌 访问令牌',
   },
   {
     id: 'runtime',
@@ -153,12 +154,14 @@ export function PreferencesDialog({
   maintenanceBusy,
   changeMaintenance,
   refreshSystem,
+  signInAfterTokenChange,
 }: {
   project?: { id: string; name: string };
   value: Preferences;
   change: (value: Preferences) => void;
   changeNotifications: (patch: Partial<NotificationPreferences>) => void;
   refreshSystem: () => void;
+  signInAfterTokenChange: (message: string) => void;
   close: () => void;
   saveError?: string;
   system?: System;
@@ -200,7 +203,15 @@ export function PreferencesDialog({
   const [instructionsDraft, setInstructionsDraft] = useState({ changed: false, busy: false });
   const [projectDefaultDraft, setProjectDefaultDraft] = useState({ changed: false, busy: false });
   const [loginDraft, setLoginDraft] = useState({ changed: false, busy: false });
-  const drafts = [networkDraft, runtimeDraft, instructionsDraft, projectDefaultDraft, loginDraft];
+  const [tokenDraft, setTokenDraft] = useState({ changed: false, busy: false });
+  const otherDrafts = [
+    networkDraft,
+    runtimeDraft,
+    instructionsDraft,
+    projectDefaultDraft,
+    loginDraft,
+  ];
+  const drafts = [...otherDrafts, tokenDraft];
   const [discarding, setDiscarding] = useState(false);
   const sectionButton = useRef<HTMLButtonElement>(null);
   const categoryButton = useRef<HTMLButtonElement>(null);
@@ -613,6 +624,11 @@ export function PreferencesDialog({
               <div className="preferences-content settings-forms" hidden={section !== 'network'}>
                 <NetworkSettings onDraft={setNetworkDraft} />
                 <WorkspaceSettings field="sessionHours" onDraft={setLoginDraft} />
+                <AccessTokenSettings
+                  onDraft={setTokenDraft}
+                  otherSettingsPending={otherDrafts.some((draft) => draft.changed || draft.busy)}
+                  onSignIn={signInAfterTokenChange}
+                />
               </div>
             )}
             {visited.runtime && (

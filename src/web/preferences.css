@@ -200,6 +200,42 @@
   font-weight: 600;
   box-shadow: inset 2px 0 var(--link);
 }
+.listener-readout {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--editor);
+  color: var(--muted);
+  font-size: 13px;
+}
+.listener-readout div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.listener-readout dd {
+  margin: 0;
+  color: var(--fg);
+}
+.access-token-settings {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.access-token-settings p {
+  margin: 0;
+}
+.access-token-settings .network-actions {
+  margin-top: 2px;
+}
+.access-token-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
 .network-listener {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0.65fr);
@@ -475,6 +511,9 @@
   .settings-layout {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
+  }
+  .access-token-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
   .settings-navigation {
     padding: 8px 12px;

@@ -117,6 +117,7 @@ const sameQueueDraft = (a: QueuePayload, b: QueuePayload) =>
 function App() {
   const [auth, setAuth] = useState<'loading' | 'login' | 'ready'>('loading');
   const [token, setToken] = useState('');
+  const [loginNotice, setLoginNotice] = useState('');
   const [system, setSystem] = useState<System>();
   const canReview = system?.capabilities?.review !== false;
   const canBranch = system?.capabilities?.branch !== false;
@@ -1737,6 +1738,7 @@ function App() {
       <Login
         token={token}
         error={error}
+        notice={loginNotice}
         checking={auth === 'loading'}
         busy={busy}
         onTokenChange={setToken}
@@ -1750,6 +1752,7 @@ function App() {
           void post('/login', { token })
             .then(() => {
               setToken('');
+              setLoginNotice('');
               return init();
             })
             .catch((e) => setError(message(e)))
@@ -2701,6 +2704,14 @@ function App() {
           maintenanceBusy={maintenanceBusy}
           changeMaintenance={changeMaintenance}
           refreshSystem={() => void request<System>('/system').then(setSystem, notice)}
+          signInAfterTokenChange={(message) => {
+            feed.current?.close();
+            setDialog(undefined);
+            setToken('');
+            setError('');
+            setLoginNotice(message);
+            setAuth('login');
+          }}
           project={project}
           value={preferences}
           defaults={{

@@ -17,18 +17,25 @@ await writeFile(
   join(project, 'example.ts'),
   'export function hello(name: string) {\n  return `Hello, ${name}`;\n}\n',
 );
+const data = join(directory, 'data');
+await mkdir(data);
+await writeFile(join(data, 'access-token'), 'test-only-browser-token-not-a-real-secret', {
+  mode: 0o600,
+  flag: 'wx',
+});
+const env = { ...process.env };
+delete env.CODES_ACCESS_TOKEN;
 const child = spawn(process.execPath, ['dist/server/main.js'], {
   stdio: 'inherit',
   env: {
-    ...process.env,
+    ...env,
     CODES_RUNTIME: 'mock',
     CODES_TEST_MODE: '1',
-    CODES_DATA_DIR: join(directory, 'data'),
+    CODES_DATA_DIR: data,
     CODES_PROJECT_ROOT: project,
     CODES_PORT: '19140',
     CODES_HOST: '127.0.0.1',
     CODES_PUBLIC_ORIGIN: 'http://127.0.0.1:19140',
-    CODES_ACCESS_TOKEN: 'test-only-browser-token-not-a-real-secret',
   },
 });
 let stopping = false;

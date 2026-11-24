@@ -10,6 +10,8 @@
 
 ### Added
 
+- Change the file-backed workspace access token after signing in and confirming the current token. Changing it revokes browser sessions while server tasks continue.
+
 - Select browser notification events and remember hidden-file visibility across reloads.
 - Set the new-project directory and login validity. New sessions use the configured lifetime.
 - Start a bounded connection diagnostic window and prepare a database backup for offline restore. Restoring keeps a copy of the current database.
@@ -81,6 +83,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Refine the sign-in panel and show the current browser address. Show the active and pending listener addresses separately in Network & access.
 
 - Organize settings by browser, workspace, and server. Separate maintenance from backup and restore, and put project instructions beside the new-project default.
 

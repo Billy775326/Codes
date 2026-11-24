@@ -88,7 +88,7 @@ Run `npm run preview:web -- rollback` from the active checkout to restore the pr
 
 In **Settings → Network & access**, choose a loopback listener (`127.0.0.1`, `localhost`, or `::1`) and a port from 1 to 65535. On Linux, low ports may require additional bind permissions. Add one allowed HTTP(S) origin per line, including the external HTTPS URL when using a proxy. Allowed addresses control which browser origins Codes accepts. The listener address and port control where the process binds.
 
-Save, then restart Codes with the same data directory and sign in at the new address. The form shows the active listener while changes are pending. Existing local HTTP entries on the old port follow an edited listener port until you edit the address list yourself. If you proxy or forward the listener, update that upstream or forward before visiting it again.
+Save, then restart Codes with the same data directory and sign in at the new address. The listener section shows the active address and the saved address for the next restart when they differ. The sign-in page shows the current browser origin, which can be a proxy address. Existing local HTTP entries on the old port follow an edited listener port until you edit the address list yourself. If you proxy or forward the listener, update that upstream or forward before visiting it again.
 
 Codes stores the saved settings in `network-settings.json` in the private data directory. The saved settings take precedence over `CODES_HOST`, `CODES_PORT`, and `CODES_PUBLIC_ORIGIN`. If a saved setting prevents access, stop the service, move that file elsewhere as a backup, and restart with the desired environment values. Without a settings file, `CODES_PUBLIC_ORIGIN` still selects one exact browser origin. The defaults allow the local loopback origins on port 6670.
 
@@ -115,7 +115,13 @@ npm start
 
 Configure the proxy upstream as `http://127.0.0.1:6670`, preserve `Host: codes.example.com`, disable response buffering for `/api/events`, and allow streaming connections to remain open. Terminate HTTPS at the proxy and restrict access to the intended owner. A browser write must use an allowed origin whose hostname and port match the request's Host header. Use a dedicated origin for Codes.
 
-Do not set a browser URL containing the access token. The login form exchanges it for an HttpOnly SameSite cookie; HTTPS origins add Secure. Sessions expire after 12 hours by default. Change the duration for future sign-ins under **Settings → Network & access → Sign-in session**. Existing sessions keep their expiry and are lost on service restart. Change the token in the private file or environment, then restart to revoke existing sessions. Logout invalidates its server-side session; an open event stream is closed within its next session check.
+Do not set a browser URL containing the access token. The login form exchanges it for an HttpOnly SameSite cookie; HTTPS origins add Secure. Sessions expire after 12 hours by default. Change the duration for future sign-ins under **Settings → Network & access → Sign-in session**. Existing sessions keep their expiry and are lost on service restart. Logout invalidates its server-side session. An open event stream closes on its next session check.
+
+### Change the access token
+
+With a file-backed token, open **Settings → Network & access → Access token**, enter the current token, then enter and confirm the replacement. Use 16–256 characters without surrounding whitespace or control characters. Codes writes the replacement atomically to the private `access-token` file, immediately ends all browser sessions and event streams, and accepts the replacement for subsequent sign-ins. Running tasks and queued work continue on the server.
+
+If the process was started with `CODES_ACCESS_TOKEN`, that environment value remains authoritative. Update it in the service environment and restart. Keep the token private. The settings API and configuration exports contain no token value.
 
 ## Runtime settings
 

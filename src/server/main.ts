@@ -1,5 +1,4 @@
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import { lookup } from 'node:dns/promises';
 import { resolve, join } from 'node:path';
 import { Driver } from '../codex/driver.js';
@@ -8,6 +7,7 @@ import { Service } from './service.js';
 import { application } from './http.js';
 import { NetworkConfiguration } from './network-settings.js';
 import { RuntimeConfiguration } from './runtime-settings.js';
+import { AccessToken } from './access-token.js';
 import { acquireDataDirectoryLock } from './data-directory-lock.js';
 
 const directory = resolve(process.env.CODES_DATA_DIR ?? '.local');
@@ -22,11 +22,7 @@ const address = host === 'localhost' ? (await lookup(host)).address : host;
 if (address !== '127.0.0.1' && address !== '::1')
   throw new Error('The listen address must resolve to 127.0.0.1 or ::1.');
 const releaseLock = acquireDataDirectoryLock(directory);
-const tokenPath = join(directory, 'access-token');
-if (!existsSync(tokenPath))
-  writeFileSync(tokenPath, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
-const token = process.env.CODES_ACCESS_TOKEN ?? readFileSync(tokenPath, 'utf8').trim();
-if (token.length < 16) throw new Error('CODES_ACCESS_TOKEN must contain at least 16 characters.');
+const token = new AccessToken(directory, process.env.CODES_ACCESS_TOKEN);
 const mode = process.env.CODES_RUNTIME ?? 'codex';
 if (mode !== 'mock' && mode !== 'codex') throw new Error('CODES_RUNTIME must be codex or mock.');
 const configuredProjectPath = process.env.CODES_PROJECT_ROOT
@@ -57,7 +53,11 @@ const app = await application(service, {
 });
 app.server.listen(port, address, () => {
   console.log(`codes is ready at ${origins.join(', ')}`);
-  console.log(`Use the access token stored in ${tokenPath} to sign in.`);
+  console.log(
+    token.source === 'file'
+      ? `Use the access token stored in ${token.file} to sign in.`
+      : 'Use the access token configured in CODES_ACCESS_TOKEN to sign in.',
+  );
   if (mode === 'mock')
     console.log('Simulation mode: no model requests or shell commands are executed.');
 });

@@ -1,3 +1,4 @@
+import { AccessToken } from '../src/server/access-token';
 import { once } from 'node:events';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { request, type IncomingMessage } from 'node:http';
@@ -53,7 +54,7 @@ it('requires verified Access on every route, binds the Codes session to its iden
     await writeFile(join(directory, 'index.html'), '<!doctype html><title>Isolated Codes</title>');
     app = await application(service, {
       network,
-      token: fixture,
+      token: new AccessToken(directory, fixture),
       staticDir: directory,
       cloudflareKey: async () => keys.publicKey,
     });

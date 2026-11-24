@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, join, extname, relative } from 'node:path';
 import { createReadStream } from 'node:fs';
@@ -25,6 +25,8 @@ import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
 import type { NetworkConfiguration } from './network-settings.js';
 import type { RuntimeConfiguration } from './runtime-settings.js';
+import type { AccessToken } from './access-token.js';
+import { accessTokenLimits } from '../shared/access-token.js';
 import type { JWTVerifyGetKey } from 'jose';
 import { cloudflareAuthenticator } from './cloudflare-access.js';
 import { WorkspaceBackup } from './workspace-backup.js';
@@ -162,7 +164,7 @@ export async function application(
   options: {
     network: NetworkConfiguration;
     runtime?: RuntimeConfiguration;
-    token: string;
+    token: AccessToken;
     dev?: boolean;
     test?: boolean;
     staticDir?: string;
@@ -177,6 +179,20 @@ export async function application(
       : undefined;
   const sessions = new Map<string, { expiry: number; subject: string | undefined }>();
   const attempts = new Map<string, { count: number; until: number }>();
+  const clearedCookie = 'codes_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0';
+  function verifyToken(request: IncomingMessage, supplied: string, invalid: AppError) {
+    const now = Date.now();
+    for (const [key, value] of attempts) if (value.until < now) attempts.delete(key);
+    const ip = request.socket.remoteAddress ?? 'unknown';
+    const attempt = attempts.get(ip);
+    if ((attempt?.count ?? 0) >= 5 || attempts.size > 100)
+      throw new AppError('LOGIN_RATE', 'Too many sign-in attempts. Try again in a minute.', 429);
+    if (!options.token.matches(supplied)) {
+      attempts.set(ip, { count: (attempt?.count ?? 0) + 1, until: now + 60_000 });
+      throw invalid;
+    }
+    attempts.delete(ip);
+  }
   const server = createServer();
   const vite = options.dev
     ? await (
@@ -229,26 +245,15 @@ export async function application(
         : undefined;
       if (response.destroyed) return;
       if (url.pathname === '/api/login' && method === 'POST') {
-        for (const [key, value] of attempts) if (value.until < Date.now()) attempts.delete(key);
-        const ip = request.socket.remoteAddress ?? 'unknown';
-        const attempt = attempts.get(ip);
-        if ((attempt?.count ?? 0) >= 5 || attempts.size > 100)
-          throw new AppError(
-            'LOGIN_RATE',
-            'Too many sign-in attempts. Try again in a minute.',
-            429,
-          );
         const input = z
-          .object({ token: z.string().max(256) })
+          .object({ token: z.string().max(accessTokenLimits.max) })
           .strict()
           .parse(await body(request));
-        const supplied = Buffer.from(input.token);
-        const expected = Buffer.from(options.token);
-        if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-          attempts.set(ip, { count: (attempt?.count ?? 0) + 1, until: Date.now() + 60_000 });
-          throw new AppError('AUTH_REQUIRED', 'The access token is incorrect.', 401);
-        }
-        attempts.delete(ip);
+        verifyToken(
+          request,
+          input.token,
+          new AppError('AUTH_REQUIRED', 'The access token is incorrect.', 401),
+        );
         for (const [id, session] of sessions) if (session.expiry < Date.now()) sessions.delete(id);
         if (sessions.size >= 32) sessions.delete(sessions.keys().next().value!);
         const session = randomBytes(32).toString('hex');
@@ -280,11 +285,32 @@ export async function application(
         }
         if (url.pathname === '/api/logout' && method === 'POST') {
           sessions.delete(sessionId(request) ?? '');
-          response.setHeader(
-            'set-cookie',
-            'codes_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0',
-          );
+          response.setHeader('set-cookie', clearedCookie);
           return json(response, { ok: true });
+        }
+        if (url.pathname === '/api/settings/access-token') {
+          if (method === 'GET') return json(response, { source: options.token.source });
+          if (method === 'PUT') {
+            const input = z
+              .object({
+                current: z.string().max(accessTokenLimits.max),
+                replacement: z.string().max(accessTokenLimits.max),
+              })
+              .strict()
+              .parse(await body(request));
+            if (!authenticated(request, access?.subject))
+              throw new AppError('AUTH_REQUIRED', 'Sign in to your workspace.', 401);
+            verifyToken(
+              request,
+              input.current,
+              new AppError('CURRENT_TOKEN_INVALID', 'The current token is incorrect.', 403),
+            );
+            options.token.replace(input.replacement);
+            sessions.clear();
+            service.events.close();
+            response.setHeader('set-cookie', clearedCookie);
+            return json(response, { ok: true });
+          }
         }
         if (url.pathname === '/api/web-build' && method === 'GET' && !options.dev) {
           const index = await readFile(join(options.staticDir ?? 'dist/web', 'index.html'), 'utf8');

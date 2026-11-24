@@ -3,24 +3,40 @@
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 32px 20px;
-  background: var(--panel);
+  padding: 20px 12px;
+  background: var(--editor);
   color: var(--fg);
 }
 .login-panel {
-  width: min(100%, 360px);
+  width: min(100%, 408px);
+  padding: clamp(16px, 5vw, 28px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 12px 36px #0002;
 }
-.login-panel .brand {
-  margin-bottom: 24px;
+.login-heading {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  margin-bottom: 20px;
 }
-.login-panel h1 {
+.login-heading h1 {
   font-size: 22px;
-  font-weight: 550;
-  margin: 0 0 24px;
+  font-weight: 600;
+  margin: 0;
+}
+.login-notice {
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border-inline-start: 2px solid var(--link);
+  background: var(--field);
+  font-size: 13px;
+  line-height: 1.5;
 }
 .login-panel form {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 .login-panel form > label {
   font-size: 14px;
@@ -62,6 +78,7 @@
 .login-submit {
   width: 100%;
   min-height: 44px;
+  margin-top: 4px;
 }
 .login-error {
   border: 1px solid var(--border);
@@ -81,24 +98,48 @@
   margin-top: 8px;
   text-decoration: underline;
 }
-.login-help {
-  margin-top: 20px;
+.login-details {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 14px;
   color: var(--muted);
   font-size: 13px;
 }
-.login-help summary {
-  cursor: pointer;
-  width: fit-content;
+.login-address {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
 }
-.login-help summary > svg {
-  display: none;
+.login-address dd {
+  margin: 0;
+  min-width: 0;
 }
-.login-help p {
-  line-height: 1.7;
-}
-.login-help code {
+.login-details code {
   color: var(--fg);
   overflow-wrap: anywhere;
+}
+.login-help summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  list-style: none;
+  cursor: pointer;
+}
+.login-help summary::-webkit-details-marker {
+  display: none;
+}
+.login-help[open] summary > svg {
+  transform: rotate(90deg);
+}
+.login-help p {
+  margin: 8px 0 0;
+  line-height: 1.55;
 }
 .login-spinner {
   width: 14px;

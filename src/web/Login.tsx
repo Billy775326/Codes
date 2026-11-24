@@ -6,6 +6,7 @@ import './login.css';
 interface LoginProps {
   token: string;
   error: string;
+  notice: string;
   checking: boolean;
   busy: boolean;
   onTokenChange: (token: string) => void;
@@ -16,6 +17,7 @@ interface LoginProps {
 export function Login({
   token,
   error,
+  notice,
   checking,
   busy,
   onTokenChange,
@@ -28,8 +30,15 @@ export function Login({
   return (
     <main className="login-shell">
       <section className="login-panel" aria-labelledby="sign-in-title">
-        <Brand />
-        <h1 id="sign-in-title">{t('Open workspace')}</h1>
+        <header className="login-heading">
+          <Brand />
+          <h1 id="sign-in-title">{t('Open workspace')}</h1>
+        </header>
+        {notice && (
+          <p className="login-notice" role="status">
+            {t(notice)}
+          </p>
+        )}
         <form
           aria-busy={pending}
           onSubmit={(e) => {
@@ -86,15 +95,24 @@ export function Login({
             )}
           </button>
         </form>
-        <details className="login-help">
-          <summary>
-            {t('Where do I find my token?')}
-            <Icon name="chevron" size={13} />
-          </summary>
-          <p>
-            {t('Default on the server')} · <code>.local/access-token</code>
-          </p>
-        </details>
+        <footer className="login-details">
+          <dl className="login-address">
+            <dt>{t('Service address')}</dt>
+            <dd>
+              <code>{window.location.origin}</code>
+            </dd>
+          </dl>
+          <details className="login-help">
+            <summary>
+              {t('Where do I find my token?')}
+              <Icon name="chevron" size={13} />
+            </summary>
+            <p>
+              {t('Default on the server')} · <code>.local/access-token</code>
+            </p>
+            <p>{t('If the server uses CODES_ACCESS_TOKEN, use the value configured there.')}</p>
+          </details>
+        </footer>
       </section>
     </main>
   );

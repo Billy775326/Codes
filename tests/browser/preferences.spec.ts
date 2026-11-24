@@ -120,7 +120,10 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
     await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await open();
     await expect(listenPort).toHaveValue('8787');
-    await expect(dialog.getByRole('status')).toContainText(`port ${initial.active.port}`);
+    await expect(dialog.locator('.listener-readout')).toContainText(
+      `127.0.0.1:${initial.active.port}`,
+    );
+    await expect(dialog.locator('.listener-readout')).toContainText('127.0.0.1:8787');
     await mode.selectOption('cloudflare-access');
     const team = 'https://example.cloudflareaccess.com';
     const audience = 'a'.repeat(64);

@@ -11,9 +11,13 @@ export function readSettingsFile(path: string): unknown | undefined {
 }
 
 export function writeSettingsFile(path: string, value: unknown) {
+  writePrivateFile(path, JSON.stringify(value, null, 2) + '\n');
+}
+
+export function writePrivateFile(path: string, value: string) {
   const temporary = `${path}.${randomUUID()}.tmp`;
   try {
-    writeFileSync(temporary, JSON.stringify(value, null, 2) + '\n', {
+    writeFileSync(temporary, value, {
       mode: 0o600,
       flag: 'wx',
     });

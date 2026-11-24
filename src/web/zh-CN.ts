@@ -1,5 +1,34 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
+  'Service address': '服务地址',
+  'If the server uses CODES_ACCESS_TOKEN, use the value configured there.':
+    '如果服务端设置了 CODES_ACCESS_TOKEN，请使用该变量配置的令牌。',
+  'Access token': '访问令牌',
+  'This server uses CODES_ACCESS_TOKEN. Change it in the server environment and restart Codes.':
+    '此服务使用 CODES_ACCESS_TOKEN。请在服务端环境中修改，然后重启 Codes。',
+  'Change access token': '修改访问令牌',
+  'Current token': '当前令牌',
+  'New token': '新令牌',
+  'Confirm new token': '确认新令牌',
+  'Use 16–256 characters without surrounding whitespace or control characters.':
+    '使用 16–256 个字符，首尾不能有空白，且不能包含控制字符。',
+  'Changing the token signs out all browsers. Running tasks continue.':
+    '更换令牌后，所有浏览器需重新登录。正在执行的任务会继续。',
+  'The new tokens do not match.': '两次输入的新令牌不一致。',
+  'Save or discard other settings before changing the token.':
+    '请先保存或放弃其他设置的修改，再更换令牌。',
+  'Save new token': '保存新令牌',
+  'The current token is incorrect.': '当前令牌不正确。',
+  'The server environment manages the access token.': '此访问令牌由服务端环境管理。',
+  'Choose a different access token.': '请设置不同的访问令牌。',
+  'Access token changed. Sign in with your new token.': '访问令牌已更换，请使用新令牌登录。',
+  'The token change could not be confirmed. Try signing in with your new token.':
+    '未能确认令牌是否已更换，请尝试用新令牌登录。',
+  'Active listener': '当前监听',
+  'Listener after restart': '重启后监听',
+  'Save and restart Codes to apply a new listener address or port.':
+    '保存并重启 Codes 后，新的监听地址或端口生效。',
+  'Saved. Restart Codes to apply.': '已保存，重启 Codes 后生效。',
   Server: '服务管理',
   Projects: '项目',
   'Backup & restore': '备份与还原',

@@ -11,6 +11,11 @@ import { IconButton } from './primitives';
 
 const path = '/settings/network';
 
+function listenerAddress(listener: Pick<NetworkSettings, 'host' | 'port'>) {
+  const host = listener.host === '::1' ? '[::1]' : listener.host;
+  return `${host}:${listener.port}`;
+}
+
 function allowedAddresses(settings: NetworkSettingsSnapshot['settings'], port: string) {
   return settings.origins
     .map((address) => {
@@ -224,10 +229,30 @@ export function NetworkSettings({
               required
               value={port}
               onChange={(event) => setPort(event.target.value)}
+              aria-describedby="network-listener-help"
               disabled={saving}
             />
           </label>
         </div>
+        <p className="preference-help" id="network-listener-help">
+          {t('Save and restart Codes to apply a new listener address or port.')}
+        </p>
+        <dl className="listener-readout">
+          <div>
+            <dt>{t('Active listener')}</dt>
+            <dd>
+              <code>{listenerAddress(snapshot.active)}</code>
+            </dd>
+          </div>
+          {listenerAddress(snapshot.active) !== listenerAddress(snapshot.settings) && (
+            <div>
+              <dt>{t('Listener after restart')}</dt>
+              <dd>
+                <code>{listenerAddress(snapshot.settings)}</code>
+              </dd>
+            </div>
+          )}
+        </dl>
       </section>
       <section className="preferences-section" aria-labelledby="network-access-heading">
         <h3 id="network-access-heading">{t('Browser access')}</h3>
@@ -307,12 +332,7 @@ export function NetworkSettings({
         </p>
       )}
       {snapshot.restartRequired ? (
-        <p role="status">
-          {t('Saved. Restart Codes to apply. Currently listening on {host}, port {port}.', {
-            host: snapshot.active.host,
-            port: snapshot.active.port,
-          })}
-        </p>
+        <p role="status">{t('Saved. Restart Codes to apply.')}</p>
       ) : saved && !changed ? (
         <p role="status">{t('Network settings saved.')}</p>
       ) : null}

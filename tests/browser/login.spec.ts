@@ -1,3 +1,4 @@
+import { chooseSettingsSection } from './settings-helpers';
 import { test, expect } from '@playwright/test';
 
 const token = 'test-only-browser-token-not-a-real-secret';
@@ -15,6 +16,8 @@ for (const viewport of [
     await expect(input).toHaveAttribute('type', 'password');
     await expect(page.getByRole('button', { name: 'Open workspace', exact: true })).toBeDisabled();
     await expect(page.getByRole('heading', { name: 'Open workspace', exact: true })).toBeVisible();
+    await expect(page.locator('.login-address')).toContainText(new URL(page.url()).origin);
+    await expect(page.getByRole('button', { name: 'Change access token' })).toHaveCount(0);
     const panel = await page.locator('.login-panel').boundingBox();
     expect(panel!.x).toBeGreaterThanOrEqual(0);
     expect(panel!.x + panel!.width).toBeLessThanOrEqual(viewport.width);
@@ -90,4 +93,59 @@ test('a failed session check can reconnect without reloading the page', async ({
   await page.getByRole('button', { name: 'Retry connection', exact: false }).click();
   await expect(page.getByLabel('Workspace access token')).toBeEnabled();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('changes a file-backed access token and keeps the draft through sign-in', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const replacement = 'replacement-access-token-test-fixture';
+  const headers = { origin: baseURL! };
+  const observer = await browser.newContext({ baseURL });
+  try {
+    const observerLogin = await observer.request.post('/api/login', { headers, data: { token } });
+    expect(observerLogin.ok()).toBe(true);
+    await page.setViewportSize({ width: 320, height: 680 });
+    await page.goto('/');
+    const tokenInput = page.getByLabel('Workspace access token', { exact: true });
+    await tokenInput.fill(token);
+    await tokenInput.press('Enter');
+    await page.getByLabel('Message Codex').fill('Keep this draft after changing the token.');
+    await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await chooseSettingsSection(dialog, 'Network & access');
+    await dialog.getByRole('button', { name: 'Change access token', exact: true }).click();
+    await dialog.getByLabel('Current token', { exact: true }).fill(token);
+    await dialog.getByLabel('New token', { exact: true }).fill(replacement);
+    const confirmation = dialog.getByLabel('Confirm new token', { exact: true });
+    await confirmation.fill('mismatched-test-token');
+    await expect(dialog.getByRole('button', { name: 'Save new token' })).toBeDisabled();
+    await confirmation.fill(replacement);
+    await dialog.getByRole('button', { name: 'Save new token' }).click();
+    await expect(page.getByRole('status')).toHaveText(
+      'Access token changed. Sign in with your new token.',
+    );
+    expect((await observer.request.get('/api/system')).status()).toBe(401);
+    await expect(tokenInput).toHaveValue('');
+    await tokenInput.fill(replacement);
+    await tokenInput.press('Enter');
+    await expect(page.getByLabel('Message Codex')).toHaveValue(
+      'Keep this draft after changing the token.',
+    );
+    await expect(dialog).toHaveCount(0);
+  } finally {
+    const login = await observer.request.post('/api/login', {
+      headers,
+      data: { token: replacement },
+    });
+    if (login.ok()) {
+      const restored = await observer.request.put('/api/settings/access-token', {
+        headers,
+        data: { current: replacement, replacement: token },
+      });
+      expect(restored.ok()).toBe(true);
+    }
+    await observer.close();
+  }
 });

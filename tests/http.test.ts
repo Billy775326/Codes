@@ -13,6 +13,7 @@ import { Service } from '../src/server/service';
 import { Driver } from '../src/codex/driver';
 import { application } from '../src/server/http';
 import { NetworkConfiguration } from '../src/server/network-settings';
+import { AccessToken } from '../src/server/access-token';
 let app: Awaited<ReturnType<typeof application>>;
 let directory: string;
 let service: Service;
@@ -297,7 +298,12 @@ beforeEach(async () => {
   await new Promise<void>((yes) => reserve.close(() => yes()));
   origin = `http://127.0.0.1:${port}`;
   const network = new NetworkConfiguration(directory, { CODES_PORT: String(port) });
-  app = await application(service, { network, token, staticDir: join(directory, 'dist', 'web') });
+  await writeFile(join(directory, 'access-token'), token + '\n', { mode: 0o600 });
+  app = await application(service, {
+    network,
+    token: new AccessToken(directory),
+    staticDir: join(directory, 'dist', 'web'),
+  });
   await new Promise<void>((yes) => app.server.listen(port, '127.0.0.1', yes));
   const login = await fetch(origin + '/api/login', {
     method: 'POST',
@@ -1017,4 +1023,79 @@ it('expires temporary diagnostics and validates staged restores without replacin
     body: JSON.stringify(pending),
   });
   expect(await removed.json()).toEqual({ pending: null });
+});
+
+it('requires the current token and revokes sessions and event streams after a private file update', async () => {
+  const replacement = 'new-http-access-token-test-fixture';
+  const endpoint = origin + '/api/settings/access-token';
+  const headers = { origin, cookie, 'content-type': 'application/json' };
+  const update = (current: string, value: string, requestHeaders = headers) =>
+    fetch(endpoint, {
+      method: 'PUT',
+      headers: requestHeaders,
+      body: JSON.stringify({ current, replacement: value }),
+    });
+  expect((await fetch(endpoint)).status).toBe(401);
+  expect(await (await fetch(endpoint, { headers })).json()).toEqual({ source: 'file' });
+  expect(
+    (await update(token, replacement, { ...headers, origin: 'http://example.invalid' })).status,
+  ).toBe(403);
+  expect((await update('incorrect-test-token', replacement)).status).toBe(403);
+  expect((await update(token, ' short-value')).status).toBe(400);
+  expect((await update(token, token)).status).toBe(400);
+
+  const project = await service.addProject(directory);
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  await service.send(
+    thread.id,
+    randomUUID(),
+    '[hold] Continue after token rotation',
+    thread.settings,
+  );
+  const controller = new AbortController();
+  try {
+    const events = await fetch(
+      origin +
+        '/api/events?' +
+        new URLSearchParams({
+          projectId: project.id,
+          epoch: service.events.epoch,
+          after: String(service.events.seq),
+        }),
+      { headers: { cookie }, signal: controller.signal },
+    );
+    expect(events.status).toBe(200);
+    const read = events.text();
+    const response = await update(token, replacement);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
+    expect(await response.json()).toEqual({ ok: true });
+    expect(await read).toContain('event: ready');
+    expect(service.store.thread(thread.id)?.state).toBe('running');
+    expect((await fetch(endpoint, { headers })).status).toBe(401);
+    const login = (value: string) =>
+      fetch(origin + '/api/login', {
+        method: 'POST',
+        headers: { origin, 'content-type': 'application/json' },
+        body: JSON.stringify({ token: value }),
+      });
+    expect((await login(token)).status).toBe(401);
+    expect((await login(replacement)).status).toBe(200);
+    expect(new AccessToken(directory).matches(replacement)).toBe(true);
+    const { stat } = await import('node:fs/promises');
+    expect((await stat(join(directory, 'access-token'))).mode & 0o777).toBe(0o600);
+  } finally {
+    controller.abort();
+    await service.interrupt(thread.id);
+  }
+});
+
+it('keeps the environment token authoritative over the file', async () => {
+  const managed = new AccessToken(directory, 'environment-token-test-fixture');
+  expect(managed.source).toBe('environment');
+  expect(managed.matches(token)).toBe(false);
+  expect(() => managed.replace('attempted-new-token-test-fixture')).toThrow(
+    'The server environment manages the access token.',
+  );
+  expect(new AccessToken(directory).matches(token)).toBe(true);
 });
