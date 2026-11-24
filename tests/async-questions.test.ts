@@ -35,7 +35,7 @@ it.each(['call_live', 'item-3'])(
       {
         afterMessageId: 'call_live',
         legacyQuestion: {
-          itemId: 'item-3',
+          itemIds: ['item-3'],
           questionIds: { [questionId('item-3')]: questionId('call_live') },
         },
         status: 'answered',
@@ -78,5 +78,40 @@ it('keeps similar requests separate when the match is ambiguous or belongs to an
     'item-3',
     'item-8',
     'item-9',
+  ]);
+});
+
+it('consolidates changing legacy ordinals without losing the original answer', () => {
+  using db = fixture();
+  const old = new AsyncQuestions(db);
+  old.observe('thread', message('call_live'));
+  old.observeHistory('thread', [message('item-3')]);
+  old.confirmReply('thread', [
+    { questionItemId: questionId('item-3'), question: title, answer: 'One' },
+  ]);
+
+  const restored = new AsyncQuestions(db);
+  restored.observeHistory('thread', [message('item-494')]);
+  const [action] = restored.actions('thread');
+  expect(restored.actions('thread')).toHaveLength(1);
+  expect(action).toMatchObject({
+    afterMessageId: 'call_live',
+    legacyQuestion: { itemIds: ['item-3', 'item-494'] },
+    status: 'answered',
+    submittedAnswers: { [questionId('call_live')]: 'One' },
+  });
+  expect(restored.hasOpen('thread')).toBe(false);
+});
+
+it('keeps repeated questions separate when their items appear together in one history page', () => {
+  using db = fixture();
+  const old = new AsyncQuestions(db);
+  old.observe('thread', message('call_live'));
+  old.observeHistory('thread', [message('item-3'), message('item-494')]);
+  const restored = new AsyncQuestions(db);
+  expect(restored.actions('thread').map((action) => action.afterMessageId)).toEqual([
+    'call_live',
+    'item-3',
+    'item-494',
   ]);
 });

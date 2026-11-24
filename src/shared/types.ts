@@ -81,7 +81,7 @@ export interface Action {
   questions?: Question[];
   afterMessageId?: string;
   /** Alternate IDs assigned by legacy history to the same nonblocking request. */
-  legacyQuestion?: { itemId: string; questionIds: Record<string, string> };
+  legacyQuestion?: { itemIds: string[]; questionIds: Record<string, string> };
   submittedAnswers?: Record<string, string>;
   replyUnconfirmed?: boolean;
   /** Missing on older clients/requests: treat questions as required. */

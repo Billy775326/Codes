@@ -1036,9 +1036,7 @@ export class Service {
       const turns = direction === 'newer' ? page.data.slice() : page.data.slice().reverse();
       const messages = await hydrate(turns);
       if (messages) {
-        let questionChanged = false;
-        for (const message of messages)
-          if (this.asyncQuestions.observe(id, message)) questionChanged = true;
+        let questionChanged = this.asyncQuestions.observeHistory(id, messages);
         for (const turn of turns)
           if (turn.status === 'failed' || turn.status === 'interrupted')
             if (this.asyncQuestions.expireTurn(id, turn.id)) questionChanged = true;

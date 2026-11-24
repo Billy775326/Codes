@@ -157,7 +157,7 @@
 
 ### Fixed
 
-- Show one asynchronous question card when legacy history and live events use different IDs for the same request. Preserve confirmed answers and keep them with the original question.
+- Show one asynchronous question card when legacy history and live events use different IDs for the same request, including when history renumbers the item. Preserve confirmed answers on the original question.
 
 - Pause waiting messages for new failures, interruptions, or uncertain receipts. Preserve explicit pauses and avoid applying old failures to a fresh queue.
 

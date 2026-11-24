@@ -1600,7 +1600,7 @@ function App() {
     [...inlineQuestions.values()]
       .filter((action) => action.async && action.afterMessageId)
       .flatMap((action) =>
-        [action.afterMessageId, action.legacyQuestion?.itemId]
+        [action.afterMessageId, ...(action.legacyQuestion?.itemIds ?? [])]
           .filter(Boolean)
           .map((id) => [id, action] as const),
       ),
@@ -1646,7 +1646,8 @@ function App() {
     const legacyAnchor =
       anchor < 0 && action.legacyQuestion
         ? transcriptMessages.findLastIndex(
-            (item) => item.id === action.legacyQuestion?.itemId && item.turnId === action.turnId,
+            (item) =>
+              action.legacyQuestion?.itemIds.includes(item.id) && item.turnId === action.turnId,
           )
         : -1;
     const at = anchor >= 0 ? anchor : legacyAnchor >= 0 ? legacyAnchor : last;
