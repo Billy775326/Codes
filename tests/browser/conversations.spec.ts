@@ -461,7 +461,7 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
     .filter({ has: page.getByRole('button', { name: title, exact: true }) });
   await expect(row.locator('.conversation-status')).toBeVisible();
   await expect(row.locator('.conversation-status')).toHaveText('Completed');
-  // Close the single stream using the existing reconnect action, then hold its handshake.
+  // Simulate a resumed browser connection and hold the new snapshot.
   let release!: () => void;
   let captured!: () => void;
   const held = new Promise<void>((resolve) => {
@@ -482,7 +482,8 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   );
   await reconnectUpdates(page);
   await ready;
-  await expect(page.getByRole('button', { name: 'Reconnect conversation updates' })).toBeVisible();
+  await expect(page.locator('.connection')).toHaveText('Connecting');
+  await expect(page.getByRole('button', { name: 'Reconnect updates', exact: true })).toHaveCount(0);
   await expect(row.locator('.conversation-status')).toHaveText('Completed');
   const list = page.waitForResponse(
     (response) => response.url().includes('/conversations?') && response.status() === 200,
@@ -490,7 +491,7 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   release();
   await list;
   await expect(page.locator('.connection')).toHaveText('Connected');
-  await expect(page.getByRole('button', { name: 'Reconnect conversation updates' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reconnect updates', exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Search projects and chats', { exact: true })).toHaveValue(title);
   await expect(row.locator('.conversation-status')).toHaveText('Completed');
   expect(

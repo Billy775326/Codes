@@ -67,8 +67,7 @@ for (const width of [1440, 390, 320]) {
     ).toBeVisible();
     await navigation.getByRole('button', { name: 'Workspace actions', exact: true }).click();
     const menu = navigation.getByRole('dialog', { name: 'Workspace actions', exact: true });
-    for (const name of ['Reconnect updates', 'Sign out'])
-      await expect(menu.getByRole('button', { name, exact: true })).toBeVisible();
+    await expect(menu.getByRole('button')).toHaveText(['Sign out']);
     const box = await menu.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.y).toBeGreaterThanOrEqual(0);

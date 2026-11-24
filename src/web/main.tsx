@@ -73,6 +73,7 @@ import { ComposerControls, type ComposerControlsHandle } from './ComposerControl
 import { ControlTooltip } from './ControlTooltip';
 import { AddProjectDialog } from './AddProjectDialog';
 import { WorkspaceHeader } from './WorkspaceHeader';
+import { ConnectionStatus } from './ConnectionStatus';
 import { readSidebarWidth, SidebarResize, useSidebarLayout } from './SidebarResize';
 import './foundation.css';
 import './interactions.css';
@@ -473,6 +474,10 @@ function App() {
     },
     [notice],
   );
+  const retryUpdates = () => {
+    setConnectionError('');
+    setRetry((value) => value + 1);
+  };
   const refreshProjects = useCallback(() => {
     const revision = ++projectMetadataRevision.current;
     void request<Project[]>('/projects').then((projects) => {
@@ -770,7 +775,10 @@ function App() {
     } catch {
       setSteerReceipt(undefined);
     }
-    if (!threadId || auth !== 'ready') {
+  }, [threadId, projectId, auth]);
+  useEffect(() => {
+    if (auth !== 'ready') return;
+    if (!threadId) {
       if (!projectId) setConnection('Ready');
       return;
     }
@@ -1783,6 +1791,8 @@ function App() {
   const conversationLoadError =
     connectionError ||
     (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
+  const canRetryUpdates = ['Reconnecting', 'Disconnected', 'Unavailable'].includes(connection);
+  const reconnect = canRetryUpdates && (!loadingConversation || preview) ? retryUpdates : undefined;
   const withLanguage = (view: React.ReactNode) => (
     <InterfaceLanguageContext value={interfaceLanguage}>
       {view}
@@ -1873,26 +1883,7 @@ function App() {
           onModalChange={setConversationModalOpen}
         />
         <div className="workspace-footer" role="group" aria-label={t('Workspace controls')}>
-          <div className="workspace-connection">
-            <span
-              className={`connection ${['Connected', 'Ready'].includes(connection) ? 'connected' : ''}`}
-              role="status"
-              aria-label={t('Connection: {status}', { status: t(connection) })}
-            >
-              <i />
-              {t(connection)}
-            </span>
-            {!['Connected', 'Ready'].includes(connection) && (
-              <button
-                className="icon-button"
-                aria-label={t('Reconnect conversation updates')}
-                data-tooltip=""
-                onClick={() => setRetry((n) => n + 1)}
-              >
-                <Icon name="refresh" size={16} />
-              </button>
-            )}
-          </div>
+          <ConnectionStatus status={connection} placement="sidebar" onReconnect={reconnect} />
           <div className="workspace-actions">
             <button
               className="icon-button"
@@ -1908,10 +1899,6 @@ function App() {
               iconOnly
               trigger={<Icon name="more" size={16} />}
             >
-              <button data-close-menu onClick={() => setRetry((n) => n + 1)}>
-                <Icon name="refresh" size={14} />
-                {t('Reconnect updates')}
-              </button>
               <button
                 data-close-menu
                 onClick={() =>
@@ -1964,6 +1951,7 @@ function App() {
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
           onReload={reloadPage}
+          onReconnect={reconnect}
           updateAvailable={updateAvailable}
           onToggleTheme={() =>
             changePreferences({ ...preferences, theme: theme === 'dark' ? 'light' : 'dark' })
@@ -2087,14 +2075,16 @@ function App() {
                     : t('Loading conversation…')}
                 </h2>
                 {conversationLoadError && <p role="alert">{t(conversationLoadError)}</p>}
-                <button
-                  onClick={() => {
-                    setError('');
-                    setRetry((value) => value + 1);
-                  }}
-                >
-                  {t('Retry loading')}
-                </button>
+                {canRetryUpdates && (
+                  <button
+                    onClick={() => {
+                      setError('');
+                      retryUpdates();
+                    }}
+                  >
+                    {t('Retry loading')}
+                  </button>
+                )}
               </section>
             ) : !visibleMessages.length && !active ? (
               <section className="conversation-start" aria-label={t('New conversation')}>
@@ -2435,14 +2425,6 @@ function App() {
           {connectionError && (!loadingConversation || preview) && (
             <div className="error-banner" role="alert">
               <span>{t(connectionError)}</span>
-              <button
-                onClick={() => {
-                  setConnectionError('');
-                  setRetry((value) => value + 1);
-                }}
-              >
-                {t('Retry connection')}
-              </button>
             </div>
           )}
           {thread?.writerConflict && (

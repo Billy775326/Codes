@@ -71,6 +71,12 @@ const iconPaths: Record<string, React.ReactNode> = {
       <path d="M20 7v5h-5M4 17v-5h5M20 12a8 8 0 0 0-13-6M4 12a8 8 0 0 0 13 6" />
     </>
   ),
+  plug: <path d="M9 3v5m6-5v5M7 8h10v3a5 5 0 0 1-10 0ZM12 16v5" />,
+  'reload-page': (
+    <>
+      <path d="M13 3H5v18h14V9Zm0 0v6h6M9 14a3 3 0 1 0 5.7 1.4M9 11v3h3" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   arrow: <path d="M12 19V5m-6 6 6-6 6 6" />,
   latest: <path d="M12 4v12m-5-5 5 5 5-5M5 20h14" />,

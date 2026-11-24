@@ -174,31 +174,45 @@ test('a hidden tab releases its event connection and resumes from a fresh snapsh
   ).toBe(1);
 });
 
-test('a new conversation can retry its project subscription without a thread feed', async ({
-  page,
-}) => {
-  await fixture(page);
-  await page.getByRole('button', { name: 'New conversation', exact: true }).click();
-  let fail = true;
-  await page.route('**/api/projects/*/snapshot', (route) =>
-    fail
-      ? route.fulfill({
-          status: 502,
-          contentType: 'text/html',
-          body: '<html>Proxy unavailable</html>',
-        })
-      : route.continue(),
-  );
-  await page.reload();
-  await expect(page.getByRole('alert')).toContainText('HTTP 502');
-  await page.getByLabel('Message Codex').fill('Keep the new draft through reconnection');
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
-  fail = false;
-  await page.getByRole('button', { name: 'Retry connection', exact: true }).click();
-  await expect(page.locator('.connection')).toHaveText('Connected');
-  await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(page.getByLabel('Message Codex')).toHaveValue(
-    'Keep the new draft through reconnection',
-  );
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-});
+for (const width of [1440, 320])
+  test(`a new conversation reconnects beside its connection status at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await fixture(page);
+    await page.getByRole('button', { name: 'New conversation', exact: true }).click();
+    let fail = true;
+    await page.route('**/api/projects/*/snapshot', (route) =>
+      fail
+        ? route.fulfill({
+            status: 403,
+            contentType: 'text/html',
+            body: '<html>Proxy denied access</html>',
+          })
+        : route.continue(),
+    );
+    await page.reload();
+    await expect(page.getByRole('alert')).toContainText('HTTP 403');
+    await page.getByLabel('Message Codex').fill('Keep the new draft through reconnection');
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    const reconnect = page.getByRole('button', { name: 'Reconnect updates', exact: true });
+    const connection = page.locator(
+      width <= 700 ? '.header-connection-controls' : '.workspace-connection',
+    );
+    await expect(
+      connection.getByRole('button', { name: 'Reconnect updates', exact: true }),
+    ).toBeInViewport();
+    await expect(reconnect).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    fail = false;
+    await reconnect.click();
+    await expect(
+      connection.getByRole('status', { name: 'Connection: Connected', exact: true }),
+    ).toBeVisible();
+    await expect(reconnect).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByLabel('Message Codex')).toHaveValue(
+      'Keep the new draft through reconnection',
+    );
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+  });

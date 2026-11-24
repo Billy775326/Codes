@@ -88,6 +88,8 @@
 
 ### Changed
 
+- Show the reconnect control beside the connection status only after a connection problem. The sidebar refresh and page reload remain separate actions.
+
 - Fit the queue title, count, and paused status in one row. Show extra details when a message has attachments, uses different permissions, or needs attention.
 
 - Right-align the actions in the sidebar project card drawer.

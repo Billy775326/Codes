@@ -2,6 +2,7 @@ import { useInterfaceLanguage } from './interface-language';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { message } from './api';
 import { PanelMenu } from './PanelMenu';
+import { ConnectionStatus } from './ConnectionStatus';
 import { Icon, IconButton } from './primitives';
 
 type Panel = 'files' | 'diff';
@@ -22,6 +23,7 @@ interface Props {
   onSettings: () => void;
   onToggleTheme: () => void;
   onReload: () => void;
+  onReconnect?: () => void;
   updateAvailable: boolean;
   onReview?: () => void;
   onStatus: () => void;
@@ -159,24 +161,19 @@ export function WorkspaceHeader(props: Props) {
         />
         <IconButton
           className={'compact-page-reload' + (props.updateAvailable ? ' web-update-available' : '')}
-          icon="refresh"
+          icon="reload-page"
           label={reloadLabel}
           onClick={props.onReload}
         />
       </div>
+      {!props.sidebarOpen && (
+        <ConnectionStatus
+          status={props.connection}
+          placement="header"
+          onReconnect={props.onReconnect}
+        />
+      )}
       <div className="top-actions">
-        {!props.sidebarOpen && (
-          <span
-            className={
-              'header-connection ' +
-              (['Connected', 'Ready'].includes(props.connection) ? 'connected' : '')
-            }
-            role="status"
-            aria-label={t('Connection: {status}', { status: t(props.connection) })}
-          >
-            {t(props.connection)}
-          </span>
-        )}
         <PanelMenu
           label={t('Conversation actions')}
           className="conversation-menu"
@@ -229,7 +226,7 @@ export function WorkspaceHeader(props: Props) {
         <div className="top-action-group" role="group" aria-label={t('Workspace tools')}>
           <IconButton
             className={'page-reload' + (props.updateAvailable ? ' web-update-available' : '')}
-            icon="refresh"
+            icon="reload-page"
             label={reloadLabel}
             onClick={props.onReload}
           />
