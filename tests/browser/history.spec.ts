@@ -33,6 +33,72 @@ async function fixture(page: Page, actions: Omit<Action, 'threadId'>[] = []) {
   return base;
 }
 
+test('a long active turn keeps the original prompt in history without recreating it at the bottom', async ({
+  page,
+}) => {
+  const base = await fixture(page);
+  const turnId = 'long-active-turn';
+  const prompt: Message = {
+    id: 'native-long-prompt',
+    clientId: 'long-prompt-operation',
+    turnId,
+    kind: 'user',
+    text: 'Review this long task',
+  };
+  const work: Message[] = Array.from({ length: 245 }, (_, index) => ({
+    id: 'long-task-command-' + index,
+    turnId,
+    kind: 'command',
+    text: `Activity ${index}`,
+    status: 'completed',
+  }));
+  const commentary: Message = {
+    id: 'long-task-progress',
+    turnId,
+    kind: 'assistant',
+    phase: 'commentary',
+    text: 'The long task is still working.',
+  };
+  base.thread.state = 'running';
+  base.thread.turnId = turnId;
+  base.thread.turns = [{ id: turnId, status: 'inProgress', startedAtMs: Date.now() }];
+  base.thread.pending = {
+    id: prompt.clientId!,
+    kind: 'send',
+    state: 'dispatching',
+    text: prompt.text,
+  };
+  base.thread.messages = [];
+  const bubbles = page.getByTestId('message-user').filter({ hasText: prompt.text });
+  await reconnectUpdates(page);
+  await expect(bubbles).toHaveCount(1);
+  await expect(bubbles).toHaveAttribute('data-message-id', prompt.clientId!);
+
+  base.thread.pending = { ...base.thread.pending, state: 'acknowledged', turnId };
+  base.thread.messages = [prompt, commentary];
+  await reconnectUpdates(page);
+  await expect(bubbles).toHaveCount(1);
+  await expect(bubbles).toHaveAttribute('data-message-id', prompt.id);
+
+  base.thread.messages = [prompt, ...work, commentary];
+  await reconnectUpdates(page);
+  await expect(page.getByText('The long task is still working.', { exact: true })).toBeVisible();
+  await expect(page.getByText('239 activities', { exact: true }).first()).toBeVisible();
+  await expect(bubbles).toHaveCount(0);
+
+  await page.route('**/api/threads/*/history?cursor=*', (route) =>
+    route.fulfill({ json: { messages: [prompt, ...work.slice(0, 9)], olderCursor: null } }),
+  );
+  await page.getByRole('button', { name: 'Load earlier messages', exact: true }).click();
+  await expect(bubbles).toHaveCount(1);
+  await expect(bubbles).toHaveAttribute('data-message-id', prompt.id);
+  await expect(
+    page.locator('[data-turn-id="long-active-turn"]').getByTestId('message-user'),
+  ).toHaveCount(1);
+  await page.getByRole('button', { name: 'Back to latest messages', exact: true }).click();
+  await expect(bubbles).toHaveCount(0);
+});
+
 test('an answered question appears only when its original turn is loaded', async ({ page }) => {
   await fixture(page, [
     {

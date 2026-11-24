@@ -176,6 +176,8 @@
 
 ### Fixed
 
+- Keep accepted prompts in their original turns when long-running activity moves them out of the live window.
+
 - Give the selected conversation priority over historical pagination. Cancel unused reads and isolate identified oversized history responses from concurrent execution.
 - Use the same interaction status for the transcript and sidebar, including replies being submitted and replies that require verification.
 

@@ -1346,6 +1346,17 @@ function App() {
       ),
   );
   const steering = thread?.steering?.filter((entry) => !entry.questionReply) ?? [];
+  const pending = thread?.pending;
+  // A native turn owns an accepted prompt even after it leaves the live window.
+  // Reviews have no guaranteed native user item to replace their preview.
+  const pendingPreview =
+    timelineLatest &&
+    pending &&
+    (pending.kind === 'review' || (!pending.turnId && pending.state !== 'acknowledged')) &&
+    !parseQuestionReplies(pending.text ?? '') &&
+    !visibleMessages.some((item) => item.clientId === pending.id)
+      ? pending
+      : undefined;
   const visibleTurnIds = new Set(visibleMessages.map((item) => item.turnId));
   const transcriptMessages = visibleMessages.flatMap((item) => {
     if (!item.answeredQuestions?.length) return [item];
@@ -2176,23 +2187,21 @@ function App() {
                     )}
                   </div>
                 )}
-                {thread?.pending &&
-                  !parseQuestionReplies(thread.pending.text ?? '') &&
-                  !thread.messages.some((m) => m.clientId === thread.pending?.id) && (
-                    <MessageView
-                      onOpenImage={setPreviewedImage}
-                      resolveFile={resolveFile}
-                      onOpenFile={openLinkedFile}
-                      projectId={contextProjectId}
-                      item={{
-                        id: thread.pending.id,
-                        turnId: '',
-                        kind: 'user',
-                        text: thread.pending.text ?? '',
-                      }}
-                      streaming={false}
-                    />
-                  )}
+                {pendingPreview && (
+                  <MessageView
+                    onOpenImage={setPreviewedImage}
+                    resolveFile={resolveFile}
+                    onOpenFile={openLinkedFile}
+                    projectId={contextProjectId}
+                    item={{
+                      id: pendingPreview.id,
+                      turnId: '',
+                      kind: 'user',
+                      text: pendingPreview.text ?? '',
+                    }}
+                    streaming={false}
+                  />
+                )}
                 {thread?.actions
                   .filter(
                     (a) =>
