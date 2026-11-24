@@ -475,8 +475,6 @@
 }
 .app .composer textarea {
   padding: 12px 13px 3px;
-  min-height: 66px;
-  max-height: 180px;
   resize: none;
   font-size: 15.4px;
   line-height: 24px;

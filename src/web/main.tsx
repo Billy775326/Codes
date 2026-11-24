@@ -65,6 +65,7 @@ import { Transcript } from './Transcript';
 import { isTurnOutcome } from './TurnResult';
 import { historyLimit, liveRevision } from './history';
 import { useConversationTimeline } from './useConversationTimeline';
+import { useComposerTextareaHeight } from './useComposerTextareaHeight';
 import { ConversationViewCache } from './conversation-view-cache';
 import { applyConversationEvent } from './conversation-events';
 import { useWebBuild } from './useWebBuild';
@@ -945,12 +946,7 @@ function App() {
       });
     return () => controller.abort();
   }, [auth, connection, receipt, threadId, thread?.id, thread?.pending?.id, thread?.state]);
-  useLayoutEffect(() => {
-    const element = composer.current;
-    if (!element) return;
-    element.style.height = 'auto';
-    element.style.height = Math.min(180, Math.max(66, element.scrollHeight)) + 'px';
-  }, [draft, auth]);
+  useComposerTextareaHeight(composer, draft, auth === 'ready' && !queueEditing);
   const changeDraft = useCallback(
     (value: string) => {
       draftRevision.current++;

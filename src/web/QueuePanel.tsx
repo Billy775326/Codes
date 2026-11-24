@@ -1,11 +1,12 @@
 import { useInterfaceLanguage } from './interface-language';
 import { ImageAttachmentView } from './ImageAttachments';
 import { permissionLabel } from '../shared/permissions';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { QueueState, QueueItem, Settings } from '../shared/types';
 import { sameSettings } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon, IconButton } from './primitives';
+import { useComposerTextareaHeight } from './useComposerTextareaHeight';
 import './workflow.css';
 export function QueuePanel({
   threadId,
@@ -33,6 +34,8 @@ export function QueuePanel({
   const { t } = useInterfaceLanguage();
   const [editing, setEditing] = useState('');
   const [text, setText] = useState('');
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  useComposerTextareaHeight(textarea, text, !!editing);
   useEffect(() => {
     onEditingChange(!!editing);
     return () => onEditingChange(false);
@@ -92,6 +95,7 @@ export function QueuePanel({
         </p>
       )}
       <textarea
+        ref={textarea}
         aria-label={t('Edit queued message')}
         value={text}
         maxLength={50_000}

@@ -88,6 +88,8 @@
 
 ### Changed
 
+- Match the queued message editor to the composer. The field grows with the text and scrolls after reaching the height limit.
+
 - Use icons for composer and queue actions. Hover or focus for the action, its shortcut, or the reason it is unavailable.
 
 - Show the reconnect control beside the connection status only after a connection problem. The sidebar refresh and page reload remain separate actions.

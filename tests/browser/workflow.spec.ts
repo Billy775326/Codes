@@ -318,14 +318,38 @@ test('editing a queued card uses the composer area, pauses dispatch, and restore
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
   await page.getByLabel('Message Codex').fill('Queued content to revise');
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
-  await expect(page.getByLabel('Message Codex')).toHaveValue('');
-  await page.getByLabel('Message Codex').fill('My separate unsent draft');
+  const composer = page.getByLabel('Message Codex');
+  await expect(composer).toHaveValue('');
+  await composer.fill('My separate unsent draft');
+  const dimensions = await composer.evaluate((element) => {
+    const { height, fontSize, lineHeight, padding } = getComputedStyle(element);
+    return { height, 'font-size': fontSize, 'line-height': lineHeight, padding };
+  });
   const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
   await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
-  await expect(page.getByLabel('Message Codex')).toBeHidden();
-  await expect(queue.getByLabel('Edit queued message')).toHaveValue('Queued content to revise');
+  await expect(composer).toBeHidden();
+  const editor = queue.getByLabel('Edit queued message');
+  await expect(editor).toHaveValue('Queued content to revise');
+  for (const [property, value] of Object.entries(dimensions))
+    await expect(editor).toHaveCSS(property, value);
+  await editor.fill('Line one\nLine two\nLine three\nLine four');
+  await expect(editor).toHaveCSS('height', '116px');
+  await editor.fill('More lines\n'.repeat(16));
+  await expect(editor).toHaveCSS('height', '180px');
+  expect(await editor.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+    true,
+  );
+  await editor.fill('A message that wraps on a phone. '.repeat(6));
+  const wideHeight = (await editor.boundingBox())!.height;
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expect
+    .poll(async () => (await editor.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(wideHeight);
+  await expect(editor).toHaveCSS('font-size', '16px');
+  await expect(editor).toHaveCSS('line-height', dimensions['line-height']);
   await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeDisabled();
-  await queue.getByLabel('Edit queued message').fill('Discard this local edit');
+  await editor.fill('Discard this local edit');
+  await expect(editor).toHaveCSS('height', dimensions.height);
   await queue.getByRole('button', { name: 'Cancel edit', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toHaveValue('My separate unsent draft');
   await expect(queue).toContainText('Queued content to revise');
