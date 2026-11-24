@@ -568,9 +568,29 @@ test('project management and conversation links survive reload and keep the veri
   expect(requests).not.toContain(listPath);
 
   const search = page.getByLabel('Search projects and chats');
+  const unmatchedProject = projectCard(page, a.id);
+  const unmatchedRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === `/api/projects/${a.id}/conversations` &&
+      url.searchParams.get('search') === renamed.toUpperCase()
+    );
+  });
   await search.fill(renamed.toUpperCase());
   await expect(card.getByRole('button', { name: second.title, exact: true })).toBeVisible();
-  await expect(projectCard(page, a.id)).toBeHidden();
+  await unmatchedRequest;
+  await expect(unmatchedProject).toHaveAttribute('aria-busy', 'false');
+  await expect(unmatchedProject.locator('.thread-link')).toHaveCount(0);
+  const nextPage = unmatchedProject.getByRole('button', {
+    name: 'Next conversation page',
+    exact: true,
+  });
+  if (await nextPage.count()) {
+    await expect(
+      unmatchedProject.getByText('No matches on this page', { exact: true }),
+    ).toBeVisible();
+    await expect(nextPage).toBeEnabled();
+  } else await expect(unmatchedProject).toBeHidden();
   await search.fill('no match ' + randomUUID());
   await expect(card).toBeHidden();
   await page.getByRole('button', { name: 'Clear search' }).click();
