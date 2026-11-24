@@ -185,6 +185,7 @@ type IconButtonProps = Omit<React.ComponentPropsWithRef<'button'>, 'children' | 
   icon: string;
   label: string;
   hint?: string;
+  unavailable?: string;
   size?: number;
 };
 
@@ -192,18 +193,24 @@ export function IconButton({
   icon,
   label,
   hint,
+  unavailable,
   size = 16,
   type = 'button',
   className,
+  onClick,
   ...attributes
 }: IconButtonProps) {
+  // Keep an unavailable action reachable by keyboard when it has an explanation.
+  const tooltip = unavailable ? `${label} · ${unavailable}` : hint;
   return (
     <button
       {...attributes}
       type={type}
       aria-label={label}
-      aria-description={attributes['aria-description'] ?? hint}
-      data-tooltip={hint ?? ''}
+      aria-description={unavailable ?? attributes['aria-description'] ?? hint}
+      aria-disabled={unavailable ? true : attributes['aria-disabled']}
+      onClick={unavailable ? (event) => event.preventDefault() : onClick}
+      data-tooltip={tooltip ?? ''}
       className={className ? 'icon-button ' + className : 'icon-button'}
     >
       <Icon name={icon} size={size} />

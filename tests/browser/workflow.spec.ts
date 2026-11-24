@@ -236,7 +236,11 @@ test('queue controls retain full long messages, recover lost receipts, and pause
   await page.getByLabel('Message Codex').fill('Remove this waiting message');
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   await expect(queue.locator('li')).toHaveCount(2);
-  await queue.locator('li').last().getByRole('button', { name: 'Remove', exact: true }).click();
+  await queue
+    .locator('li')
+    .last()
+    .getByRole('button', { name: 'Remove queued message', exact: true })
+    .click();
   await expect(queue.locator('li')).toHaveCount(1);
   await page.reload();
   await expect(queue.locator('li')).toHaveCount(1);

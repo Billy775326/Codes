@@ -17,7 +17,7 @@ export function QueuePanel({
   settings,
   onEditingChange,
   onStop,
-  dispatchDisabled = false,
+  dispatchUnavailable,
 }: {
   threadId: string;
   projectId: string;
@@ -25,7 +25,7 @@ export function QueuePanel({
   settings?: Settings;
   onEditingChange: (editing: boolean) => void;
   onStop?: () => void;
-  dispatchDisabled?: boolean;
+  dispatchUnavailable?: string;
   state: QueueState;
   onChange: (queue: QueueState) => void;
   onCheck: () => Promise<void>;
@@ -55,6 +55,12 @@ export function QueuePanel({
     }
   };
   const pauseReason = state.paused && state.reason !== 'Paused by you.' ? state.reason : undefined;
+  const addNowUnavailable = (entry: QueueItem) => {
+    if (busy) return t('Wait for the current request.');
+    if (dispatchUnavailable || !settings)
+      return t(dispatchUnavailable ?? 'Wait for project context.');
+    if (!sameSettings(entry.settings, settings)) return t('Requires matching task settings.');
+  };
   const entryBeingEdited = state.items.find((entry) => entry.id === editing);
   const editable = entryBeingEdited?.state === 'queued';
   const canSave =
@@ -96,17 +102,14 @@ export function QueuePanel({
       />
       <div className="queue-editor-actions">
         {onStop && (
-          <button
+          <IconButton
             className="queue-editor-stop"
-            type="button"
-            aria-label={t('Stop task')}
-            aria-description={t('Stop current task and pause queue')}
+            icon="stop"
+            label={t('Stop task')}
+            hint={t(state.items.length && !state.paused ? 'Stop task · Pause queue' : 'Stop task')}
             disabled={busy}
             onClick={onStop}
-          >
-            <Icon name="stop" size={16} />
-            {t('Stop task')}
-          </button>
+          />
         )}
         <button
           className="icon-button"
@@ -175,14 +178,12 @@ export function QueuePanel({
               {editing !== entry.id && entry.state !== 'dispatching' && (
                 <div className="queue-actions">
                   {entry.state === 'queued' && turnId && (
-                    <button
-                      disabled={
-                        busy ||
-                        dispatchDisabled ||
-                        !settings ||
-                        !sameSettings(entry.settings, settings)
-                      }
-                      aria-label={t('Add queued message to current task')}
+                    <IconButton
+                      icon="steer"
+                      size={15}
+                      label={t('Add queued message to current task')}
+                      hint={t('Add to current task')}
+                      unavailable={addNowUnavailable(entry)}
                       aria-description={t('Accepted additions cannot be edited.')}
                       onClick={() =>
                         void run(() =>
@@ -194,10 +195,7 @@ export function QueuePanel({
                           ),
                         )
                       }
-                    >
-                      <Icon name="steer" size={14} />
-                      {t('Add now')}
-                    </button>
+                    />
                   )}
                   {entry.state === 'queued' && (
                     <IconButton
@@ -229,7 +227,10 @@ export function QueuePanel({
                     />
                   )}
                   {['queued', 'failed'].includes(entry.state) && (
-                    <button
+                    <IconButton
+                      icon="trash"
+                      size={15}
+                      label={t('Remove queued message')}
                       disabled={busy}
                       onClick={() =>
                         void run(() =>
@@ -238,10 +239,7 @@ export function QueuePanel({
                           }),
                         )
                       }
-                    >
-                      <Icon name="trash" size={14} />
-                      {t('Remove')}
-                    </button>
+                    />
                   )}
                   {entry.state === 'unknown' && (
                     <button disabled={busy} onClick={() => void run(onCheck)}>

@@ -204,6 +204,15 @@ test('changing future settings does not reconfigure the active task or existing 
   await expect(page.getByRole('region', { name: 'Queued messages' })).toContainText(
     'New queued settings',
   );
+  const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
+  const queuedAdd = queue
+    .getByRole('button', { name: 'Add queued message to current task' })
+    .last();
+  await expect(queuedAdd).toBeDisabled();
+  await queuedAdd.hover();
+  await expect(page.locator('.control-tooltip')).toHaveText(
+    'Add queued message to current task · Requires matching task settings.',
+  );
   const snapshot = await (await page.request.get('/api/threads/' + id + '/snapshot')).json();
   expect(snapshot.thread.settings.permission).toBe('read-only');
   expect(
@@ -213,9 +222,8 @@ test('changing future settings does not reconfigure the active task or existing 
   ).toEqual(['read-only', 'workspace-write']);
   await page.getByRole('button', { name: 'Stop task', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
-  const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
-  await queue.getByRole('button', { name: 'Remove', exact: true }).first().click();
-  await queue.getByRole('button', { name: 'Remove', exact: true }).first().click();
+  await queue.getByRole('button', { name: 'Remove queued message', exact: true }).first().click();
+  await queue.getByRole('button', { name: 'Remove queued message', exact: true }).first().click();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
     'Ask for approval',
@@ -379,7 +387,7 @@ test('queued receipt checks preserve settings semantics across serialization and
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   await page
     .getByRole('region', { name: 'Queued messages', exact: true })
-    .getByRole('button', { name: 'Remove', exact: true })
+    .getByRole('button', { name: 'Remove queued message', exact: true })
     .click();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
 });

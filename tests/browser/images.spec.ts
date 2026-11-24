@@ -193,7 +193,7 @@ test('queued images keep their preview and can be steered without placeholder te
   await expect(page.locator('.attachments img')).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop task', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
-  await queue.getByRole('button', { name: 'Remove', exact: true }).click();
+  await queue.getByRole('button', { name: 'Remove queued message', exact: true }).click();
 });
 
 test('image validation and the four-attachment limit leave the existing draft usable', async ({

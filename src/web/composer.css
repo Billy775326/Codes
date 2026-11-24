@@ -272,37 +272,28 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: var(--control-size);
-  padding: 4px 9px;
-  gap: 4px;
+  width: var(--control-size);
+  height: var(--control-size);
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 7px;
   color: var(--fg);
-  font-size: 13px;
-  white-space: nowrap;
 }
 .app .composer-dispatch-actions > .stop-button {
   border-color: var(--border);
   margin-inline-start: 4px;
 }
-.app .composer-dispatch-actions > button:hover:not(:disabled) {
+.app .composer-dispatch-actions > button:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--hover);
 }
 .app .composer-dispatch-actions > .delivery-primary,
-.app .composer-dispatch-actions > .send-button,
 .app .send-button {
   background: var(--fg);
   color: var(--primary-ink);
 }
-.app .composer-dispatch-actions > :is(.send-button, .delivery-primary):hover:not(:disabled),
+.app .composer-dispatch-actions > .delivery-primary:hover:not([aria-disabled='true']),
 .app .send-button:hover:not(:disabled) {
   background: var(--accent);
-}
-.app .composer-dispatch-actions > .send-button,
-.app .send-button {
-  width: var(--control-size);
-  height: var(--control-size);
-  padding: 0;
 }
 .app .composer-dispatch-actions > button > svg {
   flex: none;
@@ -420,6 +411,7 @@
   width: var(--queue-control-size);
   min-width: var(--queue-control-size);
   height: var(--queue-control-size);
+  padding: 0;
 }
 .app .compact-queue .queue-error,
 .app .compact-queue .queue-edit-scope {
@@ -452,11 +444,7 @@
   padding: 4px 10px 9px;
 }
 .app .queue-editor-actions > .queue-editor-stop {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: var(--control-size);
-  padding-inline: 8px;
+  border: 1px solid var(--border);
   margin-inline-end: auto;
 }
 .app .queue-editor-actions > .send-button {
@@ -464,7 +452,7 @@
   width: var(--control-size);
   height: var(--control-size);
 }
-@container (max-width: 390px) {
+@container (max-width: 260px) {
   .app .compact-queue .queue-entry {
     grid-template-columns: minmax(0, 1fr);
   }

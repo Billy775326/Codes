@@ -12,9 +12,7 @@ async function send(page: Page, text: string) {
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
 }
 for (const width of [1440, 320])
-  test(`delivery labels distinguish next turn from current task at ${width}px`, async ({
-    page,
-  }) => {
+  test(`delivery icons distinguish next turn from current task at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await login(page);
     await expect(page.locator('#message-delivery-help')).toContainText('Starts a new turn');
@@ -23,9 +21,9 @@ for (const width of [1440, 320])
     await page.getByLabel('Message Codex').fill('Correct the current task');
     const dispatch = page.getByRole('group', { name: 'Message actions', exact: true });
     const buttons = dispatch.getByRole('button');
-    await expect(buttons).toHaveText(['Queue', 'Add now', 'Stop']);
+    await expect(buttons).toHaveText(['', '', '']);
     await expect(dispatch.getByRole('button', { name: 'Queue message', exact: true })).toHaveClass(
-      'delivery-primary',
+      /\bdelivery-primary\b/,
     );
     await expect(page.locator('#message-delivery-help')).toContainText(
       'Queued messages can be edited until dispatch.',
@@ -33,7 +31,7 @@ for (const width of [1440, 320])
     const alternate = page.getByRole('button', { name: 'Add to current task', exact: true });
     await alternate.hover();
     const hint = page.locator('.control-tooltip');
-    await expect(hint).toHaveText('Add now · Ctrl/Cmd+Shift+Enter');
+    await expect(hint).toHaveText('Add to current task · Ctrl/Cmd+Shift+Enter');
     await expect(alternate).toHaveAttribute(
       'aria-keyshortcuts',
       'Control+Shift+Enter Meta+Shift+Enter',
@@ -56,17 +54,19 @@ for (const width of [1440, 320])
     await page.getByLabel('Message Codex').fill('Do this in the next turn');
     const addNow = page.getByRole('button', { name: 'Add to current task', exact: true });
     await expect(addNow).toBeEnabled();
-    await expect(addNow).toHaveClass('delivery-primary');
-    await expect(buttons).toHaveText(['Queue', 'Add now', 'Stop']);
+    await expect(addNow).toHaveClass(/\bdelivery-primary\b/);
+    await expect(buttons).toHaveText(['', '', '']);
     await addNow.hover();
-    await expect(hint).toHaveText(width <= 700 ? 'Add now · Ctrl/Cmd+Enter' : 'Add now · Enter');
+    await expect(hint).toHaveText(
+      width <= 700 ? 'Add to current task · Ctrl/Cmd+Enter' : 'Add to current task · Enter',
+    );
     await expect(hint).toBeVisible();
     await expect(page.locator('#message-delivery-help')).toContainText(
       'Accepted additions cannot be edited',
     );
     const queueInstead = page.getByRole('button', { name: 'Queue message', exact: true });
     await queueInstead.hover();
-    await expect(hint).toHaveText('Queue · Ctrl/Cmd+Shift+Enter');
+    await expect(hint).toHaveText('Queue for next turn · Ctrl/Cmd+Shift+Enter');
     await queueInstead.click();
     const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
     await expect(queue).toContainText('Do this in the next turn');
@@ -74,15 +74,17 @@ for (const width of [1440, 320])
     await expect(queue.getByText('Read only', { exact: true })).toHaveCount(0);
     const edit = queue.getByRole('button', { name: 'Edit message', exact: true });
     await expect(edit).toBeVisible();
+    const rowActions = queue.getByRole('listitem').getByRole('button');
+    await expect(rowActions).toHaveText(['', '', '']);
+    const remove = queue.getByRole('button', { name: 'Remove queued message', exact: true });
+    await remove.hover();
+    await expect(hint).toHaveText('Remove queued message');
     const header = await queue.locator('.queue-heading').boundingBox();
     expect(header!.height).toBeLessThanOrEqual(width <= 700 ? 44 : 32);
     const editButton = (await edit.boundingBox())!;
-    if (width <= 700) {
-      expect(editButton.height).toBeGreaterThanOrEqual(40);
-    } else {
-      const preview = (await queue.locator('.queue-preview').boundingBox())!;
-      expect(preview.y + preview.height / 2).toBeCloseTo(editButton.y + editButton.height / 2, 0);
-    }
+    expect(editButton.height).toBeGreaterThanOrEqual(width <= 700 ? 40 : 28);
+    const preview = (await queue.locator('.queue-preview').boundingBox())!;
+    expect(preview.y + preview.height / 2).toBeCloseTo(editButton.y + editButton.height / 2, 0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -95,15 +97,12 @@ for (const width of [1440, 320])
     expect(
       await page.locator('.composer-dispatch-actions > button').evaluateAll((buttons) =>
         buttons.every((button) => {
-          const label = button.querySelector('.action-label');
-          if (!label) return true;
           const bounds = button.getBoundingClientRect();
-          const text = label.getBoundingClientRect();
+          const minimum = innerWidth <= 700 ? 40 : 36;
           return (
-            text.left >= bounds.left &&
-            text.right <= bounds.right &&
             bounds.top === buttons[0]?.getBoundingClientRect().top &&
-            bounds.height >= (innerWidth <= 700 ? 40 : 36)
+            bounds.width >= minimum &&
+            bounds.height >= minimum
           );
         }),
       ),
@@ -131,17 +130,11 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
   const editor = queue.getByRole('form', { name: 'Queued message editor', exact: true });
   const controls = editor.getByRole('button');
   await expect(controls).toHaveCount(3);
-  await expect(editor.getByRole('button', { name: 'Stop task', exact: true })).toHaveText(
-    'Stop task',
-  );
-  for (const [name, hint] of [
-    ['Cancel edit', 'Cancel edit'],
-    ['Save queued message', 'Save queued message'],
-  ] as const) {
+  for (const name of ['Stop task', 'Cancel edit', 'Save queued message']) {
     const action = editor.getByRole('button', { name, exact: true });
     await expect(action).toHaveText('');
     await action.hover();
-    await expect(tooltip).toHaveText(hint);
+    await expect(tooltip).toHaveText(name);
     await expect(tooltip).toBeVisible();
   }
   expect(
@@ -158,10 +151,11 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
     }),
   ).toBe(true);
   const stop = editor.getByRole('button', { name: 'Stop task', exact: true });
-  await stop.hover();
+  await editor.getByLabel('Edit queued message').hover();
   await expect(tooltip).toBeHidden();
   await editor.getByLabel('Edit queued message').press('Tab');
   await expect(stop).toBeFocused();
+  await expect(tooltip).toHaveText('Stop task');
   await queue.getByLabel('Edit queued message').fill('Keep this unsubmitted local correction');
   await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeDisabled();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue(

@@ -1493,37 +1493,53 @@ function App() {
     canSteer && preferences.followUp === 'steer' && matchesTaskSettings ? 'steer' : 'queue';
   const alternateDelivery = deliveryMode === 'queue' ? 'steer' : 'queue';
   const hasFollowUps = active || !!thread?.queue?.items.length;
-  const deliveryBlocked =
-    connection !== 'Connected' ||
-    busy ||
-    settingsBlocked ||
-    !!system?.maintenance ||
-    !!thread?.writerConflict ||
-    !!localAttachments.pending ||
-    !!steerReceipt ||
-    !!queueRequest ||
-    !hasInput ||
-    !contextReady ||
-    directoryBlocked ||
-    loadingConversation ||
-    !!thread?.archived ||
-    !!thread?.managementPending;
-  const queueBlocked = deliveryBlocked || (thread?.queue?.items.length ?? 0) >= 10;
-  const addBlocked = deliveryBlocked || !canSteer || !matchesTaskSettings;
+  const deliveryReason = (
+    [
+      [thread?.archived, 'Conversation archived.'],
+      [directoryBlocked, 'Project directory unavailable.'],
+      [system?.maintenance, 'New tasks are paused for maintenance.'],
+      [connection !== 'Connected' || loadingConversation, 'Wait for the connection.'],
+      [thread?.writerConflict, 'Open in another Codex client'],
+      [steerReceipt || queueRequest, 'Check the pending result first.'],
+      [localAttachments.pending, 'Wait for attachments to upload.'],
+      [busy || thread?.managementPending, 'Wait for the current request.'],
+      [settingsBlocked, 'Check conversation settings.'],
+      [!contextReady, 'Wait for project context.'],
+      [!hasInput, 'Write a message first.'],
+    ] as const
+  ).find(([blocked]) => blocked)?.[1];
+  const queueFull = (thread?.queue?.items.length ?? 0) >= 10;
+  const queueReason = queueFull ? 'Queue full. Remove a queued message.' : deliveryReason;
+  const steerReason = (
+    [
+      [thread?.state === 'waitingApproval', 'Respond to the approval first.'],
+      [thread?.state === 'waitingInput', 'Answer the question first.'],
+      [
+        thread?.state === 'unknown' || thread?.pending?.state === 'unknown',
+        'Check the pending result first.',
+      ],
+      [thread?.pending?.kind === 'review', 'Wait for the review to finish.'],
+      [!canSteer, 'No task is accepting messages.'],
+      [!matchesTaskSettings, 'Requires matching task settings.'],
+    ] as const
+  ).find(([blocked]) => blocked)?.[1];
+  const addNowReason = steerReason ?? deliveryReason;
+  const deliveryBlocked = !!deliveryReason;
+  const queueBlocked = !!queueReason;
+  const addBlocked = !!addNowReason;
+  const stopReason = busy
+    ? 'Wait for the current request.'
+    : !thread?.turnId || !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
+      ? 'No task can be stopped.'
+      : undefined;
   const queueDescription = t(
-    (thread?.queue?.items.length ?? 0) >= 10
-      ? 'Queue full. Edit or remove a waiting message.'
+    queueFull
+      ? 'Queue full. Remove a queued message.'
       : thread?.queue?.paused
         ? 'Resume the queue to send waiting messages.'
         : 'Queued messages can be edited until dispatch.',
   );
-  const addNowDescription = t(
-    !canSteer
-      ? 'Resolve the pending request first.'
-      : !matchesTaskSettings
-        ? 'Requires matching task settings.'
-        : 'Accepted additions cannot be edited.',
-  );
+  const addNowDescription = t(addNowReason ?? 'Accepted additions cannot be edited.');
   const deliveryHelp = hasFollowUps
     ? deliveryMode === 'queue'
       ? queueDescription
@@ -2393,7 +2409,13 @@ function App() {
           )}
           {thread?.queue && (
             <QueuePanel
-              dispatchDisabled={!contextReady || directoryBlocked}
+              dispatchUnavailable={
+                directoryBlocked
+                  ? 'Project directory unavailable.'
+                  : !contextReady
+                    ? 'Wait for project context.'
+                    : undefined
+              }
               projectId={contextProjectId}
               key={threadId}
               threadId={threadId}
@@ -2650,23 +2672,27 @@ function App() {
                 data-follow-up={hasFollowUps || undefined}
               >
                 {hasFollowUps ? (
-                  <button
-                    type="button"
+                  <IconButton
+                    icon="queue"
+                    size={17}
+                    label={t('Queue message')}
                     className={deliveryMode === 'queue' ? 'delivery-primary' : undefined}
-                    aria-label={t('Queue message')}
                     aria-keyshortcuts={
-                      deliveryMode === 'queue' ? keyShortcut : alternateKeyShortcut
+                      queueBlocked
+                        ? undefined
+                        : deliveryMode === 'queue'
+                          ? keyShortcut
+                          : alternateKeyShortcut
                     }
                     aria-description={queueDescription}
-                    data-tooltip={
-                      t('Queue') + ' · ' + (deliveryMode === 'queue' ? shortcut : alternateShortcut)
+                    hint={
+                      t('Queue for next turn') +
+                      ' · ' +
+                      (deliveryMode === 'queue' ? shortcut : alternateShortcut)
                     }
-                    disabled={queueBlocked}
+                    unavailable={queueReason ? t(queueReason) : undefined}
                     onClick={() => followUp('queue')}
-                  >
-                    <Icon name="queue" size={15} />
-                    <span className="action-label">{t('Queue')}</span>
-                  </button>
+                  />
                 ) : (
                   <IconButton
                     className="send-button"
@@ -2682,50 +2708,47 @@ function App() {
                 )}
                 {active && (
                   <>
-                    <button
-                      type="button"
+                    <IconButton
+                      icon="steer"
+                      size={17}
+                      label={t('Add to current task')}
                       className={deliveryMode === 'steer' ? 'delivery-primary' : undefined}
-                      aria-label={t('Add to current task')}
                       aria-keyshortcuts={
-                        deliveryMode === 'steer' ? keyShortcut : alternateKeyShortcut
+                        addBlocked
+                          ? undefined
+                          : deliveryMode === 'steer'
+                            ? keyShortcut
+                            : alternateKeyShortcut
                       }
                       aria-description={addNowDescription}
-                      data-tooltip={
-                        !canSteer || !matchesTaskSettings
-                          ? addNowDescription
-                          : t('Add now') +
-                            ' · ' +
-                            (deliveryMode === 'steer' ? shortcut : alternateShortcut)
+                      hint={
+                        t('Add to current task') +
+                        ' · ' +
+                        (deliveryMode === 'steer' ? shortcut : alternateShortcut)
                       }
-                      disabled={addBlocked}
+                      unavailable={addNowReason ? addNowDescription : undefined}
                       onClick={() => followUp('steer')}
-                    >
-                      <Icon name="steer" size={15} />
-                      <span className="action-label">{t('Add now')}</span>
-                    </button>
-                    <button
-                      type="button"
+                    />
+                    <IconButton
+                      icon="stop"
                       className="stop-button"
-                      aria-label={t('Stop task')}
-                      data-tooltip={t('Pauses the queue')}
+                      label={t('Stop task')}
+                      hint={t(
+                        thread?.queue?.items.length && !thread.queue.paused
+                          ? 'Stop task · Pause queue'
+                          : 'Stop task',
+                      )}
                       aria-description={t(
                         'Stop the current task and pause queued work. Completed file changes remain.',
                       )}
-                      disabled={
-                        busy ||
-                        !thread?.turnId ||
-                        !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
-                      }
+                      unavailable={stopReason ? t(stopReason) : undefined}
                       onClick={() => {
                         setBusy(true);
                         void post(`/threads/${threadId}/interrupt`)
                           .catch(notice)
                           .finally(() => setBusy(false));
                       }}
-                    >
-                      <Icon name="stop" size={16} />
-                      <span className="action-label">{t('Stop')}</span>
-                    </button>
+                    />
                   </>
                 )}
               </div>

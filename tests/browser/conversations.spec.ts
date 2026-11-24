@@ -386,7 +386,7 @@ test('sidebar keeps task and paused queue status across selection, reload, theme
   await expect(row.locator('.conversation-status')).toHaveText('Stopped');
   await expect(row.locator('.conversation-queue')).toHaveText('1 in queue · Paused');
   const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
-  await queue.getByRole('button', { name: 'Remove', exact: true }).click();
+  await queue.getByRole('button', { name: 'Remove queued message', exact: true }).click();
   await expect(row.locator('.conversation-queue')).toHaveCount(0);
 });
 

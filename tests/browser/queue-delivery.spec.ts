@@ -44,7 +44,7 @@ for (const width of [1440, 390])
     );
     await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeVisible();
     await expect(page.getByTestId('message-user')).toHaveCount(2);
-    await queue.getByRole('button', { name: 'Remove', exact: true }).click();
+    await queue.getByRole('button', { name: 'Remove queued message', exact: true }).click();
     await expect(queue).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,

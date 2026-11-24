@@ -95,22 +95,41 @@ test('composer shortcut hints follow multiline preferences and a waiting queue',
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
   await input.fill('Waiting follow-up');
   const queue = page.getByRole('button', { name: 'Queue message', exact: true });
-  await expect(queue).toHaveClass('delivery-primary');
-  await expect(
-    page.getByRole('button', { name: 'Add to current task', exact: true }),
-  ).toBeDisabled();
+  await expect(queue).toHaveClass(/\bdelivery-primary\b/);
+  const addNow = page.getByRole('button', { name: 'Add to current task', exact: true });
+  await expect(addNow).toBeDisabled();
+  await addNow.hover();
+  await expect(tooltip).toHaveText('Add to current task · Respond to the approval first.');
+  await addNow.press('Enter');
+  await expect(page.getByTestId('message-user')).toHaveCount(1);
   await queue.hover();
-  await expect(tooltip).toHaveText('Queue · Enter');
+  await expect(tooltip).toHaveText('Queue for next turn · Enter');
   await expect(tooltip).toBeVisible();
-  await page.getByRole('button', { name: 'Stop task', exact: true }).hover();
-  await expect(tooltip).toHaveText('Pauses the queue');
+  const stop = page.getByRole('button', { name: 'Stop task', exact: true });
+  await stop.hover();
+  await expect(tooltip).toHaveText('Stop task');
   await expect(tooltip).toBeVisible();
   await queue.click();
+  await stop.hover();
+  await expect(tooltip).toHaveText('Stop task · Pause queue');
+  await expect(input).toHaveValue('');
+  await queue.hover();
+  await expect(tooltip).toHaveText('Queue message · Write a message first.');
+  await expect(tooltip).toBeVisible();
+  for (let index = 1; index < 10; index++) {
+    await input.fill('More queued work ' + index);
+    await queue.click();
+  }
+  await input.fill('Keep this unsent draft');
+  await expect(queue).toBeDisabled();
+  await input.hover();
+  await queue.hover();
+  await expect(tooltip).toHaveText('Queue message · Queue full. Remove a queued message.');
+  await expect(queue).not.toHaveAttribute('aria-keyshortcuts');
+  await page.getByRole('button', { name: 'Remove queued message', exact: true }).last().click();
   await page.getByRole('button', { name: 'Decline', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
-  await queue.hover();
-  await expect(tooltip).toHaveText('Queue · Enter');
-  await expect(tooltip).toBeVisible();
+  await expect(input).toHaveValue('Keep this unsent draft');
   await expect(page.locator('#message-delivery-help')).toContainText(
     'Resume the queue to send waiting messages.',
   );
