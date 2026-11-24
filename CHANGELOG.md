@@ -10,6 +10,9 @@
 
 ### Added
 
+- Switch API-compatible web assets independently of the running service and restore the previous entry if needed.
+- Discover Codex CLI compatibility by the installed App Server protocol. Show the actual CLI version and gate optional native features.
+
 - Edit the current project's root AGENTS.md in Settings. Saving checks for edits made on disk since the file was opened.
 
 - Resize desktop navigation and project panels by dragging their inner edges or using the arrow keys while the divider has focus. Each width is saved in the browser.
@@ -72,6 +75,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Migrate workspace metadata to schema 5 with a private pre-upgrade backup. Diagnose slow reads and connection replay with correlated, bounded log records.
 
 - Keep the project card disclosure beside its name in both states. The chevron indicates whether conversations are visible and keeps keyboard focus when toggled.
 
@@ -156,6 +161,9 @@
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 
 ### Fixed
+
+- Give the selected conversation priority over historical pagination. Cancel unused reads and isolate identified oversized history responses from concurrent execution.
+- Use the same interaction status for the transcript and sidebar, including replies being submitted and replies that require verification.
 
 - Use the effective project Codex configuration for inherited model, reasoning effort, and speed. Clearing an override restores the current Codex default.
 

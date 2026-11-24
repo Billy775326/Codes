@@ -1,3 +1,4 @@
+import { deferred } from '../src/shared/deferred';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
@@ -6,6 +7,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gunzipSync } from 'node:zlib';
 import type { IncomingHttpHeaders } from 'node:http';
+import { switchWebPreview } from '../scripts/web-preview';
 import { Store } from '../src/server/store';
 import { Service } from '../src/server/service';
 import { Driver } from '../src/codex/driver';
@@ -17,6 +19,134 @@ let service: Service;
 let origin: string;
 let cookie: string;
 const token = 'test-only-access-token-not-a-real-secret';
+it('stops advancing disconnected HTTP history while a different conversation is running', async () => {
+  const project = await service.addProject(directory);
+  const active = await service.create(project.id, { permission: 'read-only' });
+  const history = await service.create(project.id, { permission: 'read-only' });
+  await service.send(active.id, randomUUID(), '[hold] Keep this turn running', active.settings);
+  const readStarted = deferred<void>();
+  const releasePage = deferred<void>();
+  const loggedAbort = deferred<void>();
+  const output = console.info;
+  const info = vi.spyOn(console, 'info').mockImplementation((line) => {
+    if (typeof line === 'string' && line.includes('CLIENT_DISCONNECTED')) loggedAbort.resolve();
+    else output(line);
+  });
+  const call = service.driver.call.bind(service.driver);
+  let pages = 0;
+  const spy = vi
+    .spyOn(service.driver, 'call')
+    .mockImplementation(async (method, params, timeout) => {
+      if (
+        typeof params === 'object' &&
+        params &&
+        'threadId' in params &&
+        params.threadId === history.id
+      ) {
+        if (method === 'thread/turns/list')
+          return { data: [{ id: 'history-turn', status: 'completed', itemsView: 'notLoaded' }] };
+        if (method === 'thread/items/list') {
+          pages++;
+          readStarted.resolve();
+          await releasePage.promise;
+          return { data: [], nextCursor: pages === 1 ? 'next' : null };
+        }
+      }
+      return call(method, params, timeout);
+    });
+  const cursor = Buffer.from(
+    JSON.stringify({ id: history.id, cursor: '', direction: 'older' }),
+  ).toString('base64url');
+  const controller = new AbortController();
+  try {
+    const request = fetch(origin + '/api/threads/' + history.id + '/history?cursor=' + cursor, {
+      headers: { cookie },
+      signal: controller.signal,
+    });
+    const aborted = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    await readStarted.promise;
+    controller.abort();
+    await aborted;
+    await loggedAbort.promise;
+    releasePage.resolve();
+    const snapshot = await fetch(origin + '/api/threads/' + active.id + '/snapshot', {
+      headers: { cookie },
+    });
+    expect(snapshot.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+    expect((await snapshot.json()).thread.state).toBe('running');
+    expect(pages).toBe(1);
+    await service.interrupt(active.id);
+  } finally {
+    releasePage.resolve();
+    spy.mockRestore();
+    info.mockRestore();
+  }
+});
+it('switches and rolls back a compatible web build without restarting execution or its event stream', async () => {
+  const dist = join(directory, 'dist');
+  const candidate = join(directory, 'candidate');
+  const state = join(directory, 'preview-state');
+  const previous = 'style-aaaaaaaa.css';
+  const next = 'style-bbbbbbbb.css';
+  for (const [folder, asset, style] of [
+    [dist, previous, 'body{color:red}'],
+    [candidate, next, 'body{color:blue}'],
+  ] as const) {
+    await mkdir(join(folder, 'server'), { recursive: true });
+    await writeFile(join(folder, 'server', 'main.js'), 'same backend');
+    await mkdir(join(folder, 'web', 'assets'), { recursive: true });
+    await writeFile(join(folder, 'web', 'assets', asset), style);
+    await writeFile(
+      join(folder, 'web', 'index.html'),
+      '<link rel="stylesheet" href="/assets/' + asset + '">',
+    );
+  }
+  const project = await service.addProject(directory);
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  await service.send(thread.id, randomUUID(), '[hold] Keep executing', thread.settings);
+  const epoch = service.events.epoch;
+  const controller = new AbortController();
+  const event = await fetch(
+    origin +
+      '/api/events?' +
+      new URLSearchParams({
+        threadId: thread.id,
+        after: String(service.events.seq),
+        epoch,
+      }),
+    { headers: { cookie }, signal: controller.signal },
+  );
+  const reader = event.body!.getReader();
+  const webBuild = async () =>
+    (await fetch(origin + '/api/web-build', { headers: { cookie } })).json();
+  try {
+    expect(await webBuild()).toEqual({ signature: '/assets/' + previous });
+    await switchWebPreview(dist, state, candidate);
+    expect(await (await fetch(origin + '/')).text()).toContain(next);
+    expect(await webBuild()).toEqual({ signature: '/assets/' + next });
+    expect(await (await fetch(origin + '/assets/' + previous)).text()).toBe('body{color:red}');
+    service.events.publish('web-switch-fixture', {}, thread.id);
+    let received = '';
+    while (!received.includes('web-switch-fixture')) {
+      const frame = await reader.read();
+      expect(frame.done).toBe(false);
+      received += new TextDecoder().decode(frame.value);
+    }
+    expect(service.events.epoch).toBe(epoch);
+    expect(thread.state).toBe('running');
+    await writeFile(join(candidate, 'server', 'main.js'), 'different backend');
+    await expect(switchWebPreview(dist, state, candidate)).rejects.toThrow(
+      /different backend output/,
+    );
+    await switchWebPreview(dist, state);
+    expect(await webBuild()).toEqual({ signature: '/assets/' + previous });
+    expect(await (await fetch(origin + '/assets/' + next)).text()).toBe('body{color:blue}');
+    await service.interrupt(thread.id);
+  } finally {
+    controller.abort();
+    await reader.cancel().catch(() => undefined);
+  }
+});
 it('returns only effective execution defaults for an authenticated registered project', async () => {
   const project = await service.addProject(directory);
   const url = origin + '/api/projects/' + project.id + '/codex-defaults';
@@ -167,7 +297,7 @@ beforeEach(async () => {
   await new Promise<void>((yes) => reserve.close(() => yes()));
   origin = `http://127.0.0.1:${port}`;
   const network = new NetworkConfiguration(directory, { CODES_PORT: String(port) });
-  app = await application(service, { network, token });
+  app = await application(service, { network, token, staticDir: join(directory, 'dist', 'web') });
   await new Promise<void>((yes) => app.server.listen(port, '127.0.0.1', yes));
   const login = await fetch(origin + '/api/login', {
     method: 'POST',

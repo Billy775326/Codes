@@ -92,15 +92,15 @@ Legacy Codex histories use native `thread/turns/list` with full items and a one-
 
 ## Project and conversation context
 
-SQLite schema 4 retains project registrations and conversation associations. Browser navigation stores at most 20 recent project views, separately from conversation drafts and server-backed settings. The native conversation header validates ownership; selected snapshots add bounded project/directory metadata, and conversation file APIs derive their directory from the thread ID. Project-level file APIs remain compatible for uncreated drafts and older callers.
+SQLite schema 5 retains project registrations and conversation associations. Browser navigation stores at most 20 recent project views, separately from conversation drafts and server-backed settings. The native conversation header validates ownership; selected snapshots add bounded project/directory metadata, and conversation file APIs derive their directory from the thread ID. Project-level file APIs remain compatible for uncreated drafts and older callers.
 
 Directory health uses asynchronous filesystem checks. Missing or inaccessible directories do not erase history; new execution and filesystem access fail explicitly. Queues pause before claiming their next item. Existing configured registrations survive service startup with a missing path. These checks preserve directory context and native permissions rather than adding another tool authorization engine. See [project/conversation behavior](session-navigation-proposal.md).
 
 ## Compatibility and trust
 
-Supported protocol baseline: **Codex CLI 0.167.0**. Protocol behavior was checked against generated schemas and a metadata-only native smoke test, followed by an isolated live read/write/interrupt pilot. The metadata check exposed lazy thread materialization: `thread/turns/list` reports a specific error before the first user message. The adapter treats only that pinned-version error as empty history.
+Codes discovers the installed App Server methods and fields from the CLI's generated protocol schema, then validates the stdio handshake. The native compatibility matrix tests CLI 0.166.0, 0.167.0, 0.168.0, and 0.172.0. Other versions are accepted when they expose the required execution, approval and history contracts. Missing optional branch, review or turn-speed capabilities are reported and gated. Versions with full-turn history can use bounded legacy pages. The [IDE alignment audit](ide-parity.md) records the earlier protocol baseline.
 
-Native Plan/Code and reasoning settings use experimental collaboration fields on the pinned connection. Reviews share the send execution lease; steering uses separate receipts. The [IDE alignment audit](ide-parity.md) records protocol choices and remaining differences.
+Conversation history schedules at most two native reads, including at most one background pagination request. Identical reads share work. Disconnecting the last reader stops subsequent native pages. Oversized JSONL replies identified by a known history request ID fail that read. Unknown or malformed frames still fail the connection to protect execution receipts and approval callbacks.
 
 An independent simulator exercises protocol timing and failure paths, but does not prove that every live Codex tool, account policy, permission request, or model event behaves as expected. Basic live read/write/interrupt acceptance passed; real prompting policies and broader tool variants remain separate gates.
 

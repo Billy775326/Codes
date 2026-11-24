@@ -12,6 +12,8 @@ import { imageId, imageLimits, imageTypes } from '../shared/images.js';
 import { limits } from '../shared/types.js';
 import { projectInstructionsLimit } from '../shared/project-instructions.js';
 import { Service } from './service.js';
+import { webEntrySignature } from '../shared/web-build.js';
+import { readPhase, readReplay, readResult, traceRead } from './read-diagnostics.js';
 import type { openImagePreview } from './images.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
@@ -95,6 +97,7 @@ function acceptsGzip(header: string | undefined) {
   return (offers.get('gzip') ?? offers.get('*') ?? 0) > 0;
 }
 async function json(response: ServerResponse, data: unknown, status = 200) {
+  const startedAt = performance.now();
   let bytes = Buffer.from(JSON.stringify(data));
   let encoding: string | undefined;
   if (
@@ -109,6 +112,8 @@ async function json(response: ServerResponse, data: unknown, status = 200) {
       encoding = 'gzip';
     }
   }
+  readPhase('serialize', startedAt);
+  readResult(bytes.length);
   if (response.destroyed) return;
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -118,6 +123,17 @@ async function json(response: ServerResponse, data: unknown, status = 200) {
     ...(encoding ? { 'content-encoding': encoding } : {}),
   });
   response.end(bytes);
+}
+async function untilClosed<T>(response: ServerResponse, read: (signal: AbortSignal) => Promise<T>) {
+  const controller = new AbortController();
+  const close = () => controller.abort();
+  response.once('close', close);
+  if (response.destroyed) close();
+  try {
+    return await read(controller.signal);
+  } finally {
+    response.removeListener('close', close);
+  }
 }
 async function serveImagePreview(
   response: ServerResponse,
@@ -250,6 +266,10 @@ export async function application(
             'codes_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0',
           );
           return json(response, { ok: true });
+        }
+        if (url.pathname === '/api/web-build' && method === 'GET' && !options.dev) {
+          const index = await readFile(join(options.staticDir ?? 'dist/web', 'index.html'), 'utf8');
+          return json(response, { signature: webEntrySignature(index) });
         }
         if (url.pathname === '/api/system' && method === 'GET')
           return json(response, service.system());
@@ -411,10 +431,12 @@ export async function application(
             throw new AppError('NOT_FOUND', 'Attachment endpoint not found.', 404);
           }
           if (segments[3] === 'snapshot' && method === 'GET') {
-            await service.list(projectId);
-            return json(response, {
-              threads: service.summaries(projectId),
-              cursor: { seq: service.events.seq, epoch: service.events.epoch },
+            return traceRead(response, 'project-snapshot', undefined, async () => {
+              await service.list(projectId);
+              return json(response, {
+                threads: service.summaries(projectId),
+                cursor: { seq: service.events.seq, epoch: service.events.epoch },
+              });
             });
           }
           if (segments[3] === 'conversations' && method === 'GET') {
@@ -628,23 +650,31 @@ export async function application(
           if (segments[3] === 'management-status' && method === 'POST')
             return json(response, await service.checkManagement(id));
           if (segments[3] === 'snapshot' && method === 'GET') {
-            const thread = await service.read(id);
-            // Cached history stays readable while native execution is offline.
-            const context = await service.projectContext(thread.projectId);
-            return json(response, {
-              thread: {
-                ...service.withSidebarActivity(thread),
-                actions: service.conversationActions(id),
-              },
-              context,
-              cursor: { seq: service.events.seq, epoch: service.events.epoch },
-            });
+            return traceRead(response, 'snapshot', id, () =>
+              untilClosed(response, async (signal) => {
+                const thread = await service.read(id, signal);
+                // Cached history stays readable while native execution is offline.
+                const context = await service.projectContext(thread.projectId);
+                return json(response, {
+                  thread: {
+                    ...service.withSidebarActivity(thread),
+                    actions: service.conversationActions(id),
+                  },
+                  context,
+                  cursor: { seq: service.events.seq, epoch: service.events.epoch },
+                });
+              }),
+            );
           }
           if (segments[3] === 'history' && method === 'GET') {
-            const cursor = url.searchParams.get('cursor');
-            if (!cursor || cursor.length > 4096)
-              throw new AppError('HISTORY_CURSOR', 'A valid history cursor is required.');
-            return json(response, await service.history(id, cursor));
+            return traceRead(response, 'history', id, () =>
+              untilClosed(response, async (signal) => {
+                const cursor = url.searchParams.get('cursor');
+                if (!cursor || cursor.length > 4096)
+                  throw new AppError('HISTORY_CURSOR', 'A valid history cursor is required.');
+                return json(response, await service.history(id, cursor, signal));
+              }),
+            );
           }
           if (segments[3] === 'send' && method === 'POST') {
             const p = sendInput.parse(await body(request));
@@ -720,39 +750,42 @@ export async function application(
         }
         if (url.pathname === '/api/events' && method === 'GET') {
           const id = url.searchParams.get('threadId') ?? '';
-          if (id) {
-            const thread = service.store.thread(id);
-            if (!thread) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
-            service.project(thread.projectId);
-          } else service.project(url.searchParams.get('projectId') ?? '');
-          service.events.checkCapacity();
-          response.writeHead(200, {
-            'content-type': 'text/event-stream',
-            'cache-control': 'no-store',
-            connection: 'keep-alive',
-            'x-accel-buffering': 'no',
+          return traceRead(response, 'events', id, async () => {
+            if (id) {
+              const thread = service.store.thread(id);
+              if (!thread) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+              service.project(thread.projectId);
+            } else service.project(url.searchParams.get('projectId') ?? '');
+            service.events.checkCapacity();
+            response.writeHead(200, {
+              'content-type': 'text/event-stream',
+              'cache-control': 'no-store',
+              connection: 'keep-alive',
+              'x-accel-buffering': 'no',
+            });
+            response.flushHeaders();
+            const expiry = setInterval(() => {
+              if (!authenticated(request, access?.subject)) response.end();
+            }, 30_000);
+            const accessExpiry = access
+              ? setTimeout(
+                  () => response.end(),
+                  Math.min(access.expiresAt - Date.now(), 12 * 3600_000),
+                )
+              : undefined;
+            response.once('close', () => {
+              clearInterval(expiry);
+              clearTimeout(accessExpiry);
+            });
+            readReplay(
+              service.events.subscribe(
+                id,
+                Number(url.searchParams.get('after') ?? -1),
+                url.searchParams.get('epoch') ?? '',
+                response,
+              ),
+            );
           });
-          response.flushHeaders();
-          const expiry = setInterval(() => {
-            if (!authenticated(request, access?.subject)) response.end();
-          }, 30_000);
-          const accessExpiry = access
-            ? setTimeout(
-                () => response.end(),
-                Math.min(access.expiresAt - Date.now(), 12 * 3600_000),
-              )
-            : undefined;
-          response.once('close', () => {
-            clearInterval(expiry);
-            clearTimeout(accessExpiry);
-          });
-          service.events.subscribe(
-            id,
-            Number(url.searchParams.get('after') ?? -1),
-            url.searchParams.get('epoch') ?? '',
-            response,
-          );
-          return;
         }
         throw new AppError('NOT_FOUND', 'API endpoint not found.', 404);
       }
@@ -791,6 +824,7 @@ export async function application(
       });
       response.end(method === 'HEAD' ? undefined : bytes);
     })().catch((error: unknown) => {
+      if (response.destroyed) return;
       if (response.headersSent) {
         response.end();
         return;

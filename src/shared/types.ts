@@ -117,6 +117,7 @@ export interface Summary {
     | 'optionalInput'
     | 'approvalAndInput'
     | 'responding'
+    | 'responseUnconfirmed'
     | 'compacting';
   expiredQuestion?: boolean;
 }
@@ -200,6 +201,12 @@ export interface MaintenanceState {
   expiresAt: number;
   ready: boolean;
 }
+export interface CodexCapabilities {
+  itemHistory: boolean;
+  branch: boolean;
+  review: boolean;
+  turnSpeed: boolean;
+}
 export interface System {
   maintenance?: MaintenanceState;
   defaultProjectPath?: string;
@@ -208,6 +215,7 @@ export interface System {
   version: string;
   error?: string;
   codeQuestions?: boolean;
+  capabilities?: CodexCapabilities;
 }
 export interface Envelope {
   seq: number;

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Action, Message, Question } from '../shared/types.js';
+import type { OpenInteraction } from '../shared/conversation-activity.js';
 import { questionSourceItemId } from '../shared/question-replies.js';
 
 type Entry = {
@@ -30,12 +31,7 @@ const parseEntry = (entry: Entry): QuestionEntry => ({
   parsed: JSON.parse(entry.questions),
 });
 
-/** Keep nonblocking question attention separate from native callbacks and execution leases. */
-export class AsyncQuestions {
-  private readonly preparing = new Set<string>();
-
-  constructor(private readonly db: DatabaseSync) {
-    db.exec(`CREATE TABLE IF NOT EXISTS async_question_items (
+export const asyncQuestionSchema = `CREATE TABLE IF NOT EXISTS async_question_items (
       id TEXT PRIMARY KEY,
       thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
       item_id TEXT NOT NULL,
@@ -62,8 +58,13 @@ export class AsyncQuestions {
       turn_id TEXT NOT NULL,
       signature TEXT NOT NULL,
       PRIMARY KEY(thread_id, turn_id, signature)
-    );`);
-  }
+    );`;
+
+/** Keep nonblocking question attention separate from native callbacks and execution leases. */
+export class AsyncQuestions {
+  private readonly preparing = new Set<string>();
+
+  constructor(private readonly db: DatabaseSync) {}
 
   observe(threadId: string, message: Message) {
     if (!hasQuestion(message)) return false;
@@ -191,18 +192,39 @@ export class AsyncQuestions {
       .run(remaining, threadId, itemId);
   }
 
-  hasOpen(threadId: string) {
+  openInteractions(threadId: string): OpenInteraction[] {
     const candidates = this.db
       .prepare(selection + ' WHERE q.thread_id=? AND q.closed IS NULL AND q.remaining>0')
       .iterate(threadId) as IterableIterator<Entry>;
     const groups = new Map<string, Map<string, QuestionGroup>>();
+    const included = new Set<string>();
+    const open: OpenInteraction[] = [];
     for (const entry of candidates) {
       const group = this.group(entry, groups);
-      if (!group.legacy) return true;
-      const status = this.toAction(group).status;
-      if (status === 'pending' || status === 'responding') return true;
+      if (included.has(group.primary.id)) continue;
+      included.add(group.primary.id);
+      if (!group.legacy) {
+        const responding =
+          this.preparing.has(entry.id) ||
+          ['dispatching', 'acknowledged', 'unknown'].includes(entry.operationState ?? '');
+        open.push({
+          kind: 'questions',
+          status: responding ? 'responding' : 'pending',
+          blocking: false,
+          replyUnconfirmed: entry.operationState === 'unknown',
+        });
+      } else {
+        const { kind, status, blocking, replyUnconfirmed } = this.toAction(group);
+        if (status === 'pending' || status === 'responding')
+          open.push({ kind, status, blocking, replyUnconfirmed });
+      }
+      if (open.length >= 40) break;
     }
-    return false;
+    return open;
+  }
+
+  hasOpen(threadId: string) {
+    return this.openInteractions(threadId).length > 0;
   }
 
   action(id: string) {

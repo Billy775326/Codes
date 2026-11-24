@@ -99,7 +99,8 @@ test('three-dot indicator distinguishes a pending answer from approval without a
   const activity = page.locator('.task-activity');
   await input.fill('[question] Waiting dot fixture');
   await send.click();
-  await expect(activity).toHaveAccessibleName('Needs answer');
+  await expect(activity).toHaveAccessibleName('Optional question');
+  await expect(page.locator('.thread-link[aria-current=page]')).toContainText('Optional question');
   const dot = activity.locator('i').first();
   await expect(dot).toHaveCSS('background-color', 'rgb(193, 175, 246)');
   await expect(dot).toHaveCSS('animation-name', 'none');

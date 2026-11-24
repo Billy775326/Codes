@@ -44,7 +44,7 @@ A branch operation has its own durable receipt and returned conversation ID. Ret
 
 ## Storage and verification
 
-Queue state, branch ancestry, and branch result IDs were introduced in schema 3. The current schema is 4, which also shares the execution lease with reviews; schemas 1–3 are backed up before migration. See [migration and rollback](conversations.md#metadata-migration-and-rollback); native histories and authentication remain in the server user's Codex home. Metadata backups alone do not preserve that native history or undo later model work.
+Queue state, branch ancestry, and branch result IDs were introduced in schema 3. Schema 4 shared the execution lease with reviews. The current schema is 5, with metadata tables created through the migration. Schemas 1–4 are backed up before upgrade. See [migration and rollback](conversations.md#metadata-migration-and-rollback); native histories and authentication remain in the server user's Codex home. Metadata backups alone do not preserve that native history or undo later model work.
 
 The [official app-server documentation](https://learn.chatgpt.com/docs/app-server) defines structured question callbacks and `thread/fork` with `lastTurnId`. Fields were checked against generated schemas from CLI 0.167.0. Queue order, receipts, limits, and browser recovery are codes behavior, tested separately in the simulator. The opt-in live pilot also verifies native fork history, unchanged source files/history, and two queued model turns. Real prompting policies and HTTPS/physical-phone acceptance remain separate gates.
 

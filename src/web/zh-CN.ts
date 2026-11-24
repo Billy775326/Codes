@@ -490,6 +490,10 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Refresh list': '刷新列表',
   'Refreshing…': '正在刷新…',
   'Reload default settings': '重新加载默认设置',
+  'A native history item exceeds the preview limit.': '一条原生历史记录超过了预览上限。',
+  'Too many conversation reads. Try again.': '会话读取过多，请重试。',
+  'The conversation read queue is busy. Try again.': '会话读取繁忙，请重试。',
+  'Reload to apply update': '重载页面以应用更新',
   'Reload page': '重载页面',
   'Reload settings': '重新加载设置',
   'Reload this page? Unsent attachments or a queue edit may be lost.':

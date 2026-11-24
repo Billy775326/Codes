@@ -32,7 +32,7 @@ Revision checks reject stale writes from another window. A conflicting local cho
 
 ## Storage and API
 
-Schema 4 remains supported. An additive `setting_profiles` table stores settings separately from execution snapshots, using a scope key and an integer revision. Existing conversations are seeded once from their last stored task configuration. Subsequent task/history refreshes preserve those preferences. Back up the database with the existing runtime data. Older builds ignore this table; preferences remain available when returning to a build that supports it.
+Schema 5 creates `setting_profiles` in the database migration. The table stores settings separately from execution snapshots, using a scope key and an integer revision. Existing conversations are seeded once from their last stored task configuration. Subsequent task/history refreshes preserve those preferences. Back up the database with the existing runtime data. Older builds ignore this table; preferences remain available when returning to a build that supports it.
 
 Authenticated endpoints:
 

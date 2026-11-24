@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, chmodSync, openSync, closeSync } from 'node:fs';
+import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   Operation,
@@ -15,7 +15,8 @@ import { limits, sameSettings } from '../shared/types.js';
 import { parseQuestionReplies } from '../shared/question-replies.js';
 import { settingsSchema, settingsProfileSchema } from '../shared/settings.js';
 import { AppError } from '../shared/errors.js';
-import { QueueStore, queueSchema } from './queue-store.js';
+import { QueueStore } from './queue-store.js';
+import { migrateDatabase } from './database-migrations.js';
 
 const retainedTurnUsage = 1000;
 const projectArchiveStatus =
@@ -30,80 +31,12 @@ export class Store {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(join(directory, 'codes.sqlite'));
     chmodSync(join(directory, 'codes.sqlite'), 0o600);
-    if (
-      this.db.prepare("SELECT name FROM sqlite_master WHERE name='meta'").get() &&
-      ![1, 2, 3, 4].includes((this.db.prepare('SELECT version FROM meta').get() as any)?.version)
-    ) {
+    try {
+      migrateDatabase(this.db, directory);
+    } catch (error) {
       this.db.close();
-      throw new AppError(
-        'DATABASE_VERSION',
-        'This database was created by an unsupported version.',
-        500,
-      );
+      throw error;
     }
-    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=1000;
-      CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL);
-      INSERT INTO meta SELECT 4 WHERE NOT EXISTS (SELECT 1 FROM meta);
-      CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT UNIQUE NOT NULL);
-      CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), title TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL, settings TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0, forked_from_id TEXT);
-      CREATE INDEX IF NOT EXISTS thread_project_updated ON threads(project_id, updated_at);
-      CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id), kind TEXT NOT NULL, digest TEXT NOT NULL, state TEXT NOT NULL, turn_id TEXT, error TEXT, pending_text TEXT, created_at INTEGER NOT NULL, result_id TEXT);
-      CREATE UNIQUE INDEX IF NOT EXISTS active_turn ON operations(thread_id) WHERE kind IN ('send','review') AND state IN ('dispatching','acknowledged','unknown');`);
-    const version = (this.db.prepare('SELECT version FROM meta').get() as any).version;
-    if (version < 4) {
-      const backup = join(
-        directory,
-        'codes.schema-v' + version + '-' + Date.now() + '-' + randomUUID() + '.sqlite',
-      );
-      try {
-        closeSync(openSync(backup, 'wx', 0o600));
-        this.db.prepare('VACUUM INTO ?').run(backup);
-      } catch (error) {
-        this.db.close();
-        throw error;
-      }
-      this.db.exec('BEGIN IMMEDIATE');
-      try {
-        if (version === 1)
-          this.db.exec('ALTER TABLE threads ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;');
-        if (version < 3)
-          this.db.exec(
-            'ALTER TABLE threads ADD COLUMN forked_from_id TEXT; ALTER TABLE operations ADD COLUMN result_id TEXT;',
-          );
-        this.db.exec(
-          queueSchema +
-            `DROP INDEX IF EXISTS active_turn;
-          CREATE UNIQUE INDEX active_turn ON operations(thread_id) WHERE kind IN ('send','review') AND state IN ('dispatching','acknowledged','unknown');
-          UPDATE meta SET version=4; COMMIT;`,
-        );
-      } catch (error) {
-        this.db.exec('ROLLBACK');
-        this.db.close();
-        throw error;
-      }
-    } else this.db.exec(queueSchema);
-    this.db.exec(`CREATE TABLE IF NOT EXISTS project_archives (
-      project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE
-    );`);
-    this.db.exec(`CREATE TABLE IF NOT EXISTS setting_profiles (
-      scope TEXT PRIMARY KEY, revision INTEGER NOT NULL, settings TEXT NOT NULL);
-      INSERT OR IGNORE INTO setting_profiles SELECT 'thread:'||id,0,settings FROM threads;`);
-    this.db.exec(`CREATE TABLE IF NOT EXISTS waiting_question_operations (
-      operation_id TEXT PRIMARY KEY REFERENCES operations(id) ON DELETE CASCADE
-    );`);
-    this.db.exec(`CREATE TABLE IF NOT EXISTS turn_usage (
-      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-      turn_id TEXT NOT NULL,
-      total_tokens INTEGER NOT NULL,
-      output_tokens INTEGER,
-      PRIMARY KEY (thread_id, turn_id)
-    );`);
-    this.db.exec(`CREATE TABLE IF NOT EXISTS uploaded_files (
-      project_id TEXT NOT NULL REFERENCES projects(id),
-      id TEXT NOT NULL,
-      content TEXT NOT NULL,
-      PRIMARY KEY (project_id, id)
-    );`);
     this.queue = new QueueStore(this.db);
     this.queue.recover();
     this.db.exec(

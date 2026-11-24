@@ -36,17 +36,18 @@ export class Events {
       clearInterval(timer);
       this.clients.delete(client);
     });
-    if (epoch !== this.epoch || seq < this.discarded || seq > this.seq)
+    if (epoch !== this.epoch || seq < this.discarded || seq > this.seq) {
       this.send(response, 'reset', {});
-    else {
-      for (const { value } of this.ring)
-        if (
-          value.seq > seq &&
-          (!value.threadId || value.threadId === threadId || value.kind === 'summary')
-        )
-          this.send(response, 'message', value);
-      this.send(response, 'ready', { epoch: this.epoch });
+      return epoch !== this.epoch ? 'reset-epoch' : 'reset-cursor';
     }
+    for (const { value } of this.ring)
+      if (
+        value.seq > seq &&
+        (!value.threadId || value.threadId === threadId || value.kind === 'summary')
+      )
+        this.send(response, 'message', value);
+    this.send(response, 'ready', { epoch: this.epoch });
+    return 'ready';
   }
   private send(response: ServerResponse, event: string, value: unknown) {
     if (response.destroyed) return;

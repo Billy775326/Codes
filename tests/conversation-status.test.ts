@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
-import { conversationStatus } from '../src/web/conversation-status';
-import type { State, Summary } from '../src/shared/types';
+import { conversationStatus, taskActivity } from '../src/web/conversation-status';
+import type { Action, State, Summary, Thread } from '../src/shared/types';
+import { interactionActivity } from '../src/shared/conversation-activity';
 const row: Summary = {
   id: 'a',
   projectId: 'p',
@@ -72,4 +73,42 @@ it('distinguishes running work, outstanding interactions, and unconfirmed result
   );
   expect(conversationStatus({ ...row, executionPending: true }).indicator).toBeUndefined();
   expect(conversationStatus(row).indicator).toBeUndefined();
+});
+
+it('keeps the conversation and sidebar consistent while answering and checking uncertain replies', () => {
+  const question: Action = {
+    id: 'ask',
+    threadId: row.id,
+    turnId: 'turn',
+    kind: 'questions',
+    async: true,
+    blocking: false,
+    title: 'Question',
+    detail: '',
+    decisions: [],
+    status: 'responding',
+  };
+  const thread: Thread = {
+    ...row,
+    state: 'running',
+    actions: [question],
+    messages: [],
+    olderCursor: null,
+    settings: { permission: 'read-only' },
+    diff: '',
+  };
+  const presentation = () =>
+    conversationStatus({
+      ...thread,
+      sidebarActivity: interactionActivity(thread.state, thread.actions),
+    });
+  expect(taskActivity(thread, true)).toEqual({
+    state: presentation().indicator,
+    label: presentation().label,
+  });
+  expect(presentation().label).toBe('Submitting response');
+  question.replyUnconfirmed = true;
+  expect(taskActivity(thread, true)).toEqual({ state: 'unknown', label: presentation().label });
+  expect(presentation().label).toBe('Status unknown');
+  expect(taskActivity(thread, false)?.state).toBe('reconnecting');
 });

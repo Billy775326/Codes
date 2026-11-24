@@ -26,3 +26,21 @@ jobs:
           name: browser-failure
           path: test-results/
           retention-days: 7
+  native-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        codex: ['0.166.0', '0.167.0', '0.168.0', '0.172.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --prefix "$RUNNER_TEMP/native-codex" --ignore-scripts --no-audit --no-fund "@openai/codex@$CODEX_TEST_VERSION"
+        env:
+          CODEX_TEST_VERSION: ${{ matrix.codex }}
+      - run: CODES_CODEX_BINARY="$RUNNER_TEMP/native-codex/node_modules/.bin/codex" npm run test:native

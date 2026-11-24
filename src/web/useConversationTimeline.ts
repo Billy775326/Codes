@@ -1,0 +1,330 @@
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type HTMLAttributes,
+} from 'react';
+import type { Thread } from '../shared/types';
+import { ApiError, message, request } from './api';
+import {
+  earlierWindow,
+  linkedToLatest,
+  refreshHistory,
+  type HistoryDirection,
+  type HistoryPage,
+  type HistoryWindow,
+} from './history';
+
+export function useConversationTimeline({
+  auth,
+  thread,
+  threadId,
+  projectId,
+  autoScroll,
+  notice,
+}: {
+  auth: string;
+  thread?: Thread;
+  threadId: string;
+  projectId: string;
+  autoScroll: boolean;
+  notice: (error: unknown) => void;
+}) {
+  const selection = useRef({ threadId, projectId });
+  selection.current = { threadId, projectId };
+  const transcript = useRef<HTMLDivElement>(null);
+  const historyAnchor = useRef<{ threadId: string; turnId?: string; offset: number } | undefined>(
+    undefined,
+  );
+  const follow = useRef(true);
+  const positionedConversation = useRef<string | undefined>(undefined);
+  const historyRead = useRef<AbortController | undefined>(undefined);
+  const scrollPosition = useRef(0);
+  const touchPosition = useRef<number | undefined>(undefined);
+  const restoringScroll = useRef(false);
+  const [anchorRevision, setAnchorRevision] = useState(0);
+  const automaticHistory = useRef(new Set<string>());
+  const scrollDirection = useRef<HistoryDirection | undefined>(undefined);
+  const [historyError, setHistoryError] = useState<{
+    direction: HistoryDirection;
+    message: string;
+  }>();
+  const [historyWindow, setHistoryWindow] = useState<HistoryWindow>();
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [atLatest, setAtLatest] = useState(true);
+  const history = historyWindow?.threadId === threadId ? historyWindow : undefined;
+  const timelineLatest = !history || (!!thread && linkedToLatest(history, thread));
+  const visibleMessages = useMemo(
+    () => (thread ? (history ? refreshHistory(history, thread) : thread.messages) : []),
+    [thread?.messages, history],
+  );
+  const visibleTurns = useMemo(
+    () => [
+      ...(history?.turns ?? []).filter(
+        (turn) => !thread?.turns?.some((latest) => latest.id === turn.id),
+      ),
+      ...(thread?.turns ?? []),
+    ],
+    [history?.turns, thread?.turns],
+  );
+  const reviewMessages = useMemo(() => {
+    const latest = thread?.messages ?? [];
+    if (!history) return latest;
+    const liveIds = new Set(latest.map((item) => item.id));
+    return [...visibleMessages.filter((item) => !liveIds.has(item.id)), ...latest];
+  }, [visibleMessages, thread?.messages, history]);
+  const returnToLatest = useCallback(() => {
+    historyRead.current?.abort();
+    historyRead.current = undefined;
+    historyAnchor.current = undefined;
+    setLoadingHistory(false);
+    setHistoryError(undefined);
+    automaticHistory.current.clear();
+    scrollDirection.current = undefined;
+    setHistoryWindow(undefined);
+    setAtLatest(true);
+    follow.current = true;
+    requestAnimationFrame(() => {
+      if (follow.current && transcript.current) {
+        transcript.current.scrollTop = transcript.current.scrollHeight;
+        scrollPosition.current = transcript.current.scrollTop;
+      }
+    });
+  }, []);
+  useEffect(() => () => historyRead.current?.abort(), [threadId, projectId, auth]);
+  useLayoutEffect(() => {
+    const anchor = historyAnchor.current;
+    const element = transcript.current;
+    if (anchor && element) {
+      restoringScroll.current = true;
+      if (anchor.threadId === threadId) {
+        const turn = [...element.querySelectorAll<HTMLElement>('.turn')].find(
+          (item) => item.dataset.turnId === anchor.turnId,
+        );
+        if (turn)
+          element.scrollTop +=
+            turn.getBoundingClientRect().top - element.getBoundingClientRect().top - anchor.offset;
+        else element.scrollTop = 0;
+      }
+      scrollPosition.current = element.scrollTop;
+      requestAnimationFrame(() => {
+        restoringScroll.current = false;
+        setAnchorRevision((value) => value + 1);
+      });
+      historyAnchor.current = undefined;
+    }
+  }, [visibleMessages, threadId]);
+  useEffect(() => {
+    const element = transcript.current;
+    if (!timelineLatest || !element) return;
+    const current = thread?.id === threadId ? threadId : undefined;
+    const opened = current !== positionedConversation.current;
+    positionedConversation.current = current;
+    if (follow.current && (autoScroll || opened)) {
+      element.scrollTop = element.scrollHeight;
+    } else if (!autoScroll) {
+      setAtLatest(element.scrollHeight - element.scrollTop - element.clientHeight < 100);
+    }
+  }, [
+    visibleMessages,
+    thread?.actions,
+    thread?.state,
+    thread?.id,
+    threadId,
+    timelineLatest,
+    autoScroll,
+  ]);
+  const loadHistory = async (direction: HistoryDirection = 'older', automatic = false) => {
+    const cursor =
+      direction === 'older'
+        ? history
+          ? history.olderCursor
+          : thread?.olderCursor
+        : history?.newerCursor;
+    const key = direction + ':' + cursor;
+    if (
+      !thread ||
+      !cursor ||
+      historyRead.current ||
+      (automatic &&
+        (historyError || automaticHistory.current.has(key) || automaticHistory.current.size >= 32))
+    )
+      return;
+    if (automatic) automaticHistory.current.add(key);
+    else {
+      automaticHistory.current.clear();
+      scrollDirection.current = undefined;
+    }
+    const id = thread.id;
+    const project = projectId;
+    const controller = new AbortController();
+    historyRead.current = controller;
+    setLoadingHistory(true);
+    try {
+      const page = await request<HistoryPage>(
+        `/threads/${id}/history?cursor=${encodeURIComponent(cursor)}`,
+        {},
+        controller.signal,
+      );
+      if (
+        controller.signal.aborted ||
+        selection.current.threadId !== id ||
+        selection.current.projectId !== project
+      )
+        return;
+      follow.current = false;
+      setAtLatest(false);
+      const element = transcript.current;
+      if (element) {
+        const top = element.getBoundingClientRect().top;
+        const turn = [...element.querySelectorAll<HTMLElement>('.turn')].find(
+          (item) => item.getBoundingClientRect().bottom > top,
+        );
+        historyAnchor.current = {
+          threadId: id,
+          turnId: turn?.dataset.turnId,
+          offset: turn ? turn.getBoundingClientRect().top - top : 0,
+        };
+      }
+      setHistoryError(undefined);
+      setHistoryWindow((current) => earlierWindow(thread, current, page, direction));
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setHistoryError({ direction, message: message(error) });
+        if (error instanceof ApiError && error.status === 401) notice(error);
+      }
+    } finally {
+      if (historyRead.current === controller) {
+        historyRead.current = undefined;
+        setLoadingHistory(false);
+      }
+    }
+  };
+  useEffect(() => {
+    if (loadingHistory || historyError || !scrollDirection.current || restoringScroll.current)
+      return;
+    const element = transcript.current;
+    const direction = scrollDirection.current;
+    if (
+      element &&
+      (direction === 'older'
+        ? element.scrollTop < 240
+        : !timelineLatest && element.scrollHeight - element.scrollTop - element.clientHeight < 240)
+    )
+      void loadHistory(direction, true);
+  }, [
+    loadingHistory,
+    history?.olderCursor,
+    history?.newerCursor,
+    timelineLatest,
+    historyError,
+    anchorRevision,
+  ]);
+
+  const setFollowing = useCallback((value: boolean) => {
+    follow.current = value;
+  }, []);
+  const timelineEvents: Pick<
+    HTMLAttributes<HTMLDivElement>,
+    'onPointerDown' | 'onTouchStart' | 'onTouchMove' | 'onKeyDown' | 'onWheel' | 'onScroll'
+  > = {
+    onPointerDown: (event) => {
+      // Only a scrollbar drag begins scrolling. Clicking prose or a
+      // disclosure must not turn programmatic focus scrolling into paging.
+      if (
+        event.target === event.currentTarget &&
+        event.clientX >= event.currentTarget.getBoundingClientRect().right - 24
+      ) {
+        automaticHistory.current.clear();
+        scrollDirection.current ??= 'older';
+      }
+    },
+    onTouchStart: (event) => {
+      touchPosition.current = event.touches[0]?.clientY;
+      automaticHistory.current.clear();
+    },
+    onTouchMove: (event) => {
+      const y = event.touches[0]?.clientY;
+      if (y === undefined || touchPosition.current === undefined || y === touchPosition.current)
+        return;
+      const direction = y > touchPosition.current ? 'older' : 'newer';
+      touchPosition.current = y;
+      automaticHistory.current.clear();
+      scrollDirection.current = direction;
+      const element = event.currentTarget;
+      const bottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+      if (direction === 'newer' && timelineLatest && bottom < 100) {
+        follow.current = true;
+        setAtLatest(true);
+      }
+      if (direction === 'older' ? element.scrollTop < 240 : !timelineLatest && bottom < 240)
+        void loadHistory(direction, true);
+    },
+    onKeyDown: (event) => {
+      if (['ArrowUp', 'PageUp', 'Home', 'ArrowDown', 'PageDown', 'End'].includes(event.key)) {
+        automaticHistory.current.clear();
+        scrollDirection.current = ['ArrowUp', 'PageUp', 'Home'].includes(event.key)
+          ? 'older'
+          : 'newer';
+      }
+    },
+    onWheel: (event) => {
+      if (!event.deltaY) return;
+      automaticHistory.current.clear();
+      const direction = event.deltaY < 0 ? 'older' : 'newer';
+      scrollDirection.current = direction;
+      const element = event.currentTarget;
+      if (
+        direction === 'newer' &&
+        timelineLatest &&
+        element.scrollHeight - element.scrollTop - element.clientHeight < 100
+      ) {
+        follow.current = true;
+        setAtLatest(true);
+      }
+      if (
+        direction === 'older'
+          ? element.scrollTop < 240
+          : !timelineLatest && element.scrollHeight - element.scrollTop - element.clientHeight < 240
+      )
+        void loadHistory(direction, true);
+    },
+    onScroll: (e) => {
+      const el = e.currentTarget;
+      const delta = el.scrollTop - scrollPosition.current;
+      scrollPosition.current = el.scrollTop;
+      if (restoringScroll.current) return;
+      const nearBottom = timelineLatest && el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+      follow.current = nearBottom;
+      setAtLatest(nearBottom);
+      if (delta && scrollDirection.current) {
+        const direction = delta < 0 ? 'older' : 'newer';
+        scrollDirection.current = direction;
+        if (
+          direction === 'older'
+            ? el.scrollTop < 240
+            : !timelineLatest && el.scrollHeight - el.scrollTop - el.clientHeight < 240
+        )
+          void loadHistory(direction, true);
+      }
+    },
+  };
+  return {
+    transcript,
+    history,
+    timelineLatest,
+    visibleMessages,
+    visibleTurns,
+    reviewMessages,
+    setFollowing,
+    returnToLatest,
+    loadHistory,
+    loadingHistory,
+    historyError,
+    atLatest,
+    timelineEvents,
+  };
+}

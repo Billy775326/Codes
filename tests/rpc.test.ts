@@ -68,6 +68,23 @@ describe('CLI JSONL transport', () => {
     output.write(Buffer.alloc(nativeFrameBytes + 1, 65));
     await expect(pending).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
   });
+  it('discards an identified oversized history response while retaining a concurrent task receipt', async () => {
+    const { rpc, output } = fixture();
+    const history = rpc.request('thread/items/list', {});
+    const start = rpc.request('turn/start', {});
+    const historyError = expect(history).rejects.toMatchObject({
+      code: 'HISTORY_LIMIT',
+      uncertain: false,
+    });
+    output.write('{"id":');
+    output.write('1,"result":{"text":"');
+    const chunk = Buffer.alloc(64 * 1024, 65);
+    for (let offset = 0; offset <= nativeFrameBytes; offset += chunk.length) output.write(chunk);
+    output.write('"}}\n{"id":2,"result":{"turn":{"id":"running"}}}\n');
+    await historyError;
+    await expect(start).resolves.toEqual({ turn: { id: 'running' } });
+    rpc.fail();
+  });
   it('distinguishes a definite CLI rejection from a lost result', async () => {
     const { rpc, output } = fixture();
     const pending = rpc.request('turn/start', {});

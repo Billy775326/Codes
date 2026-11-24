@@ -4,11 +4,15 @@ import { AppError, record, cliError } from '../shared/errors.js';
 
 // Native tool results can be larger than the bounded browser transcript.
 export const nativeFrameBytes = 16 * 1024 * 1024;
+const historyMethods = new Set(['thread/read', 'thread/turns/list', 'thread/items/list']);
 
 export class Rpc extends EventEmitter {
   private serial = 0;
   private fragments: Buffer[] = [];
   private frameBytes = 0;
+  // Keep enough IDs to recognize a late oversized reply after a read deadline.
+  private historyRequests = new Set<number>();
+  private discarding?: { id: number; timer: ReturnType<typeof setTimeout> };
   private pending = new Map<
     number,
     {
@@ -31,7 +35,14 @@ export class Rpc extends EventEmitter {
         while (offset < chunk.length) {
           const end = chunk.indexOf(10, offset);
           const part = chunk.subarray(offset, end < 0 ? chunk.length : end);
-          if (this.frameBytes + part.length > nativeFrameBytes) throw new Error('line limit');
+          if (!this.discarding && this.frameBytes + part.length > nativeFrameBytes)
+            this.discardHistoryFrame(part);
+          if (this.discarding) {
+            if (end < 0) break;
+            this.finishDiscard();
+            offset = end + 1;
+            continue;
+          }
           if (part.length) this.fragments.push(part);
           this.frameBytes += part.length;
           if (end < 0) break;
@@ -65,6 +76,11 @@ export class Rpc extends EventEmitter {
     if (this.pending.size >= 64)
       return Promise.reject(new AppError('RUNTIME_BUSY', 'Too many CLI requests.', 429));
     const id = ++this.serial;
+    if (historyMethods.has(method)) {
+      this.historyRequests.add(id);
+      if (this.historyRequests.size > 256)
+        this.historyRequests.delete(this.historyRequests.values().next().value!);
+    }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
@@ -118,6 +134,7 @@ export class Rpc extends EventEmitter {
       this.emit(value.id === undefined ? 'notification' : 'request', value);
       return;
     }
+    this.historyRequests.delete(value.id);
     const pending = this.pending.get(value.id);
     if (!pending) return;
     this.pending.delete(value.id);
@@ -129,6 +146,45 @@ export class Rpc extends EventEmitter {
         new AppError('PROTOCOL_ERROR', 'The CLI returned an invalid receipt.', 502, true),
       );
   }
+  private discardHistoryFrame(part: Buffer) {
+    // Only a recognizable response to a known history request may be discarded.
+    // Unknown frames can carry execution receipts or server interaction requests.
+    const head = Buffer.alloc(256);
+    let length = 0;
+    for (const fragment of this.fragments) {
+      length += fragment.copy(head, length, 0, head.length - length);
+      if (length >= head.length) break;
+    }
+    if (length < head.length) length += part.copy(head, length, 0, head.length - length);
+    const match =
+      /^\s*\{\s*(?:"jsonrpc"\s*:\s*"2\.0"\s*,\s*)?"id"\s*:\s*([1-9]\d{0,14})\s*,\s*"(?:result|error)"\s*:/.exec(
+        head.toString('utf8', 0, length),
+      );
+    const id = Number(match?.[1]);
+    if (!this.historyRequests.has(id)) throw new Error('line limit');
+    const timer = setTimeout(() => {
+      this.fail(
+        new AppError('PROTOCOL_ERROR', 'The oversized CLI response did not finish.', 502, true),
+      );
+    }, this.timeoutMs);
+    timer.unref();
+    this.discarding = { id, timer };
+    this.fragments = [];
+    this.frameBytes = 0;
+  }
+  private finishDiscard() {
+    const { id, timer } = this.discarding!;
+    clearTimeout(timer);
+    this.discarding = undefined;
+    this.historyRequests.delete(id);
+    const pending = this.pending.get(id);
+    if (!pending) return;
+    this.pending.delete(id);
+    clearTimeout(pending.timer);
+    pending.reject(
+      new AppError('HISTORY_LIMIT', 'A native history item exceeds the preview limit.', 413),
+    );
+  }
   fail(error = new AppError('RUNTIME_OFFLINE', 'The CLI stopped.', 503, true)) {
     if (this.failure) return;
     this.failure = error;
@@ -137,6 +193,8 @@ export class Rpc extends EventEmitter {
       pending.reject(error);
     }
     this.pending.clear();
+    this.historyRequests.clear();
+    if (this.discarding) clearTimeout(this.discarding.timer);
     this.fragments = [];
     this.frameBytes = 0;
     this.emit('offline', error);

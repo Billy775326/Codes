@@ -17,20 +17,13 @@ import { imageLimits } from '../shared/images';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
-import { ImagePreviewDialog, MessageMarkdown } from './ContentPreview';
+import { ImagePreviewDialog } from './ContentPreview';
+import { MessageView } from './ConversationMessage';
 import { useLocalAttachments } from './useLocalAttachments';
 import { readBrowserPreferences, type Preferences } from './browser-preferences';
 import { defaultTextSize } from './font-sizes';
 import { ConversationNotifications, notificationAccess } from './browser-notifications';
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type {
   Action,
@@ -66,20 +59,12 @@ import { FilesPanel, LinkedFilePreview } from './FilesPanel';
 import { resolveProjectFile, type ProjectFileReference } from './remarkProjectFileLinks';
 import { PanelMenu } from './PanelMenu';
 import { usePanelFocus } from './usePanelFocus';
-import { ChangeSummary } from './ChangeSummary';
 import { Transcript } from './Transcript';
 import { isTurnOutcome } from './TurnResult';
-import { MessageTime } from './MessageTime';
-import {
-  earlierWindow,
-  historyLimit,
-  refreshHistory,
-  liveRevision,
-  linkedToLatest,
-  type HistoryDirection,
-  type HistoryPage,
-  type HistoryWindow,
-} from './history';
+import { historyLimit, liveRevision } from './history';
+import { useConversationTimeline } from './useConversationTimeline';
+import { applyConversationEvent } from './conversation-events';
+import { useWebBuild } from './useWebBuild';
 import {
   InteractionDialog,
   PreferencesDialog,
@@ -133,192 +118,12 @@ const sameQueueDraft = (a: QueuePayload, b: QueuePayload) =>
   sameSettings(a.settings, b.settings) &&
   JSON.stringify(a.attachments) === JSON.stringify(b.attachments);
 
-const MessageView = memo(function MessageView({
-  projectId,
-  projectPath,
-  item,
-  streaming,
-  resolveFile,
-  onOpenFile,
-  onOpenImage,
-  onReply,
-  onFork,
-  disabled,
-  onReview,
-  actions = false,
-  changes,
-  timestamp,
-  completion,
-}: {
-  onReply?: (item: Message) => void;
-  resolveFile: (href: string | undefined) => ProjectFileReference | undefined;
-  onOpenFile: (file: ProjectFileReference) => void;
-  onOpenImage: (path: string) => void;
-  onFork?: (item: Message) => void;
-  disabled?: boolean;
-  onReview?: (item: Message, path?: string) => void;
-  projectId: string;
-  projectPath?: string;
-  item: Message;
-  streaming: boolean;
-  actions?: boolean;
-  changes?: Message;
-  timestamp?: number;
-  completion?: React.ReactNode;
-}) {
-  const { t } = useInterfaceLanguage();
-  const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState('');
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(copyTimer.current), []);
-  if (item.kind === 'change' && item.files?.length)
-    return (
-      <ChangeSummary item={item} review={onReview ? (path) => onReview(item, path) : undefined} />
-    );
-  if (item.kind === 'command' || item.kind === 'change' || item.kind === 'tool') {
-    const firstLine = item.text
-      .slice(0, item.text.indexOf('\n') < 0 ? 120 : item.text.indexOf('\n'))
-      .slice(0, 100);
-    return (
-      <details
-        className="tool"
-        open={expanded}
-        onToggle={(event) => setExpanded(event.currentTarget.open)}
-      >
-        <summary>
-          <Icon name={item.status === 'completed' ? 'check' : 'terminal'} size={14} />
-          <span className="activity-label">
-            {item.kind === 'command'
-              ? t(item.status === 'inProgress' ? 'Running {command}' : 'Ran {command}', {
-                  command: firstLine || t('command'),
-                })
-              : item.kind === 'tool'
-                ? firstLine
-                : t('File changes')}
-          </span>
-          <span className="activity-status">{t(item.status ?? '')}</span>
-        </summary>
-        {expanded && (
-          <>
-            <pre>{item.text}</pre>
-            {item.truncated && (
-              <p className="tool-truncated">
-                {t('Output preview is truncated. Inspect native history for the complete output.')}
-              </p>
-            )}
-          </>
-        )}
-      </details>
-    );
-  }
-  if (item.kind === 'compaction')
-    return (
-      <p className="message compaction" data-message-id={item.id} data-turn-id={item.turnId}>
-        {item.text}
-      </p>
-    );
-  return (
-    <article
-      data-message-id={item.id}
-      data-turn-id={item.turnId}
-      className={`message ${item.kind}`}
-      data-testid={`message-${item.kind}`}
-    >
-      <div className="message-body">
-        {!!item.images?.length && (
-          <div className="message-images">
-            {item.images.map((image, index) => (
-              <ImageAttachmentView
-                key={image.id + ':' + index}
-                image={image}
-                projectId={projectId}
-              />
-            ))}
-          </div>
-        )}
-        {!!item.unavailableImages && (
-          <p className="image-unavailable">
-            {item.unavailableImages}
-            {' ' + t('image attachment(s) available in native history.')}
-          </p>
-        )}
-        <div className="prose">
-          <MessageMarkdown
-            text={item.text}
-            projectPath={projectPath}
-            resolveFile={resolveFile}
-            onOpenFile={onOpenFile}
-            onOpenImage={onOpenImage}
-            assistant={item.kind === 'assistant'}
-            streaming={item.kind === 'assistant' && streaming}
-          />
-        </div>
-        {changes && (
-          <ChangeSummary
-            item={changes}
-            review={onReview ? (path) => onReview(changes, path) : undefined}
-          />
-        )}
-        {!streaming &&
-          item.kind !== 'user' &&
-          ((actions && item.turnId && (onReply || onFork)) ||
-            timestamp !== undefined ||
-            completion) && (
-            <div className="message-footer">
-              {actions && !streaming && item.turnId && (onReply || onFork) && (
-                <div className="message-actions" role="group" aria-label={t('Reply actions')}>
-                  <IconButton
-                    icon="copy"
-                    label={t('Copy message')}
-                    size={13}
-                    onClick={() => {
-                      void navigator.clipboard
-                        ?.writeText(item.text)
-                        .then(() => {
-                          setCopied('Copied');
-                          clearTimeout(copyTimer.current);
-                          copyTimer.current = setTimeout(() => setCopied(''), 2000);
-                        })
-                        .catch(() => setCopied('Copy unavailable. Select the message text.'));
-                      if (!navigator.clipboard)
-                        setCopied('Copy unavailable. Select the message text.');
-                    }}
-                  />
-                  {copied && <span role="status">{t(copied)}</span>}
-                  {onReply && (
-                    <IconButton
-                      icon="reply"
-                      label={t('Reply')}
-                      hint={t('Quote in draft')}
-                      size={13}
-                      disabled={disabled}
-                      onClick={() => onReply(item)}
-                    />
-                  )}
-                  {onFork && (
-                    <IconButton
-                      icon="branch"
-                      label={t('Branch from here')}
-                      size={13}
-                      disabled={disabled}
-                      onClick={() => onFork(item)}
-                    />
-                  )}
-                </div>
-              )}
-              {completion ?? <MessageTime value={timestamp} kind="finished" />}
-            </div>
-          )}
-      </div>
-      {item.kind === 'user' && <MessageTime value={timestamp} kind="started" />}
-    </article>
-  );
-});
-
 function App() {
   const [auth, setAuth] = useState<'loading' | 'login' | 'ready'>('loading');
   const [token, setToken] = useState('');
   const [system, setSystem] = useState<System>();
+  const canReview = system?.capabilities?.review !== false;
+  const canBranch = system?.capabilities?.branch !== false;
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const maintenanceExpiresAt = system?.maintenance?.expiresAt;
   const [projects, setProjects] = useState<Project[]>([]);
@@ -560,66 +365,6 @@ function App() {
   const [filePath, setFilePath] = useState<string>();
   const [receipt, setReceipt] = useState('');
   const feed = useRef<Feed | undefined>(undefined);
-  const transcript = useRef<HTMLDivElement>(null);
-  const historyAnchor = useRef<{ threadId: string; turnId?: string; offset: number } | undefined>(
-    undefined,
-  );
-  const follow = useRef(true);
-  const positionedConversation = useRef<string | undefined>(undefined);
-  const historyRead = useRef<AbortController | undefined>(undefined);
-  const scrollPosition = useRef(0);
-  const touchPosition = useRef<number | undefined>(undefined);
-  const restoringScroll = useRef(false);
-  const [anchorRevision, setAnchorRevision] = useState(0);
-  const automaticHistory = useRef(new Set<string>());
-  const scrollDirection = useRef<HistoryDirection | undefined>(undefined);
-  const [historyError, setHistoryError] = useState<{
-    direction: HistoryDirection;
-    message: string;
-  }>();
-  const [historyWindow, setHistoryWindow] = useState<HistoryWindow>();
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [atLatest, setAtLatest] = useState(true);
-  const history = historyWindow?.threadId === threadId ? historyWindow : undefined;
-  const timelineLatest = !history || (!!thread && linkedToLatest(history, thread));
-  const visibleMessages = useMemo(
-    () => (thread ? (history ? refreshHistory(history, thread) : thread.messages) : []),
-    [thread?.messages, history],
-  );
-  const visibleTurns = useMemo(
-    () => [
-      ...(history?.turns ?? []).filter(
-        (turn) => !thread?.turns?.some((latest) => latest.id === turn.id),
-      ),
-      ...(thread?.turns ?? []),
-    ],
-    [history?.turns, thread?.turns],
-  );
-  const reviewMessages = useMemo(() => {
-    const latest = thread?.messages ?? [];
-    if (!history) return latest;
-    const liveIds = new Set(latest.map((item) => item.id));
-    return [...visibleMessages.filter((item) => !liveIds.has(item.id)), ...latest];
-  }, [visibleMessages, thread?.messages, history]);
-  const returnToLatest = useCallback(() => {
-    historyRead.current?.abort();
-    historyRead.current = undefined;
-    historyAnchor.current = undefined;
-    setLoadingHistory(false);
-    setHistoryError(undefined);
-    automaticHistory.current.clear();
-    scrollDirection.current = undefined;
-    setHistoryWindow(undefined);
-    setAtLatest(true);
-    follow.current = true;
-    requestAnimationFrame(() => {
-      if (follow.current && transcript.current) {
-        transcript.current.scrollTop = transcript.current.scrollHeight;
-        scrollPosition.current = transcript.current.scrollTop;
-      }
-    });
-  }, []);
-  useEffect(() => () => historyRead.current?.abort(), [threadId, projectId, auth]);
   const projectRef = useRef(projectId);
   projectRef.current = projectId;
   const notice = useCallback((e: unknown) => {
@@ -674,6 +419,29 @@ function App() {
     attachmentsUnavailable ||
     !!localAttachments.pending ||
     attachments.length >= imageLimits.attachments;
+  const {
+    transcript,
+    history,
+    timelineLatest,
+    visibleMessages,
+    visibleTurns,
+    reviewMessages,
+    setFollowing,
+    returnToLatest,
+    loadHistory,
+    loadingHistory,
+    historyError,
+    atLatest,
+    timelineEvents,
+  } = useConversationTimeline({
+    auth,
+    thread,
+    threadId,
+    projectId,
+    autoScroll: preferences.autoScroll,
+    notice,
+  });
+  const updateAvailable = useWebBuild(auth === 'ready');
   const reloadPage = () => {
     if (
       (attachments.length || localAttachments.pending || queueEditing) &&
@@ -934,7 +702,7 @@ function App() {
       setDiffPath('');
       if (changed) setPanel(null);
       if (window.innerWidth <= 1099) setSidebar(false);
-      follow.current = true;
+      setFollowing(true);
     },
     [returnToLatest],
   );
@@ -985,14 +753,15 @@ function App() {
       if (!deltas.size) return;
       const changes = new Map(deltas);
       deltas.clear();
-      setThread(
-        (t) =>
-          t && {
-            ...t,
-            messages: t.messages.map((m) =>
-              changes.has(m.id) ? { ...m, text: m.text + changes.get(m.id) } : m,
-            ),
-          },
+      setThread((t) =>
+        t?.id === threadId
+          ? {
+              ...t,
+              messages: t.messages.map((m) =>
+                changes.has(m.id) ? { ...m, text: m.text + changes.get(m.id) } : m,
+              ),
+            }
+          : t,
       );
     };
     const event = (e: Envelope) => {
@@ -1043,27 +812,7 @@ function App() {
         save(`codes.operation.${threadId}`, '');
         setReceipt('');
       }
-      setThread((t) => {
-        if (!t) return t;
-        if (e.kind === 'item') {
-          const item = e.data as Message;
-          return {
-            ...t,
-            messages: (t.messages.some((m) => m.id === item.id)
-              ? t.messages.map((m) => (m.id === item.id ? item : m))
-              : [...t.messages, item]
-            ).slice(-historyLimit),
-          };
-        }
-        if (e.kind === 'state') {
-          const data = e.data as Partial<Thread>;
-          return { ...t, ...data };
-        }
-        if (e.kind === 'actions') return { ...t, actions: e.data as Action[] };
-        if (e.kind === 'queue') return { ...t, queue: e.data as QueueState };
-        if (e.kind === 'diff') return { ...t, diff: String(e.data) };
-        return t;
-      });
+      setThread((thread) => applyConversationEvent(thread, e));
     };
     const stream = new Feed(
       threadId,
@@ -1154,48 +903,6 @@ function App() {
     element.style.height = 'auto';
     element.style.height = Math.min(180, Math.max(66, element.scrollHeight)) + 'px';
   }, [draft, auth]);
-  useLayoutEffect(() => {
-    const anchor = historyAnchor.current;
-    const element = transcript.current;
-    if (anchor && element) {
-      restoringScroll.current = true;
-      if (anchor.threadId === threadId) {
-        const turn = [...element.querySelectorAll<HTMLElement>('.turn')].find(
-          (item) => item.dataset.turnId === anchor.turnId,
-        );
-        if (turn)
-          element.scrollTop +=
-            turn.getBoundingClientRect().top - element.getBoundingClientRect().top - anchor.offset;
-        else element.scrollTop = 0;
-      }
-      scrollPosition.current = element.scrollTop;
-      requestAnimationFrame(() => {
-        restoringScroll.current = false;
-        setAnchorRevision((value) => value + 1);
-      });
-      historyAnchor.current = undefined;
-    }
-  }, [visibleMessages, threadId]);
-  useEffect(() => {
-    const element = transcript.current;
-    if (!timelineLatest || !element) return;
-    const current = thread?.id === threadId ? threadId : undefined;
-    const opened = current !== positionedConversation.current;
-    positionedConversation.current = current;
-    if (follow.current && (preferences.autoScroll || opened)) {
-      element.scrollTop = element.scrollHeight;
-    } else if (!preferences.autoScroll) {
-      setAtLatest(element.scrollHeight - element.scrollTop - element.clientHeight < 100);
-    }
-  }, [
-    visibleMessages,
-    thread?.actions,
-    thread?.state,
-    thread?.id,
-    threadId,
-    timelineLatest,
-    preferences.autoScroll,
-  ]);
   const changeDraft = useCallback(
     (value: string) => {
       draftRevision.current++;
@@ -1456,7 +1163,7 @@ function App() {
       if (operation.state === 'failed')
         throw new ApiError(operation.error ?? 'The operation failed.', 'OPERATION_FAILED');
       clearAcceptedDraft(id, version, origin);
-      follow.current = true;
+      setFollowing(true);
       if (operation.state === 'completed') {
         save(`codes.operation.${id}`, '');
         setReceipt('');
@@ -1783,7 +1490,9 @@ function App() {
         changeSettings({ ...settings, mode: settings.mode === 'plan' ? 'default' : 'plan' });
       },
     },
-    { name: '/review', detail: 'Start a native code review', run: () => setDialog('review') },
+    ...(canReview
+      ? [{ name: '/review', detail: 'Start a native code review', run: () => setDialog('review') }]
+      : []),
     { name: '/status', detail: 'Connection, model and usage', run: () => setDialog('status') },
     {
       name: '/approve',
@@ -2011,89 +1720,6 @@ function App() {
     document.addEventListener('keydown', shortcut);
     return () => document.removeEventListener('keydown', shortcut);
   }, [auth, busy, settings]);
-  const loadHistory = async (direction: HistoryDirection = 'older', automatic = false) => {
-    const cursor =
-      direction === 'older'
-        ? history
-          ? history.olderCursor
-          : thread?.olderCursor
-        : history?.newerCursor;
-    const key = direction + ':' + cursor;
-    if (
-      !thread ||
-      !cursor ||
-      historyRead.current ||
-      (automatic &&
-        (historyError || automaticHistory.current.has(key) || automaticHistory.current.size >= 32))
-    )
-      return;
-    if (automatic) automaticHistory.current.add(key);
-    else {
-      automaticHistory.current.clear();
-      scrollDirection.current = undefined;
-    }
-    const id = thread.id;
-    const project = projectId;
-    const controller = new AbortController();
-    historyRead.current = controller;
-    setLoadingHistory(true);
-    try {
-      const page = await request<HistoryPage>(
-        `/threads/${id}/history?cursor=${encodeURIComponent(cursor)}`,
-        {},
-        controller.signal,
-      );
-      if (controller.signal.aborted || threadRef.current !== id || projectRef.current !== project)
-        return;
-      follow.current = false;
-      setAtLatest(false);
-      const element = transcript.current;
-      if (element) {
-        const top = element.getBoundingClientRect().top;
-        const turn = [...element.querySelectorAll<HTMLElement>('.turn')].find(
-          (item) => item.getBoundingClientRect().bottom > top,
-        );
-        historyAnchor.current = {
-          threadId: id,
-          turnId: turn?.dataset.turnId,
-          offset: turn ? turn.getBoundingClientRect().top - top : 0,
-        };
-      }
-      setHistoryError(undefined);
-      setHistoryWindow((current) => earlierWindow(thread, current, page, direction));
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        setHistoryError({ direction, message: message(error) });
-        if (error instanceof ApiError && error.status === 401) notice(error);
-      }
-    } finally {
-      if (historyRead.current === controller) {
-        historyRead.current = undefined;
-        setLoadingHistory(false);
-      }
-    }
-  };
-  useEffect(() => {
-    if (loadingHistory || historyError || !scrollDirection.current || restoringScroll.current)
-      return;
-    const element = transcript.current;
-    const direction = scrollDirection.current;
-    if (
-      element &&
-      (direction === 'older'
-        ? element.scrollTop < 240
-        : !timelineLatest && element.scrollHeight - element.scrollTop - element.clientHeight < 240)
-    )
-      void loadHistory(direction, true);
-  }, [
-    loadingHistory,
-    history?.olderCursor,
-    history?.newerCursor,
-    timelineLatest,
-    historyError,
-    anchorRevision,
-  ]);
-
   const modalOpen =
     adding || !!dialog || !!previewedImage || !!linkedFile || !!forking || conversationModalOpen;
   const conversationLoadError =
@@ -2275,10 +1901,11 @@ function App() {
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
           onReload={reloadPage}
+          updateAvailable={updateAvailable}
           onToggleTheme={() =>
             changePreferences({ ...preferences, theme: theme === 'dark' ? 'light' : 'dark' })
           }
-          onReview={() => setDialog('review')}
+          onReview={canReview ? () => setDialog('review') : undefined}
           onStatus={() => setDialog('status')}
           onPanel={(kind) => {
             if (kind === 'diff' || (contextReady && !directoryBlocked))
@@ -2380,92 +2007,7 @@ function App() {
           role="region"
           aria-label={t('Conversation timeline')}
           tabIndex={0}
-          onPointerDown={(event) => {
-            // Only a scrollbar drag begins scrolling. Clicking prose or a
-            // disclosure must not turn programmatic focus scrolling into paging.
-            if (
-              event.target === event.currentTarget &&
-              event.clientX >= event.currentTarget.getBoundingClientRect().right - 24
-            ) {
-              automaticHistory.current.clear();
-              scrollDirection.current ??= 'older';
-            }
-          }}
-          onTouchStart={(event) => {
-            touchPosition.current = event.touches[0]?.clientY;
-            automaticHistory.current.clear();
-          }}
-          onTouchMove={(event) => {
-            const y = event.touches[0]?.clientY;
-            if (
-              y === undefined ||
-              touchPosition.current === undefined ||
-              y === touchPosition.current
-            )
-              return;
-            const direction = y > touchPosition.current ? 'older' : 'newer';
-            touchPosition.current = y;
-            automaticHistory.current.clear();
-            scrollDirection.current = direction;
-            const element = event.currentTarget;
-            const bottom = element.scrollHeight - element.scrollTop - element.clientHeight;
-            if (direction === 'newer' && timelineLatest && bottom < 100) {
-              follow.current = true;
-              setAtLatest(true);
-            }
-            if (direction === 'older' ? element.scrollTop < 240 : !timelineLatest && bottom < 240)
-              void loadHistory(direction, true);
-          }}
-          onKeyDown={(event) => {
-            if (['ArrowUp', 'PageUp', 'Home', 'ArrowDown', 'PageDown', 'End'].includes(event.key)) {
-              automaticHistory.current.clear();
-              scrollDirection.current = ['ArrowUp', 'PageUp', 'Home'].includes(event.key)
-                ? 'older'
-                : 'newer';
-            }
-          }}
-          onWheel={(event) => {
-            if (!event.deltaY) return;
-            automaticHistory.current.clear();
-            const direction = event.deltaY < 0 ? 'older' : 'newer';
-            scrollDirection.current = direction;
-            const element = event.currentTarget;
-            if (
-              direction === 'newer' &&
-              timelineLatest &&
-              element.scrollHeight - element.scrollTop - element.clientHeight < 100
-            ) {
-              follow.current = true;
-              setAtLatest(true);
-            }
-            if (
-              direction === 'older'
-                ? element.scrollTop < 240
-                : !timelineLatest &&
-                  element.scrollHeight - element.scrollTop - element.clientHeight < 240
-            )
-              void loadHistory(direction, true);
-          }}
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            const delta = el.scrollTop - scrollPosition.current;
-            scrollPosition.current = el.scrollTop;
-            if (restoringScroll.current) return;
-            const nearBottom =
-              timelineLatest && el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-            follow.current = nearBottom;
-            setAtLatest(nearBottom);
-            if (delta && scrollDirection.current) {
-              const direction = delta < 0 ? 'older' : 'newer';
-              scrollDirection.current = direction;
-              if (
-                direction === 'older'
-                  ? el.scrollTop < 240
-                  : !timelineLatest && el.scrollHeight - el.scrollTop - el.clientHeight < 240
-              )
-                void loadHistory(direction, true);
-            }
-          }}
+          {...timelineEvents}
         >
           <div className="conversation-inner">
             {loadingConversation ? (
@@ -2592,7 +2134,7 @@ function App() {
                           onReview={reviewMessage}
                           onReply={thread.archived ? undefined : reply}
                           onFork={
-                            !active || m.turnId !== thread.turnId
+                            canBranch && (!active || m.turnId !== thread.turnId)
                               ? m.kind === 'assistant'
                                 ? branchMessage
                                 : undefined
@@ -2727,7 +2269,7 @@ function App() {
               <button
                 onClick={() => {
                   const card = document.getElementById('action-' + unresolvedQuestions[0]!.id);
-                  follow.current = false;
+                  setFollowing(false);
                   card?.scrollIntoView({ block: 'center' });
                   card
                     ?.querySelector<HTMLElement>('input:not(:disabled),button:not(:disabled)')

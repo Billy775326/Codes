@@ -60,7 +60,7 @@ export class ModelSettings {
       throw new AppError('PROTOCOL_ERROR', 'The CLI returned invalid execution defaults.', 502);
     const config = parsed.data.config;
     // Fast is enabled by default in the pinned CLI, and can be disabled by native config.
-    const fastAvailable = config.features?.fast_mode !== false;
+    const fastAvailable = this.driver.supports('turnSpeed') && config.features?.fast_mode !== false;
     const tier =
       config.service_tier === 'priority' && !fastAvailable ? 'default' : config.service_tier;
     return {
@@ -76,6 +76,8 @@ export class ModelSettings {
     return { ...defaults, fast: serviceTier === 'priority' };
   }
   async permissions() {
+    await this.driver.start();
+    if (!this.driver.supportsMethod('configRequirements/read')) return { autoReview: false };
     const response = await this.driver.call('configRequirements/read', {});
     const parsed = z
       .object({
@@ -119,9 +121,10 @@ export class ModelSettings {
       ...model,
       supportsImages: inputModalities?.includes('image') ?? false,
       supportsFast:
-        serviceTiers?.some((tier) => tier.id === 'priority' || tier.id === 'fast') ??
-        additionalSpeedTiers?.includes('fast') ??
-        false,
+        this.driver.supports('turnSpeed') &&
+        (serviceTiers?.some((tier) => tier.id === 'priority' || tier.id === 'fast') ??
+          additionalSpeedTiers?.includes('fast') ??
+          false),
     }));
   }
   async modes() {
@@ -145,6 +148,12 @@ export class ModelSettings {
   }
   async resolve(settings: Settings, cwd: string, hasImages = false) {
     const [modes, native] = await Promise.all([this.modes(), this.configuration(cwd)]);
+    if (settings.fast !== undefined && !this.driver.supports('turnSpeed'))
+      throw new AppError(
+        'FAST_UNAVAILABLE',
+        'Speed overrides are unavailable with the installed Codex CLI.',
+        412,
+      );
     const mode = settings.mode ?? 'default';
     const preset = modes.find((entry) => entry.mode === mode);
     if (!preset)

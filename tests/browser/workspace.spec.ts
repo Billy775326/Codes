@@ -261,3 +261,20 @@ test('bounded long history remains usable while typing and switching conversatio
   await expect(page.getByRole('heading', { name: 'New conversation' })).toBeVisible();
   await page.screenshot({ path: 'test-results/desktop-after-history.png' });
 });
+
+test('offers a reload for a new web build without replacing the current draft', async ({
+  page,
+}) => {
+  await page.route('**/api/web-build', (route) =>
+    route.fulfill({ json: { signature: '/assets/current-build-fixture.js' } }),
+  );
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  const composer = page.getByLabel('Message Codex');
+  await composer.fill('Keep this draft during the update');
+  await expect(
+    page.getByRole('button', { name: 'Reload to apply update', exact: true }),
+  ).toBeVisible();
+  await expect(composer).toHaveValue('Keep this draft during the update');
+});

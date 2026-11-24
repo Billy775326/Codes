@@ -11,6 +11,7 @@ const directory = await mkdtemp(join(tmpdir(), 'codes-native-'));
 process.env.CODEX_HOME = join(directory, 'codex-home');
 delete process.env.OPENAI_API_KEY;
 delete process.env.CODEX_API_KEY;
+delete process.env.CODEX_SQLITE_HOME;
 await mkdir(process.env.CODEX_HOME);
 await mkdir(join(directory, 'project'));
 const configPath = join(process.env.CODEX_HOME, 'config.toml');
@@ -28,6 +29,13 @@ try {
   const project = await service.addProject(join(directory, 'project'));
   const configuration = await service.driver.call('config/read', { includeLayers: false });
   assert.equal(configuration.config.features.default_mode_request_user_input, true);
+  assert.match(service.system().version, /^\d+\.\d+\.\d+/);
+  assert.deepEqual(service.system().capabilities, {
+    itemHistory: true,
+    branch: true,
+    review: true,
+    turnSpeed: true,
+  });
   const defaults = await service.modelSettings.defaults(project.path);
   assert.deepEqual(defaults, {
     model: 'gpt-5.2',
@@ -128,7 +136,9 @@ try {
   await assert.rejects(service.create(project.id), { code: 'DIRECTORY_UNAVAILABLE' });
   await rename(join(directory, 'project-moved'), join(directory, 'project'));
   console.log(
-    'PASS: CLI 0.167.0 initialization, model/reasoning/image-input metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all four sandbox/approval/reviewer presets with manual read-only restoration, lazy empty history, and missing-directory metadata/history recovery. No model requests.',
+    'PASS: CLI ' +
+      service.system().version +
+      ' capability discovery and initialization, model/reasoning/image-input metadata, Plan/Code presets, Fast/standard thread settings, creation/read, all four sandbox/approval/reviewer presets with manual read-only restoration, lazy empty history, and missing-directory metadata/history recovery. No model requests.',
   );
 } finally {
   await service.close();

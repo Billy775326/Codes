@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../src/server/store';
 
 const cleanups: (() => void)[] = [];
-it('persists independent settings and defaults without changing execution snapshots or schema 4', () => {
+it('persists independent settings and defaults without changing execution snapshots or schema 5', () => {
   const { store, directory } = fixture();
   const original = store.thread('a')!.settings;
   const selected = {
@@ -35,7 +35,7 @@ it('persists independent settings and defaults without changing execution snapsh
     expect(reopened.settingsProfile('a')).toEqual(profile);
     expect(reopened.settingsProfile()).toEqual(defaults);
     expect(reopened.settingsProfile('b').settings).toEqual(original);
-    expect(reopened.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 4 });
+    expect(reopened.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 5 });
     expect(() => reopened.settingsProfile('missing')).toThrow(/not found/);
   } finally {
     reopened.close();
@@ -66,7 +66,7 @@ it('seeds existing conversation settings once and rejects corrupt preference val
   store.db
     .prepare("UPDATE threads SET settings=? WHERE id='a'")
     .run(JSON.stringify({ permission: 'workspace-write', effort: 'high' }));
-  store.db.exec('DROP TABLE setting_profiles');
+  store.db.exec('UPDATE meta SET version=4; DROP TABLE setting_profiles;');
   store.close();
   const reopened = new Store(directory);
   try {
@@ -178,6 +178,29 @@ it('refuses a future database schema without modifying it', () => {
   expect(() => new Store(directory)).toThrow(/unsupported version/);
 });
 
+it('rolls back a failed schema-4 migration and leaves the private pre-upgrade backup', () => {
+  const { store, directory } = fixture();
+  store.db.exec(`UPDATE meta SET version=4;
+    DROP TABLE project_archives;
+    DROP TABLE setting_profiles;
+    CREATE TABLE setting_profiles (scope TEXT PRIMARY KEY);`);
+  store.close();
+  expect(() => new Store(directory)).toThrow();
+  const old = new DatabaseSync(join(directory, 'codes.sqlite'), { readOnly: true });
+  try {
+    expect(old.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 4 });
+    expect(
+      old.prepare("SELECT name FROM sqlite_master WHERE name='project_archives'").get(),
+    ).toBeUndefined();
+    expect(old.prepare("SELECT title FROM threads WHERE id='a'").get()).toBeDefined();
+  } finally {
+    old.close();
+  }
+  const backups = readdirSync(directory).filter((name) => name.startsWith('codes.schema-v4-'));
+  expect(backups).toHaveLength(1);
+  expect(statSync(join(directory, backups[0]!)).mode & 0o777).toBe(0o600);
+});
+
 it('backs up schema 1 before adding archive metadata and preserves pending receipts', () => {
   const directory = mkdtempSync(join(tmpdir(), 'codes-migration-'));
   cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
@@ -198,7 +221,7 @@ it('backs up schema 1 before adding archive metadata and preserves pending recei
       state: 'unknown',
     });
     expect(migrated.active('t')).toMatchObject({ id: 'op', state: 'unknown', text: 'saved draft' });
-    expect(migrated.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 4 });
+    expect(migrated.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 5 });
     const backupName = readdirSync(directory).find((name) => name.startsWith('codes.schema-v1-'))!;
     expect(statSync(join(directory, backupName)).mode & 0o777).toBe(0o600);
     const backup = new DatabaseSync(join(directory, backupName), { readOnly: true });

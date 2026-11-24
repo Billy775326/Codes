@@ -11,6 +11,7 @@
     "dev": "node --import tsx src/server/main.ts --dev",
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/main.js",
+    "preview:web": "node --import tsx scripts/web-preview.ts",
     "install:command": "node scripts/install-command.mjs",
     "demo": "CODES_RUNTIME=mock node dist/server/main.js",
     "check": "tsc --noEmit",

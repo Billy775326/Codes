@@ -1,24 +1,25 @@
 import { directoryStatus, directoryError } from './project-context.js';
 import { nativePermissions } from '../shared/permissions.js';
-import { randomUUID, createHash } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
-import { realpath, readFile, readdir, stat } from 'node:fs/promises';
-import { resolve, relative, basename, dirname, isAbsolute } from 'node:path';
-import { homedir } from 'node:os';
+import { activeTurn, interactionActivity } from '../shared/conversation-activity.js';
+import { randomUUID } from 'node:crypto';
+import { realpath, stat } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
-import { projectInstructions } from './project-instructions.js';
+import { pauseQueueAfterTurn, settleQueuedOperations } from './queue-transitions.js';
+import { ProjectFiles } from './project-files.js';
 import type { ProjectInstructions } from '../shared/project-instructions.js';
-import { Images, openImagePreview } from './images.js';
-import { projectImageType } from '../shared/images.js';
-import { hasHiddenPathSegment } from '../shared/project-files.js';
+import { Images } from './images.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
 import { encodeQuestionReplies } from '../shared/question-replies.js';
 import { nativeMessage as item, nativeTurn } from './transcript.js';
+import { readConversationHistory } from './conversation-history.js';
+import { ConversationReads } from './conversation-reads.js';
+import { nativeThreadState as state, nativeStatus, terminal } from './native-thread-status.js';
 import { z } from 'zod';
 import { AppError, record } from '../shared/errors.js';
 import {
@@ -30,7 +31,6 @@ import {
   type Message,
   type Action,
   type Attachment,
-  type UploadedFileAttachment,
   type FileContent,
   type State,
   type Summary,
@@ -40,52 +40,14 @@ import {
 
 const text = (value: unknown, maximum: number = limits.item) =>
   typeof value === 'string' ? value.slice(0, maximum) : '';
-function decodeFileText(bytes: Buffer) {
-  let content: string;
-  try {
-    content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    throw new AppError('BINARY_FILE', 'Only UTF-8 text files are supported.');
-  }
-  if (content.includes('\0')) throw new AppError('BINARY_FILE', 'Only text files are supported.');
-  return content;
-}
-const terminal = (status: unknown) =>
-  ['completed', 'failed', 'interrupted'].includes(String(status));
-function state(raw: any): State {
-  if (raw?.type === 'active')
-    return raw.activeFlags?.includes('waitingOnApproval')
-      ? 'waitingApproval'
-      : raw.activeFlags?.includes('waitingOnUserInput')
-        ? 'waitingInput'
-        : 'running';
-  return raw?.type === 'systemError' ? 'failed' : raw?.type === 'notLoaded' ? 'unknown' : 'idle';
-}
-
-const nativeStatus = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('notLoaded') }),
-  z.object({ type: z.literal('idle') }),
-  z.object({ type: z.literal('systemError') }),
-  z.object({ type: z.literal('active'), activeFlags: z.array(z.string()) }),
-]);
-
-const nativeHistoryItemPageSize = 1;
-const nativeHistoryItemLimit = 2000;
-
-function isWithinDirectory(directory: string, path: string) {
-  const rel = relative(directory, path);
-  return rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel);
-}
-
 export class Service {
   readonly events = new Events();
   readonly images: Images;
   private cache = new Map<string, Thread>();
   private loaded = new Set<string>();
-  private reads = new Map<string, Promise<Thread>>();
+  private readonly reads = new ConversationReads();
   private admission: Promise<void> = Promise.resolve();
   private managing = new Set<string>();
-  private savingInstructions = new Set<string>();
   readonly queue: MessageQueue;
   readonly modelSettings: ModelSettings;
   private readonly asyncQuestions: AsyncQuestions;
@@ -99,15 +61,17 @@ export class Service {
     string,
     { action: Action; rpcId: string | number; epoch: string; permissions?: unknown }
   >();
-  private readonly privateFileRoots: string[];
+  private readonly projectFiles: ProjectFiles;
   constructor(
     readonly store: Store,
     readonly driver: Driver,
     private readonly defaultProjectPath?: string,
   ) {
-    const codexHome = resolve(process.env.CODEX_HOME ?? resolve(homedir(), '.codex'));
-    this.privateFileRoots = [realpathSync(store.directory)];
-    if (existsSync(codexHome)) this.privateFileRoots.push(realpathSync(codexHome));
+    this.projectFiles = new ProjectFiles(
+      store,
+      (id) => this.project(id),
+      (id) => this.requireProject(id),
+    );
     this.images = new Images(store.directory);
     this.asyncQuestions = new AsyncQuestions(store.db);
     this.modelSettings = new ModelSettings(driver);
@@ -306,21 +270,11 @@ export class Service {
     if (!context.directory.available) throw directoryError(context.directory);
     return context.project;
   }
-  async projectInstructions(id: string) {
-    return projectInstructions((await this.requireProject(id)).path);
+  projectInstructions(id: string) {
+    return this.projectFiles.projectInstructions(id);
   }
-  async saveProjectInstructions(id: string, update: ProjectInstructions) {
-    const project = await this.requireProject(id);
-    if (this.project(id).archived)
-      throw new AppError('PROJECT_ARCHIVED', 'Restore this project before editing AGENTS.md.', 409);
-    if (this.savingInstructions.has(project.path))
-      throw new AppError('INSTRUCTIONS_BUSY', 'Another save is in progress. Try again.', 409);
-    this.savingInstructions.add(project.path);
-    try {
-      return await projectInstructions(project.path, update);
-    } finally {
-      this.savingInstructions.delete(project.path);
-    }
+  saveProjectInstructions(id: string, update: ProjectInstructions) {
+    return this.projectFiles.saveProjectInstructions(id, update);
   }
   async conversationContext(id: string) {
     const { saved } = await this.conversationOwner(id);
@@ -411,7 +365,7 @@ export class Service {
     if (cached?.actions.some((a) => ['pending', 'responding'].includes(a.status))) return;
     const next =
       status.data.type === 'notLoaded'
-        ? ['running', 'waitingInput', 'waitingApproval'].includes(saved.state)
+        ? activeTurn(saved.state)
           ? 'unknown'
           : saved.state
         : status.data.type === 'idle' && terminal(saved.state)
@@ -426,20 +380,13 @@ export class Service {
   }
   withSidebarActivity<T extends Summary>(summary: T): T {
     const thread = this.cache.get(summary.id);
-    const actions = thread?.actions.filter((action) => action.status === 'pending') ?? [];
-    const questions = actions.filter((action) => action.kind === 'questions');
-    const asyncInput = !summary.archived && this.asyncQuestions.hasOpen(summary.id);
-    const approvals = actions.length > questions.length;
-    let sidebarActivity: Summary['sidebarActivity'];
-    if ((questions.length || asyncInput) && approvals) sidebarActivity = 'approvalAndInput';
-    else if (questions.length || asyncInput)
-      sidebarActivity = questions.every((question) => question.blocking === false)
-        ? 'optionalInput'
-        : 'needsInput';
-    else if (approvals) sidebarActivity = 'needsApproval';
-    else if (thread?.actions.some((action) => action.status === 'responding'))
-      sidebarActivity = 'responding';
-    else if (summary.state === 'running' && thread?.compaction) sidebarActivity = 'compacting';
+    const actions = thread?.actions ?? [];
+    const questions = summary.archived ? [] : this.asyncQuestions.openInteractions(summary.id);
+    const sidebarActivity = interactionActivity(
+      summary.state,
+      [...actions, ...questions],
+      !!thread?.compaction,
+    );
     return {
       ...summary,
       sidebarActivity,
@@ -806,9 +753,7 @@ export class Service {
   private remember(thread: Thread) {
     const work = this.admission.then(async () => {
       if (!this.cache.has(thread.id) && this.cache.size >= limits.idleThreads) {
-        const candidate = [...this.cache.values()].find(
-          (x) => !x.pending && !['running', 'waitingApproval', 'waitingInput'].includes(x.state),
-        );
+        const candidate = [...this.cache.values()].find((x) => !x.pending && !activeTurn(x.state));
         if (candidate) {
           if (this.loaded.has(candidate.id)) {
             await this.driver.call('thread/unsubscribe', { threadId: candidate.id });
@@ -823,18 +768,16 @@ export class Service {
     this.admission = work.catch(() => undefined);
     return work;
   }
-  async read(id: string): Promise<Thread> {
+  async read(id: string, signal?: AbortSignal): Promise<Thread> {
+    signal?.throwIfAborted();
     const existing = this.cache.get(id);
     if (existing) return existing;
-    const pending = this.reads.get(id);
-    if (pending) return pending;
-    const reading = this.load(id);
-    this.reads.set(id, reading);
-    try {
-      return await reading;
-    } finally {
-      this.reads.delete(id);
-    }
+    return this.reads.run(
+      'snapshot:' + id,
+      signal ? 'snapshot' : 'operation',
+      signal,
+      (readSignal) => this.load(id, readSignal),
+    );
   }
   saveConversationSettings(id: string, revision: number, settings: Settings) {
     const saved = this.store.thread(id);
@@ -856,11 +799,12 @@ export class Service {
     this.events.publish('defaults', profile);
     return profile;
   }
-  private async load(id: string) {
+  private async load(id: string, signal: AbortSignal) {
     const saved = this.store.thread(id);
     if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
     this.project(saved.projectId);
-    const page = await this.history(id);
+    const page = await this.readHistory(id, undefined, signal);
+    signal.throwIfAborted();
     const pending = this.store.active(id);
     const metadata = this.store.thread(id)!;
     const thread: Thread = {
@@ -901,187 +845,32 @@ export class Service {
     this.publishSummary(this.store.thread(id)!);
     return thread;
   }
-  async history(id: string, continuation?: string) {
-    const deadline = Date.now() + 25_000;
-    const call = (method: string, params: unknown) => {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0)
-        throw new AppError('HISTORY_TIMEOUT', 'History loading timed out. Try again.', 504);
-      return this.driver.call(method, params, remaining);
-    };
+  history(id: string, continuation?: string, signal?: AbortSignal) {
+    return this.reads.run(
+      'history:' + JSON.stringify([id, continuation]),
+      signal ? 'history' : 'operation',
+      signal,
+      (readSignal) => this.readHistory(id, continuation, readSignal),
+    );
+  }
+  private async readHistory(id: string, continuation: string | undefined, signal: AbortSignal) {
     const saved = this.store.thread(id);
     if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
     const project = this.project(saved.projectId);
-    let cursor: string | undefined;
-    let direction: 'older' | 'newer' = 'older';
-    if (continuation) {
-      try {
-        const decoded = JSON.parse(Buffer.from(continuation, 'base64url').toString());
-        if (decoded.id !== id || typeof decoded.cursor !== 'string') throw new Error();
-        if (decoded.direction !== undefined && !['older', 'newer'].includes(decoded.direction))
-          throw new Error();
-        direction = decoded.direction ?? 'older';
-        cursor = decoded.cursor || undefined;
-      } catch {
-        throw new AppError('HISTORY_CURSOR', 'Invalid history cursor.');
-      }
-    }
-    const header = await call('thread/read', { threadId: id, includeTurns: false });
-    if (header.thread?.cwd !== project.path)
-      throw new AppError(
-        'PROJECT_OWNERSHIP',
-        'The conversation no longer belongs to this project.',
-        403,
-      );
-    const hydrate = async (turns: any[]): Promise<Message[] | undefined> => {
-      const messages: Message[] = [];
-      let messageBytes = 0;
-      const append = (entry: any, turn: any) => {
-        const mapped = item(
-          entry.item,
-          turn.id,
-          (path) => this.images.reference(saved.projectId, path),
-          Number.isFinite(entry.completedAtMs) && entry.completedAtMs >= 0
-            ? 'completed'
-            : Number.isFinite(entry.startedAtMs) &&
-                entry.startedAtMs >= 0 &&
-                turn.status === 'inProgress'
-              ? 'inProgress'
-              : undefined,
-        );
-        if (!mapped) return true;
-        messageBytes += Buffer.byteLength(mapped.text);
-        // A smaller turn page may fit. Discard this attempted page rather than
-        // truncating its items or returning a cursor that skips unread history.
-        if (messages.length >= 240 || messageBytes > 2 * 1024 * 1024) return false;
-        messages.push(mapped);
-        return true;
-      };
-      for (const turn of turns) {
-        if (typeof turn.id !== 'string')
-          throw new AppError('PROTOCOL_ERROR', 'Invalid turn identity.', 502);
-        if (turn.itemsView === 'full') {
-          if (!Array.isArray(turn.items))
-            throw new AppError('PROTOCOL_ERROR', 'Invalid full turn history.', 502);
-          for (const value of turn.items) if (!append({ item: value }, turn)) return;
-          continue;
-        }
-        let next: string | undefined;
-        const seen = new Set<string>();
-        do {
-          const items = await call('thread/items/list', {
-            threadId: id,
-            turnId: turn.id,
-            cursor: next,
-            limit: nativeHistoryItemPageSize,
-            sortDirection: 'asc',
-          });
-          if (!Array.isArray(items.data))
-            throw new AppError('PROTOCOL_ERROR', 'Invalid item history.', 502);
-          for (const entry of items.data) if (!append(entry, turn)) return;
-          next = items.nextCursor ?? undefined;
-          if (
-            next &&
-            (seen.has(next) || seen.size >= nativeHistoryItemLimit / nativeHistoryItemPageSize)
-          )
-            throw new AppError(
-              'HISTORY_LIMIT',
-              'History pagination exceeded the supported limit.',
-              502,
-            );
-          if (next) seen.add(next);
-        } while (next);
-      }
-      return messages;
-    };
-    // Legacy stores expose turn pages with full items, but no item-pagination endpoint.
-    // Start with one turn so old transcripts cannot create an eager multi-turn payload.
-    const legacy = header.thread.historyMode === 'legacy';
-    let pageLimit: number = legacy ? 1 : limits.page;
-    for (;;) {
-      let page;
-      try {
-        page = await call('thread/turns/list', {
-          threadId: id,
-          cursor,
-          limit: pageLimit,
-          sortDirection: direction === 'newer' ? 'asc' : 'desc',
-          itemsView: legacy ? 'full' : 'notLoaded',
-        });
-      } catch (error) {
-        // CLI 0.167.0 creates threads lazily; only its specific empty-thread error is benign.
-        if (
-          !continuation &&
-          error instanceof AppError &&
-          error.code === 'CLI_ERROR' &&
-          error.message.includes(
-            'is not materialized yet; thread/turns/list is unavailable before first user message',
-          )
-        )
-          return {
-            messages: [] as Message[],
-            olderCursor: null,
-            newerCursor: null,
-            hasNewer: false,
-            state: 'idle' as State,
-            turns: [] as any[],
-          };
-        throw error;
-      }
-      if (!Array.isArray(page.data))
-        throw new AppError('PROTOCOL_ERROR', 'Invalid conversation history.', 502);
-      for (const value of [page.nextCursor, page.backwardsCursor])
-        if (value != null && typeof value !== 'string')
-          throw new AppError('PROTOCOL_ERROR', 'Invalid history continuation.', 502);
-      const turns = direction === 'newer' ? page.data.slice() : page.data.slice().reverse();
-      const messages = await hydrate(turns);
-      if (messages) {
-        let questionChanged = this.asyncQuestions.observeHistory(id, messages);
-        for (const turn of turns)
-          if (turn.status === 'failed' || turn.status === 'interrupted')
-            if (this.asyncQuestions.expireTurn(id, turn.id)) questionChanged = true;
-        if (questionChanged) this.publishQuestions(id);
-        const latest = turns.at(-1);
-        return {
-          messages,
-          olderCursor: this.historyCursor(
-            id,
-            direction === 'older' ? page.nextCursor : page.backwardsCursor,
-            'older',
-          ),
-          // Keep a resumable forward edge even at the live end, so a reader can
-          // catch up after the bounded live cache has moved beyond this page.
-          newerCursor: this.historyCursor(
-            id,
-            direction === 'newer' ? (page.nextCursor ?? cursor) : page.backwardsCursor,
-            'newer',
-          ),
-          hasNewer: direction === 'newer' ? !!page.nextCursor : !!cursor && !!page.backwardsCursor,
-          state: (state(header.thread.status) === 'running'
-            ? 'running'
-            : terminal(latest?.status)
-              ? latest.status
-              : latest?.status === 'inProgress'
-                ? 'unknown'
-                : 'idle') as State,
-          turns: this.store.attachTurnUsage(id, turns.map(nativeTurn)),
-        };
-      }
-      if (pageLimit === 1 || turns.length <= 1)
-        throw new AppError(
-          'HISTORY_LIMIT',
-          'This turn exceeds the display limit. Use the CLI to inspect this conversation.',
-          413,
-        );
-      // Re-read from the same native cursor. The successful, smaller page supplies
-      // its own next cursor, keeping older turns reachable without duplicates.
-      pageLimit = Math.max(1, Math.min(Math.floor(pageLimit / 2), turns.length - 1));
-    }
-  }
-  private historyCursor(id: string, cursor: unknown, direction: 'older' | 'newer') {
-    return typeof cursor === 'string' && cursor
-      ? Buffer.from(JSON.stringify({ id, cursor, direction })).toString('base64url')
-      : null;
+    const { interruptedTurns, ...page } = await readConversationHistory(
+      this.driver,
+      id,
+      project.path,
+      continuation,
+      signal,
+      (path) => this.images.reference(saved.projectId, path),
+    );
+    signal.throwIfAborted();
+    let questionChanged = this.asyncQuestions.observeHistory(id, page.messages);
+    for (const turnId of interruptedTurns)
+      if (this.asyncQuestions.expireTurn(id, turnId)) questionChanged = true;
+    if (questionChanged) this.publishQuestions(id);
+    return { ...page, turns: this.store.attachTurnUsage(id, page.turns) };
   }
   queueState(id: string) {
     if (!this.store.thread(id))
@@ -1286,6 +1075,7 @@ export class Service {
     return this.store.thread(parentId)!;
   }
   async branchPoint(id: string) {
+    await this.driver.requireFeature('branch', 'Conversation branching');
     await this.conversationOwner(id, 10000);
     const page = await this.driver.call(
       'thread/turns/list',
@@ -1384,6 +1174,7 @@ export class Service {
         true,
       );
     }
+    await this.driver.requireFeature('branch', 'Conversation branching');
     if (this.managing.has(id) || this.store.pendingManagement(id))
       throw new AppError('MANAGEMENT_BUSY', 'Finish the current conversation change first.', 409);
     this.managing.add(id);
@@ -1496,6 +1287,7 @@ export class Service {
     ];
   }
   async review(id: string, operationId: string, target: ReviewTarget, settings: Settings) {
+    await this.driver.requireFeature('review', 'Native code review');
     const title =
       target.type === 'baseBranch'
         ? 'changes against ' + target.branch
@@ -1749,7 +1541,7 @@ export class Service {
               approvalPolicy,
               approvalsReviewer,
               collaborationMode,
-              serviceTierForTurn: serviceTier,
+              ...(this.driver.supports('turnSpeed') ? { serviceTierForTurn: serviceTier } : {}),
             },
       );
       if (typeof result.turn?.id !== 'string')
@@ -1795,7 +1587,7 @@ export class Service {
             : 'failed';
         if (error instanceof AppError && error.code === 'THREAD_WRITER_BUSY')
           thread.writerConflict = true;
-        else this.pauseAfterTurn(id, thread.state);
+        else pauseQueueAfterTurn(this.store, id, thread.state);
       }
       this.boundary(thread);
       throw error;
@@ -1805,7 +1597,7 @@ export class Service {
     const thread = await this.read(id);
     const pending = this.store.active(id);
     if (!pending && !this.store.steers(id).length) {
-      this.syncQueue(thread);
+      settleQueuedOperations(this.store, thread);
       this.queue.notify(id);
       return thread;
     }
@@ -1836,7 +1628,7 @@ export class Service {
     if (match && terminal(match.status)) {
       this.store.complete(id, match.id);
       thread.state = match.status;
-      this.pauseAfterTurn(id, match.status);
+      pauseQueueAfterTurn(this.store, id, match.status);
       thread.messages = history.messages;
       thread.turns = history.turns;
       thread.olderCursor = history.olderCursor;
@@ -1880,7 +1672,7 @@ export class Service {
         ) {
           if (!thread.pending && terminal(thread.state))
             return { requested: false, alreadyFinished: true };
-          // CLI 0.167.0 can acknowledge turn/start before its runner is registered.
+          // A native acknowledgement can precede runner registration.
           // Cancellation of this same turn is safe to retry; task dispatch is never retried.
           if (attempt < 9 && thread.turnId === turnId) {
             await delay(100);
@@ -2056,45 +1848,12 @@ export class Service {
       this.publishQuestions(threadId);
     }
   }
-  private pauseAfterTurn(id: string, outcome: string | undefined) {
-    if (outcome === 'failed' || outcome === 'interrupted')
-      this.store.queue.pauseForReview(
-        id,
-        'A task stopped or failed. Review the queue before resuming.',
-      );
-  }
-  private syncQueue(thread: Thread) {
-    for (const entry of this.store.queue.inFlight(thread.id)) {
-      const op = this.store.operation(entry.id);
-      if (op?.state === 'completed') {
-        const outcome =
-          thread.turns?.find((turn) => turn.id === op.turnId)?.status ??
-          (thread.turnId === op.turnId ? thread.state : undefined);
-        this.store.queue.set(
-          entry.id,
-          'completed',
-          outcome === 'failed' || outcome === 'interrupted'
-            ? `The task ended ${outcome}.`
-            : undefined,
-        );
-        this.pauseAfterTurn(thread.id, outcome);
-      } else if (op?.state === 'unknown') {
-        if (entry.state !== 'sent')
-          this.store.queue.set(entry.id, 'unknown', 'Check result before continuing.');
-        this.store.queue.pauseForReview(thread.id, 'An execution result is unknown.');
-      } else if (op?.state === 'failed') {
-        this.store.queue.set(entry.id, entry.state === 'sent' ? 'completed' : 'failed', op.error);
-        this.store.queue.pauseForReview(thread.id, 'A queued task failed.');
-      }
-    }
-    thread.queue = this.store.queue.state(thread.id);
-  }
   private boundary(thread: Thread) {
     thread.expiredQuestion =
       !thread.actions.some(
         (a) => a.kind === 'questions' && (a.status === 'pending' || a.status === 'responding'),
       ) && this.store.hasExpiredQuestion(thread.id);
-    this.syncQueue(thread);
+    settleQueuedOperations(this.store, thread);
     thread.composerSettings = this.store.settingsProfile(thread.id);
     // Protect lifecycle state and first-prompt titles from older thread/list replies.
     this.metadataChanged(thread.id);
@@ -2203,12 +1962,7 @@ export class Service {
           }),
         })
         .safeParse(p);
-      if (
-        !parsed.success ||
-        p.turnId !== thread.turnId ||
-        !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
-      )
-        return;
+      if (!parsed.success || p.turnId !== thread.turnId || !activeTurn(thread.state)) return;
       const labels = {
         inProgress: 'Reviewing',
         approved: 'Approved',
@@ -2422,7 +2176,7 @@ export class Service {
         // outer review turn's completion. Only that exact receipt can close it.
         thread.turnId = p.turn.id;
         thread.state = terminal(p.turn.status) ? p.turn.status : 'unknown';
-        if (newTerminal) this.pauseAfterTurn(thread.id, thread.state);
+        if (newTerminal) pauseQueueAfterTurn(this.store, thread.id, thread.state);
         const pending = this.store.active(thread.id);
         if (
           pending &&
@@ -2495,11 +2249,7 @@ export class Service {
       )
         return;
       // A delayed item from an earlier turn cannot change the current task's progress.
-      if (
-        turnId !== thread.turnId ||
-        !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
-      )
-        return;
+      if (turnId !== thread.turnId || !activeTurn(thread.state)) return;
       const previousCompaction = thread.compaction?.id;
       if (lifecycle === 'inProgress' && typeof raw.id === 'string')
         thread.compaction = { id: raw.id, turnId };
@@ -2669,163 +2419,29 @@ export class Service {
       : 'waitingInput';
     this.boundary(thread);
   }
-  uploadFile(projectId: string, bytes: Buffer, name: string): UploadedFileAttachment {
-    if (!bytes.length || bytes.length > limits.uploadedFile)
-      throw new AppError(
-        'FILE_LIMIT',
-        'Choose a non-empty UTF-8 text file of at most 64 KiB.',
-        413,
-      );
-    const content = decodeFileText(bytes);
-    return {
-      kind: 'uploaded-file',
-      id: this.store.saveUploadedFile(projectId, content),
-      name:
-        basename(name.replaceAll('\\', '/'))
-          .replace(/[\x00-\x1f\x7f]/g, '')
-          .slice(0, 160) || 'File',
-    };
+  uploadFile(projectId: string, bytes: Buffer, name: string) {
+    return this.projectFiles.uploadFile(projectId, bytes, name);
   }
-  async file(projectId: string, path: string, showHidden = false): Promise<FileContent> {
-    const absolute = await this.safePath(projectId, path, showHidden);
-    const info = await stat(absolute).catch((error) => this.fileError(projectId, error));
-    if (!info.isFile() || info.size > limits.file)
-      throw new AppError('FILE_LIMIT', 'Choose a text file smaller than 256 KB.');
-    const bytes = await readFile(absolute).catch((error) => this.fileError(projectId, error));
-    if (bytes.length > limits.file)
-      throw new AppError('FILE_LIMIT', 'This file grew beyond the 256 KB limit.');
-    const content = decodeFileText(bytes);
-    return {
-      path,
-      text: content,
-      sha: createHash('sha256').update(bytes).digest('hex'),
-      lines: content.split('\n').length,
-    };
+  file(projectId: string, path: string, showHidden = false) {
+    return this.projectFiles.file(projectId, path, showHidden);
   }
-  async projectImage(projectId: string, path: string, showHidden = false) {
-    const contentType = projectImageType(path);
-    if (!contentType)
-      throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP project image.', 415);
-    const absolute = await this.safePath(projectId, path, showHidden);
-    const project = this.project(projectId);
-    return openImagePreview(absolute, contentType, (opened) => {
-      this.requireBrowserPath(project.path, opened, showHidden);
-    }).catch((error) => this.fileError(projectId, error));
+  files(projectId: string, path = '', showHidden = false) {
+    return this.projectFiles.files(projectId, path, showHidden);
   }
-
-  async workspaceImage(path: string) {
-    if (
-      !isAbsolute(path) ||
-      resolve(path) !== path ||
-      /[\\\x00-\x1f\x7f]/.test(path) ||
-      path.length > 4096
-    )
-      throw new AppError('PATH_DENIED', 'Choose an absolute image path on the server.', 403);
-    const contentType = projectImageType(path);
-    if (!contentType) throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP image.', 415);
-    const [runtime, ...privateRoots] = this.privateFileRoots;
-    const checkPath = (absolute: string) => {
-      // Runtime storage is private. Only direct image exports and its media folders are previews.
-      const storedMedia =
-        runtime &&
-        ['images', 'screenshots'].some((folder) =>
-          isWithinDirectory(resolve(runtime, folder), absolute),
-        );
-      if (
-        privateRoots.some((root) => isWithinDirectory(root, absolute)) ||
-        (runtime &&
-          isWithinDirectory(runtime, absolute) &&
-          dirname(absolute) !== runtime &&
-          !storedMedia)
-      )
-        throw new AppError('PATH_DENIED', 'This image is outside the preview scope.', 403);
-    };
-    checkPath(path);
-    try {
-      const absolute = await realpath(path);
-      checkPath(absolute);
-      return await openImagePreview(absolute, contentType, checkPath);
-    } catch (error) {
-      if (record(error) && ['ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code))
-        throw new AppError('IMAGE_NOT_FOUND', 'The image is no longer available.', 404);
-      if (record(error) && ['EACCES', 'EPERM'].includes(error.code))
-        throw new AppError('FILE_ACCESS', 'The selected image cannot be accessed.', 403);
-      throw error;
-    }
+  projectImage(projectId: string, path: string, showHidden = false) {
+    return this.projectFiles.projectImage(projectId, path, showHidden);
   }
-  async files(projectId: string, path = '', showHidden = false) {
-    const absolute = await this.safePath(projectId, path, showHidden);
-    const privateEntries = new Set(
-      this.privateFileRoots
-        .filter((root) => dirname(root) === absolute)
-        .map((root) => basename(root)),
-    );
-    return (
-      await readdir(absolute, { withFileTypes: true }).catch((error) =>
-        this.fileError(projectId, error),
-      )
-    )
-      .filter(
-        (entry) =>
-          (showHidden || !hasHiddenPathSegment(entry.name)) && !privateEntries.has(entry.name),
-      )
-      .slice(0, 200)
-      .map((x) => ({
-        name: x.name,
-        path: path ? `${path}/${x.name}` : x.name,
-        directory: x.isDirectory(),
-      }))
-      .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
-  }
-  private async fileError(projectId: string, error: unknown): Promise<never> {
-    await this.requireProject(projectId);
-    if (record(error) && ['ENOENT', 'ENOTDIR'].includes(error.code))
-      throw new AppError(
-        'FILE_NOT_FOUND',
-        'The selected file or directory no longer exists. Refresh Files.',
-        404,
-      );
-    if (record(error) && ['EACCES', 'EPERM'].includes(error.code))
-      throw new AppError('FILE_ACCESS', 'The selected file or directory cannot be accessed.', 403);
-    throw error;
-  }
-  private isPrivateBrowserPath(projectRoot: string, absolute: string) {
-    return this.privateFileRoots.some(
-      (root) =>
-        root !== projectRoot &&
-        isWithinDirectory(projectRoot, root) &&
-        isWithinDirectory(root, absolute),
-    );
-  }
-  private requireBrowserPath(projectRoot: string, absolute: string, showHidden: boolean) {
-    if (
-      !isWithinDirectory(projectRoot, absolute) ||
-      this.isPrivateBrowserPath(projectRoot, absolute) ||
-      (!showHidden && hasHiddenPathSegment(relative(projectRoot, absolute)))
-    )
-      throw new AppError('PATH_DENIED', 'This path is outside the file browser scope.', 403);
-  }
-  private async safePath(projectId: string, path: string, showHidden: boolean) {
-    if (
-      isAbsolute(path) ||
-      path.split(/[\\/]/).includes('..') ||
-      (!showHidden && hasHiddenPathSegment(path))
-    )
-      throw new AppError('PATH_DENIED', 'This path is outside the file browser scope.', 403);
-    const project = await this.requireProject(projectId);
-    const canonical = await realpath(resolve(project.path, path)).catch((error) =>
-      this.fileError(projectId, error),
-    );
-    this.requireBrowserPath(project.path, canonical, showHidden);
-    return canonical;
+  workspaceImage(path: string) {
+    return this.projectFiles.workspaceImage(path);
   }
   async close() {
     clearTimeout(this.maintenance?.timer);
     this.events.close();
+    const reads = this.reads.close();
     await this.admission;
     const queued = this.queue.close();
     await this.driver.stop();
-    await queued;
+    await Promise.all([queued, reads]);
     this.store.close();
   }
 }

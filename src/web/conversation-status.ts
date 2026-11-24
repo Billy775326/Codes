@@ -1,3 +1,4 @@
+import { activeTurn, interactionActivity } from '../shared/conversation-activity';
 import type { State, Summary, Thread } from '../shared/types';
 import { interfaceLanguages, type Translate } from './interface-language';
 
@@ -7,6 +8,7 @@ const activityLabels: Record<NonNullable<Summary['sidebarActivity']>, string> = 
   optionalInput: 'Optional question',
   approvalAndInput: 'Needs approval · Question open',
   responding: 'Submitting response',
+  responseUnconfirmed: 'Status unknown',
   compacting: 'Compacting context',
 };
 const activityIndicators: Record<NonNullable<Summary['sidebarActivity']>, string> = {
@@ -15,6 +17,7 @@ const activityIndicators: Record<NonNullable<Summary['sidebarActivity']>, string
   optionalInput: 'answer',
   approvalAndInput: 'answer-and-approval',
   responding: 'submitting',
+  responseUnconfirmed: 'unknown',
   compacting: 'running',
 };
 const turnIndicators: Partial<Record<State, string>> = {
@@ -34,32 +37,40 @@ const labels: Record<State, string> = {
   unknown: 'Status unknown',
 };
 
-/** Presentation of existing task/receipt/queue state; never an execution state machine. */
-export function conversationStatus(row: Summary, t: Translate = interfaceLanguages.en.t) {
-  const uncertain = row.executionUnknown || row.queueIssue === 'unknown';
-  const label = uncertain
-    ? row.expiredQuestion
-      ? 'Question expired · Check result'
-      : 'Check result'
-    : row.managementPending
-      ? 'Check archive'
-      : row.sidebarActivity
-        ? activityLabels[row.sidebarActivity]
-        : row.executionPending &&
-            !['running', 'waitingApproval', 'waitingInput'].includes(row.state)
-          ? 'Confirming result'
-          : labels[row.state];
+function status(row: Summary) {
+  const uncertain =
+    row.executionUnknown || (row.queueIssue === 'unknown' && !activeTurn(row.state));
+  if (uncertain)
+    return {
+      label: row.expiredQuestion ? 'Question expired · Check result' : 'Check result',
+      tone: 'attention',
+      indicator: 'unknown',
+    };
+  if (row.managementPending)
+    return { label: 'Check archive', tone: 'attention', indicator: undefined };
+  const activity = row.sidebarActivity;
+  if (activity)
+    return {
+      label: activityLabels[activity],
+      tone: activity === 'compacting' ? 'running' : 'attention',
+      indicator: activityIndicators[activity],
+    };
+  if (row.executionPending && !activeTurn(row.state) && row.state !== 'unknown')
+    return { label: 'Confirming result', tone: 'running', indicator: undefined };
   const tone =
-    uncertain ||
-    row.managementPending ||
-    (row.sidebarActivity !== undefined && row.sidebarActivity !== 'compacting') ||
-    ['waitingApproval', 'waitingInput', 'unknown'].includes(row.state)
-      ? 'attention'
-      : row.state === 'failed'
-        ? 'error'
-        : row.state === 'running' || row.executionPending
-          ? 'running'
+    row.state === 'failed'
+      ? 'error'
+      : row.state === 'running'
+        ? 'running'
+        : turnIndicators[row.state]
+          ? 'attention'
           : 'neutral';
+  return { label: labels[row.state], tone, indicator: turnIndicators[row.state] };
+}
+
+/** Present task, operation and queue state without changing their ownership. */
+export function conversationStatus(row: Summary, t: Translate = interfaceLanguages.en.t) {
+  const { label, tone, indicator } = status(row);
   const queueStatus =
     row.queueIssue === 'unknown'
       ? 'Check result'
@@ -71,38 +82,18 @@ export function conversationStatus(row: Summary, t: Translate = interfaceLanguag
   const queue = row.queueCount
     ? t('{count} in queue', { count: row.queueCount }) + (queueStatus ? ' · ' + t(queueStatus) : '')
     : undefined;
-  const indicator = uncertain
-    ? 'unknown'
-    : row.managementPending
-      ? undefined
-      : row.sidebarActivity
-        ? activityIndicators[row.sidebarActivity]
-        : turnIndicators[row.state];
   return { label: t(label), tone, queue, indicator };
 }
 /** Live indicator for the selected conversation, using the existing task and interaction states. */
 export function taskActivity(thread: Thread, connected: boolean) {
   if (thread.writerConflict) return;
-  const pending = thread.actions.filter((action) =>
-    ['pending', 'responding'].includes(action.status),
-  );
-  const answer =
-    thread.state === 'waitingInput' || pending.some((action) => action.kind === 'questions');
-  const approval =
-    thread.state === 'waitingApproval' || pending.some((action) => action.kind !== 'questions');
-  const running =
-    thread.state === 'running' || thread.sidebarActivity === 'compacting' || !!thread.pending;
-  const unknown = thread.state === 'unknown' || thread.executionUnknown;
-  if (!answer && !approval && !running && !unknown) return;
-  if (!connected) return { state: 'reconnecting', label: 'Reconnecting…' };
-  if (pending.some((action) => action.replyUnconfirmed))
-    return { state: 'unknown', label: 'Status unknown' };
-  if (pending.length && pending.every((action) => action.status === 'responding'))
-    return { state: 'submitting', label: 'Submitting response' };
-  if (answer && approval)
-    return { state: 'answer-and-approval', label: 'Needs approval · Question open' };
-  if (answer) return { state: 'answer', label: 'Needs answer' };
-  if (approval) return { state: 'approval', label: 'Needs approval' };
-  if (unknown) return { state: 'unknown', label: 'Status unknown' };
-  return { state: 'running', label: 'Running' };
+  const view = status({
+    ...thread,
+    sidebarActivity: interactionActivity(thread.state, thread.actions, !!thread.compaction),
+  });
+  const state = view.indicator ?? (thread.pending ? 'running' : undefined);
+  if (!state) return;
+  return connected
+    ? { state, label: view.label }
+    : { state: 'reconnecting', label: 'Reconnecting…' };
 }

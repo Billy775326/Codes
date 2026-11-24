@@ -18,7 +18,7 @@ After the new HTTP listener accepts authenticated requests, call `GET /api/model
 
 Native task transcripts and CLI authentication remain in the server user's Codex home. codes keeps project metadata, settings, execution/branch receipts, pending prompt text, and queued messages with attachment references for recovery. Browser drafts are stored in that browser's local storage, so use a trusted browser profile. Signing out clears the server session, not local drafts. Question answers are not stored as plaintext by the codes operation journal; the CLI may retain them according to its own behavior.
 
-Completed/failed operation receipts are retained for 30 days. Completed/cancelled queue entries are also retained for 30 days. Failed and unknown queue entries remain available for review; remove a failed entry after correcting its cause. Unknown operations are retained until resolved. Treat the data directory and native Codex home as private user data. To back up, stop codes and back up both locations, preserving permissions. Schemas 1–3 are automatically backed up and migrated to schema 4 on startup, retaining queues and branch receipts while adding the review execution lease. See [migration and rollback](conversations.md#metadata-migration-and-rollback). There is no automatic restore tool; unsupported database versions are rejected rather than reset.
+Completed/failed operation receipts are retained for 30 days. Completed/cancelled queue entries are also retained for 30 days. Failed and unknown queue entries remain available for review; remove a failed entry after correcting its cause. Unknown operations are retained until resolved. Treat the data directory and native Codex home as private user data. To back up, stop codes and back up both locations, preserving permissions. Schemas 1–4 are automatically backed up and migrated to schema 5 on startup. The migration covers queue and execution leases, settings, usage, questions, archives, and upload metadata. See [migration and rollback](conversations.md#metadata-migration-and-rollback). There is no automatic restore tool; unsupported database versions are rejected rather than reset.
 
 ## Existing Codex conversations
 
@@ -64,6 +64,12 @@ The owner authorized the following delivery policy on 2026-11-18: after a verifi
 
 Release tags, GitHub Releases, package publishing and a new public deployment still require their own authorization.
 
+### Updating only the web interface
+
+For an API-compatible frontend change, run `npm run build` in an isolated checkout, then run `npm run preview:web -- install /absolute/path/to/candidate/dist` from the active Codes checkout. The command checks that the candidate backend output and unversioned public files match. It retains the existing hashed assets and atomically switches the HTML entry. Sign-in, event streams and running tasks stay connected. Open pages mark the existing reload control when they detect the new entry.
+
+Run `npm run preview:web -- rollback` from the active checkout to restore the previous entry. Use the full maintenance flow for backend changes, shared protocol changes, unversioned assets or a full asset budget. Run one preview update at a time.
+
 ## Network and access
 
 In **Settings → Network & access**, choose a loopback listener (`127.0.0.1`, `localhost`, or `::1`) and a port from 1 to 65535. On Linux, low ports may require additional bind permissions. Add one allowed HTTP(S) origin per line, including the external HTTPS URL when using a proxy. Allowed addresses control which browser origins Codes accepts. The listener address and port control where the process binds.
@@ -99,7 +105,7 @@ Do not set a browser URL containing the access token. The login form exchanges i
 
 ## Runtime settings
 
-In **Settings → Runtime**, set the default native RPC deadline (1,000–300,000 ms) and whether native questions are available in Code mode. The form also shows the Codex executable and Codes data directory. Save and restart Codes to apply changes. `runtime-settings.json` in the private data directory takes precedence over `CODES_CODE_QUESTIONS` and `CODES_CODEX_REQUEST_TIMEOUT_MS`. Before a save, the defaults are Code-mode questions enabled and a 30,000 ms native request deadline. Operations with dedicated deadlines retain those deadlines.
+In **Settings → Runtime**, set the default native RPC deadline (1,000–300,000 ms) and whether native questions are available in Code mode. The form also shows the Codex executable and Codes data directory. Save and restart Codes to apply changes. `runtime-settings.json` in the private data directory takes precedence over `CODES_CODE_QUESTIONS` and `CODES_CODEX_REQUEST_TIMEOUT_MS`. Before a save, Code-mode questions are enabled when the installed CLI supports them and the native request deadline is 30,000 ms. Operations with dedicated deadlines retain those deadlines.
 
 To recover from invalid runtime settings, stop Codes, move `runtime-settings.json` to a backup outside the active path, and restart with the desired environment values.
 
@@ -121,12 +127,16 @@ If an execution receipt is lost, **do not submit the task a second time**. Use *
 
 An unknown result that cannot be proven terminal remains locked. Inspect the task through the CLI and resolve the underlying runtime issue. This preview does not provide a force-unlock button. Reconciliation currently scans the latest 12 native turns; an operation displaced by external CLI activity may require manual investigation. Starting a separate conversation does not cancel the previous operation.
 
+### Read diagnostics
+
+Snapshot, history and event-stream requests expose an `X-Request-Id` header. Slow reads, failures and replay resets produce one JSON log record with the request ID, safe conversation ID, elapsed time, queue and native RPC phases, and response bytes when available. Set `CODES_READ_DIAGNOSTICS=1` to include successful requests during a diagnostic run. The records omit message bodies, credentials and filesystem paths.
+
 ## Known preview limits
 
 - One selected conversation receives detailed events in each browser. An idle browser subscribes to project summaries so newly created conversations appear without refreshing.
 - The sidebar browses native conversations in pages of up to 30, with separate active/archived views. Case-insensitive title search scans up to four native pages per request; use Next to continue. A failed read retains the displayed portion and offers refresh. The project summary snapshot remains capped at 200; it is not the discovery limit.
 - Empty CLI threads are materialized lazily. If the CLI is restarted before the first user message, an empty thread may no longer be readable; create a new conversation.
-- Native item display is capped. History reads fetch one native item per response and use a 16 MiB JSONL frame limit. Larger individual native items still require CLI inspection; browser snapshot/display limits remain smaller.
+- Native item display is capped. History reads fetch one native item per response and use a 16 MiB JSONL frame limit. Larger individual native items require CLI inspection. A recognizable oversized history response can be skipped without ending other tasks. An invalid or unidentifiable frame still ends the shared connection and leaves unconfirmed operations protected.
 - File context is a checksum-verified copy of selected lines at send time. Files opens with hidden entries off. Use **Show hidden files** in the Files toolbar to browse and attach dotfiles in the selected project.
 - The change view shows native current-turn diff events or file-change items from the loaded history. It is not a general Git staging or merge interface.
 - The isolated live read/write/interrupt pilot passed. Remote proxy behavior, a real prompting approval policy, and the remaining permission/question variants still require manual acceptance; simulator success is insufficient.

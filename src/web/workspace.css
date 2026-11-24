@@ -1138,3 +1138,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.app .web-update-available {
+  color: var(--accent);
+  position: relative;
+}
+.app .web-update-available::after {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}

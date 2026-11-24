@@ -50,10 +50,10 @@ The server talks to the [Codex App Server](https://learn.chatgpt.com/docs/app-se
 ## Requirements
 
 - Linux, Node.js **24.19 or newer in the 24.x line**, and npm.
-- Codex CLI **0.167.0**, already installed and signed in as the server user for real tasks.
+- Codex CLI with a compatible App Server, already installed and signed in as the server user for real tasks.
 - A current browser. Mobile is intended primarily for viewing and approval.
 
-This preview pins one CLI protocol version. It refuses other versions rather than silently guessing compatibility. Install the supported CLI with `npm install --global @openai/codex@0.167.0`, then follow the [official CLI login instructions](https://learn.chatgpt.com/docs/codex/cli). codes does not copy or expose your CLI credentials.
+Codes checks the installed CLI’s generated App Server protocol. CLI 0.166.0, 0.167.0, 0.168.0, and 0.172.0 have metadata smoke coverage. Install Codex with `npm install --global @openai/codex`, then follow the [official CLI login instructions](https://learn.chatgpt.com/docs/codex/cli). codes does not copy or expose your CLI credentials.
 
 ## Run locally
 
@@ -134,7 +134,7 @@ npm run test:e2e
 npm run test:native
 ```
 
-Install a test browser first with `npx playwright install chromium`. Alternatively, set `CODES_CHROME` to an existing Chrome executable. Browser tests use a temporary project, a test-only token, and the simulation runtime. `test:native` requires CLI 0.167.0 and uses an empty temporary `CODEX_HOME`; it sends no prompts or model requests.
+Install a test browser first with `npx playwright install chromium`. Alternatively, set `CODES_CHROME` to an existing Chrome executable. Browser tests use a temporary project, a test-only token, and the simulation runtime. `test:native` uses the installed compatible CLI (or `CODES_CODEX_BINARY`) and an isolated temporary `CODEX_HOME`; it sends no prompts or model requests.
 
 The opt-in live pilot uses the server's existing login and model quota, edits only a disposable fixture, and leaves native acceptance conversations:
 

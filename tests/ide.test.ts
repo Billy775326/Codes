@@ -80,6 +80,23 @@ it('rejects unadvertised reasoning before dispatch and preserves custom model id
   expect(collaborationMode.settings.model).toBe('custom-exact-name');
 });
 
+it('rejects unavailable native review and branching before reserving an operation', async () => {
+  const { service, thread } = await fixture();
+  vi.spyOn(service.driver, 'supports').mockImplementation(
+    (feature) => feature !== 'review' && feature !== 'branch',
+  );
+  const review = randomUUID();
+  const fork = randomUUID();
+  await expect(
+    service.review(thread.id, review, { type: 'uncommittedChanges' }, thread.settings),
+  ).rejects.toMatchObject({ code: 'CLI_FEATURE_UNAVAILABLE' });
+  await expect(service.fork(thread.id, fork, 'fixture-turn')).rejects.toMatchObject({
+    code: 'CLI_FEATURE_UNAVAILABLE',
+  });
+  expect(service.store.operation(review)).toBeUndefined();
+  expect(service.store.operation(fork)).toBeUndefined();
+});
+
 it('restores the current project Codex model, effort and speed after explicit turn overrides', async () => {
   const { service, thread, project } = await fixture();
   const call = service.driver.call.bind(service.driver);

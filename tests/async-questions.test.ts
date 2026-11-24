@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { expect, it } from 'vitest';
-import { AsyncQuestions } from '../src/server/async-questions';
+import { AsyncQuestions, asyncQuestionSchema } from '../src/server/async-questions';
 import { nativeMessage } from '../src/server/transcript';
 
 const title = 'Which direction should I use?';
@@ -15,6 +15,7 @@ function fixture() {
     CREATE TABLE operations (id TEXT PRIMARY KEY, state TEXT NOT NULL);
     INSERT INTO threads VALUES ('thread');
   `);
+  db.exec(asyncQuestionSchema);
   return db;
 }
 

@@ -22,7 +22,8 @@ interface Props {
   onSettings: () => void;
   onToggleTheme: () => void;
   onReload: () => void;
-  onReview: () => void;
+  updateAvailable: boolean;
+  onReview?: () => void;
   onStatus: () => void;
   onPanel: (panel: Panel) => void;
   onDraft: (text: string) => void;
@@ -129,7 +130,7 @@ function ConversationHeading({
 
 export function WorkspaceHeader(props: Props) {
   const { t } = useInterfaceLanguage();
-  const reloadLabel = t('Reload page');
+  const reloadLabel = t(props.updateAvailable ? 'Reload to apply update' : 'Reload page');
   return (
     <header className="topbar">
       {!props.sidebarOpen && (
@@ -157,7 +158,7 @@ export function WorkspaceHeader(props: Props) {
           onRename={props.onRename}
         />
         <IconButton
-          className="compact-page-reload"
+          className={'compact-page-reload' + (props.updateAvailable ? ' web-update-available' : '')}
           icon="refresh"
           label={reloadLabel}
           onClick={props.onReload}
@@ -191,7 +192,7 @@ export function WorkspaceHeader(props: Props) {
           <button
             data-close-menu
             onClick={props.onReview}
-            disabled={!props.hasProject || props.busy}
+            disabled={!props.onReview || !props.hasProject || props.busy}
           >
             <Icon name="review" size={14} />
             {t('Review code')}
@@ -227,7 +228,7 @@ export function WorkspaceHeader(props: Props) {
         </div>
         <div className="top-action-group" role="group" aria-label={t('Workspace tools')}>
           <IconButton
-            className="page-reload"
+            className={'page-reload' + (props.updateAvailable ? ' web-update-available' : '')}
             icon="refresh"
             label={reloadLabel}
             onClick={props.onReload}
