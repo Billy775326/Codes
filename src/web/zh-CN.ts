@@ -321,6 +321,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Hold Shift to select a range.': '按住 Shift 选择连续行。',
   'HTML preview': 'HTML 预览',
   'image attachment(s) available in native history.': '张图片可在 Codex 历史中查看。',
+  'Image preview': '图片预览',
   'Image unavailable': '无法显示图片',
   'Image unavailable:': '无法显示图片：',
   'Immediate follow-ups': '即时追加消息',

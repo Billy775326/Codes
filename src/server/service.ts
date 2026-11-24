@@ -1,8 +1,8 @@
 import { directoryStatus, directoryError } from './project-context.js';
 import { nativePermissions } from '../shared/permissions.js';
 import { randomUUID, createHash } from 'node:crypto';
-import { constants, existsSync, realpathSync } from 'node:fs';
-import { open, realpath, readFile, readdir, stat } from 'node:fs/promises';
+import { existsSync, realpathSync } from 'node:fs';
+import { realpath, readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, basename, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -12,8 +12,8 @@ import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
 import { projectInstructions } from './project-instructions.js';
 import type { ProjectInstructions } from '../shared/project-instructions.js';
-import { Images, validatedImageType } from './images.js';
-import { imageLimits, projectImageType } from '../shared/images.js';
+import { Images, openImagePreview } from './images.js';
+import { projectImageType } from '../shared/images.js';
 import { hasHiddenPathSegment } from '../shared/project-files.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
@@ -2707,29 +2707,49 @@ export class Service {
     if (!contentType)
       throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP project image.', 415);
     const absolute = await this.safePath(projectId, path, showHidden);
-    const file = await open(
-      absolute,
-      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-    ).catch((error) => this.fileError(projectId, error));
+    const project = this.project(projectId);
+    return openImagePreview(absolute, contentType, (opened) => {
+      this.requireBrowserPath(project.path, opened, showHidden);
+    }).catch((error) => this.fileError(projectId, error));
+  }
+
+  async workspaceImage(path: string) {
+    if (
+      !isAbsolute(path) ||
+      resolve(path) !== path ||
+      /[\\\x00-\x1f\x7f]/.test(path) ||
+      path.length > 4096
+    )
+      throw new AppError('PATH_DENIED', 'Choose an absolute image path on the server.', 403);
+    const contentType = projectImageType(path);
+    if (!contentType) throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP image.', 415);
+    const [runtime, ...privateRoots] = this.privateFileRoots;
+    const checkPath = (absolute: string) => {
+      // Runtime storage is private. Only direct image exports and its media folders are previews.
+      const storedMedia =
+        runtime &&
+        ['images', 'screenshots'].some((folder) =>
+          isWithinDirectory(resolve(runtime, folder), absolute),
+        );
+      if (
+        privateRoots.some((root) => isWithinDirectory(root, absolute)) ||
+        (runtime &&
+          isWithinDirectory(runtime, absolute) &&
+          dirname(absolute) !== runtime &&
+          !storedMedia)
+      )
+        throw new AppError('PATH_DENIED', 'This image is outside the preview scope.', 403);
+    };
+    checkPath(path);
     try {
-      const openedPath = await realpath('/proc/self/fd/' + file.fd);
-      this.requireBrowserPath(this.project(projectId).path, openedPath, showHidden);
-      const info = await file.stat();
-      if (!info.isFile() || info.size > imageLimits.bytes)
-        throw new AppError('IMAGE_LIMIT', 'Project images must be at most 8 MiB.', 413);
-      const size = info.size;
-      const header = Buffer.allocUnsafe(Math.min(size, imageLimits.previewHeaderBytes));
-      let length = 0;
-      while (length < header.length) {
-        const { bytesRead } = await file.read(header, length, header.length - length, length);
-        if (!bytesRead) break;
-        length += bytesRead;
-      }
-      if (validatedImageType(header.subarray(0, length)) !== contentType)
-        throw new AppError('IMAGE_FORMAT', 'The image content does not match its filename.', 415);
-      return { stream: file.createReadStream({ start: 0, end: size - 1 }), size, contentType };
+      const absolute = await realpath(path);
+      checkPath(absolute);
+      return await openImagePreview(absolute, contentType, checkPath);
     } catch (error) {
-      await file.close();
+      if (record(error) && ['ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code))
+        throw new AppError('IMAGE_NOT_FOUND', 'The image is no longer available.', 404);
+      if (record(error) && ['EACCES', 'EPERM'].includes(error.code))
+        throw new AppError('FILE_ACCESS', 'The selected image cannot be accessed.', 403);
       throw error;
     }
   }

@@ -12,6 +12,7 @@ import { imageId, imageLimits, imageTypes } from '../shared/images.js';
 import { limits } from '../shared/types.js';
 import { projectInstructionsLimit } from '../shared/project-instructions.js';
 import { Service } from './service.js';
+import type { openImagePreview } from './images.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
 import type { NetworkConfiguration } from './network-settings.js';
@@ -118,6 +119,19 @@ async function json(response: ServerResponse, data: unknown, status = 200) {
   });
   response.end(bytes);
 }
+async function serveImagePreview(
+  response: ServerResponse,
+  { stream, size, contentType }: Awaited<ReturnType<typeof openImagePreview>>,
+) {
+  response.writeHead(200, {
+    'content-type': contentType,
+    'content-length': size,
+    'cache-control': 'private,no-store',
+    'cross-origin-resource-policy': 'same-origin',
+    'x-content-type-options': 'nosniff',
+  });
+  await pipeline(stream, response);
+}
 export async function application(
   service: Service,
   options: {
@@ -214,6 +228,11 @@ export async function application(
       if (url.pathname.startsWith('/api/')) {
         if (!authenticated(request, access?.subject))
           throw new AppError('AUTH_REQUIRED', 'Sign in to your workspace.', 401);
+        if (url.pathname === '/api/image-preview' && method === 'GET')
+          return await serveImagePreview(
+            response,
+            await service.workspaceImage(url.searchParams.get('path') ?? ''),
+          );
         if (url.pathname === '/api/html-preview' && method === 'GET') {
           response.writeHead(200, {
             'content-type': 'text/html; charset=utf-8',
@@ -450,19 +469,14 @@ export async function application(
               ),
             );
           if (segments[3] === 'image-preview' && !segments[4] && method === 'GET') {
-            const { stream, size, contentType } = await service.projectImage(
-              projectId,
-              url.searchParams.get('path') ?? '',
-              url.searchParams.get('showHidden') === 'true',
+            return await serveImagePreview(
+              response,
+              await service.projectImage(
+                projectId,
+                url.searchParams.get('path') ?? '',
+                url.searchParams.get('showHidden') === 'true',
+              ),
             );
-            response.writeHead(200, {
-              'content-type': contentType,
-              'content-length': size,
-              'cache-control': 'private,no-store',
-              'cross-origin-resource-policy': 'same-origin',
-            });
-            await pipeline(stream, response);
-            return;
           }
           if (
             segments[3] === 'seed-conversations' &&

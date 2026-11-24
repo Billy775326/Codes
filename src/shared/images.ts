@@ -18,3 +18,5 @@ export function projectImageType(path: string) {
 }
 export const projectImageUrl = (projectId: string, path: string, showHidden = false) =>
   `/api/projects/${encodeURIComponent(projectId)}/image-preview?path=${encodeURIComponent(path)}${showHidden ? '&showHidden=true' : ''}`;
+export const workspaceImageUrl = (path: string) =>
+  `/api/image-preview?path=${encodeURIComponent(path)}`;

@@ -6,7 +6,7 @@ codes follows the published Codex IDE interaction contracts for native clarifica
 
 External web links in chat open in a new tab. Links within the Codes workspace use the current tab.
 
-Files previews project PNG, JPEG, and WebP images in place. In a Codex answer, Markdown image references and links can use paths relative to the project root or absolute paths within that project. Project images load on demand, are validated from a header of at most 512 KiB, and stream through the authenticated workspace. Each image is limited to 8 MiB and 24 megapixels.
+Files previews project PNG, JPEG, and WebP images in place. In the conversation, local image links open a preview dialog and Markdown images display inline. Absolute paths refer to files on the Codes server, regardless of the selected project. Relative paths use the conversation's project root. Preview links require workspace sign-in. The Codes data directory allows direct raster exports and files in its `images` and `screenshots` folders. Other runtime subdirectories and the Codex home remain private. Images load on demand, are validated from a header of at most 512 KiB, and are limited to 8 MiB and 24 megapixels.
 
 Use **Preview HTML** below an HTML code block, standalone HTML answer, or inside an open `.html` / `.htm` file. Opening a preview closes the previous one. The isolated preview supports static markup, inline CSS and embedded raster images. Scripts, navigation, form submissions and external asset requests are disabled. Source stays visible in the conversation or Files.
 

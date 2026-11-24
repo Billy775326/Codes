@@ -36,6 +36,14 @@
   object-fit: contain;
 }
 
+.app .workspace-image-dialog {
+  width: min(980px, 100%);
+}
+.workspace-image-dialog .project-preview-image {
+  max-height: 75dvh;
+  margin-inline: auto;
+}
+
 .code-block {
   min-width: 0;
 }

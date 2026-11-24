@@ -2,7 +2,7 @@ import { reconnectUpdates } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot, Message } from '../../src/shared/types';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { imagePng } from '../fixtures/image';
 async function fixture(page: Page, count: number) {
   await page.goto('/');
@@ -210,6 +210,7 @@ test('answers and project files preview raster images and isolated static HTML',
   const { base } = await fixture(page, 0);
   const project = base.context!.project;
   const imageName = 'preview-test.png';
+  const screenshotPath = join(dirname(project.path), 'data', 'shared-screenshot.png');
   const htmlName = 'preview-test.html';
   const html = [
     '<meta http-equiv="refresh" content="0; url=/preview-external-test">',
@@ -219,12 +220,14 @@ test('answers and project files preview raster images and isolated static HTML',
     '<img src="/preview-external-test"><a href="/preview-external-test">An example link</a>',
   ].join('\n');
   await writeFile(join(project.path, imageName), imagePng);
+  await writeFile(screenshotPath, imagePng);
   await writeFile(join(project.path, htmlName), html);
   const reply = base.thread.messages.find((message) => message.phase === 'final_answer')!;
   reply.text =
     '| Output | Format |\n| --- | --- |\n| Plot | `png` |\n\n![Generated plot](./' +
     imageName +
-    ')\n\n```html\n' +
+    `)\n\n![Shared screenshot](${screenshotPath})\n\n[Preview screenshot](${screenshotPath})\n\n` +
+    `<a href="${screenshotPath}">Screenshot from an HTML link</a>\n\n\`\`\`html\n` +
     html +
     '\n```';
   let externalResponses = 0;
@@ -244,6 +247,18 @@ test('answers and project files preview raster images and isolated static HTML',
       )
       .toBeGreaterThan(0);
   await expectImage('Generated plot');
+  await expectImage('Shared screenshot');
+  const closePreview = async () => {
+    const dialog = page.getByRole('dialog', { name: 'Image preview', exact: true });
+    await expect(dialog).toBeVisible();
+    await expectImage('shared-screenshot.png');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+  };
+  await preview.getByRole('button', { name: 'Preview screenshot', exact: true }).click();
+  await closePreview();
+  await preview.getByRole('button', { name: 'Screenshot from an HTML link', exact: true }).click();
+  await closePreview();
   await expect(
     preview.getByRole('table').getByRole('columnheader', { name: 'Format' }),
   ).toBeVisible();

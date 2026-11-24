@@ -3,10 +3,15 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MarkdownLink } from './MarkdownLink';
-import { projectFilePath, remarkProjectFileLinks } from './remarkProjectFileLinks';
-import { projectImageType, projectImageUrl } from '../shared/images';
+import {
+  projectFilePath,
+  remarkProjectFileLinks,
+  workspaceImagePath,
+} from './remarkProjectFileLinks';
+import { projectImageUrl, workspaceImageUrl } from '../shared/images';
 import { limits } from '../shared/types';
 import { IconButton } from './primitives';
+import { InteractionDialog } from './InteractionDialog';
 import './content-preview.css';
 
 function htmlPreviewIssue(html: string) {
@@ -91,8 +96,11 @@ export function ProjectImagePreview({
   path: string;
   showHidden?: boolean;
 }) {
+  return <LinkedImagePreview src={projectImageUrl(projectId, path, showHidden)} path={path} />;
+}
+
+function LinkedImagePreview({ src, path }: { src: string; path: string }) {
   const { t } = useInterfaceLanguage();
-  const src = projectImageUrl(projectId, path, showHidden);
   return (
     <a
       href={src}
@@ -105,23 +113,18 @@ export function ProjectImagePreview({
   );
 }
 
-function imagePath(url: string | undefined, root: string | undefined) {
-  if (!url) return;
-  let path: string;
-  try {
-    path = decodeURIComponent(url.split(/[?#]/, 1)[0] ?? '');
-  } catch {
-    return;
-  }
-  if (/^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//')) return;
-  if (path.startsWith('/')) {
-    const prefix = root?.endsWith('/') ? root : root && root + '/';
-    if (!prefix || !path.startsWith(prefix)) return;
-    path = path.slice(prefix.length);
-  }
-  path = path.replace(/^(?:\.\/)+/, '');
-  if (projectImageType(path) && !path.split(/[\\/]/).some((part) => part.startsWith('.')))
-    return path;
+export function ImagePreviewDialog({ path, close }: { path: string; close: () => void }) {
+  const { t } = useInterfaceLanguage();
+  return (
+    <InteractionDialog
+      title={t('Image preview')}
+      close={close}
+      closeOnBackdrop
+      className="workspace-image-dialog"
+    >
+      <LinkedImagePreview src={workspaceImageUrl(path)} path={path.split('/').at(-1) ?? path} />
+    </InteractionDialog>
+  );
 }
 
 const PreviewCodeBlock: Components['pre'] = ({ node, children, ...props }) => {
@@ -165,32 +168,42 @@ const PreviewCodeBlock: Components['pre'] = ({ node, children, ...props }) => {
 
 const liveMarkdownLimit = 24 * 1024;
 
-export const AnswerMarkdown = memo(function AnswerMarkdown({
+export const MessageMarkdown = memo(function MessageMarkdown({
   text,
-  projectId,
   projectPath,
   onOpenFile,
+  onOpenImage,
+  assistant,
   streaming = false,
 }: {
   text: string;
-  projectId: string;
   projectPath?: string;
   onOpenFile?: (path: string) => void;
+  onOpenImage: (path: string) => void;
+  assistant: boolean;
   streaming?: boolean;
 }) {
   const components = useMemo<Components>(
     () => ({
-      pre: streaming ? undefined : PreviewCodeBlock,
+      pre: assistant && !streaming ? PreviewCodeBlock : undefined,
       img: ({ node: _node, src, alt, ...props }) => {
         // A partial image target can change as more of the message arrives.
         if (streaming) return alt ? <span>{alt}</span> : null;
-        const path = imagePath(src, projectPath);
-        if (!path || !projectId) return <img src={src} alt={alt} {...props} />;
-        const preview = projectImageUrl(projectId, path);
+        const path = workspaceImagePath(src, projectPath);
+        if (!path) return <img src={src} alt={alt} {...props} />;
+        const preview = workspaceImageUrl(path);
         return <PreviewImage key={preview} src={preview} alt={alt || path} />;
       },
       a: ({ node: _node, href, children, ...props }) => {
-        const file = projectFilePath(href, projectPath);
+        const image = workspaceImagePath(href, projectPath);
+        if (image) {
+          return (
+            <button type="button" className="project-file-link" onClick={() => onOpenImage(image)}>
+              {children}
+            </button>
+          );
+        }
+        const file = assistant ? projectFilePath(href, projectPath) : undefined;
         if (file) {
           return (
             <button
@@ -203,38 +216,28 @@ export const AnswerMarkdown = memo(function AnswerMarkdown({
             </button>
           );
         }
-        const path = imagePath(href, projectPath);
-        if (!path || !projectId)
-          return (
-            <MarkdownLink href={href} {...props}>
-              {children}
-            </MarkdownLink>
-          );
         return (
-          <a
-            href={projectImageUrl(projectId, path)}
-            target="_blank"
-            rel="noopener noreferrer"
-            {...props}
-          >
+          <MarkdownLink href={href} {...props}>
             {children}
-          </a>
+          </MarkdownLink>
         );
       },
     }),
-    [onOpenFile, projectId, projectPath, streaming],
+    [assistant, onOpenFile, onOpenImage, projectPath, streaming],
   );
   if (streaming && text.length > liveMarkdownLimit)
     return <div className="stream-text">{text}</div>;
   return (
     <>
       <Markdown
-        remarkPlugins={[remarkGfm, [remarkProjectFileLinks, { projectPath }]]}
+        remarkPlugins={
+          assistant ? [remarkGfm, [remarkProjectFileLinks, { projectPath }]] : [remarkGfm]
+        }
         components={components}
       >
         {text}
       </Markdown>
-      {!streaming && /^(?:\s*<!doctype\s+html\b|\s*<html[\s>])/i.test(text) && (
+      {assistant && !streaming && /^(?:\s*<!doctype\s+html\b|\s*<html[\s>])/i.test(text) && (
         <HtmlPreview html={text} />
       )}
     </>

@@ -1,4 +1,25 @@
 import type { Parent, Root } from 'mdast';
+import { projectImageType } from '../shared/images';
+
+export function workspaceImagePath(url: string | undefined, projectPath: string | undefined) {
+  if (!url) return;
+  let path: string;
+  try {
+    path = decodeURIComponent(url.split(/[?#]/, 1)[0] ?? '').replace(/^(?:\.\/)+/, '');
+  } catch {
+    return;
+  }
+  if (
+    !projectImageType(path) ||
+    path.startsWith('//') ||
+    /^[a-z][a-z\d+.-]*:/i.test(path) ||
+    /[\\\x00-\x1f\x7f]/.test(path)
+  )
+    return;
+  const relative = path.replace(/^\//, '');
+  if (relative.split('/').some((part) => part === '' || part === '.' || part === '..')) return;
+  return path.startsWith('/') ? path : projectPath && `${projectPath.replace(/\/$/, '')}/${path}`;
+}
 
 export function projectFilePath(href: string | undefined, projectPath: string | undefined) {
   if (!projectPath || !href?.startsWith('/') || href.startsWith('//')) return;
@@ -20,7 +41,6 @@ export function projectFilePath(href: string | undefined, projectPath: string | 
 /** Convert plain project-file anchors while keeping arbitrary HTML escaped. */
 export function remarkProjectFileLinks({ projectPath }: { projectPath?: string }) {
   return (tree: Root) => {
-    if (!projectPath) return;
     const rewrite = ({ children }: Parent) => {
       for (let index = 0; index < children.length; index++) {
         const node = children[index]!;
@@ -32,7 +52,7 @@ export function remarkProjectFileLinks({ projectPath }: { projectPath?: string }
           continue;
         const match = /^<a\s+href\s*=\s*(?:"([^"]+)"|'([^']+)')\s*>$/i.exec(node.value);
         const href = match?.[1] ?? match?.[2];
-        if (href && projectFilePath(href, projectPath)) {
+        if (href && (projectFilePath(href, projectPath) || workspaceImagePath(href, projectPath))) {
           children.splice(index, 3, { type: 'link', url: href, children: [label] });
         }
       }

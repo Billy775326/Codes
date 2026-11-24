@@ -17,7 +17,7 @@ import { imageLimits } from '../shared/images';
 import { useSettingsProfile } from './useSettingsProfile';
 import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
-import { AnswerMarkdown } from './ContentPreview';
+import { ImagePreviewDialog, MessageMarkdown } from './ContentPreview';
 import { useLocalAttachments } from './useLocalAttachments';
 import { readBrowserPreferences, type Preferences } from './browser-preferences';
 import { defaultTextSize } from './font-sizes';
@@ -32,9 +32,6 @@ import React, {
   useState,
 } from 'react';
 import { createRoot } from 'react-dom/client';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { MarkdownLink } from './MarkdownLink';
 import type {
   Action,
   Attachment,
@@ -140,6 +137,7 @@ const MessageView = memo(function MessageView({
   item,
   streaming,
   onOpenFile,
+  onOpenImage,
   onReply,
   onFork,
   disabled,
@@ -151,6 +149,7 @@ const MessageView = memo(function MessageView({
 }: {
   onReply?: (item: Message) => void;
   onOpenFile?: (path: string) => void;
+  onOpenImage: (path: string) => void;
   onFork?: (item: Message) => void;
   disabled?: boolean;
   onReview?: (item: Message, path?: string) => void;
@@ -240,19 +239,14 @@ const MessageView = memo(function MessageView({
           </p>
         )}
         <div className="prose">
-          {item.kind === 'assistant' ? (
-            <AnswerMarkdown
-              text={item.text}
-              projectId={projectId}
-              projectPath={projectPath}
-              onOpenFile={onOpenFile}
-              streaming={streaming}
-            />
-          ) : (
-            <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
-              {item.text}
-            </Markdown>
-          )}
+          <MessageMarkdown
+            text={item.text}
+            projectPath={projectPath}
+            onOpenFile={onOpenFile}
+            onOpenImage={onOpenImage}
+            assistant={item.kind === 'assistant'}
+            streaming={item.kind === 'assistant' && streaming}
+          />
         </div>
         {changes && (
           <ChangeSummary
@@ -376,6 +370,7 @@ function App() {
   const [autoReviewReady, setAutoReviewReady] = useState(false);
   const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
+  const [previewedImage, setPreviewedImage] = useState<string>();
   const [preferences, setPreferences] = useState(() =>
     readBrowserPreferences(saved('codes.preferences')),
   );
@@ -2055,7 +2050,7 @@ function App() {
     anchorRevision,
   ]);
 
-  const modalOpen = adding || !!dialog || !!forking || conversationModalOpen;
+  const modalOpen = adding || !!dialog || !!previewedImage || !!forking || conversationModalOpen;
   const conversationLoadError =
     connectionError ||
     (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
@@ -2538,6 +2533,7 @@ function App() {
                       }
                       return (
                         <MessageView
+                          onOpenImage={setPreviewedImage}
                           projectId={contextProjectId}
                           projectPath={project?.path}
                           onOpenFile={
@@ -2594,6 +2590,7 @@ function App() {
                   !parseQuestionReplies(thread.pending.text ?? '') &&
                   !thread.messages.some((m) => m.clientId === thread.pending?.id) && (
                     <MessageView
+                      onOpenImage={setPreviewedImage}
                       projectId={contextProjectId}
                       item={{
                         id: thread.pending.id,
@@ -3098,6 +3095,9 @@ function App() {
           </span>
         </div>
       </main>
+      {previewedImage && (
+        <ImagePreviewDialog path={previewedImage} close={() => setPreviewedImage(undefined)} />
+      )}
       {dialog === 'preferences' && (
         <PreferencesDialog
           project={project}

@@ -592,6 +592,38 @@ it('serves only validated images inside the authenticated project scope', async 
   expect((await read('not-an-image.png')).status).toBe(400);
 });
 
+it('previews named raster images across workspace paths without exposing private data folders', async () => {
+  const { imagePng } = await import('./fixtures/image');
+  const external = await mkdtemp(join(tmpdir(), 'codes-preview-outside-project-'));
+  const read = (path: string, session = cookie) =>
+    fetch(origin + '/api/image-preview?path=' + encodeURIComponent(path), {
+      headers: { cookie: session },
+    });
+  try {
+    const outside = join(external, 'outside.png');
+    const exportPath = join(directory, 'export.png');
+    const privatePath = join(directory, 'backup', 'capture.png');
+    await mkdir(join(directory, 'backup'));
+    for (const path of [outside, exportPath, privatePath]) await writeFile(path, imagePng);
+    await symlink(privatePath, join(external, 'alias.png'));
+    expect((await read(outside, '')).status).toBe(401);
+    for (const path of [outside, exportPath]) {
+      const result = await read(path);
+      expect(result.status).toBe(200);
+      expect(result.headers.get('content-type')).toBe('image/png');
+      expect(Buffer.from(await result.arrayBuffer())).toEqual(imagePng);
+    }
+    expect((await read(privatePath)).status).toBe(403);
+    expect((await read(join(external, 'alias.png'))).status).toBe(403);
+    expect((await read('outside.png')).status).toBe(403);
+    expect((await read(join(external, 'missing.png'))).status).toBe(404);
+    await writeFile(join(external, 'notes.txt'), 'ordinary file');
+    expect((await read(join(external, 'notes.txt'))).status).toBe(415);
+  } finally {
+    await rm(external, { recursive: true, force: true });
+  }
+});
+
 it('validates local text uploads and only resolves their references in the owning project', async () => {
   const project = await service.addProject(directory);
   const upload = (body: string | Uint8Array<ArrayBuffer>, session = cookie) =>

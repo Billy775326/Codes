@@ -1,4 +1,15 @@
-import { mkdir, readdir, stat, readFile, writeFile, rename, unlink } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import {
+  mkdir,
+  readdir,
+  stat,
+  readFile,
+  writeFile,
+  rename,
+  unlink,
+  open,
+  realpath,
+} from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve, join, basename } from 'node:path';
 import { imageSize } from 'image-size';
@@ -38,6 +49,40 @@ function inspectImage(bytes: Buffer) {
 
 export function validatedImageType(bytes: Buffer) {
   return formats[inspectImage(bytes)];
+}
+
+export async function openImagePreview(
+  absolute: string,
+  contentType: string,
+  checkPath: (path: string) => void,
+) {
+  const file = await open(
+    absolute,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
+  try {
+    checkPath(await realpath('/proc/self/fd/' + file.fd));
+    const info = await file.stat();
+    if (!info.isFile() || info.size > imageLimits.bytes)
+      throw new AppError('IMAGE_LIMIT', 'Preview images must be at most 8 MiB.', 413);
+    const header = Buffer.allocUnsafe(Math.min(info.size, imageLimits.previewHeaderBytes));
+    let length = 0;
+    while (length < header.length) {
+      const { bytesRead } = await file.read(header, length, header.length - length, length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (validatedImageType(header.subarray(0, length)) !== contentType)
+      throw new AppError('IMAGE_FORMAT', 'The image content does not match its filename.', 415);
+    return {
+      stream: file.createReadStream({ start: 0, end: info.size - 1 }),
+      size: info.size,
+      contentType,
+    };
+  } catch (error) {
+    await file.close();
+    throw error;
+  }
 }
 
 export class Images {
