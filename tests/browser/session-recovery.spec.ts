@@ -74,7 +74,14 @@ test('an expired sidebar request also returns to sign-in', async ({ page }) => {
   await signin(page);
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
   await page.getByLabel('Message Codex').fill('A new project draft');
-  await expire(page);
+  await page.route(
+    '**/api/projects',
+    async (route) => {
+      await expire(page);
+      await route.continue();
+    },
+    { times: 1 },
+  );
   await page.getByRole('button', { name: 'Refresh projects and chats', exact: true }).click();
   await expect(page.getByLabel('Workspace access token')).toBeEnabled();
   await signin(page);
