@@ -18,6 +18,7 @@ test('workspace defaults to persistent navigation, retains drafts through histor
   await expect(page.getByLabel('Search projects and chats', { exact: true })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Close navigation', exact: true })).toBeFocused();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Unsent panel draft');
   const menu = page.getByRole('button', { name: 'Model and reasoning', exact: true });
   await menu.click();
@@ -46,10 +47,9 @@ test('desktop sidebars resize independently and keep their widths through reload
   const right = page.getByRole('separator', { name: 'Resize project panel' });
   const input = page.getByLabel('Message Codex');
   await expect(page.locator('.topbar')).toContainText('New conversation');
-  await expect(
-    page.locator('.topbar').getByRole('button', { name: 'Close navigation' }),
-  ).toHaveAttribute('aria-expanded', 'true');
-  await expect(navigation.getByRole('button', { name: 'Close navigation' })).toHaveCount(0);
+  await expect(page.locator('.topbar').getByRole('button', { name: /navigation/ })).toHaveCount(0);
+  const brand = navigation.getByRole('img', { name: 'Codes', exact: true });
+  expect((await closeNavigation.boundingBox())!.x).toBeGreaterThan((await brand.boundingBox())!.x);
   await input.fill('Keep this draft while resizing');
   await files.click();
   const closeContext = context.getByRole('button', { name: 'Close panel', exact: true });

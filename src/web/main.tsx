@@ -481,6 +481,7 @@ function App() {
   const [panel, setPanel] = useState<'files' | 'diff' | null>(null);
   const workspaceElement = useRef<HTMLDivElement>(null);
   const navigationElement = useRef<HTMLElement>(null);
+  const navigationClose = useRef<HTMLButtonElement>(null);
   const contextElement = useRef<HTMLElement>(null);
   const [navigationWidth, setNavigationWidth] = useState(() =>
     readSidebarWidth(saved('codes.navigation-width')),
@@ -503,6 +504,11 @@ function App() {
       document.querySelector<HTMLButtonElement>('[data-open-navigation]')?.focus(),
     );
   }, []);
+  const openNavigation = () => {
+    setSidebar(true);
+    if (!narrow)
+      requestAnimationFrame(() => navigationClose.current?.focus({ preventScroll: true }));
+  };
   const closeContext = useCallback(() => setPanel(null), []);
   const dismissContext = () => {
     closeContext();
@@ -2091,10 +2097,15 @@ function App() {
         aria-modal={narrow && sidebar && !modalOpen ? true : undefined}
       >
         <div className="sidebar-brand">
-          {narrow && (
-            <IconButton icon="sidebar" label={t('Close navigation')} onClick={closeNavigation} />
-          )}
           <Brand />
+          <IconButton
+            ref={navigationClose}
+            className="navigation-close"
+            icon="sidebar-collapse"
+            label={t('Close navigation')}
+            size={18}
+            onClick={closeNavigation}
+          />
         </div>
         <Conversations
           projects={projects}
@@ -2194,13 +2205,12 @@ function App() {
           renameDisabled={busy || !!thread?.managementPending}
           projectName={project?.name}
           sidebarOpen={sidebar}
-          drawerLayout={narrow}
           connection={connection}
           theme={theme}
           panel={panel}
           busy={busy}
           hasProject={contextReady && !directoryBlocked}
-          onNavigation={sidebar ? closeNavigation : () => setSidebar(true)}
+          onNavigation={openNavigation}
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
           onReload={reloadPage}

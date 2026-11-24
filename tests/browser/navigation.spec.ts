@@ -120,9 +120,10 @@ test('phone drawers own focus and attaching context returns to the running conve
   await login(page);
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   const navigation = page.getByRole('dialog', { name: 'Workspace navigation', exact: true });
-  await expect(
-    navigation.getByRole('button', { name: 'Close navigation', exact: true }),
-  ).toBeFocused();
+  const close = navigation.getByRole('button', { name: 'Close navigation', exact: true });
+  const brand = navigation.getByRole('img', { name: 'Codes', exact: true });
+  await expect(close).toBeFocused();
+  expect((await close.boundingBox())!.x).toBeGreaterThan((await brand.boundingBox())!.x);
   await page.keyboard.press('Shift+Tab');
   await expect(
     navigation.getByRole('button', { name: 'Workspace actions', exact: true }),

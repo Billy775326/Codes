@@ -80,6 +80,12 @@ const iconPaths: Record<string, React.ReactNode> = {
       <path d="M9 4v16" />
     </>
   ),
+  'sidebar-collapse': (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16m7-11-3 3 3 3" />
+    </>
+  ),
   file: (
     <>
       <path d="M14 3H6v18h12V7Z" />

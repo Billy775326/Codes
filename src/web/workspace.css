@@ -147,8 +147,7 @@
   color: var(--muted);
 }
 .app .icon-button:hover,
-.app .icon-button.selected,
-.app .navigation-toggle[aria-expanded='true'] {
+.app .icon-button.selected {
   color: var(--fg);
   background: var(--hover);
 }
@@ -208,8 +207,13 @@
 .app .sidebar-brand {
   height: 56px;
   min-height: 56px;
-  padding: 0 16px;
+  padding-inline: 16px 12px;
   gap: 8px;
+}
+.app .sidebar-brand .navigation-close {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  color: var(--fg);
 }
 .app .simulation-strip {
   min-height: 22px;

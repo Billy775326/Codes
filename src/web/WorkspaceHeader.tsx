@@ -11,7 +11,6 @@ interface Props {
   renameDisabled?: boolean;
   projectName?: string;
   sidebarOpen: boolean;
-  drawerLayout: boolean;
   connection: string;
   theme: 'dark' | 'light';
   panel: Panel | null;
@@ -133,15 +132,14 @@ export function WorkspaceHeader(props: Props) {
   const reloadLabel = t('Reload page');
   return (
     <header className="topbar">
-      {(!props.sidebarOpen || !props.drawerLayout) && (
+      {!props.sidebarOpen && (
         <IconButton
-          className="navigation-toggle"
           icon="sidebar"
           size={18}
-          label={t(props.sidebarOpen ? 'Close navigation' : 'Open navigation')}
+          label={t('Open navigation')}
           data-open-navigation=""
           aria-controls="sidebar-navigation"
-          aria-expanded={props.sidebarOpen}
+          aria-expanded={false}
           onClick={props.onNavigation}
         />
       )}

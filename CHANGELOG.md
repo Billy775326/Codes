@@ -75,7 +75,7 @@
 
 - Use 14 px as the default conversation and code text size.
 
-- Put the desktop navigation toggle at the start of the workspace header and the project panel close button next to its tabs.
+- Put the collapse control beside the Codes logo on desktop and mobile. Reopen the sidebar from the conversation header. The project panel close button sits next to its tabs.
 
 - Show shorter descriptions and a clear selected mark in the conversation permission picker. Highlight unrestricted access and explain when Auto-review is unavailable.
 
