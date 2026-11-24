@@ -88,6 +88,8 @@
 
 ### Changed
 
+- Fit the queue title, count, and paused status in one row. Show extra details when a message has attachments, uses different permissions, or needs attention.
+
 - Right-align the actions in the sidebar project card drawer.
 
 - Simplify sign-in to a branded token form. The server prints the token file path only when it first generates a file-backed token. Show the active and pending listener addresses separately in Network & access.

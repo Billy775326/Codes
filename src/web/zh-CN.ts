@@ -548,7 +548,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Patch preview is truncated. Counts describe the displayed portion; inspect the workspace for the complete change.':
     '补丁预览已截断。计数仅对应显示部分，完整变更请在工作区查看。',
   'Pause queue': '暂停队列',
-  'Paused by you.': '已手动暂停。',
   Paused: '已暂停',
   Pending: '等待中',
   'Permission approval': '权限审批',
@@ -580,7 +579,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   Queue: '排队',
   'Queue for next turn': '排队到下一轮',
   'Queue message': '将消息加入队列',
-  'Queue paused. Resume when ready.': '队列已暂停，可手动恢复。',
   Queued: '已排队',
   'Queued message editor': '排队消息编辑器',
   'Queued messages': '排队消息',

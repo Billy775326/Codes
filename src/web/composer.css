@@ -341,60 +341,90 @@
 
 /* Waiting messages sit directly above the composer; editing occupies the same input area. */
 .app .compact-queue {
-  padding: 8px 10px;
+  --queue-control-size: 28px;
+  padding: 3px 10px;
   max-height: none;
   overflow: visible;
   border-radius: 14px;
 }
-.app .compact-queue > p:empty {
-  display: none;
+.app .compact-queue .queue-heading-label {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  color: var(--muted);
+}
+.app .compact-queue .queue-heading-label strong {
+  color: var(--fg);
 }
 .app .compact-queue .queue-heading > .icon-button {
+  width: var(--queue-control-size);
+  min-width: var(--queue-control-size);
+  height: var(--queue-control-size);
   padding: 0;
   border: 0;
+}
+.app .compact-queue .queue-pause-reason {
+  margin: 0 0 4px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .app .compact-queue ol {
   max-height: 150px;
   overflow-y: auto;
-  margin-top: 4px;
+  margin-top: 0;
 }
 .app .compact-queue li {
-  align-items: center;
-  padding: 7px 0;
+  align-items: start;
+  gap: 7px;
+  padding: 3px 0;
+}
+.app .compact-queue .queue-index {
+  padding-top: 6px;
 }
 .app .compact-queue .queue-entry {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   column-gap: 8px;
 }
-.app .compact-queue .queue-entry-label {
+.app .compact-queue .queue-entry-details {
   grid-column: 1 / -1;
+  line-height: 1.4;
   font-size: 11px;
 }
 .app .compact-queue .queue-preview {
+  grid-column: 1;
   font-size: 13px;
   line-height: 1.5;
-  margin: 4px 0;
+  margin: 0;
   max-height: 40px;
 }
 .app .compact-queue .queue-actions {
   align-items: center;
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 1;
   gap: 2px;
+  flex-wrap: wrap;
 }
 .app .compact-queue .queue-actions > button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   border: 0;
-  min-height: 32px;
-  padding: 5px;
+  min-height: var(--queue-control-size);
+  padding: 3px 5px;
   font-size: 12px;
+}
+.app .compact-queue .queue-actions > .icon-button {
+  width: var(--queue-control-size);
+  min-width: var(--queue-control-size);
+  height: var(--queue-control-size);
 }
 .app .compact-queue .queue-error,
 .app .compact-queue .queue-edit-scope {
   grid-column: 1 / -1;
+  margin: 2px 0 0;
 }
 .app .compact-queue.is-editing {
   padding-bottom: 0;
@@ -434,17 +464,24 @@
   width: var(--control-size);
   height: var(--control-size);
 }
-@media (max-width: 700px) {
+@container (max-width: 390px) {
   .app .compact-queue .queue-entry {
     grid-template-columns: minmax(0, 1fr);
   }
+  .app .compact-queue .queue-index {
+    padding-top: 2px;
+  }
   .app .compact-queue .queue-actions {
     grid-column: 1;
-    grid-row: 3;
-    justify-content: flex-end;
+    grid-row: auto;
+  }
+}
+@media (max-width: 700px), (pointer: coarse) {
+  .app .compact-queue {
+    --queue-control-size: 40px;
   }
   .app .compact-queue .queue-actions > button {
-    min-height: 40px;
+    min-width: var(--queue-control-size);
   }
   .app .compact-queue ol {
     max-height: 120px;

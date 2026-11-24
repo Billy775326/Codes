@@ -38,6 +38,10 @@ for (const width of [1440, 390])
     await page.getByRole('button', { name: 'Stop task', exact: true }).click();
     await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
     await expect(queue.locator('li')).toHaveCount(1);
+    await expect(queue.locator('.queue-heading')).toContainText('Paused');
+    await expect(queue).toContainText(
+      'A task stopped or failed. Review the queue before resuming.',
+    );
     await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeVisible();
     await expect(page.getByTestId('message-user')).toHaveCount(2);
     await queue.getByRole('button', { name: 'Remove', exact: true }).click();

@@ -54,6 +54,7 @@ export function QueuePanel({
       setBusy(false);
     }
   };
+  const pauseReason = state.paused && state.reason !== 'Paused by you.' ? state.reason : undefined;
   const entryBeingEdited = state.items.find((entry) => entry.id === editing);
   const editable = entryBeingEdited?.state === 'queued';
   const canSave =
@@ -100,7 +101,6 @@ export function QueuePanel({
             type="button"
             aria-label={t('Stop task')}
             aria-description={t('Stop current task and pause queue')}
-            data-tooltip={t('Pauses the queue')}
             disabled={busy}
             onClick={onStop}
           >
@@ -137,10 +137,11 @@ export function QueuePanel({
       aria-label={t('Queued messages')}
     >
       <div className="queue-heading">
-        <strong>
-          {state.items.length ? t('Queued') : t('Unsubmitted edit')}{' '}
+        <div className="queue-heading-label">
+          <strong>{state.items.length ? t('Queued') : t('Unsubmitted edit')}</strong>
           {state.items.length > 0 && <span>{state.items.length}/10</span>}
-        </strong>
+          {state.paused && state.items.length > 0 && <span>{t('Paused')}</span>}
+        </div>
         {state.items.length > 0 && (
           <button
             className="icon-button"
@@ -160,48 +161,18 @@ export function QueuePanel({
           </button>
         )}
       </div>
-      {state.paused && <p>{t(state.reason ?? 'Queue paused. Resume when ready.')}</p>}
+      {pauseReason && <p className="queue-pause-reason">{t(pauseReason)}</p>}
       <ol>
         {state.items.map((entry, index) => (
           <li key={entry.id}>
             <span className="queue-index">{index + 1}</span>
             <div className="queue-entry">
-              <div className="queue-entry-label">
-                <span>
-                  {entry.state === 'queued'
-                    ? t('Waiting')
-                    : entry.state === 'dispatching'
-                      ? t('Sending')
-                      : entry.state === 'unknown'
-                        ? t('Unconfirmed')
-                        : t('Needs review')}
-                </span>
-                <small>
-                  {t(permissionLabel(entry.settings.permission))}
-                  {entry.attachments.length
-                    ? ' · ' + t('{count} attachment(s)', { count: entry.attachments.length })
-                    : ''}
-                </small>
-              </div>
               <p className="queue-preview">
-                {entry.text.slice(0, 500)}
-                {entry.text.length > 500 ? '…' : ''}
+                {entry.text
+                  ? entry.text.slice(0, 500) + (entry.text.length > 500 ? '…' : '')
+                  : t('{count} attachment(s)', { count: entry.attachments.length })}
               </p>
-              {entry.attachments.some((item) => item.kind === 'image') && (
-                <div className="queued-images">
-                  {entry.attachments.map((item, index) =>
-                    item.kind === 'image' ? (
-                      <ImageAttachmentView
-                        key={item.id + ':' + index}
-                        image={item}
-                        projectId={projectId}
-                      />
-                    ) : null,
-                  )}
-                </div>
-              )}
-              {entry.error && <p className="queue-error">{t(entry.error)}</p>}
-              {editing !== entry.id && (
+              {editing !== entry.id && entry.state !== 'dispatching' && (
                 <div className="queue-actions">
                   {entry.state === 'queued' && turnId && (
                     <button
@@ -233,7 +204,7 @@ export function QueuePanel({
                       icon="edit"
                       size={15}
                       label={t('Edit message')}
-                      hint={t('Edit · Pauses queue')}
+                      hint={state.paused ? undefined : t('Edit · Pauses queue')}
                       disabled={busy || !!editing}
                       onClick={() =>
                         void run(async () => {
@@ -279,6 +250,43 @@ export function QueuePanel({
                   )}
                 </div>
               )}
+              {(entry.state !== 'queued' ||
+                entry.settings.permission !== settings?.permission ||
+                (!!entry.text && entry.attachments.length > 0)) && (
+                <div className="queue-entry-details">
+                  {entry.state !== 'queued' && (
+                    <span>
+                      {t(
+                        entry.state === 'dispatching'
+                          ? 'Sending'
+                          : entry.state === 'unknown'
+                            ? 'Unconfirmed'
+                            : 'Needs review',
+                      )}
+                    </span>
+                  )}
+                  {entry.settings.permission !== settings?.permission && (
+                    <span>{t(permissionLabel(entry.settings.permission))}</span>
+                  )}
+                  {entry.text && entry.attachments.length > 0 && (
+                    <span>{t('{count} attachment(s)', { count: entry.attachments.length })}</span>
+                  )}
+                </div>
+              )}
+              {entry.attachments.some((item) => item.kind === 'image') && (
+                <div className="queued-images">
+                  {entry.attachments.map((item, index) =>
+                    item.kind === 'image' ? (
+                      <ImageAttachmentView
+                        key={item.id + ':' + index}
+                        image={item}
+                        projectId={projectId}
+                      />
+                    ) : null,
+                  )}
+                </div>
+              )}
+              {entry.error && <p className="queue-error">{t(entry.error)}</p>}
               {entry.state === 'queued' &&
                 turnId &&
                 settings &&

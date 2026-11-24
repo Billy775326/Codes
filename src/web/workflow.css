@@ -49,11 +49,6 @@
   font-size: 12px;
   font-weight: 500;
 }
-.queue-heading strong span {
-  font-size: 10px;
-  color: var(--muted);
-  margin-left: 5px;
-}
 .queue-heading button,
 .queue-actions button {
   font-size: 10px;
@@ -88,12 +83,10 @@
   min-width: 0;
   flex: 1;
 }
-.queue-entry-label {
+.queue-entry-details {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 0 8px;
   color: var(--muted);
-  font-size: 9px;
   flex-wrap: wrap;
 }
 .queue-preview {

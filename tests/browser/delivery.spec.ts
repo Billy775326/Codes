@@ -69,8 +69,20 @@ for (const width of [1440, 320])
     await expect(hint).toHaveText('Queue · Ctrl/Cmd+Shift+Enter');
     await queueInstead.click();
     const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
-    await expect(queue).toContainText('Waiting');
-    await expect(queue.getByRole('button', { name: 'Edit message', exact: true })).toBeVisible();
+    await expect(queue).toContainText('Do this in the next turn');
+    await expect(queue.getByText('Waiting', { exact: true })).toHaveCount(0);
+    await expect(queue.getByText('Read only', { exact: true })).toHaveCount(0);
+    const edit = queue.getByRole('button', { name: 'Edit message', exact: true });
+    await expect(edit).toBeVisible();
+    const header = await queue.locator('.queue-heading').boundingBox();
+    expect(header!.height).toBeLessThanOrEqual(width <= 700 ? 44 : 32);
+    const editButton = (await edit.boundingBox())!;
+    if (width <= 700) {
+      expect(editButton.height).toBeGreaterThanOrEqual(40);
+    } else {
+      const preview = (await queue.locator('.queue-preview').boundingBox())!;
+      expect(preview.y + preview.height / 2).toBeCloseTo(editButton.y + editButton.height / 2, 0);
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -114,17 +126,20 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
   await queue.getByRole('button', { name: 'Pause queue', exact: true }).hover();
   await expect(tooltip).toHaveText('Pause queue');
   await queue.getByRole('button', { name: 'Edit message', exact: true }).click();
-  await expect(queue).toContainText('Paused by you.');
+  await expect(queue.locator('.queue-heading')).toContainText('Paused');
+  await expect(queue).not.toContainText('Paused by you.');
   const editor = queue.getByRole('form', { name: 'Queued message editor', exact: true });
   const controls = editor.getByRole('button');
   await expect(controls).toHaveCount(3);
+  await expect(editor.getByRole('button', { name: 'Stop task', exact: true })).toHaveText(
+    'Stop task',
+  );
   for (const [name, hint] of [
-    ['Stop task', 'Pauses the queue'],
     ['Cancel edit', 'Cancel edit'],
     ['Save queued message', 'Save queued message'],
   ] as const) {
     const action = editor.getByRole('button', { name, exact: true });
-    await expect(action).toHaveText(name === 'Stop task' ? 'Stop task' : '');
+    await expect(action).toHaveText('');
     await action.hover();
     await expect(tooltip).toHaveText(hint);
     await expect(tooltip).toBeVisible();
@@ -142,9 +157,11 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
       );
     }),
   ).toBe(true);
+  const stop = editor.getByRole('button', { name: 'Stop task', exact: true });
+  await stop.hover();
+  await expect(tooltip).toBeHidden();
   await editor.getByLabel('Edit queued message').press('Tab');
-  await expect(editor.getByRole('button', { name: 'Stop task', exact: true })).toBeFocused();
-  await expect(tooltip).toHaveText('Pauses the queue');
+  await expect(stop).toBeFocused();
   await queue.getByLabel('Edit queued message').fill('Keep this unsubmitted local correction');
   await expect(queue.getByRole('button', { name: 'Resume queue', exact: true })).toBeDisabled();
   await expect(queue.getByLabel('Edit queued message')).toHaveValue(
@@ -161,6 +178,7 @@ test('a queue edit locks at dispatch and remains recoverable if the entry leaves
   });
   await reconnectUpdates(page);
   await expect(queue.getByLabel('Edit queued message')).toHaveAttribute('readonly', '');
+  await expect(queue.getByText('Sending', { exact: true })).toBeVisible();
   await expect(
     queue.getByRole('button', { name: 'Save queued message', exact: true }),
   ).toBeDisabled();
