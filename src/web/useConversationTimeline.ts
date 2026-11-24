@@ -8,6 +8,7 @@ import {
   type HTMLAttributes,
 } from 'react';
 import type { Thread } from '../shared/types';
+import type { ConversationView } from './conversation-view-cache';
 import { ApiError, message, request } from './api';
 import {
   earlierWindow,
@@ -21,6 +22,7 @@ import {
 export function useConversationTimeline({
   auth,
   thread,
+  preview,
   threadId,
   projectId,
   autoScroll,
@@ -28,6 +30,7 @@ export function useConversationTimeline({
 }: {
   auth: string;
   thread?: Thread;
+  preview?: ConversationView;
   threadId: string;
   projectId: string;
   autoScroll: boolean;
@@ -58,17 +61,23 @@ export function useConversationTimeline({
   const history = historyWindow?.threadId === threadId ? historyWindow : undefined;
   const timelineLatest = !history || (!!thread && linkedToLatest(history, thread));
   const visibleMessages = useMemo(
-    () => (thread ? (history ? refreshHistory(history, thread) : thread.messages) : []),
-    [thread?.messages, history],
+    () =>
+      thread
+        ? history
+          ? refreshHistory(history, thread)
+          : thread.messages
+        : (preview?.messages ?? []),
+    [thread?.messages, history, preview],
   );
+  const recentTurns = thread?.turns ?? preview?.turns;
   const visibleTurns = useMemo(
     () => [
       ...(history?.turns ?? []).filter(
-        (turn) => !thread?.turns?.some((latest) => latest.id === turn.id),
+        (turn) => !recentTurns?.some((latest) => latest.id === turn.id),
       ),
-      ...(thread?.turns ?? []),
+      ...(recentTurns ?? []),
     ],
-    [history?.turns, thread?.turns],
+    [history?.turns, recentTurns],
   );
   const reviewMessages = useMemo(() => {
     const latest = thread?.messages ?? [];
@@ -120,7 +129,7 @@ export function useConversationTimeline({
   useEffect(() => {
     const element = transcript.current;
     if (!timelineLatest || !element) return;
-    const current = thread?.id === threadId ? threadId : undefined;
+    const current = (thread?.id ?? preview?.id) === threadId ? threadId : undefined;
     const opened = current !== positionedConversation.current;
     positionedConversation.current = current;
     if (follow.current && (autoScroll || opened)) {
@@ -133,6 +142,7 @@ export function useConversationTimeline({
     thread?.actions,
     thread?.state,
     thread?.id,
+    preview?.id,
     threadId,
     timelineLatest,
     autoScroll,

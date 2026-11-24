@@ -65,6 +65,7 @@ import { Transcript } from './Transcript';
 import { isTurnOutcome } from './TurnResult';
 import { historyLimit, liveRevision } from './history';
 import { useConversationTimeline } from './useConversationTimeline';
+import { ConversationViewCache } from './conversation-view-cache';
 import { applyConversationEvent } from './conversation-events';
 import { useWebBuild } from './useWebBuild';
 import { InteractionDialog, ReviewDialog, StatusDialog } from './InteractionDialog';
@@ -169,6 +170,13 @@ function App() {
   const [threads, setThreads] = useState<Record<string, Summary[]>>({});
   const [context, setContext] = useState<ProjectContext>();
   const [thread, setThread] = useState<Thread>();
+  const conversationViews = useMemo(() => new ConversationViewCache(), []);
+  const liveThread = useRef(thread);
+  liveThread.current = thread;
+  const preview =
+    auth === 'ready' && threadId && thread?.id !== threadId
+      ? conversationViews.peek(threadId, projectId)
+      : undefined;
   const contextProjectId = threadId ? (thread?.id === threadId ? thread.projectId : '') : projectId;
   const contextBase = threadId ? '/threads/' + threadId : '/projects/' + projectId;
   const contextReady = !!contextProjectId && context?.project.id === contextProjectId;
@@ -437,6 +445,7 @@ function App() {
   } = useConversationTimeline({
     auth,
     thread,
+    preview,
     threadId,
     projectId,
     autoScroll: preferences.autoScroll,
@@ -615,11 +624,17 @@ function App() {
       setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
   }, []);
   useEffect(() => {
-    if (auth !== 'ready') setThreads({});
-  }, [auth]);
+    if (auth !== 'ready') {
+      conversationViews.clear();
+      setThreads({});
+      setContext(undefined);
+    }
+  }, [auth, conversationViews]);
   useEffect(() => {
     setThread((current) =>
-      current?.projectId === projectId && current.id === threadId ? current : undefined,
+      auth === 'ready' && current?.projectId === projectId && current.id === threadId
+        ? current
+        : undefined,
     );
     setDirectory('');
     setPanel(null);
@@ -686,6 +701,18 @@ function App() {
   const select = useCallback(
     (id: string, owner = projectRef.current, restore = false) => {
       const changed = id !== threadRef.current || owner !== projectRef.current;
+      if (changed) {
+        conversationViews.refreshRecency(id, owner);
+        const leaving = liveThread.current;
+        if (
+          auth === 'ready' &&
+          leaving?.id === threadRef.current &&
+          leaving.projectId === projectRef.current
+        )
+          conversationViews.remember(leaving);
+        feed.current?.close();
+        setConnection(owner ? 'Connecting' : 'Ready');
+      }
       setThread((current) =>
         current?.id === id && current.projectId === owner ? current : undefined,
       );
@@ -706,7 +733,7 @@ function App() {
       if (window.innerWidth <= 1099) setSidebar(false);
       setFollowing(true);
     },
-    [returnToLatest],
+    [auth, conversationViews, returnToLatest],
   );
   useEffect(() => {
     if (auth !== 'ready') return;
@@ -821,7 +848,13 @@ function App() {
       threadId,
       (snapshot) => {
         if (threadRef.current !== threadId) return;
+        if (snapshot.thread.id !== threadId)
+          throw new ApiError(
+            'The service returned a result for a different conversation.',
+            'INVALID_RESPONSE',
+          );
         if (recentProject.current && snapshot.thread.projectId !== recentProject.current) {
+          conversationViews.forget(threadId);
           remember(recentProject.current, '');
           recentProject.current = undefined;
           setSelection((current) => ({ ...current, threadId: '' }));
@@ -849,7 +882,11 @@ function App() {
         void defaultSettings.refresh();
       },
       event,
-      connectionStatus,
+      (status) => {
+        if (status === 'Unavailable' || status === 'Sign in required')
+          conversationViews.forget(threadId);
+        connectionStatus(status);
+      },
       'threads',
       connectionFailure,
     );
@@ -1285,6 +1322,9 @@ function App() {
   const project =
     projects.find((x) => x.id === contextProjectId) ??
     (context?.project.id === contextProjectId ? context.project : undefined);
+  const transcriptProject = preview
+    ? projects.find((entry) => entry.id === preview.projectId)
+    : project;
   const reviewMessage = useCallback(
     (item: Message, path?: string) => {
       setDiffTurn(item.turnId === thread?.turnId ? '' : item.turnId);
@@ -1907,7 +1947,10 @@ function App() {
         inert={modalOpen || (narrow && (sidebar || !!panel)) || undefined}
       >
         <WorkspaceHeader
-          title={loadingConversation ? t('Conversation') : (thread?.title ?? t('New conversation'))}
+          title={
+            preview?.title ??
+            (loadingConversation ? t('Conversation') : (thread?.title ?? t('New conversation')))
+          }
           conversationId={thread?.id === threadId ? threadId : undefined}
           renameDisabled={busy || !!thread?.managementPending}
           projectName={project?.name}
@@ -2026,11 +2069,12 @@ function App() {
           ref={transcript}
           role="region"
           aria-label={t('Conversation timeline')}
+          aria-busy={!!preview || undefined}
           tabIndex={0}
           {...timelineEvents}
         >
           <div className="conversation-inner">
-            {loadingConversation ? (
+            {loadingConversation && !preview ? (
               <section
                 className="conversation-loading-state"
                 role="status"
@@ -2052,7 +2096,7 @@ function App() {
                   {t('Retry loading')}
                 </button>
               </section>
-            ) : !thread?.messages.length && !active ? (
+            ) : !visibleMessages.length && !active ? (
               <section className="conversation-start" aria-label={t('New conversation')}>
                 {!projectId && (
                   <button className="primary" onClick={openAddProject}>
@@ -2080,18 +2124,18 @@ function App() {
                     </button>
                   </div>
                 )}
-                {thread && (
+                {(thread || preview) && (
                   <Transcript
-                    key={thread.id}
+                    key={threadId}
                     messages={transcriptMessages}
                     turns={visibleTurns}
                     activeIds={activeTurnIds}
                     result={taskResult}
                     viewport={transcript}
-                    projectId={contextProjectId}
-                    pending={thread.pending}
+                    projectId={preview?.projectId ?? contextProjectId}
+                    pending={thread?.pending}
                     loadEarlier={
-                      (history ? history.olderCursor : thread.olderCursor)
+                      (history ? history.olderCursor : thread?.olderCursor)
                         ? () => loadHistory('older')
                         : undefined
                     }
@@ -2149,8 +2193,8 @@ function App() {
                       return (
                         <MessageView
                           onOpenImage={setPreviewedImage}
-                          projectId={contextProjectId}
-                          projectPath={project?.path}
+                          projectId={preview?.projectId ?? contextProjectId}
+                          projectPath={transcriptProject?.path}
                           resolveFile={resolveFile}
                           onOpenFile={openLinkedFile}
                           key={m.id}
@@ -2159,17 +2203,18 @@ function App() {
                           changes={changes}
                           timestamp={timestamp}
                           completion={completion}
-                          onReview={reviewMessage}
-                          onReply={thread.archived ? undefined : reply}
+                          onReview={thread ? reviewMessage : undefined}
+                          onReply={thread && !thread.archived ? reply : undefined}
                           onFork={
-                            canBranch && (!active || m.turnId !== thread.turnId)
+                            thread && canBranch && (!active || m.turnId !== thread.turnId)
                               ? m.kind === 'assistant'
                                 ? branchMessage
                                 : undefined
                               : undefined
                           }
-                          disabled={busy || forkBusy || thread.managementPending}
+                          disabled={busy || forkBusy || thread?.managementPending}
                           streaming={
+                            !!thread &&
                             m.kind === 'assistant' &&
                             m.id === assistantTail.get(m.turnId) &&
                             (m.turnId === thread.turnId ||
@@ -2387,7 +2432,7 @@ function App() {
             />
           )}
 
-          {connectionError && !loadingConversation && (
+          {connectionError && (!loadingConversation || preview) && (
             <div className="error-banner" role="alert">
               <span>{t(connectionError)}</span>
               <button

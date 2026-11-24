@@ -257,9 +257,62 @@ test('bounded long history remains usable while typing and switching conversatio
     body: JSON.stringify({ ...result, measuredAt: timings }),
     contentType: 'application/json',
   });
+  const id = await page.evaluate(() => localStorage.getItem('codes.thread'));
+  expect(id).toBeTruthy();
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'New conversation' })).toBeVisible();
   await page.screenshot({ path: 'test-results/desktop-after-history.png' });
+
+  const conversation = page.locator('.thread-link').filter({ hasText: 'Rendering reference' });
+  let release!: () => void;
+  const delayed = new Promise<void>((resolve) => (release = resolve));
+  const snapshot = '**/api/threads/' + id + '/snapshot';
+  await page.route(snapshot, async (route) => {
+    await delayed;
+    const response = await route.fetch();
+    const payload = await response.json();
+    const last = payload.thread.messages.findLast(
+      (item: { kind: string }) => item.kind === 'assistant',
+    );
+    last.text = 'The synchronized reply is current.';
+    await route.fulfill({ json: payload });
+  });
+  try {
+    const reading = page.waitForRequest((request) =>
+      request.url().endsWith('/threads/' + id + '/snapshot'),
+    );
+    await conversation.click();
+    await reading;
+    await expect(
+      page.getByRole('heading', { name: 'Rendering reference', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByTestId('message-assistant')).toHaveCount(12);
+    await expect(page.getByLabel('Message Codex')).toHaveValue(
+      'Typing remains responsive in a long conversation',
+    );
+    await page.getByLabel('Message Codex').fill('Draft edited during synchronization');
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    await expect(page.getByText('The synchronized reply is current.', { exact: true })).toHaveCount(
+      0,
+    );
+  } finally {
+    release();
+  }
+  await expect(page.getByText('The synchronized reply is current.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('Draft edited during synchronization');
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'New conversation', exact: true }).click();
+  await page.unroute(snapshot);
+  await page.route(snapshot, (route) =>
+    route.fulfill({
+      status: 403,
+      json: { error: { code: 'PROJECT_OWNERSHIP', message: 'Conversation access changed.' } },
+    }),
+  );
+  await conversation.click();
+  await expect(page.getByRole('heading', { name: 'Unable to load conversation' })).toBeVisible();
+  await expect(page.getByTestId('message-assistant')).toHaveCount(0);
 });
 
 test('offers a reload for a new web build without replacing the current draft', async ({
