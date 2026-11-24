@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } f
 import type { Message } from '../shared/types';
 import { ImageAttachmentView } from './ImageAttachments';
 import { useInterfaceLanguage } from './interface-language';
-import { Icon } from './primitives';
+import { Icon, IconButton } from './primitives';
 import './turn-prompt-bar.css';
 
 export interface TurnPrompt {
@@ -27,8 +27,10 @@ export function TurnPromptBar({
   const turnElements = useRef<NodeListOf<HTMLElement> | undefined>(undefined);
   const current = useRef(prompts);
   const schedule = useRef<() => void>(undefined);
-  const [pinned, setPinned] = useState<string>();
-  const [expanded, setExpanded] = useState<string>();
+  const toggle = useRef<HTMLButtonElement>(null);
+  const [{ turnId: pinned, open }, setDisclosure] = useState<{ turnId?: string; open: boolean }>({
+    open: false,
+  });
   const [locating, setLocating] = useState(false);
   const locateRequest = useRef<string>(undefined);
 
@@ -41,7 +43,9 @@ export function TurnPromptBar({
     if (!element) return false;
     element.scrollIntoView({ block: 'start' });
     element.focus({ preventScroll: true });
-    setExpanded(undefined);
+    setDisclosure((value) =>
+      value.turnId === turnId && value.open ? { turnId, open: false } : value,
+    );
     return true;
   };
 
@@ -64,12 +68,14 @@ export function TurnPromptBar({
     const content = overlay.current?.parentElement;
     if (!timeline || !content) return;
     let frame = 0;
+    const pin = (turnId?: string) =>
+      setDisclosure((value) => (value.turnId === turnId ? value : { turnId, open: false }));
     const refresh = () => {
       frame = 0;
       const top = timeline.getBoundingClientRect().top;
       const turns = turnElements.current;
       if (!turns?.length) {
-        setPinned(undefined);
+        pin();
         return;
       }
       let first = 0;
@@ -87,7 +93,7 @@ export function TurnPromptBar({
         turn &&
         turn.getBoundingClientRect().top <= top &&
         (!original || original.getBoundingClientRect().bottom <= top);
-      setPinned(prompt && turnsPastPrompt ? id : undefined);
+      pin(prompt && turnsPastPrompt ? id : undefined);
     };
     const update = () => {
       if (!frame) frame = requestAnimationFrame(refresh);
@@ -106,13 +112,7 @@ export function TurnPromptBar({
     };
   }, [viewport]);
 
-  useEffect(() => {
-    setExpanded(undefined);
-  }, [pinned]);
-
   const prompt = pinned ? prompts.get(pinned) : undefined;
-  const open = !!pinned && expanded === pinned;
-  const toggle = useRef<HTMLButtonElement>(null);
   const locate = async () => {
     if (!pinned || focusOriginal(pinned) || !loadEarlier) return;
     locateRequest.current = pinned;
@@ -135,24 +135,39 @@ export function TurnPromptBar({
           onKeyDown={(event) => {
             if (event.key !== 'Escape' || !open) return;
             event.stopPropagation();
-            setExpanded(undefined);
+            setDisclosure({ turnId: pinned, open: false });
             toggle.current?.focus();
           }}
         >
-          <button
-            className="turn-prompt-toggle"
-            type="button"
-            ref={toggle}
-            aria-expanded={open}
-            aria-controls={detailId}
-            onClick={() => setExpanded(open ? undefined : pinned)}
-          >
-            <strong>{t('Turn message')}</strong>
-            <span>
-              {prompt.text.trimStart().slice(0, 180).replace(/\s+/g, ' ') || t('Attachments')}
-            </span>
-            <Icon name="chevron" size={13} />
-          </button>
+          <div className="turn-prompt-heading">
+            <button
+              className="turn-prompt-toggle"
+              type="button"
+              ref={toggle}
+              aria-expanded={open}
+              aria-controls={detailId}
+              onClick={() => setDisclosure({ turnId: pinned, open: !open })}
+            >
+              <strong>{t('Turn message')}</strong>
+              {!open && (
+                <span>
+                  {prompt.text.trimStart().slice(0, 180).replace(/\s+/g, ' ') || t('Attachments')}
+                </span>
+              )}
+              <Icon name="chevron" size={13} />
+            </button>
+            {(prompt.original || loadEarlier) && (
+              <IconButton
+                className="turn-prompt-jump"
+                icon="latest"
+                size={15}
+                label={t('Go to original message')}
+                hint={locating ? t('Loading earlier messages…') : undefined}
+                onClick={() => void locate()}
+                disabled={locating}
+              />
+            )}
+          </div>
           <div
             id={detailId}
             hidden={!open}
@@ -178,11 +193,6 @@ export function TurnPromptBar({
                     {prompt.original.unavailableImages}{' '}
                     {t('image attachment(s) available in native history.')}
                   </p>
-                )}
-                {(prompt.original || loadEarlier) && (
-                  <button type="button" onClick={() => void locate()} disabled={locating}>
-                    {t(locating ? 'Loading earlier messages…' : 'Go to original message')}
-                  </button>
                 )}
               </>
             )}

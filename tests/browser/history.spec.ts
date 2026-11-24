@@ -75,6 +75,8 @@ test('a long active turn keeps the original prompt in history without recreating
   const bubbles = page.getByTestId('message-user').filter({ hasText: prompt.text });
   const timeline = page.getByRole('region', { name: 'Conversation timeline', exact: true });
   const bar = page.getByRole('button', { name: /^Turn message/ });
+  const jump = page.getByRole('button', { name: 'Go to original message', exact: true });
+  const detail = timeline.locator('.turn-prompt-detail');
   const scrollToEnd = () => timeline.evaluate((entry) => (entry.scrollTop = entry.scrollHeight));
   await reconnectUpdates(page);
   await expect(bubbles).toHaveCount(1);
@@ -96,17 +98,18 @@ test('a long active turn keeps the original prompt in history without recreating
   await scrollToEnd();
   await expect(bar).toBeVisible();
   await expect(bar).toHaveAttribute('aria-expanded', 'false');
+  await expect(jump).toBeVisible();
+  await expect(detail).toBeHidden();
   expect((await bar.boundingBox())!.y).toBeCloseTo((await timeline.boundingBox())!.y + 1, 0);
   await bar.press('Space');
   await expect(bar).toHaveAttribute('aria-expanded', 'true');
+  await expect(bar).not.toContainText(prompt.text);
+  await expect(detail).toContainText(prompt.text);
+  await expect(jump).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(bar).toBeFocused();
   await expect(bar).toHaveAttribute('aria-expanded', 'false');
   await bar.click();
-  await page.getByRole('button', { name: 'Go to original message' }).click();
-  await expect(bubbles).toBeFocused();
-  await expect(bar).toHaveCount(0);
-
   await page
     .getByTestId('message-assistant')
     .first()
@@ -115,6 +118,13 @@ test('a long active turn keeps the original prompt in history without recreating
     });
   await expect(bar).toContainText('Earlier request');
   await expect(bar).toHaveAttribute('aria-expanded', 'false');
+  await expect(detail).toBeHidden();
+  await scrollToEnd();
+  await expect(bar).toContainText(prompt.text);
+  await expect(bar).toHaveAttribute('aria-expanded', 'false');
+  await jump.click();
+  await expect(bubbles).toBeFocused();
+  await expect(bar).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   base.thread.messages = [prompt, ...work, commentary];
@@ -128,10 +138,14 @@ test('a long active turn keeps the original prompt in history without recreating
   await page.route('**/api/threads/*/history?cursor=*', (route) =>
     route.fulfill({ json: { messages: [prompt, ...work.slice(0, 9)], olderCursor: null } }),
   );
-  await bar.click();
+  const toggleBounds = (await bar.boundingBox())!;
+  const jumpBounds = (await jump.boundingBox())!;
+  expect(jumpBounds.y).toBeCloseTo(toggleBounds.y, 0);
+  expect(jumpBounds.x).toBeGreaterThanOrEqual(toggleBounds.x + toggleBounds.width - 0.5);
+  expect(jumpBounds.height).toBeGreaterThanOrEqual(40);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(timeline.locator('.turn-prompt-detail')).toContainText(prompt.text);
-  await page.getByRole('button', { name: 'Go to original message' }).click();
+  await expect(detail).toBeHidden();
+  await jump.click();
   await expect(bubbles).toHaveCount(1);
   await expect(bubbles).toHaveAttribute('data-message-id', prompt.id);
   await expect(bubbles).toBeFocused();

@@ -12,7 +12,7 @@
 
 - Show recently opened conversation text immediately when switching back while Codes reconnects and refreshes the selected conversation.
 
-- Keep a collapsible prompt summary at the top of the conversation while reading a long turn. Expand it to see the prompt and available attachments or find the original message.
+- Keep a prompt summary at the top of the conversation while reading a long turn. Expand it to read the full message and see available attachments. Use the adjacent jump button to go to the original message.
 
 - Change the file-backed workspace access token after signing in and confirming the current token. Changing it revokes browser sessions while server tasks continue.
 
