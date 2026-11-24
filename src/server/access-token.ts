@@ -14,11 +14,13 @@ const digest = (token: string) => createHash('sha256').update(token).digest();
 export class AccessToken {
   readonly source: AccessTokenSource;
   readonly file: string;
+  readonly created: boolean;
   private active: Buffer;
 
   constructor(directory: string, environmentToken?: string) {
     this.file = join(directory, 'access-token');
-    if (!existsSync(this.file))
+    this.created = !existsSync(this.file);
+    if (this.created)
       writeFileSync(this.file, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
     const value = environmentToken ?? readFileSync(this.file, 'utf8').trim();
     if (value.length < accessTokenLimits.min)

@@ -65,7 +65,7 @@ npm run build
 CODES_PROJECT_ROOT=/absolute/path/to/your/project npm start
 ```
 
-Open **http://127.0.0.1:6670**. Sign in using the value in `.local/access-token` (read it on the server with `cat .local/access-token`). That file is generated on first start; keep it private. Projects can also be added through the interface.
+Open **http://127.0.0.1:6670**. Sign in using the value in `.local/access-token` (read it on the server with `cat .local/access-token`). Codes prints the path when it first generates the file. Keep its contents private. Projects can also be added through the interface.
 
 To start with a `codes` command from any directory, install the local launcher once using Node 24.x:
 

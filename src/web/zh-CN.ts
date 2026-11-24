@@ -1,8 +1,5 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
-  'Service address': '服务地址',
-  'If the server uses CODES_ACCESS_TOKEN, use the value configured there.':
-    '如果服务端设置了 CODES_ACCESS_TOKEN，请使用该变量配置的令牌。',
   'Access token': '访问令牌',
   'This server uses CODES_ACCESS_TOKEN. Change it in the server environment and restart Codes.':
     '此服务使用 CODES_ACCESS_TOKEN。请在服务端环境中修改，然后重启 Codes。',
@@ -157,7 +154,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'You can also answer after the task ends.': '任务结束后也可回答。',
   '1,000–300,000 ms. Applies to CLI requests, such as loading metadata.':
     '1,000–300,000 毫秒。适用于加载元数据等 CLI 请求。',
-  'Default on the server': '服务器默认路径',
   'Archive this project?': '归档这个项目？',
   'Default ({size} px)': '默认（{size} px）',
   'AGENTS.md contents': 'AGENTS.md 内容',
@@ -762,7 +758,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   Viewed: '已查看',
   'Waiting for active work': '等待当前任务结束',
   'Waiting for Codex…': '正在等待 Codex…',
-  'Where do I find my token?': '在哪里找到访问令牌？',
   'Work history': '工作记录',
   'Worked for {elapsed}': '耗时 {elapsed}',
   Working: '工作中',

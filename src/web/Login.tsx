@@ -1,3 +1,4 @@
+import { accessTokenLimits } from '../shared/access-token';
 import { useInterfaceLanguage } from './interface-language';
 import { useState } from 'react';
 import { Brand, Icon, IconButton } from './primitives';
@@ -30,10 +31,9 @@ export function Login({
   return (
     <main className="login-shell">
       <section className="login-panel" aria-labelledby="sign-in-title">
-        <header className="login-heading">
+        <h1 className="login-heading" id="sign-in-title">
           <Brand />
-          <h1 id="sign-in-title">{t('Open workspace')}</h1>
-        </header>
+        </h1>
         {notice && (
           <p className="login-notice" role="status">
             {t(notice)}
@@ -56,7 +56,7 @@ export function Login({
               autoCapitalize="off"
               spellCheck={false}
               value={token}
-              maxLength={256}
+              maxLength={accessTokenLimits.max}
               onChange={(e) => onTokenChange(e.target.value)}
               disabled={pending}
               required
@@ -88,31 +88,9 @@ export function Login({
             <span>
               {checking ? t('Checking session…') : busy ? t('Signing in…') : t('Open workspace')}
             </span>
-            {pending ? (
-              <span className="login-spinner" aria-hidden="true" />
-            ) : (
-              <Icon name="chevron" size={18} />
-            )}
+            {pending && <span className="login-spinner" aria-hidden="true" />}
           </button>
         </form>
-        <footer className="login-details">
-          <dl className="login-address">
-            <dt>{t('Service address')}</dt>
-            <dd>
-              <code>{window.location.origin}</code>
-            </dd>
-          </dl>
-          <details className="login-help">
-            <summary>
-              {t('Where do I find my token?')}
-              <Icon name="chevron" size={13} />
-            </summary>
-            <p>
-              {t('Default on the server')} · <code>.local/access-token</code>
-            </p>
-            <p>{t('If the server uses CODES_ACCESS_TOKEN, use the value configured there.')}</p>
-          </details>
-        </footer>
       </section>
     </main>
   );

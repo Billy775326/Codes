@@ -78,38 +78,54 @@ for (const relativeData of [false, true]) {
         CODES_PUBLIC_ORIGIN: origin,
         CODES_ACCESS_TOKEN: 'test-only-command-token-not-a-real-secret',
       };
-      // Leave the variable absent to exercise the default data directory.
-      if (!relativeData) delete (env as Partial<typeof env>).CODES_DATA_DIR;
-      let output = '';
-      child = spawn(command, [], { cwd: caller, env });
-      child.stdout?.on('data', (chunk) => (output += chunk));
-      child.stderr?.on('data', (chunk) => (output += chunk));
-      await expect.poll(() => output, { timeout: 10000 }).toContain('codes is ready');
+      // Exercise both generated and environment-managed tokens.
+      if (!relativeData) {
+        delete (env as Partial<typeof env>).CODES_DATA_DIR;
+        delete (env as Partial<typeof env>).CODES_ACCESS_TOKEN;
+      }
+      const data = relativeData ? join(caller, 'private/state') : join(checkout, '.local');
+      const tokenFile = join(data, 'access-token');
+      const start = async () => {
+        let output = '';
+        const process = spawn(command, [], { cwd: caller, env });
+        child = process;
+        process.stdout?.on('data', (chunk) => (output += chunk));
+        process.stderr?.on('data', (chunk) => (output += chunk));
+        await expect.poll(() => output, { timeout: 10000 }).toContain('Simulation mode');
+        return { process, output };
+      };
+      const first = await start();
+      if (relativeData) expect(first.output).not.toContain(tokenFile);
+      else expect(first.output).toContain(tokenFile);
+      const token = env.CODES_ACCESS_TOKEN ?? (await readFile(tokenFile, 'utf8')).trim();
       const client = await playwright.request.newContext({ baseURL: origin });
       try {
         expect((await client.get('/')).status()).toBe(200);
         expect(
           (
             await client.post('/api/login', {
-              data: { token: env.CODES_ACCESS_TOKEN },
+              data: { token },
               headers: { Origin: origin },
             })
           ).status(),
         ).toBe(200);
         const projects = await (await client.get('/api/projects')).json();
         expect(projects).toEqual([expect.objectContaining({ path: caller })]);
-        const data = relativeData ? join(caller, 'private/state') : join(checkout, '.local');
-        expect(await readFile(join(data, 'server.lock'), 'utf8')).toBe(String(child.pid));
+        expect(await readFile(join(data, 'server.lock'), 'utf8')).toBe(String(first.process.pid));
         const duplicate = spawnSync(command, [], { cwd: caller, env, encoding: 'utf8' });
         expect(duplicate.status).toBe(1);
         expect(duplicate.stderr).toContain('already in use');
-        expect(duplicate.stderr).toContain('Lock owner PID: ' + child.pid);
+        expect(duplicate.stderr).toContain('Lock owner PID: ' + first.process.pid);
         expect(duplicate.stderr).toContain('Data directory: ' + data);
         expect(duplicate.stderr).not.toContain('file://');
         expect(duplicate.stderr).not.toContain('at ModuleJob');
         expect((await client.get('/api/system')).status()).toBe(200);
-        await stop(child);
-        expect(child.exitCode).toBe(0);
+        await stop(first.process);
+        expect(first.process.exitCode).toBe(0);
+        const restarted = await start();
+        expect(restarted.output).not.toContain(tokenFile);
+        await stop(restarted.process);
+        expect(restarted.process.exitCode).toBe(0);
         await expect(readFile(join(data, 'server.lock'))).rejects.toMatchObject({ code: 'ENOENT' });
         // A lock held by another live process must also remain protected.
         await writeFile(join(data, 'server.lock'), String(process.pid));

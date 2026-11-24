@@ -15,17 +15,16 @@ for (const viewport of [
     await expect(input).toBeEnabled();
     await expect(input).toHaveAttribute('type', 'password');
     await expect(page.getByRole('button', { name: 'Open workspace', exact: true })).toBeDisabled();
-    await expect(page.getByRole('heading', { name: 'Open workspace', exact: true })).toBeVisible();
-    await expect(page.locator('.login-address')).toContainText(new URL(page.url()).origin);
+    await expect(page.getByRole('heading', { name: 'Codes', exact: true })).toBeVisible();
+    await expect(page.getByText('Service address', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Change access token' })).toHaveCount(0);
     const panel = await page.locator('.login-panel').boundingBox();
     expect(panel!.x).toBeGreaterThanOrEqual(0);
     expect(panel!.x + panel!.width).toBeLessThanOrEqual(viewport.width);
     expect(Math.abs(panel!.x + panel!.width / 2 - viewport.width / 2)).toBeLessThan(2);
     await expect(page.getByText('In clear focus.', { exact: false })).toHaveCount(0);
-    await page.getByText('Where do I find my token?', { exact: true }).click();
-    await expect(page.locator('.login-help code')).toHaveText('.local/access-token');
-    await expect(page.locator('.login-help code')).toBeVisible();
+    await expect(page.getByText('Where do I find my token?', { exact: true })).toHaveCount(0);
+    expect(await page.locator('body').textContent()).not.toContain('.local/access-token');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

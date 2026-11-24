@@ -84,7 +84,7 @@
 
 ### Changed
 
-- Refine the sign-in panel and show the current browser address. Show the active and pending listener addresses separately in Network & access.
+- Simplify sign-in to a branded token form. The server prints the token file path only when it first generates a file-backed token. Show the active and pending listener addresses separately in Network & access.
 
 - Organize settings by browser, workspace, and server. Separate maintenance from backup and restore, and put project instructions beside the new-project default.
 

@@ -53,11 +53,8 @@ const app = await application(service, {
 });
 app.server.listen(port, address, () => {
   console.log(`codes is ready at ${origins.join(', ')}`);
-  console.log(
-    token.source === 'file'
-      ? `Use the access token stored in ${token.file} to sign in.`
-      : 'Use the access token configured in CODES_ACCESS_TOKEN to sign in.',
-  );
+  if (token.created && token.source === 'file')
+    console.log(`Use the access token stored in ${token.file} to sign in.`);
   if (mode === 'mock')
     console.log('Simulation mode: no model requests or shell commands are executed.');
 });

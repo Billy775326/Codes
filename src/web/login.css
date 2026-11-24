@@ -3,28 +3,29 @@
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 20px 12px;
-  background: var(--panel);
+  padding: 22px 12px;
+  background: var(--panel)
+    radial-gradient(
+      ellipse at 50% 40%,
+      color-mix(in srgb, var(--link) 9%, transparent),
+      transparent 32rem
+    );
   color: var(--fg);
 }
 .login-panel {
-  width: min(100%, 408px);
-  padding: clamp(16px, 5vw, 28px);
+  width: min(100%, 376px);
+  padding: clamp(18px, 5vw, 30px);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--editor);
-  box-shadow: 0 12px 36px #0002;
+  box-shadow:
+    0 1px 2px #0001,
+    0 14px 42px #0002;
 }
 .login-heading {
-  display: grid;
-  gap: 16px;
-  justify-items: start;
-  margin-bottom: 20px;
-}
-.login-heading h1 {
-  font-size: 22px;
-  font-weight: 600;
-  margin: 0;
+  display: flex;
+  justify-content: center;
+  margin: 0 0 18px;
 }
 .login-notice {
   margin: 0 0 16px;
@@ -40,6 +41,7 @@
 }
 .login-panel form > label {
   font-size: 14px;
+  font-weight: 550;
 }
 .login-token-field {
   display: flex;
@@ -97,49 +99,6 @@
   align-items: center;
   margin-top: 8px;
   text-decoration: underline;
-}
-.login-details {
-  display: grid;
-  gap: 12px;
-  border-top: 1px solid var(--line);
-  margin-top: 18px;
-  padding-top: 14px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.login-address {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  margin: 0;
-}
-.login-address dd {
-  margin: 0;
-  min-width: 0;
-}
-.login-details code {
-  color: var(--fg);
-  overflow-wrap: anywhere;
-}
-.login-help summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  list-style: none;
-  cursor: pointer;
-}
-.login-help summary::-webkit-details-marker {
-  display: none;
-}
-.login-help[open] summary > svg {
-  transform: rotate(90deg);
-}
-.login-help p {
-  margin: 8px 0 0;
-  line-height: 1.55;
 }
 .login-spinner {
   width: 14px;
