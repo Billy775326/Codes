@@ -176,6 +176,8 @@
 
 ### Fixed
 
+- Make the Fast switch easy to read in either theme and keep its track and thumb aligned in new-conversation defaults.
+
 - Preview files under hidden project folders directly from conversation links or Changes while keeping the selected Files visibility preference.
 
 - Keep accepted prompts in their original turns when long-running activity moves them out of the live window.

@@ -1,5 +1,5 @@
 import { useInterfaceLanguage } from './interface-language';
-import { useImperativeHandle, useRef, type Ref } from 'react';
+import { useId, useImperativeHandle, useRef, type Ref } from 'react';
 import type { CodexDefaults, Model, Settings } from '../shared/types';
 import { permissionLabel, permissionPresets } from '../shared/permissions';
 import { PanelMenu } from './PanelMenu';
@@ -212,6 +212,7 @@ export function ModelSettingsFields({
   const defaultEffort = nativeEffort ?? selectedModel?.defaultReasoningEffort;
   const fast = settings.fast ?? codexDefaults?.fast ?? false;
   const supportsFast = !!selectedModel?.supportsFast && codexDefaults?.fastAvailable !== false;
+  const speedHintId = useId();
   return (
     <>
       <label className="model-field">
@@ -287,22 +288,26 @@ export function ModelSettingsFields({
         </select>
       </label>
       <label className="fast-option">
-        <span>
+        <span className="fast-option-copy">
           {t('Fast')}
-          <small>
+          <small id={speedHintId}>
             {supportsFast
               ? t(settings.fast === undefined ? 'Codex default' : 'Higher usage')
               : t('Fast unavailable')}
           </small>
         </span>
-        <input
-          type="checkbox"
-          role="switch"
-          aria-label={defaults ? t('Default fast mode') : t('Fast mode')}
-          checked={fast}
-          disabled={disabled || (!supportsFast && !fast)}
-          onChange={(event) => change({ ...settings, fast: event.target.checked })}
-        />
+        <span className="fast-switch">
+          <input
+            type="checkbox"
+            role="switch"
+            aria-label={defaults ? t('Default fast mode') : t('Fast mode')}
+            aria-describedby={speedHintId}
+            checked={fast}
+            disabled={disabled || (!supportsFast && !fast)}
+            onChange={(event) => change({ ...settings, fast: event.target.checked })}
+          />
+          <span className="fast-switch-track" aria-hidden="true" />
+        </span>
       </label>
       {settings.fast !== undefined && (
         <button

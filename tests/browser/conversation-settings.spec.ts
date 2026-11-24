@@ -126,6 +126,7 @@ test('new-conversation defaults persist on the server and leave an existing conv
     await section.getByLabel('Default reasoning effort', { exact: true }).selectOption('low');
     await section.getByLabel('Default task mode', { exact: true }).selectOption('plan');
     await section.getByRole('switch', { name: 'Default fast mode', exact: true }).check();
+    await expect(section.locator('.fast-switch-track')).toHaveCSS('width', '38px');
     await expect
       .poll(
         async () => (await (await page.request.get('/api/settings/defaults')).json()).settings.fast,

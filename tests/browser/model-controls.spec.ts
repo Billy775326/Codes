@@ -15,13 +15,24 @@ test('the composer shows inherited Codex effort and restores speed after an expl
   await expect(picker).toHaveAccessibleDescription(/Demo model.*High.*Codex default.*Fast/);
   await picker.click();
   const speed = page.getByRole('switch', { name: 'Fast mode', exact: true });
+  const track = page.locator('.model-menu .fast-switch-track');
   const effort = page.getByLabel('Reasoning effort', { exact: true });
   await expect(effort.locator('option:checked')).toHaveText(/Codex default.*high/);
   await expect(speed).toBeChecked();
-  await speed.uncheck();
+  await expect(speed).toHaveAccessibleDescription('Codex default');
+  await expect(track).toHaveCSS('background-color', 'rgb(168, 200, 235)');
+  await speed.press('Space');
   await expect(speed).not.toBeChecked();
+  await expect(track).toHaveCSS('background-color', 'rgb(42, 46, 52)');
+  await expect(track).toHaveCSS('border-top-color', 'rgb(173, 179, 189)');
+  await expect(track).toHaveCSS('outline-width', '2px');
   await page.getByRole('button', { name: 'Use Codex default speed', exact: true }).click();
   await expect(speed).toBeChecked();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Switch to light mode', exact: true }).click();
+  await picker.click();
+  await expect(speed).toBeChecked();
+  await expect(track).toHaveCSS('background-color', 'rgb(36, 92, 145)');
 });
 
 for (const viewport of [
@@ -134,9 +145,15 @@ test('unavailable Fast is disabled without changing model effort or dispatching'
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Model and reasoning', exact: true }).click();
-  await expect(page.getByRole('switch', { name: 'Fast mode', exact: true })).toBeDisabled();
+  const speed = page.getByRole('switch', { name: 'Fast mode', exact: true });
+  await expect(speed).toBeDisabled();
+  await expect(speed).toHaveAccessibleDescription('Fast unavailable');
+  await expect(page.locator('.model-menu .fast-switch-track')).toHaveCSS(
+    'border-top-style',
+    'dashed',
+  );
   await page.getByLabel('Reasoning effort', { exact: true }).selectOption('high');
-  await expect(page.getByRole('switch', { name: 'Fast mode', exact: true })).not.toBeChecked();
+  await expect(speed).not.toBeChecked();
   await page.keyboard.press('Escape');
   await expect(
     page.getByRole('button', { name: 'Model and reasoning', exact: true }),
