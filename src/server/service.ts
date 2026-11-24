@@ -1992,7 +1992,7 @@ export class Service {
       this.store.db.exec('BEGIN IMMEDIATE');
       try {
         this.store.begin(operationId, threadId, 'async-skip', { id, resolution });
-        this.asyncQuestions.skip(id);
+        this.asyncQuestions.skip(action.id);
         this.store.update(operationId, 'completed');
         this.store.db.exec('COMMIT');
       } catch (error) {
@@ -2012,10 +2012,14 @@ export class Service {
       throw new AppError('STALE_ACTION', 'This question is already being handled.', 409);
     if (this.store.operation(operationId))
       throw new AppError('OPERATION_CONFLICT', 'This answer operation already exists.', 409);
-    const answers = resolution.answers ?? {};
+    const received = Object.entries(resolution.answers ?? {});
+    const answers = Object.fromEntries(
+      received.map(([key, answer]) => [current.legacyQuestion?.questionIds[key] ?? key, answer]),
+    );
     const questions = current.questions ?? [];
     if (
       resolution.decision ||
+      received.length !== questions.length ||
       Object.keys(answers).length !== questions.length ||
       questions.some((question) => !answers[question.id]?.trim())
     )
@@ -2034,7 +2038,7 @@ export class Service {
         'Resolve the current task request or check its result before answering.',
         409,
       );
-    this.asyncQuestions.beginReply(id, operationId);
+    this.asyncQuestions.beginReply(current.id, operationId);
     this.publishQuestions(threadId);
     try {
       const receipt =
@@ -2050,7 +2054,7 @@ export class Service {
         this.asyncQuestions.confirmReply(threadId, replies);
       return receipt;
     } finally {
-      this.asyncQuestions.finishReply(id);
+      this.asyncQuestions.finishReply(current.id);
       this.publishQuestions(threadId);
     }
   }

@@ -466,7 +466,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       }
       if (text.includes('[async-question]')) {
         const question = {
-          id: 'call-' + randomUUID(),
+          id: 'call_' + randomUUID(),
           type: 'agentMessage',
           text: 'One decision can wait while I continue.',
           delivery: 'async',
@@ -475,7 +475,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
             { title: 'Which direction should I use?', options: ['Small change', 'Explain first'] },
           ],
         };
-        turn.items.push(question);
+        turn.items.push(text.includes('[legacy-id]') ? { ...question, id: 'item-3' } : question);
         note('item/completed', { threadId: thread.id, turnId: turn.id, item: question });
       }
       if (

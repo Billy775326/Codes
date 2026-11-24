@@ -46,7 +46,7 @@ This is progress display, not browser-side context summarization, transcript del
 
 The native agent decides whether to call `request_user_input`. codes does not manufacture a question for every prompt or treat ordinary assistant prose as a structured request. Code-mode availability is enabled by default for the codes child process with the pinned CLI's `features.default_mode_request_user_input` setting. Set `CODES_CODE_QUESTIONS=0` before starting to retain Plan-only availability. Global Codex configuration is unchanged.
 
-Question cards appear inside the turn that requested input. Confirmed replies to asynchronous questions stay on the original card and remain visible after refresh. If delivery is uncertain, **Check answer status** appears on that card. A historical answer without a matching source card remains visible in its stored turn.
+Question cards appear inside the turn that requested input. When a live request and its legacy history entry have different IDs, Codes joins a unique match within that turn using the full question group and choice labels. Confirmed replies to asynchronous questions stay on the original card and remain visible after refresh. If delivery is uncertain, **Check answer status** appears on that card. A historical answer without a matching source card remains visible in its stored turn.
 
 Native blocking requests show the confirmed state and any non-secret answers while the turn remains in the live cache. If the runtime stops with that request open, Codes marks the question expired and offers **Check result** for the original task.
 

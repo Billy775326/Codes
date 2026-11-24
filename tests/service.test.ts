@@ -415,6 +415,38 @@ it('records a confirmed reply on the original question even when the CLI has not
   }
 });
 
+it('accepts a legacy card reply under the live request ID and prevents another submission', async () => {
+  const { service, thread } = await fixture();
+  await service.send(
+    thread.id,
+    randomUUID(),
+    '[async-question] [legacy-id] [hold]',
+    thread.settings,
+  );
+  await until(() => service.conversationActions(thread.id).some((action) => action.async));
+  await service.history(thread.id);
+  const [action] = service.conversationActions(thread.id);
+  const alternate = service.store.db
+    .prepare('SELECT id FROM async_question_items WHERE thread_id=? AND item_id=?')
+    .get(thread.id, 'item-3') as { id: string };
+  const [legacyQuestionId] = Object.keys(action!.legacyQuestion!.questionIds);
+  await service.answer(alternate.id, randomUUID(), {
+    answers: { [legacyQuestionId!]: 'Small change' },
+  });
+  expect(service.conversationActions(thread.id)).toMatchObject([
+    {
+      id: action!.id,
+      status: 'answered',
+      submittedAnswers: { [action!.questions![0]!.id]: 'Small change' },
+    },
+  ]);
+  await expect(service.answer(action!.id, randomUUID(), { answers: {} })).rejects.toMatchObject({
+    code: 'STALE_ACTION',
+  });
+  expect(thread.messages.filter((entry) => entry.answeredQuestions)).toHaveLength(1);
+  await service.interrupt(thread.id);
+});
+
 it('lets optional Code questions be explicitly skipped and resumes the same native task', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[question]', thread.settings);

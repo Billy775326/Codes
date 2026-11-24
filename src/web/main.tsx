@@ -1593,7 +1593,11 @@ function App() {
   const questionsByItem = new Map(
     [...inlineQuestions.values()]
       .filter((action) => action.async && action.afterMessageId)
-      .map((action) => [action.afterMessageId, action]),
+      .flatMap((action) =>
+        [action.afterMessageId, action.legacyQuestion?.itemId]
+          .filter(Boolean)
+          .map((id) => [id, action] as const),
+      ),
   );
   const steering = thread?.steering?.filter((entry) => !entry.questionReply) ?? [];
   const visibleTurnIds = new Set(visibleMessages.map((item) => item.turnId));
@@ -1601,13 +1605,17 @@ function App() {
     if (!item.answeredQuestions?.length) return [item];
     const standalone = item.answeredQuestions.filter(({ questionItemId, question }) => {
       if (!questionItemId) return true;
-      const action = questionsByItem.get(questionSourceItemId(questionItemId));
+      const source = questionSourceItemId(questionItemId);
+      const action = questionsByItem.get(source);
       if (!action?.submittedAnswers) return true;
       const answers = action.submittedAnswers;
       // Older reply envelopes used the source item ID and the question text.
       return (
-        !Object.hasOwn(answers, questionItemId) &&
-        (questionItemId !== action.afterMessageId ||
+        !Object.hasOwn(
+          answers,
+          action.legacyQuestion?.questionIds[questionItemId] ?? questionItemId,
+        ) &&
+        (questionItemId !== source ||
           !action.questions?.some(
             (entry) => entry.question === question && Object.hasOwn(answers, entry.id),
           ))
@@ -1629,7 +1637,13 @@ function App() {
     const anchor = transcriptMessages.findLastIndex(
       (item) => item.id === action.afterMessageId && item.turnId === action.turnId,
     );
-    const at = anchor >= 0 ? anchor : last;
+    const legacyAnchor =
+      anchor < 0 && action.legacyQuestion
+        ? transcriptMessages.findLastIndex(
+            (item) => item.id === action.legacyQuestion?.itemId && item.turnId === action.turnId,
+          )
+        : -1;
+    const at = anchor >= 0 ? anchor : legacyAnchor >= 0 ? legacyAnchor : last;
     transcriptMessages.splice(at < 0 ? transcriptMessages.length : at + 1, 0, {
       id: action.id,
       kind: 'question',
