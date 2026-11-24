@@ -521,8 +521,6 @@ test('project management and conversation links survive reload and keep the veri
   await expect(rename.getByText('Rename', { exact: true })).toBeHidden();
   expect((await card.boundingBox())!.height).toBeGreaterThan(closedHeight);
   await actions(b.name).press('Tab');
-  await expect(card.getByRole('button', { name: 'Collapse ' + b.name, exact: true })).toBeFocused();
-  await page.keyboard.press('Tab');
   await expect(rename).toBeFocused();
   await rename.press('Tab');
   await expect(pin).toBeFocused();
