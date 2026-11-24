@@ -1,12 +1,4 @@
-import {
-  mkdirSync,
-  existsSync,
-  readFileSync,
-  writeFileSync,
-  openSync,
-  closeSync,
-  unlinkSync,
-} from 'node:fs';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { resolve, join } from 'node:path';
@@ -16,6 +8,7 @@ import { Service } from './service.js';
 import { application } from './http.js';
 import { NetworkConfiguration } from './network-settings.js';
 import { RuntimeConfiguration } from './runtime-settings.js';
+import { acquireDataDirectoryLock } from './data-directory-lock.js';
 
 const directory = resolve(process.env.CODES_DATA_DIR ?? '.local');
 mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -28,22 +21,7 @@ const { host, port, origins } = network.active;
 const address = host === 'localhost' ? (await lookup(host)).address : host;
 if (address !== '127.0.0.1' && address !== '::1')
   throw new Error('The listen address must resolve to 127.0.0.1 or ::1.');
-const lock = join(directory, 'server.lock');
-if (existsSync(lock)) {
-  const pid = Number(readFileSync(lock, 'utf8'));
-  if (!Number.isSafeInteger(pid) || pid <= 0)
-    throw new Error('Invalid data directory lock. Inspect it before starting.');
-  try {
-    process.kill(pid, 0);
-    throw new Error('The data directory is already in use.');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-    unlinkSync(lock);
-  }
-}
-const descriptor = openSync(lock, 'wx', 0o600);
-writeFileSync(descriptor, String(process.pid));
-closeSync(descriptor);
+const releaseLock = acquireDataDirectoryLock(directory);
 const tokenPath = join(directory, 'access-token');
 if (!existsSync(tokenPath))
   writeFileSync(tokenPath, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
@@ -92,7 +70,7 @@ async function stop() {
   stopping = true;
   clearInterval(pruning);
   await app.close();
-  unlinkSync(lock);
+  releaseLock();
 }
 process.once('SIGINT', () => {
   void stop();

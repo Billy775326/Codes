@@ -1,3 +1,4 @@
+import { allNotificationEvents, type NotificationEvent } from './browser-preferences';
 import type { State, Summary } from '../shared/types';
 import { interfaceLanguages, type Translate } from './interface-language';
 
@@ -19,23 +20,31 @@ function attention(row: Summary) {
   if (row.archived) return '';
   switch (row.sidebarActivity) {
     case 'approvalAndInput':
-      return 'Codex needs approval and an answer';
+      return 'both';
     case 'needsApproval':
-      return 'Codex needs approval';
+      return 'approval';
     case 'optionalInput':
     case 'needsInput':
-      return 'Codex has a question';
+      return 'question';
   }
-  if (row.state === 'waitingApproval') return 'Codex needs approval';
-  if (row.state === 'waitingInput') return 'Codex has a question';
+  if (row.state === 'waitingApproval') return 'approval';
+  if (row.state === 'waitingInput') return 'question';
   return '';
 }
 
-const results: Partial<Record<State, string>> = {
+function attentionTitle(kind: ReturnType<typeof attention>, events: NotificationEvent[]) {
+  const approval = (kind === 'approval' || kind === 'both') && events.includes('approval');
+  const question = (kind === 'question' || kind === 'both') && events.includes('question');
+  if (approval && question) return 'Codex needs approval and an answer';
+  if (approval) return 'Codex needs approval';
+  if (question) return 'Codex has a question';
+}
+
+const results = {
   completed: 'Codex task completed',
   failed: 'Codex task failed',
   interrupted: 'Codex task stopped',
-};
+} as const;
 const recentKey = 'codes.notifications.recent';
 
 /** Coalesce duplicate event deliveries across tabs without storing conversation content. */
@@ -54,8 +63,13 @@ function deliver(title: string, tag: string) {
 export class ConversationNotifications {
   private readonly previous = new Map<string, { state: State; attention: string }>();
 
-  observe(row: Summary, live: boolean, t: Translate = interfaceLanguages.en.t) {
-    const next = { state: row.state, attention: attention(row) };
+  observe(
+    row: Summary,
+    live: boolean,
+    t: Translate = interfaceLanguages.en.t,
+    events: NotificationEvent[] = allNotificationEvents,
+  ) {
+    const next = { state: row.state, attention: attention(row) } as const;
     const previous = this.previous.get(row.id);
     this.previous.delete(row.id);
     this.previous.set(row.id, next);
@@ -63,9 +77,13 @@ export class ConversationNotifications {
     if (!previous || !live || row.archived || !document.hidden) return;
     const title =
       next.attention && previous.attention !== next.attention
-        ? next.attention
+        ? attentionTitle(next.attention, events)
         : previous.state !== next.state &&
-            ['running', 'waitingInput', 'waitingApproval'].includes(previous.state)
+            ['running', 'waitingInput', 'waitingApproval'].includes(previous.state) &&
+            (next.state === 'completed' ||
+              next.state === 'failed' ||
+              next.state === 'interrupted') &&
+            events.includes(next.state)
           ? results[next.state]
           : undefined;
     if (title)

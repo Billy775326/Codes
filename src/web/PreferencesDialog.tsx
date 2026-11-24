@@ -3,7 +3,11 @@ import type { CodexDefaults, Model, Settings, System } from '../shared/types';
 import { permissionPresets } from '../shared/permissions';
 import { useInterfaceLanguage } from './interface-language';
 import { chatFontSizes, codeFontSizes, defaultTextSize } from './font-sizes';
-import { defaultBrowserPreferences, type Preferences } from './browser-preferences';
+import {
+  defaultBrowserPreferences,
+  type NotificationPreferences,
+  type Preferences,
+} from './browser-preferences';
 import { ModelSettingsFields } from './ComposerControls';
 import { InteractionDialog } from './InteractionDialog';
 import { NetworkSettings } from './NetworkSettings';
@@ -12,6 +16,9 @@ import { ProjectInstructionsSettings } from './ProjectInstructionsSettings';
 import { Icon, IconButton } from './primitives';
 import { NotificationSettings } from './NotificationSettings';
 import { MaintenanceSettings } from './MaintenanceSettings';
+import { WorkspaceSettings } from './WorkspaceSettings';
+import { DiagnosticsSettings } from './DiagnosticsSettings';
+import { BackupRestoreSettings } from './BackupRestoreSettings';
 
 const settingsSections = [
   {
@@ -20,14 +27,15 @@ const settingsSections = [
     label: 'Preferences',
     icon: 'settings',
     keywords:
-      'appearance theme language font text size interaction shortcut review queue scroll 外观 主题 语言 字号 字体 交互 快捷键 复查 排队 滚动',
+      'appearance theme language font text size interaction shortcut review queue scroll files hidden 外观 主题 语言 字号 字体 交互 快捷键 复查 排队 滚动 文件 隐藏',
   },
   {
     id: 'notifications',
     scope: 'browser',
     label: 'Notifications',
     icon: 'bell',
-    keywords: 'browser alerts desktop 通知 浏览器 提醒 桌面',
+    keywords:
+      'browser alerts desktop approval question completed failed stopped 通知 通知事件 浏览器 提醒 桌面 提问 审批 完成 失败 停止',
   },
   {
     id: 'defaults',
@@ -38,39 +46,47 @@ const settingsSections = [
   },
   {
     id: 'network',
-    scope: 'workspace',
+    scope: 'server',
     label: 'Network & access',
     icon: 'link',
     keywords:
-      'listen host port origin authentication cloudflare tailscale 网络 访问 监听 端口 域名 认证',
+      'listen host port origin authentication cloudflare tailscale login session expiry lifetime 网络 访问 监听 端口 域名 认证 登录 有效期',
   },
   {
     id: 'runtime',
-    scope: 'workspace',
+    scope: 'server',
     label: 'Runtime',
     icon: 'terminal',
     keywords: 'cli codex questions timeout executable 运行时 提问 超时 可执行文件',
   },
   {
     id: 'maintenance',
-    scope: 'workspace',
-    label: 'Data & maintenance',
+    scope: 'server',
+    label: 'Maintenance',
+    icon: 'activity',
+    keywords: 'status task version diagnostics connection logs 维护 状态 任务 版本 诊断 连接 日志',
+  },
+  {
+    id: 'backup',
+    scope: 'server',
+    label: 'Backup & restore',
     icon: 'archive',
-    keywords:
-      'backup snapshot database sqlite status task version 备份 快照 数据库 维护 状态 任务 版本',
+    keywords: 'snapshot database sqlite export recovery 备份 快照 数据库 恢复 还原',
   },
   {
     id: 'instructions',
     scope: 'workspace',
-    label: 'AGENTS.md',
-    icon: 'file',
-    keywords: 'project instructions rules 项目 指令 规则',
+    label: 'Projects',
+    icon: 'folder',
+    keywords:
+      'project default directory path AGENTS.md instructions rules 项目 目录 路径 默认 指令 规则',
   },
 ] as const;
 type SettingsSection = (typeof settingsSections)[number]['id'];
 const settingsScopes = [
   { id: 'browser', label: 'This browser' },
   { id: 'workspace', label: 'Workspace' },
+  { id: 'server', label: 'Server' },
 ] as const;
 
 function ResetSettings({
@@ -136,11 +152,13 @@ export function PreferencesDialog({
   system,
   maintenanceBusy,
   changeMaintenance,
+  refreshSystem,
 }: {
   project?: { id: string; name: string };
   value: Preferences;
   change: (value: Preferences) => void;
-  changeNotifications: (enabled: boolean) => void;
+  changeNotifications: (patch: Partial<NotificationPreferences>) => void;
+  refreshSystem: () => void;
   close: () => void;
   saveError?: string;
   system?: System;
@@ -175,17 +193,21 @@ export function PreferencesDialog({
     instructions: false,
     notifications: false,
     maintenance: false,
+    backup: false,
   });
   const [networkDraft, setNetworkDraft] = useState({ changed: false, busy: false });
   const [runtimeDraft, setRuntimeDraft] = useState({ changed: false, busy: false });
   const [instructionsDraft, setInstructionsDraft] = useState({ changed: false, busy: false });
+  const [projectDefaultDraft, setProjectDefaultDraft] = useState({ changed: false, busy: false });
+  const [loginDraft, setLoginDraft] = useState({ changed: false, busy: false });
+  const drafts = [networkDraft, runtimeDraft, instructionsDraft, projectDefaultDraft, loginDraft];
   const [discarding, setDiscarding] = useState(false);
   const sectionButton = useRef<HTMLButtonElement>(null);
   const categoryButton = useRef<HTMLButtonElement>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const currentCategory = settingsSections.find(({ id }) => id === section)!;
   const searchInput = useRef<HTMLInputElement>(null);
-  const discardBusy = networkDraft.busy || runtimeDraft.busy || instructionsDraft.busy;
+  const discardBusy = drafts.some((draft) => draft.busy);
   const selectSection = (value: typeof section) => {
     setVisited((previous) => (previous[value] ? previous : { ...previous, [value]: true }));
     setSection(value);
@@ -219,7 +241,7 @@ export function PreferencesDialog({
   const requestClose = () => {
     if (discarding) {
       stay();
-    } else if (networkDraft.changed || runtimeDraft.changed || instructionsDraft.changed) {
+    } else if (drafts.some((draft) => draft.changed)) {
       setDiscarding(true);
     } else {
       close();
@@ -314,6 +336,19 @@ export function PreferencesDialog({
           </div>
         </div>
       </section>
+      <section className="preferences-section" aria-labelledby="preferences-files">
+        <h3 id="preferences-files">{t('Files')}</h3>
+        <label className="preference-row">
+          <span>{t('Show hidden files')}</span>
+          <input
+            className="preference-checkbox"
+            type="checkbox"
+            role="switch"
+            checked={value.showHiddenFiles}
+            onChange={(event) => change({ ...value, showHiddenFiles: event.target.checked })}
+          />
+        </label>
+      </section>
       <section className="preferences-section" aria-labelledby="preferences-interaction">
         <h3 id="preferences-interaction">{t('Interaction')}</h3>
         <label className="preference-row">
@@ -402,13 +437,14 @@ export function PreferencesDialog({
               aria-label={t('Settings categories')}
               aria-expanded={categoriesOpen || !!terms.length}
               aria-controls="settings-categories"
+              aria-describedby="settings-selected-category"
               onClick={() => {
                 if (terms.length) setQuery('');
                 setCategoriesOpen(!(categoriesOpen || terms.length));
               }}
             >
               <Icon name={currentCategory.icon} size={16} />
-              <span>{t(currentCategory.label)}</span>
+              <span id="settings-selected-category">{t(currentCategory.label)}</span>
               <Icon name="chevron" size={14} />
             </button>
             <form
@@ -555,7 +591,7 @@ export function PreferencesDialog({
             )}
             {visited.notifications && (
               <div className="preferences-content" hidden={section !== 'notifications'}>
-                <NotificationSettings enabled={value.notifications} change={changeNotifications} />
+                <NotificationSettings value={value} change={changeNotifications} />
               </div>
             )}
             {visited.maintenance && (
@@ -565,11 +601,18 @@ export function PreferencesDialog({
                   maintenanceBusy={maintenanceBusy}
                   changeMaintenance={changeMaintenance}
                 />
+                <DiagnosticsSettings />
+              </div>
+            )}
+            {visited.backup && (
+              <div className="preferences-content" hidden={section !== 'backup'}>
+                <BackupRestoreSettings />
               </div>
             )}
             {visited.network && (
-              <div className="preferences-page" hidden={section !== 'network'}>
+              <div className="preferences-content settings-forms" hidden={section !== 'network'}>
                 <NetworkSettings onDraft={setNetworkDraft} />
+                <WorkspaceSettings field="sessionHours" onDraft={setLoginDraft} />
               </div>
             )}
             {visited.runtime && (
@@ -578,14 +621,22 @@ export function PreferencesDialog({
               </div>
             )}
             {visited.instructions && (
-              <div className="preferences-page" hidden={section !== 'instructions'}>
+              <div
+                className="preferences-content settings-forms"
+                hidden={section !== 'instructions'}
+              >
+                <WorkspaceSettings
+                  field="defaultProjectDirectory"
+                  onDraft={setProjectDefaultDraft}
+                  onSaved={refreshSystem}
+                />
                 {targetProject ? (
                   <ProjectInstructionsSettings
                     project={targetProject}
                     onDraft={setInstructionsDraft}
                   />
                 ) : (
-                  <p className="preferences-content">{t('Select a project to edit AGENTS.md.')}</p>
+                  <p className="preference-help">{t('Select a project to edit AGENTS.md.')}</p>
                 )}
               </div>
             )}
@@ -604,7 +655,7 @@ export function PreferencesDialog({
             <ResetSettings
               label={t('Reset browser settings')}
               detail={t(
-                'Restore language, theme, text sizes, interaction and notification preferences in this browser.',
+                'Restore appearance, interaction, file visibility, and notification preferences in this browser.',
               )}
               reset={() => change(defaultBrowserPreferences)}
             />

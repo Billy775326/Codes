@@ -196,7 +196,10 @@ function App() {
   const latestPreferences = useRef(preferences);
   const [preferencesError, setPreferencesError] = useState('');
   const notifications = useMemo(() => new ConversationNotifications(), []);
-  const notifyInBackground = preferences.notifications && notificationAccess() === 'granted';
+  const notifyInBackground =
+    preferences.notifications &&
+    preferences.notificationEvents.length > 0 &&
+    notificationAccess() === 'granted';
   const changePreferences = (value: Preferences) => {
     latestPreferences.current = value;
     setPreferences(value);
@@ -357,7 +360,7 @@ function App() {
   const openAddProject = useCallback(() => setAdding(true), []);
   const [conversationModalOpen, setConversationModalOpen] = useState(false);
   const [directory, setDirectory] = useState('');
-  const [showHiddenFiles, setShowHiddenFiles] = useState(false);
+  const showHiddenFiles = preferences.showHiddenFiles;
   const [filePath, setFilePath] = useState<string>();
   const [receipt, setReceipt] = useState('');
   const feed = useRef<Feed | undefined>(undefined);
@@ -651,6 +654,7 @@ function App() {
               row,
               true,
               interfaceLanguages[latestPreferences.current.language].t,
+              latestPreferences.current.notificationEvents,
             );
           conversationUpdated(row, false);
         } else if (event.kind === 'project') {
@@ -778,6 +782,7 @@ function App() {
             row,
             true,
             interfaceLanguages[latestPreferences.current.language].t,
+            latestPreferences.current.notificationEvents,
           );
         conversationUpdated(row, false);
         return;
@@ -2695,6 +2700,7 @@ function App() {
           system={system}
           maintenanceBusy={maintenanceBusy}
           changeMaintenance={changeMaintenance}
+          refreshSystem={() => void request<System>('/system').then(setSystem, notice)}
           project={project}
           value={preferences}
           defaults={{
@@ -2714,8 +2720,8 @@ function App() {
           saveError={preferencesError}
           close={() => setDialog(undefined)}
           change={changePreferences}
-          changeNotifications={(notifications) =>
-            changePreferences({ ...latestPreferences.current, notifications })
+          changeNotifications={(patch) =>
+            changePreferences({ ...latestPreferences.current, ...patch })
           }
         />
       )}
@@ -2899,7 +2905,9 @@ function App() {
               filePath={filePath}
               narrow={narrow}
               showHidden={showHiddenFiles}
-              onShowHiddenChange={setShowHiddenFiles}
+              onShowHiddenChange={(showHiddenFiles) =>
+                changePreferences({ ...latestPreferences.current, showHiddenFiles })
+              }
               onDirectory={browseDirectory}
               onFile={setFilePath}
               onAttach={attachProjectFile}

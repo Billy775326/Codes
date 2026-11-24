@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { asError } from '../shared/errors.js';
+import type { DiagnosticsStatus } from '../shared/workspace-settings.js';
 
 interface ReadTrace {
   id: string;
@@ -13,11 +14,33 @@ interface ReadTrace {
 }
 const traces = new AsyncLocalStorage<ReadTrace>();
 
+export class ReadDiagnostics {
+  private expiresAt = 0;
+  private readonly serverOverride = process.env.CODES_READ_DIAGNOSTICS === '1';
+
+  status(): DiagnosticsStatus {
+    return {
+      expiresAt: this.expiresAt > Date.now() ? this.expiresAt : null,
+      serverOverride: this.serverOverride,
+    };
+  }
+
+  setMinutes(minutes: number) {
+    this.expiresAt = minutes ? Date.now() + minutes * 60_000 : 0;
+    return this.status();
+  }
+
+  verbose() {
+    return this.serverOverride || this.expiresAt > Date.now();
+  }
+}
+
 export async function traceRead<T>(
   response: ServerResponse,
   route: 'snapshot' | 'history' | 'project-snapshot' | 'events',
   threadId: string | undefined,
   work: () => Promise<T>,
+  verbose: () => boolean,
 ) {
   const trace: ReadTrace = { id: randomUUID(), phases: {} };
   response.setHeader('x-request-id', trace.id);
@@ -30,12 +53,7 @@ export async function traceRead<T>(
     throw failure;
   } finally {
     const ms = performance.now() - start;
-    if (
-      error ||
-      trace.replay?.startsWith('reset') ||
-      ms >= 750 ||
-      process.env.CODES_READ_DIAGNOSTICS === '1'
-    ) {
+    if (error || trace.replay?.startsWith('reset') || ms >= 750 || verbose()) {
       console.info(
         JSON.stringify({
           event: 'workspace-read',

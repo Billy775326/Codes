@@ -5,16 +5,18 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const args = process.argv.slice(2);
+const restoring = args.length === 1 && args[0] === 'restore-database';
 const [major, minor] = process.versions.node.split('.').map(Number);
 if (args.length === 1 && ['--help', '-h'].includes(args[0])) {
-  console.log(`Usage: codes
+  console.log(`Usage: codes [restore-database]
 
 Start the codes web workspace in the foreground (default: http://127.0.0.1:6670).
 Configuration uses CODES_* environment variables. Press Ctrl+C to stop.
 Default data directory: ${join(root, '.local')}
 Relative configuration paths resolve from the calling directory.
+Use codes restore-database while Codes is stopped to apply a prepared database restore.
 Build the application first with npm run build in ${root}`);
-} else if (args.length) {
+} else if (args.length && !restoring) {
   console.error('Unknown arguments. Use codes --help for usage.');
   process.exitCode = 1;
 } else if (major !== 24 || minor < 19) {
@@ -35,7 +37,8 @@ Build the application first with npm run build in ${root}`);
     process.env.CODES_CODEX_BINARY = resolve(process.env.CODES_CODEX_BINARY);
   process.chdir(root);
   try {
-    await import(new URL('../dist/server/main.js', import.meta.url).href);
+    const entry = restoring ? '../dist/server/restore-command.js' : '../dist/server/main.js';
+    await import(new URL(entry, import.meta.url).href);
   } catch (error) {
     // Recognize the lock error from existing builds as well as the current build.
     // Other startup failures retain their original diagnostic and exit behavior.

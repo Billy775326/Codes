@@ -99,7 +99,7 @@ export function NetworkSettings({
 
   if (!snapshot)
     return (
-      <div className="preferences-content">
+      <div>
         {error ? (
           <>
             <p role="alert">{t(error)}</p>
@@ -193,7 +193,7 @@ export function NetworkSettings({
 
   return (
     <form
-      className="preferences-content network-settings"
+      className="network-settings"
       onSubmit={(event) => {
         event.preventDefault();
         void save();

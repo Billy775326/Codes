@@ -4,7 +4,7 @@ Run codes as the Linux account that owns the projects and is already signed in t
 
 ## Prepare maintenance
 
-Open **Settings → Data & maintenance** or **Session status** and choose **Prepare maintenance**. Codes stops admitting new tasks, follow-ups and queued messages. Existing tasks can finish, including answering questions and handling approvals. The dispatcher holds existing queued messages without changing their pause settings. **Maintenance ready** means Codes has no outstanding work it can identify, including receipts with an uncertain result. Maintenance expires after five minutes. **Cancel maintenance** resumes normal scheduling early.
+Open **Settings → Maintenance** or **Session status** and choose **Prepare maintenance**. Codes stops admitting new tasks, follow-ups and queued messages. Existing tasks can finish, including answering questions and handling approvals. The dispatcher holds existing queued messages without changing their pause settings. **Maintenance ready** means Codes has no outstanding work it can identify, including receipts with an uncertain result. Maintenance expires after five minutes. **Cancel maintenance** resumes normal scheduling early.
 
 An authenticated operator can also POST `{"action":"start"}` or `{"action":"cancel"}` to `/api/maintenance` and read `maintenance.ready` and `maintenance.expiresAt` from `GET /api/system`. Recheck readiness and the expiration immediately before switching. This control gates task admission in the current process. The operator still owns backup, restart and verification.
 
@@ -14,11 +14,17 @@ After the new HTTP listener accepts authenticated requests, call `GET /api/model
 
 ## Download a database backup
 
-Open **Settings → Data & maintenance → Download database backup** as a signed-in workspace operator. Codes uses SQLite’s online backup to produce one consistent database file while the service runs. The download contains the project list, conversation metadata, queues, operation records and saved conversation defaults. Keep it private. Codex conversation history, project files, uploaded files, server configuration and access credentials have their own backup locations.
+Open **Settings → Backup & restore → Download database backup** as a signed-in workspace operator. Codes uses SQLite’s online backup to produce one consistent database file while the service runs. The download contains the project list, conversation metadata, queues, operation records and saved conversation defaults. Keep it private. Codex conversation history, project files, uploaded files, server configuration and access credentials have their own backup locations.
 
 Codes prepares one download at a time and caps downloads at 64 MiB. For larger databases or a full recovery bundle, back up the data directory and the effective Codex home on the host. Use SQLite’s online backup for a running database or copy the database after a graceful stop.
 
-To restore the database on Linux, stop Codes and back up the current private data directory. Check that the snapshot is readable and its schema is supported by the build you will start. Replace `codes.sqlite` with the snapshot using the service account and mode `0600`. Move any matching `codes.sqlite-wal` and `codes.sqlite-shm` from the old database into the backup before restarting. Sign in and check projects, conversation history and queues. The restored database can reference native histories or attachments that must be restored separately. Review outstanding tasks before resuming a restored queue.
+To restore a backup from the same database schema:
+
+1. In **Settings → Backup & restore**, choose the SQLite file and select **Prepare restore**. Codes validates it and keeps one prepared backup in its private data directory.
+2. Let active work finish and stop Codes gracefully. On the Linux host, run `codes restore-database` as the same user and with the same `CODES_DATA_DIR` as the server. From a built checkout, `npm run restore:database` runs the same operation.
+3. Start the service, sign in and check projects, conversation history and queues. Review unresolved operations before resuming any queue.
+
+The restore command acquires the service’s data directory lock and saves the old database in a private `before-restore-*` directory before switching to the validated snapshot. The directory also holds the prepared source for recovery. Use **Remove prepared backup** in the settings page to cancel a prepared restore before applying it. Codex conversation files, project files, images, server settings and access credentials require their own backup and restore process.
 
 ## Persistent state
 
@@ -109,7 +115,7 @@ npm start
 
 Configure the proxy upstream as `http://127.0.0.1:6670`, preserve `Host: codes.example.com`, disable response buffering for `/api/events`, and allow streaming connections to remain open. Terminate HTTPS at the proxy and restrict access to the intended owner. A browser write must use an allowed origin whose hostname and port match the request's Host header. Use a dedicated origin for Codes.
 
-Do not set a browser URL containing the access token. The login form exchanges it for an HttpOnly SameSite cookie; HTTPS origins add Secure. Sessions expire after 12 hours and are lost on service restart. Change the token in the private file or environment, then restart to revoke existing sessions. Logout invalidates its server-side session; an open event stream is closed within its next session check.
+Do not set a browser URL containing the access token. The login form exchanges it for an HttpOnly SameSite cookie; HTTPS origins add Secure. Sessions expire after 12 hours by default. Change the duration for future sign-ins under **Settings → Network & access → Sign-in session**. Existing sessions keep their expiry and are lost on service restart. Change the token in the private file or environment, then restart to revoke existing sessions. Logout invalidates its server-side session; an open event stream is closed within its next session check.
 
 ## Runtime settings
 
@@ -137,7 +143,7 @@ An unknown result that cannot be proven terminal remains locked. Inspect the tas
 
 ### Read diagnostics
 
-Snapshot, history and event-stream requests expose an `X-Request-Id` header. Slow reads, failures and replay resets produce one JSON log record with the request ID, safe conversation ID, elapsed time, queue and native RPC phases, and response bytes when available. Set `CODES_READ_DIAGNOSTICS=1` to include successful requests during a diagnostic run. The records omit message bodies, credentials and filesystem paths.
+Snapshot, history and event-stream requests expose an `X-Request-Id` header. Slow reads, failures and replay resets produce one JSON log record with the request ID, safe conversation ID, elapsed time, queue and native RPC phases, and response bytes when available. Use **Settings → Maintenance → Connection diagnostics** to include successful reads for 5, 15 or 30 minutes. You can stop logging early. Use `CODES_READ_DIAGNOSTICS=1` for sustained logging from process startup. The records omit message bodies, credentials and filesystem paths.
 
 ## Known preview limits
 
@@ -145,7 +151,7 @@ Snapshot, history and event-stream requests expose an `X-Request-Id` header. Slo
 - The sidebar browses native conversations in pages of up to 30, with separate active/archived views. Case-insensitive title search scans up to four native pages per request; use Next to continue. A failed read retains the displayed portion and offers refresh. The project summary snapshot remains capped at 200; it is not the discovery limit.
 - Empty CLI threads are materialized lazily. If the CLI is restarted before the first user message, an empty thread may no longer be readable; create a new conversation.
 - Native item display is capped. History reads fetch one native item per response and use a 16 MiB JSONL frame limit. Larger individual native items require CLI inspection. A recognizable oversized history response can be skipped without ending other tasks. An invalid or unidentifiable frame still ends the shared connection and leaves unconfirmed operations protected.
-- File context is a checksum-verified copy of selected lines at send time. Files opens with hidden entries off. Use **Show hidden files** in the Files toolbar to browse and attach dotfiles in the selected project.
+- File context is a checksum-verified copy of selected lines at send time. Hidden entries are off in a fresh browser. **Show hidden files** is shared by the Files toolbar and Settings → Preferences, and the choice is saved in the browser.
 - The change view shows native current-turn diff events or file-change items from the loaded history. It is not a general Git staging or merge interface.
 - The isolated live read/write/interrupt pilot passed. Remote proxy behavior, a real prompting approval policy, and the remaining permission/question variants still require manual acceptance; simulator success is insufficient.
 

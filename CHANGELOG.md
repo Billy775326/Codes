@@ -10,6 +10,10 @@
 
 ### Added
 
+- Select browser notification events and remember hidden-file visibility across reloads.
+- Set the new-project directory and login validity. New sessions use the configured lifetime.
+- Start a bounded connection diagnostic window and prepare a database backup for offline restore. Restoring keeps a copy of the current database.
+
 - Search settings by English or Chinese keywords, open browser notifications in a dedicated section, and manage task admission and SQLite downloads under Data & maintenance.
 
 - Switch API-compatible web assets independently of the running service and restore the previous entry if needed.
@@ -77,6 +81,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Organize settings by browser, workspace, and server. Separate maintenance from backup and restore, and put project instructions beside the new-project default.
 
 - Group browser and workspace settings, put new conversation defaults on a dedicated page, and use a compact category picker on phones. Separate listener, browser access, and native runtime fields into labeled form sections.
 

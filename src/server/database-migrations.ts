@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
     );
 ` + asyncQuestionSchema;
 
-const requiredColumns = {
+export const requiredColumns = {
   meta: ['version'],
   projects: ['id', 'path', 'name'],
   threads: [
@@ -90,7 +90,7 @@ const requiredColumns = {
   async_question_ambiguity: ['thread_id', 'turn_id', 'signature'],
 };
 
-function verifySchema(db: DatabaseSync) {
+export function verifySchema(db: DatabaseSync) {
   const info = db.prepare('SELECT name FROM pragma_table_info(?)');
   for (const [table, columns] of Object.entries(requiredColumns)) {
     const actual = new Set(info.all(table).map((column) => column.name));

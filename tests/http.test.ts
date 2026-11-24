@@ -934,3 +934,87 @@ it('exports a consistent authenticated database snapshot with current workspace 
     exported.close();
   }
 });
+
+it('persists the project prefill and applies the login lifetime to new sign-ins', async () => {
+  const path = origin + '/api/settings/workspace';
+  const change = (input: unknown) =>
+    fetch(path, {
+      method: 'PATCH',
+      headers: { cookie, origin, 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  const initialProjects = service.store.projects();
+  expect(
+    (await change({ field: 'defaultProjectDirectory', expected: '', value: '.' })).status,
+  ).toBe(400);
+  const saved = await change({ field: 'defaultProjectDirectory', expected: '', value: directory });
+  expect(saved.status).toBe(200);
+  expect(service.store.projects()).toEqual(initialProjects);
+  expect(await (await fetch(origin + '/api/system', { headers: { cookie } })).json()).toMatchObject(
+    { defaultProjectPath: directory },
+  );
+  expect((await change({ field: 'defaultProjectDirectory', expected: '', value: '' })).status).toBe(
+    409,
+  );
+  expect((await change({ field: 'sessionHours', expected: 12, value: 1 })).status).toBe(200);
+  const login = await fetch(origin + '/api/login', {
+    method: 'POST',
+    headers: { origin, 'content-type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  expect(login.headers.get('set-cookie')).toContain('Max-Age=3600');
+  const short = login.headers.get('set-cookie')!.split(';')[0]!;
+  const future = Date.now() + 3600_001;
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(future);
+  try {
+    expect((await fetch(path, { headers: { cookie: short } })).status).toBe(401);
+    expect((await fetch(path, { headers: { cookie } })).status).toBe(200);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it('expires temporary diagnostics and validates staged restores without replacing the live database', async () => {
+  const headers = { cookie, origin, 'content-type': 'application/json' };
+  const diagnostics = origin + '/api/settings/diagnostics';
+  const activation = await fetch(diagnostics, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ minutes: 5 }),
+  });
+  const active = (await activation.json()).expiresAt;
+  expect(active).toBeGreaterThan(Date.now());
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(active + 1);
+  try {
+    expect(await (await fetch(diagnostics, { headers })).json()).toMatchObject({ expiresAt: null });
+  } finally {
+    clock.mockRestore();
+  }
+
+  const endpoint = origin + '/api/settings/restore';
+  const stage = (body: BodyInit) =>
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/vnd.sqlite3' },
+      body,
+    });
+  expect((await stage('not a SQLite file')).status).toBe(400);
+  expect(await (await fetch(endpoint, { headers })).json()).toEqual({ pending: null });
+
+  const file = await fetch(origin + '/api/settings/backup', { method: 'POST', headers });
+  expect(file.ok).toBe(true);
+  const bytes = await file.arrayBuffer();
+  await service.addProject(directory, 'Added after backup');
+  const staged = await stage(bytes);
+  expect(staged.status).toBe(200);
+  const { pending } = await staged.json();
+  expect(pending).toMatchObject({ bytes: bytes.byteLength });
+  expect(service.store.projects().map((item) => item.name)).toContain('Added after backup');
+  expect((await stage(bytes)).status).toBe(409);
+  const removed = await fetch(endpoint, {
+    method: 'DELETE',
+    headers,
+    body: JSON.stringify(pending),
+  });
+  expect(await removed.json()).toEqual({ pending: null });
+});

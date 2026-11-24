@@ -1,3 +1,4 @@
+import { WorkspaceConfiguration } from './workspace-settings.js';
 import { directoryStatus, directoryError } from './project-context.js';
 import { nativePermissions } from '../shared/permissions.js';
 import { activeTurn, interactionActivity } from '../shared/conversation-activity.js';
@@ -62,11 +63,13 @@ export class Service {
     { action: Action; rpcId: string | number; epoch: string; permissions?: unknown }
   >();
   private readonly projectFiles: ProjectFiles;
+  readonly workspaceSettings: WorkspaceConfiguration;
   constructor(
     readonly store: Store,
     readonly driver: Driver,
     private readonly defaultProjectPath?: string,
   ) {
+    this.workspaceSettings = new WorkspaceConfiguration(store.directory);
     this.projectFiles = new ProjectFiles(
       store,
       (id) => this.project(id),
@@ -185,7 +188,9 @@ export class Service {
     const maintenance = this.maintenance;
     return {
       ...this.driver.system(),
-      defaultProjectPath: this.defaultProjectPath,
+      defaultProjectPath:
+        this.workspaceSettings.snapshot().settings.defaultProjectDirectory ||
+        this.defaultProjectPath,
       maintenance: maintenance
         ? {
             expiresAt: maintenance.expiresAt,
@@ -208,6 +213,11 @@ export class Service {
           }
         : undefined,
     };
+  }
+  async saveWorkspaceSettings(input: unknown) {
+    const saved = await this.workspaceSettings.save(input);
+    this.events.publish('runtime', this.system());
+    return saved;
   }
   startMaintenance() {
     if (this.maintenance)

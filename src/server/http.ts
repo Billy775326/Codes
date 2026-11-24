@@ -13,7 +13,13 @@ import { limits } from '../shared/types.js';
 import { projectInstructionsLimit } from '../shared/project-instructions.js';
 import { Service } from './service.js';
 import { webEntrySignature } from '../shared/web-build.js';
-import { readPhase, readReplay, readResult, traceRead } from './read-diagnostics.js';
+import {
+  readPhase,
+  readReplay,
+  readResult,
+  traceRead,
+  ReadDiagnostics,
+} from './read-diagnostics.js';
 import type { openImagePreview } from './images.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
 import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
@@ -22,6 +28,8 @@ import type { RuntimeConfiguration } from './runtime-settings.js';
 import type { JWTVerifyGetKey } from 'jose';
 import { cloudflareAuthenticator } from './cloudflare-access.js';
 import { WorkspaceBackup } from './workspace-backup.js';
+import { diagnosticMinutes } from '../shared/workspace-settings.js';
+import { RestoreStaging } from './restore-staging.js';
 
 const sha256 = /^[a-f0-9]{64}$/;
 const fileAttachment = z
@@ -187,6 +195,14 @@ export async function application(
     return !!session && session.expiry > Date.now() && session.subject === subject;
   };
   const workspaceBackup = new WorkspaceBackup(service.store.db);
+  const restoreStaging = new RestoreStaging(service.store.directory);
+  const diagnostics = new ReadDiagnostics();
+  const traceWorkspaceRead = <T>(
+    response: ServerResponse,
+    route: Parameters<typeof traceRead>[1],
+    threadId: string | undefined,
+    work: () => Promise<T>,
+  ) => traceRead(response, route, threadId, work, () => diagnostics.verbose());
   let attachmentUploads = 0;
   server.on('request', (request, response) => {
     response.setHeader('x-content-type-options', 'nosniff');
@@ -236,10 +252,11 @@ export async function application(
         for (const [id, session] of sessions) if (session.expiry < Date.now()) sessions.delete(id);
         if (sessions.size >= 32) sessions.delete(sessions.keys().next().value!);
         const session = randomBytes(32).toString('hex');
-        sessions.set(session, { expiry: Date.now() + 12 * 3600_000, subject: access?.subject });
+        const seconds = service.workspaceSettings.snapshot().settings.sessionHours * 3600;
+        sessions.set(session, { expiry: Date.now() + seconds * 1000, subject: access?.subject });
         response.setHeader(
           'set-cookie',
-          `codes_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${requestOrigin?.protocol === 'https:' ? '; Secure' : ''}`,
+          `codes_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${seconds}${requestOrigin?.protocol === 'https:' ? '; Secure' : ''}`,
         );
         return json(response, { ok: true });
       }
@@ -291,6 +308,32 @@ export async function application(
           return json(response, await service.modelSettings.permissions());
         if (url.pathname === '/api/modes' && method === 'GET')
           return json(response, await service.modelSettings.modes());
+        if (url.pathname === '/api/settings/workspace') {
+          if (method === 'GET') return json(response, service.workspaceSettings.snapshot());
+          if (method === 'PATCH')
+            return json(response, await service.saveWorkspaceSettings(await body(request)));
+        }
+        if (url.pathname === '/api/settings/diagnostics') {
+          if (method === 'GET') return json(response, diagnostics.status());
+          if (method === 'POST') {
+            const { minutes } = z
+              .object({ minutes: z.literal([0, ...diagnosticMinutes]) })
+              .strict()
+              .parse(await body(request));
+            return json(response, diagnostics.setMinutes(minutes));
+          }
+        }
+        if (url.pathname === '/api/settings/restore') {
+          if (method === 'GET') return json(response, await restoreStaging.status());
+          if (method === 'POST') return json(response, await restoreStaging.stage(request));
+          if (method === 'DELETE') {
+            const pending = z
+              .object({ bytes: z.number().int().positive(), stagedAt: z.number().int() })
+              .strict()
+              .parse(await body(request));
+            return json(response, await restoreStaging.clear(pending));
+          }
+        }
         if (url.pathname === '/api/settings/backup' && method === 'POST')
           return await workspaceBackup.download(response);
         if (url.pathname === '/api/settings/defaults' && method === 'GET')
@@ -435,7 +478,7 @@ export async function application(
             throw new AppError('NOT_FOUND', 'Attachment endpoint not found.', 404);
           }
           if (segments[3] === 'snapshot' && method === 'GET') {
-            return traceRead(response, 'project-snapshot', undefined, async () => {
+            return traceWorkspaceRead(response, 'project-snapshot', undefined, async () => {
               await service.list(projectId);
               return json(response, {
                 threads: service.summaries(projectId),
@@ -654,7 +697,7 @@ export async function application(
           if (segments[3] === 'management-status' && method === 'POST')
             return json(response, await service.checkManagement(id));
           if (segments[3] === 'snapshot' && method === 'GET') {
-            return traceRead(response, 'snapshot', id, () =>
+            return traceWorkspaceRead(response, 'snapshot', id, () =>
               untilClosed(response, async (signal) => {
                 const thread = await service.read(id, signal);
                 // Cached history stays readable while native execution is offline.
@@ -671,7 +714,7 @@ export async function application(
             );
           }
           if (segments[3] === 'history' && method === 'GET') {
-            return traceRead(response, 'history', id, () =>
+            return traceWorkspaceRead(response, 'history', id, () =>
               untilClosed(response, async (signal) => {
                 const cursor = url.searchParams.get('cursor');
                 if (!cursor || cursor.length > 4096)
@@ -754,7 +797,7 @@ export async function application(
         }
         if (url.pathname === '/api/events' && method === 'GET') {
           const id = url.searchParams.get('threadId') ?? '';
-          return traceRead(response, 'events', id, async () => {
+          return traceWorkspaceRead(response, 'events', id, async () => {
             if (id) {
               const thread = service.store.thread(id);
               if (!thread) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
@@ -771,15 +814,14 @@ export async function application(
             const expiry = setInterval(() => {
               if (!authenticated(request, access?.subject)) response.end();
             }, 30_000);
-            const accessExpiry = access
-              ? setTimeout(
-                  () => response.end(),
-                  Math.min(access.expiresAt - Date.now(), 12 * 3600_000),
-                )
-              : undefined;
+            const loginExpiry = sessions.get(sessionId(request) ?? '')?.expiry ?? Date.now();
+            const streamExpiry = setTimeout(
+              () => response.end(),
+              Math.max(0, Math.min(loginExpiry, access?.expiresAt ?? Infinity) - Date.now()),
+            );
             response.once('close', () => {
               clearInterval(expiry);
-              clearTimeout(accessExpiry);
+              clearTimeout(streamExpiry);
             });
             readReplay(
               service.events.subscribe(
@@ -850,7 +892,7 @@ export async function application(
       const closed = new Promise<void>((yes) => server.close(() => yes()));
       service.events.close();
       await vite?.close();
-      await workspaceBackup.close();
+      await Promise.all([workspaceBackup.close(), restoreStaging.close()]);
       await service.close();
       server.closeAllConnections();
       await closed;

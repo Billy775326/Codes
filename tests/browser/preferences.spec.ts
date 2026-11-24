@@ -25,7 +25,7 @@ test('settings save the current project AGENTS.md and protect a draft after an e
   await writeFile(path, '# Original fixture\n', { flag: 'wx' });
   try {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    const tab = page.getByRole('button', { name: 'AGENTS.md', exact: true });
+    const tab = page.getByRole('button', { name: 'Projects', exact: true });
     await tab.click();
     const editor = page.getByLabel('AGENTS.md contents', { exact: true });
     await expect(editor).toHaveValue('# Original fixture\n');
@@ -615,19 +615,38 @@ test('searches settings in both languages and downloads a database backup on a n
   await search.fill('数据库');
   await search.press('Enter');
   await expect(search).toHaveValue('');
-  await expect(categories).toHaveText('Data & maintenance');
+  await expect(categories).toHaveText('Backup & restore');
   await expect(categories).toHaveAttribute('aria-expanded', 'false');
   await expect(categories).toBeFocused();
+  const downloaded = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download database backup' }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toMatch(/^codes-db-\d{4}-\d{2}-\d{2}\.sqlite$/);
+  const buffer = await readFile((await download.path())!);
+  expect(buffer.subarray(0, 15).toString()).toBe('SQLite format 3');
+  await dialog.getByLabel('Database backup file', { exact: true }).setInputFiles({
+    name: download.suggestedFilename(),
+    mimeType: 'application/vnd.sqlite3',
+    buffer,
+  });
+  await dialog.getByRole('button', { name: 'Prepare restore', exact: true }).click();
+  try {
+    await expect(dialog.getByText('codes restore-database', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('status')).toContainText('Restore prepared');
+  } finally {
+    await dialog.getByRole('button', { name: 'Remove prepared backup' }).click();
+  }
+  await chooseSettingsSection(dialog, 'Maintenance');
+  await dialog.getByRole('combobox', { name: 'Duration', exact: true }).selectOption('15');
+  await dialog.getByRole('button', { name: 'Start diagnostics' }).click();
+  try {
+    await expect(dialog.getByText(/Logging until/)).toBeVisible();
+  } finally {
+    await dialog.getByRole('button', { name: 'Stop diagnostics' }).click();
+  }
   await dialog.getByRole('button', { name: 'Prepare maintenance' }).click();
   try {
     await expect(dialog.getByRole('status')).toHaveText('Ready');
-    const downloaded = page.waitForEvent('download');
-    await dialog.getByRole('button', { name: 'Download database backup' }).click();
-    const download = await downloaded;
-    expect(download.suggestedFilename()).toMatch(/^codes-db-\d{4}-\d{2}-\d{2}\.sqlite$/);
-    expect((await readFile((await download.path())!)).subarray(0, 15).toString()).toBe(
-      'SQLite format 3',
-    );
   } finally {
     await dialog.getByRole('button', { name: 'Cancel maintenance' }).click();
   }
@@ -637,10 +656,69 @@ test('searches settings in both languages and downloads a database backup on a n
   await dialog.getByRole('button', { name: 'Clear settings search' }).click();
   await expect(search).toBeFocused();
   await categories.click();
-  await expect(settings.getByRole('button')).toHaveCount(7);
+  await expect(settings.getByRole('button')).toHaveCount(8);
   await chooseSettingsSection(dialog, 'Network & access');
   await expect(categories).toHaveAttribute('aria-expanded', 'false');
   await expect(categories).toHaveText('Network & access');
   await expect(dialog.getByLabel('Allowed addresses')).toBeVisible();
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+});
+
+test('saves project and sign-in settings independently and remembers file visibility', async ({
+  page,
+}) => {
+  await fixture(page, 'Workspace settings fixture');
+  const project = (await (await page.request.get('/api/projects')).json()).find(
+    (item: { name: string }) => item.name === 'sample-project',
+  );
+  const directory = join(project.path, 'conversation-fixtures');
+  const launcher = page.getByRole('button', { name: 'Interaction settings', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await launcher.click();
+  await dialog.getByRole('switch', { name: 'Show hidden files', exact: true }).check();
+  await chooseSettingsSection(dialog, 'Network & access');
+  const validity = dialog.getByRole('combobox', { name: 'Login validity', exact: true });
+  const before = await validity.inputValue();
+  await validity.selectOption('24');
+  await chooseSettingsSection(dialog, 'Projects');
+  const defaultPath = dialog.getByRole('textbox', {
+    name: 'Default project directory',
+    exact: true,
+  });
+  await defaultPath.fill(directory);
+  const refresh = page.waitForResponse((response) => response.url().endsWith('/api/system'));
+  await dialog.getByRole('button', { name: 'Save default project directory' }).click();
+  await refresh;
+  await expect(
+    dialog.getByRole('status').filter({ hasText: 'Workspace settings saved.' }),
+  ).toBeVisible();
+  await chooseSettingsSection(dialog, 'Network & access');
+  await expect(validity).toHaveValue('24');
+  await dialog.getByRole('button', { name: 'Save login validity' }).click();
+  await expect(
+    dialog.getByRole('status').filter({ hasText: 'Workspace settings saved.' }),
+  ).toBeVisible();
+  try {
+    await dialog.getByRole('button', { name: 'Done' }).click();
+    await page.getByRole('button', { name: 'Add project', exact: true }).click();
+    await expect(page.getByLabel('Project directory on server')).toHaveValue(directory);
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await launcher.click();
+    await expect(
+      dialog.getByRole('switch', { name: 'Show hidden files', exact: true }),
+    ).toBeChecked();
+    await chooseSettingsSection(dialog, 'Network & access');
+    await expect(validity).toHaveValue('24');
+  } finally {
+    const headers = { Origin: new URL(page.url()).origin };
+    for (const patch of [
+      { field: 'sessionHours', expected: 24, value: Number(before) },
+      { field: 'defaultProjectDirectory', expected: directory, value: '' },
+    ]) {
+      expect(
+        (await page.request.patch('/api/settings/workspace', { headers, data: patch })).ok(),
+      ).toBe(true);
+    }
+  }
 });

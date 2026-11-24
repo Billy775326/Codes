@@ -7,7 +7,7 @@ import { backup, type DatabaseSync } from 'node:sqlite';
 import { pipeline } from 'node:stream/promises';
 import { AppError } from '../shared/errors.js';
 
-const maxBackupBytes = 64 * 1024 * 1024;
+import { databaseBackupLimitBytes } from '../shared/workspace-settings.js';
 const exportDeadlineMs = 120_000;
 
 export class WorkspaceBackup {
@@ -43,7 +43,7 @@ export class WorkspaceBackup {
     const { size } = this.db
       .prepare('SELECT page_count * page_size AS size FROM pragma_page_count(), pragma_page_size()')
       .get() as { size: number };
-    if (size > maxBackupBytes) throw oversized();
+    if (size > databaseBackupLimitBytes) throw oversized();
 
     const directory = await mkdtemp(join(tmpdir(), 'codes-db-export-'));
     const signal = AbortSignal.any([this.shutdown.signal, AbortSignal.timeout(exportDeadlineMs)]);
@@ -56,7 +56,7 @@ export class WorkspaceBackup {
       const snapshot = await stat(path);
       signal.throwIfAborted();
       if (response.destroyed) return;
-      if (snapshot.size > maxBackupBytes) throw oversized();
+      if (snapshot.size > databaseBackupLimitBytes) throw oversized();
       const date = new Date().toISOString().slice(0, 10);
       response.writeHead(200, {
         'content-type': 'application/vnd.sqlite3',
