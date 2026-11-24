@@ -4,7 +4,7 @@
   display: grid;
   place-items: center;
   padding: 20px 12px;
-  background: var(--editor);
+  background: var(--panel);
   color: var(--fg);
 }
 .login-panel {
@@ -12,7 +12,7 @@
   padding: clamp(16px, 5vw, 28px);
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: var(--panel);
+  background: var(--editor);
   box-shadow: 0 12px 36px #0002;
 }
 .login-heading {
