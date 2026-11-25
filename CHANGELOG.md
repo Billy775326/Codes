@@ -198,6 +198,8 @@
 
 ### Fixed
 
+- Keep the composer’s send arrow visible in dark and light themes, including when the input is empty or the button is hovered.
+
 - Refresh an outdated workspace page after sign-in so links and previews use the running build.
 
 - Match the AGENTS.md editor to the active theme and show the server's fallback project directory in the empty default-directory field.

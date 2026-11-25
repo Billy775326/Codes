@@ -5,6 +5,44 @@ async function login(page: Page) {
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.locator('.connection')).toHaveText('Connected');
 }
+test('send arrow remains visible on hover and with an empty composer in both themes', async ({
+  page,
+}) => {
+  await login(page);
+  const input = page.getByLabel('Message Codex');
+  const send = page.getByRole('button', { name: 'Send message', exact: true });
+  const contrast = () =>
+    send.locator('svg').evaluate((icon) => {
+      const luminance = (color: string) => {
+        const rgb = color.match(/\d+(?:\.\d+)?/g)!.map((component) => {
+          const value = Number(component) / 255;
+          return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * rgb[0]! + 0.7152 * rgb[1]! + 0.0722 * rgb[2]!;
+      };
+      const stroke = luminance(getComputedStyle(icon).stroke);
+      const background = luminance(getComputedStyle(icon.parentElement!).backgroundColor);
+      return (Math.max(stroke, background) + 0.05) / (Math.min(stroke, background) + 0.05);
+    });
+  for (const theme of ['dark', 'light']) {
+    await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+
+    await input.fill('A short draft');
+    await expect(send).toBeEnabled();
+    expect(await contrast()).toBeGreaterThanOrEqual(3);
+    await send.hover();
+    expect(await contrast()).toBeGreaterThanOrEqual(3);
+
+    await input.clear();
+    await expect(send).toBeDisabled();
+    await send.hover({ force: true });
+    await expect(send).toHaveCSS('opacity', '1');
+    expect(await contrast()).toBeGreaterThanOrEqual(3);
+  }
+});
 for (const width of [1440, 320]) {
   test(`composer has one focus border, bounded input and aligned controls at ${width}px`, async ({
     page,

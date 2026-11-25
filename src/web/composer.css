@@ -289,13 +289,22 @@
   background: var(--hover);
 }
 .app .composer-dispatch-actions > .delivery-primary,
-.app .send-button {
+.app .icon-button.send-button {
   background: var(--fg);
   color: var(--primary-ink);
 }
-.app .composer-dispatch-actions > .delivery-primary:hover:not([aria-disabled='true']),
-.app .send-button:hover:not(:disabled) {
+.app .composer-dispatch-actions > .delivery-primary:hover:not([aria-disabled='true']) {
   background: var(--accent);
+}
+.app .icon-button.send-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--primary-ink);
+}
+.app .icon-button.send-button:disabled {
+  border-color: var(--border);
+  background: var(--field);
+  color: var(--muted);
+  opacity: 1;
 }
 .app .composer-dispatch-actions > button > svg {
   flex: none;
