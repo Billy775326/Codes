@@ -24,10 +24,15 @@ test('English is the default and Simplified Chinese persists without changing dr
   const chineseLanguage = page.getByRole('combobox', { name: '语言', exact: true });
   await expect(chineseLanguage).toHaveValue('zh-CN');
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+  await expect(page.getByRole('button', { name: '常规', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: '会话默认值', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: '主题', exact: true })).toHaveValue('light');
   await page.getByRole('button', { name: '网络与访问', exact: true }).click();
   await expect(page.getByRole('combobox', { name: '监听地址', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '运行环境', exact: true }).click();
+  await page.getByRole('button', { name: 'Codex CLI', exact: true }).click();
   await expect(page.getByLabel('原生请求超时（毫秒）')).toBeVisible();
   await page.getByRole('button', { name: '关闭弹窗', exact: true }).click();
   await expect(page.getByLabel('给 Codex 发送消息')).toHaveValue(draft);

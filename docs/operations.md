@@ -125,13 +125,13 @@ If the process was started with `CODES_ACCESS_TOKEN`, that environment value rem
 
 ## Runtime settings
 
-In **Settings → Runtime**, set the default native RPC deadline (1,000–300,000 ms) and whether native questions are available in Code mode. The form also shows the Codex executable and Codes data directory. Save and restart Codes to apply changes. `runtime-settings.json` in the private data directory takes precedence over `CODES_CODE_QUESTIONS` and `CODES_CODEX_REQUEST_TIMEOUT_MS`. Before a save, Code-mode questions are enabled when the installed CLI supports them and the native request deadline is 30,000 ms. Operations with dedicated deadlines retain those deadlines.
+In **Settings → Codex CLI**, set the default native RPC deadline (1,000–300,000 ms) and whether native questions are available in Code mode. The form also shows the Codex executable and Codes data directory. Save and restart Codes to apply changes. `runtime-settings.json` in the private data directory takes precedence over `CODES_CODE_QUESTIONS` and `CODES_CODEX_REQUEST_TIMEOUT_MS`. Before a save, Code-mode questions are enabled when the installed CLI supports them and the native request deadline is 30,000 ms. Operations with dedicated deadlines retain those deadlines.
 
 To recover from invalid runtime settings, stop Codes, move `runtime-settings.json` to a backup outside the active path, and restart with the desired environment values.
 
 ## Browser notifications
 
-Enable **Browser notifications** in **Settings → Preferences** and allow the site to display notifications. Use **Send test notification** to verify delivery. With notifications enabled, an open background Codes tab keeps its existing event connection and can report completion, failure, stops, approvals and questions. Notification titles use generic text. Browser support requires a secure context, such as HTTPS or localhost. Delivery depends on the browser keeping the tab and connection active.
+Enable **Browser notifications** in **Settings → Notifications** and allow the site to display notifications. Use **Send test notification** to verify delivery. With notifications enabled, an open background Codes tab keeps its existing event connection and can report completion, failure, stops, approvals and questions. Notification titles use generic text. Browser support requires a secure context, such as HTTPS or localhost. Delivery depends on the browser keeping the tab and connection active.
 
 ## When the page disconnects
 
@@ -157,7 +157,7 @@ Snapshot, history and event-stream requests expose an `X-Request-Id` header. Slo
 - The sidebar browses native conversations in pages of up to 30, with separate active/archived views. Case-insensitive title search scans up to four native pages per request; use Next to continue. A failed read retains the displayed portion and offers refresh. The project summary snapshot remains capped at 200; it is not the discovery limit.
 - Empty CLI threads are materialized lazily. If the CLI is restarted before the first user message, an empty thread may no longer be readable; create a new conversation.
 - Native item display is capped. History reads fetch one native item per response and use a 16 MiB JSONL frame limit. Larger individual native items require CLI inspection. A recognizable oversized history response can be skipped without ending other tasks. An invalid or unidentifiable frame still ends the shared connection and leaves unconfirmed operations protected.
-- File context is a checksum-verified copy of selected lines at send time. Hidden entries are off in a fresh browser. **Show hidden files** is shared by the Files toolbar and Settings → Preferences, and the choice is saved in the browser.
+- File context is a checksum-verified copy of selected lines at send time. Hidden entries are off in a fresh browser. **Show hidden files** is shared by the Files toolbar and Settings → General, and the choice is saved in the browser.
 - The change view shows native current-turn diff events or file-change items from the loaded history. It is not a general Git staging or merge interface.
 - The isolated live read/write/interrupt pilot passed. Remote proxy behavior, a real prompting approval policy, and the remaining permission/question variants still require manual acceptance; simulator success is insufficient.
 

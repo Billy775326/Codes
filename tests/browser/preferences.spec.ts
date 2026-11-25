@@ -32,7 +32,7 @@ test('settings save the current project AGENTS.md and protect a draft after an e
     await expect(editor).toHaveCSS('background-color', 'rgb(42, 46, 52)');
     await expect(editor).toHaveCSS('color', 'rgb(225, 228, 232)');
     await editor.fill('# Saved through settings\n');
-    await page.getByRole('button', { name: 'Preferences', exact: true }).click();
+    await page.getByRole('button', { name: 'General', exact: true }).click();
     await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('light');
     await tab.click();
     await expect(editor).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -170,7 +170,7 @@ test('runtime settings save independently of the active configuration and surviv
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const open = async () => {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await chooseSettingsSection(dialog, 'Runtime');
+    await chooseSettingsSection(dialog, 'Codex CLI');
   };
   const path = '/api/settings/runtime';
   const get = async (): Promise<RuntimeSettingsSnapshot> => (await page.request.get(path)).json();
@@ -179,6 +179,12 @@ test('runtime settings save independently of the active configuration and surviv
   try {
     const timeout = dialog.getByLabel('Native request timeout (milliseconds)');
     await expect(timeout).toHaveValue(String(initial.active.requestTimeoutMs));
+    const help = dialog.getByText(
+      '1,000–300,000 ms. Applies to CLI requests, such as loading metadata.',
+    );
+    await expect(timeout).toHaveAccessibleDescription(await help.innerText());
+    const [fieldBox, helpBox] = await Promise.all([timeout.boundingBox(), help.boundingBox()]);
+    expect(fieldBox!.x).toBeGreaterThan(helpBox!.x + helpBox!.width);
     await expect(dialog.getByText('Data directory', { exact: true })).toBeVisible();
     await dialog.getByRole('switch', { name: 'Codex questions in Code mode' }).uncheck();
     await timeout.fill('45000');
@@ -212,11 +218,11 @@ test('network and runtime drafts survive a tab switch and require confirmation t
   const timeout = dialog.getByLabel('Native request timeout (milliseconds)');
   await chooseSettingsSection(dialog, 'Network & access');
   await port.fill('28787');
-  await chooseSettingsSection(dialog, 'Runtime');
+  await chooseSettingsSection(dialog, 'Codex CLI');
   await timeout.fill('77123');
   await chooseSettingsSection(dialog, 'Network & access');
   await expect(port).toHaveValue('28787');
-  await chooseSettingsSection(dialog, 'Runtime');
+  await chooseSettingsSection(dialog, 'Codex CLI');
   await expect(timeout).toHaveValue('77123');
   await dialog.getByRole('button', { name: 'Close dialog' }).click();
   const discard = dialog.getByRole('group', { name: 'Discard unsaved settings?' });
@@ -224,7 +230,7 @@ test('network and runtime drafts survive a tab switch and require confirmation t
   await expect(keep).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(categories).toBeFocused();
-  await expect(categories).toHaveText('Runtime');
+  await expect(categories).toHaveText('Codex CLI');
   await expect(timeout).toHaveValue('77123');
   await page.keyboard.press('Escape');
   await discard.getByRole('button', { name: 'Discard changes' }).click();
@@ -283,6 +289,11 @@ for (const width of [1440, 320]) {
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
     await expect(dialog.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
+    if (width === 1440) {
+      const desktopDialog = (await dialog.boundingBox())!;
+      expect(desktopDialog.width).toBe(780);
+      expect(desktopDialog.height).toBe(680);
+    }
     await expect(dialog.locator('details')).not.toHaveAttribute('open');
     await expect(page.getByLabel('Display size')).toHaveCount(0);
     const close = dialog.getByRole('button', { name: 'Close dialog', exact: true });
@@ -619,8 +630,7 @@ test('searches settings in both languages and downloads a database backup on a n
   await expect(categories).toHaveAttribute('aria-expanded', 'false');
   const searchBox = (await search.boundingBox())!;
   const categoryBox = (await categories.boundingBox())!;
-  expect(searchBox.y).toBeLessThan(categoryBox.y + categoryBox.height);
-  expect(searchBox.x).toBeGreaterThan(categoryBox.x + categoryBox.width);
+  expect(searchBox.y).toBeGreaterThanOrEqual(categoryBox.y + categoryBox.height);
   await search.fill('backup');
   const settings = dialog.getByRole('group', { name: 'Settings sections' });
   await expect(settings.getByRole('button')).toHaveCount(1);

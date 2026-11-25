@@ -85,7 +85,7 @@ export function NotificationSettings({
         ))}
       </fieldset>
       {enabled && access === 'granted' && (
-        <>
+        <div className="settings-action-row">
           <p className="preference-help">{t('Keep this tab open for notifications.')}</p>
           <button
             type="button"
@@ -103,7 +103,7 @@ export function NotificationSettings({
           >
             {t('Send test notification')}
           </button>
-        </>
+        </div>
       )}
       {tested && <p role="status">{t('Test notification requested.')}</p>}
       {error && <p role="alert">{t(error)}</p>}

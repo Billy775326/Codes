@@ -85,7 +85,22 @@ export function AccessTokenSettings({
 
   return (
     <section className="preferences-section" aria-labelledby={formId + '-title'}>
-      <h3 id={formId + '-title'}>{t('Access token')}</h3>
+      <div className="settings-section-header">
+        <h3 id={formId + '-title'}>{t('Access token')}</h3>
+        {source === 'file' && (
+          <button
+            ref={trigger}
+            className="settings-action"
+            type="button"
+            aria-expanded={editing}
+            aria-controls={editing ? formId : undefined}
+            disabled={busy}
+            onClick={() => (editing ? clear() : setEditing(true))}
+          >
+            {t('Change access token')}
+          </button>
+        )}
+      </div>
       {source === 'environment' ? (
         <p className="preference-help">
           {t(
@@ -93,113 +108,97 @@ export function AccessTokenSettings({
           )}
         </p>
       ) : (
-        source === 'file' && (
-          <>
-            <button
-              ref={trigger}
-              className="settings-action"
-              type="button"
-              aria-expanded={editing}
-              aria-controls={editing ? formId : undefined}
-              disabled={busy}
-              onClick={() => (editing ? clear() : setEditing(true))}
-            >
-              {t('Change access token')}
-            </button>
-            {editing && (
-              <form
-                id={formId}
-                className="network-settings access-token-settings"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void save();
-                }}
-              >
-                <label>
-                  {t('Current token')}
-                  <input
-                    type="password"
-                    name="current-token"
-                    autoComplete="current-password"
-                    autoCapitalize="off"
-                    spellCheck={false}
-                    maxLength={accessTokenLimits.max}
-                    disabled={busy}
-                    value={current}
-                    onChange={(event) => setCurrent(event.target.value)}
-                    required
-                  />
-                </label>
-                <div className="access-token-fields">
-                  <label>
-                    {t('New token')}
-                    <input
-                      type="password"
-                      name="new-token"
-                      autoComplete="new-password"
-                      autoCapitalize="off"
-                      spellCheck={false}
-                      minLength={accessTokenLimits.min}
-                      maxLength={accessTokenLimits.max}
-                      disabled={busy}
-                      value={replacement}
-                      aria-describedby={formId + '-help'}
-                      onChange={(event) => setReplacement(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    {t('Confirm new token')}
-                    <input
-                      type="password"
-                      name="confirm-new-token"
-                      autoComplete="new-password"
-                      autoCapitalize="off"
-                      spellCheck={false}
-                      maxLength={accessTokenLimits.max}
-                      disabled={busy}
-                      value={confirmation}
-                      aria-invalid={!!confirmation && confirmation !== replacement}
-                      onChange={(event) => setConfirmation(event.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
-                <p className="preference-help" id={formId + '-help'}>
-                  {t('Use 16–256 characters without surrounding whitespace or control characters.')}
-                </p>
-                <p className="preference-help">
-                  {t('Changing the token signs out all browsers. Running tasks continue.')}
-                </p>
-                {confirmation && confirmation !== replacement && (
-                  <p role="status">{t('The new tokens do not match.')}</p>
-                )}
-                {otherSettingsPending && (
-                  <p role="status">
-                    {t('Save or discard other settings before changing the token.')}
-                  </p>
-                )}
-                <div className="network-actions">
-                  <button type="button" className="settings-action" disabled={busy} onClick={clear}>
-                    {t('Cancel')}
-                  </button>
-                  <button
-                    type="submit"
-                    className="settings-action"
-                    disabled={
-                      !current ||
-                      !validNewAccessToken(replacement) ||
-                      replacement !== confirmation ||
-                      busy ||
-                      otherSettingsPending
-                    }
-                  >
-                    {busy ? t('Saving…') : t('Save new token')}
-                  </button>
-                </div>
-              </form>
+        source === 'file' &&
+        editing && (
+          <form
+            id={formId}
+            className="network-settings access-token-settings"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+          >
+            <label>
+              {t('Current token')}
+              <input
+                type="password"
+                name="current-token"
+                autoComplete="current-password"
+                autoCapitalize="off"
+                spellCheck={false}
+                maxLength={accessTokenLimits.max}
+                disabled={busy}
+                value={current}
+                onChange={(event) => setCurrent(event.target.value)}
+                required
+              />
+            </label>
+            <div className="access-token-fields">
+              <label>
+                {t('New token')}
+                <input
+                  type="password"
+                  name="new-token"
+                  autoComplete="new-password"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  minLength={accessTokenLimits.min}
+                  maxLength={accessTokenLimits.max}
+                  disabled={busy}
+                  value={replacement}
+                  aria-describedby={formId + '-help'}
+                  onChange={(event) => setReplacement(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                {t('Confirm new token')}
+                <input
+                  type="password"
+                  name="confirm-new-token"
+                  autoComplete="new-password"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  maxLength={accessTokenLimits.max}
+                  disabled={busy}
+                  value={confirmation}
+                  aria-invalid={!!confirmation && confirmation !== replacement}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  required
+                />
+              </label>
+            </div>
+            <p className="preference-help" id={formId + '-help'}>
+              {t('Use 16–256 characters without surrounding whitespace or control characters.')}
+            </p>
+            <p className="preference-help">
+              {t('Changing the token signs out all browsers. Running tasks continue.')}
+            </p>
+            {confirmation && confirmation !== replacement && (
+              <p role="status">{t('The new tokens do not match.')}</p>
             )}
-          </>
+            {otherSettingsPending && (
+              <p role="status">{t('Save or discard other settings before changing the token.')}</p>
+            )}
+            <div className="network-actions">
+              <button type="button" className="settings-action" disabled={busy} onClick={clear}>
+                {t('Cancel')}
+              </button>
+              <button
+                type="submit"
+                className="settings-action"
+                disabled={
+                  !current ||
+                  !validNewAccessToken(replacement) ||
+                  replacement !== confirmation ||
+                  busy ||
+                  otherSettingsPending
+                }
+              >
+                {busy ? t('Saving…') : t('Save new token')}
+              </button>
+            </div>
+          </form>
         )
       )}
       {error && <p role="alert">{t(error)}</p>}

@@ -257,25 +257,26 @@ export function NetworkSettings({
       <section className="preferences-section" aria-labelledby="network-access-heading">
         <h3 id="network-access-heading">{t('Browser access')}</h3>
         <div className="network-access-fields">
-          <div className="network-auth-mode">
-            <label>
+          <label className="preference-row">
+            <span className="preference-description">
               {t('Authentication mode')}
-              <select
-                value={authMode}
-                onChange={(event) => setAuthMode(event.target.value as NetworkSettings['authMode'])}
-                aria-describedby="network-auth-help"
-                disabled={saving}
-              >
-                <option value="local">{t('Local / Tailscale (local)')}</option>
-                <option value="cloudflare-access">Cloudflare Access</option>
-              </select>
-            </label>
-            <p className="preference-help" id="network-auth-help">
-              {authMode === 'cloudflare-access'
-                ? t('Sign in with Access, then your Codes token.')
-                : t('Use Cloudflare Access for public hostnames.')}
-            </p>
-          </div>
+              <span className="preference-help" id="network-auth-help">
+                {authMode === 'cloudflare-access'
+                  ? t('Sign in with Access, then your Codes token.')
+                  : t('Use Cloudflare Access for public hostnames.')}
+              </span>
+            </span>
+            <select
+              aria-label={t('Authentication mode')}
+              value={authMode}
+              onChange={(event) => setAuthMode(event.target.value as NetworkSettings['authMode'])}
+              aria-describedby="network-auth-help"
+              disabled={saving}
+            >
+              <option value="local">{t('Local / Tailscale (local)')}</option>
+              <option value="cloudflare-access">Cloudflare Access</option>
+            </select>
+          </label>
           {authMode === 'cloudflare-access' && (
             <div className="network-access-credentials">
               <label>

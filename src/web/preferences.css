@@ -2,8 +2,8 @@
   z-index: 80;
 }
 .app .preferences-dialog {
-  width: min(940px, 100%);
-  height: min(740px, calc(100dvh - 40px));
+  width: min(780px, 100%);
+  height: min(680px, calc(100dvh - 40px));
   max-height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
@@ -22,7 +22,7 @@
 }
 .preferences-dialog > .modal-heading {
   flex: 0 0 auto;
-  padding: 10px 18px;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--line);
   gap: 12px;
 }
@@ -31,14 +31,14 @@
 }
 .settings-layout {
   display: grid;
-  grid-template-columns: minmax(198px, 24%) minmax(0, 1fr);
+  grid-template-columns: 204px minmax(0, 1fr);
   min-height: 0;
   flex: 1;
 }
 .settings-navigation {
   min-height: 0;
   overflow-y: auto;
-  padding: 14px 12px;
+  padding: 12px;
   border-inline-end: 1px solid var(--line);
   background: var(--editor);
 }
@@ -85,7 +85,7 @@
 }
 .preferences-nav {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   margin-top: 16px;
 }
 .settings-nav-group {
@@ -94,7 +94,7 @@
 }
 .settings-nav-label {
   color: var(--muted);
-  margin: 0 10px 4px;
+  margin: 0 8px 4px;
   font-size: 12px;
   font-weight: 600;
 }
@@ -103,7 +103,7 @@
   align-items: center;
   gap: 8px;
   min-height: var(--control-size);
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: 6px;
   color: var(--muted);
   text-align: start;
@@ -115,12 +115,17 @@
   margin: 4px 8px;
   color: var(--muted);
 }
+.settings-forms > * + * {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
 .settings-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
+  gap: 4px 16px;
   min-width: 0;
-  margin: 12px 0;
+  margin: 8px 0 12px;
   padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -134,6 +139,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 32px;
 }
 .settings-option input {
   flex-shrink: 0;
@@ -146,13 +152,20 @@
 }
 .app .preferences-dialog .settings-compact-field select {
   width: auto;
-  margin: 0 0 0 auto;
+  margin: 0;
 }
 .settings-action-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 12px;
+}
+.settings-action-row > .preference-help {
+  flex: 1 1 200px;
+  margin: 0;
+}
+.settings-action-row > .settings-action:last-child:not(:only-child) {
+  margin-inline-start: auto;
 }
 .restore-steps {
   padding-inline-start: 20px;
@@ -162,7 +175,10 @@
   margin-top: 6px;
 }
 .restore-filename {
+  flex: 1 1 140px;
+  min-width: 0;
   overflow-wrap: anywhere;
+  color: var(--muted);
 }
 .settings-panels {
   display: flex;
@@ -199,9 +215,9 @@
   display: grid;
   gap: 6px;
   margin: 12px 0 0;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 6px;
-  background: var(--panel);
+  background: var(--editor);
   color: var(--muted);
   font-size: 13px;
 }
@@ -240,18 +256,19 @@
   display: grid;
   gap: 12px;
 }
-.network-auth-mode {
-  max-width: 18rem;
+.app .network-settings .preference-row > select {
+  width: auto;
+  margin: 0;
+}
+.app .network-settings .preference-row > input[type='number'] {
+  width: min(100%, 9rem);
+  margin: 0;
 }
 .app .network-settings :is(select, input:not([hidden], [type='checkbox']), textarea) {
   display: block;
   width: 100%;
   min-height: var(--control-size);
   margin: 6px 0 0;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--fg);
   background: var(--field);
 }
 .app .network-settings textarea {
@@ -261,7 +278,6 @@
 .network-access-credentials {
   display: grid;
   gap: 12px;
-  margin-top: 12px;
 }
 .network-actions {
   display: flex;
@@ -271,20 +287,17 @@
   align-items: center;
   margin-top: 12px;
 }
-.network-actions button:not(.icon-button) {
-  min-height: var(--control-size);
-}
 .network-transfer {
   display: flex;
   gap: 4px;
   margin-inline-end: auto;
 }
 .runtime-paths {
-  font-size: 13px;
-  color: var(--muted);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: 8px 12px;
+  gap: 8px 16px;
+  font-size: 13px;
+  color: var(--muted);
   margin: 0;
 }
 .runtime-paths dd {
@@ -294,30 +307,24 @@
 }
 .preferences-content {
   min-height: 0;
-  min-width: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  overflow-wrap: anywhere;
-  padding: 18px;
+  padding: 22px 24px;
   scrollbar-gutter: stable;
 }
-.settings-panels > .preferences-content:not([hidden]) {
+.settings-panels > .preferences-content,
+.settings-panels .preferences-page:not([hidden]) > .preferences-content {
   flex: 1;
 }
-.preferences-section {
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--editor);
-}
-.preferences-section + .preferences-section,
-.network-settings + .preferences-section {
-  margin-top: 12px;
+.preferences-section + .preferences-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
 .preferences-section h3 {
   font-size: 15px;
   font-weight: 600;
-  margin: 0 0 10px;
+  margin: 0 0 14px;
   color: var(--fg);
 }
 .app .preferences-dialog label {
@@ -326,61 +333,59 @@
   color: var(--fg);
   min-width: 0;
 }
-.app .preferences-dialog .preference-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
-  gap: 8px 16px;
+.app .preferences-dialog :is(.preference-row, .default-model-settings > label) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
+  gap: 6px 16px;
   min-height: 44px;
   padding-block: 4px;
 }
-.app .preferences-dialog .preference-row + .preference-row {
-  border-top: 1px solid var(--line);
+.preference-description {
+  flex: 1 1 140px;
+  min-width: 0;
 }
-.preference-row > :is(input, select) {
-  justify-self: end;
+.preference-description .preference-help {
+  margin: 2px 0 0;
 }
 .preference-help {
   display: block;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
-  margin-block: 4px 0;
+  margin: 4px 0 0;
 }
 .app .preferences-dialog select {
   margin: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
   min-height: 40px;
-  font-size: 14px;
   min-width: 0;
+  font-size: 14px;
   background: var(--field);
 }
-.default-model-settings {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  border-top: 1px solid var(--line);
-  margin-top: 8px;
-  padding-top: 12px;
-}
-.app .preferences-dialog .default-model-settings select {
-  display: block;
-  width: 100%;
-  margin-top: 6px;
-}
-.default-model-settings .fast-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.app .preferences-dialog :is(.preference-row, .model-field) > select {
+  max-width: 100%;
+  margin-inline-start: auto;
 }
 .default-model-settings .fast-option small {
   display: block;
   color: var(--muted);
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: 12px;
+}
+.default-model-settings .preference-reset-speed {
+  display: block;
+  margin-inline-start: auto;
+}
+.settings-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.settings-section-header h3 {
+  margin: 0;
 }
 .preferences-section > .preference-help {
   margin: 0 0 14px;
@@ -394,11 +399,11 @@
   text-decoration: underline;
 }
 .preferences-preview {
-  background: var(--panel);
+  background: var(--editor);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  margin-top: 10px;
-  padding: 10px 12px;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 8px;
 }
 .app .preferences-preview .prose p {
   font-size: inherit;
@@ -430,7 +435,7 @@
   justify-content: space-between;
   flex: 0 0 auto;
   gap: 8px 16px;
-  padding: 8px 18px;
+  padding: 12px 20px;
   border-top: 1px solid var(--line);
 }
 .preferences-save-error {
@@ -480,9 +485,9 @@
   color: #a13535;
 }
 .preferences-done {
-  margin-inline-start: auto;
-  min-height: var(--control-size);
-  padding: 6px 16px;
+  margin-left: auto;
+  min-height: 40px;
+  padding: 8px 20px;
   border: 1px solid var(--border);
   border-radius: 6px;
   flex-shrink: 0;
@@ -534,11 +539,7 @@
     padding: 6px 12px;
   }
   .preferences-content {
-    padding: 12px 10px;
-    scrollbar-gutter: auto;
-  }
-  .preferences-section {
-    padding: 12px;
+    padding: 16px;
   }
   .settings-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -548,11 +549,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .settings-navigation {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: center;
-    gap: 6px;
-    padding: 8px 10px;
+    padding: 8px 12px;
     border-inline-end: 0;
     border-bottom: 1px solid var(--line);
   }
@@ -561,18 +558,11 @@
     width: 100%;
     min-height: 44px;
     justify-content: space-between;
-    padding-inline: 6px;
-    gap: 4px;
     text-align: start;
-    line-height: 1.2;
+    margin-bottom: 6px;
   }
   .settings-category-toggle span {
     flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .settings-category-toggle svg {
-    flex-shrink: 0;
   }
   .settings-category-toggle svg:last-child {
     transform: rotate(90deg);
@@ -590,12 +580,11 @@
     display: none;
   }
   .preferences-nav {
-    grid-column: 1 / -1;
-    gap: 8px;
-    max-height: min(224px, 35dvh);
+    gap: 10px;
+    max-height: min(206px, 34dvh);
     overflow-y: auto;
     overscroll-behavior: contain;
-    margin-top: 0;
+    margin-top: 8px;
   }
   .settings-nav-group {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -625,30 +614,18 @@
     min-height: 44px;
     min-width: 44px;
   }
-  .default-model-settings {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+  .app .network-settings :is(input, textarea) {
+    font-size: 16px;
   }
-  .app .network-settings :is(input, textarea),
   .project-instructions textarea {
     font-size: max(16px, var(--code-font-size, 14px));
+  }
+  .preferences-preview {
+    padding: 12px;
   }
 }
 
 @media (max-width: 390px) {
-  .app
-    .preferences-dialog
-    :is(.preferences-interaction .preference-row:has(select), .default-permissions) {
-    grid-template-columns: minmax(0, 1fr);
-    padding-block: 8px;
-  }
-  .preferences-interaction select,
-  .default-permissions select {
-    justify-self: start;
-  }
-  .settings-category-toggle svg:first-child {
-    display: none;
-  }
   .runtime-paths {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 4px;

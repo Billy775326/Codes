@@ -52,7 +52,7 @@ export function RuntimeSettings({
 
   if (!snapshot)
     return (
-      <section className="preferences-section">
+      <div className="preferences-content">
         {error ? (
           <>
             <p role="alert">{t(error)}</p>
@@ -63,7 +63,7 @@ export function RuntimeSettings({
         ) : (
           <p role="status">{t('Loading runtime settings…')}</p>
         )}
-      </section>
+      </div>
     );
 
   async function saveSettings() {
@@ -92,7 +92,7 @@ export function RuntimeSettings({
 
   return (
     <form
-      className="network-settings"
+      className="preferences-content network-settings"
       onSubmit={(event) => {
         event.preventDefault();
         void saveSettings();
@@ -111,10 +111,17 @@ export function RuntimeSettings({
             disabled={saving}
           />
         </label>
-        <label>
-          {t('Native request timeout (milliseconds)')}
+        <label className="preference-row">
+          <span className="preference-description">
+            {t('Native request timeout (milliseconds)')}
+            <span className="preference-help" id="native-timeout-help">
+              {t('1,000–300,000 ms. Applies to CLI requests, such as loading metadata.')}
+            </span>
+          </span>
           <input
             type="number"
+            aria-label={t('Native request timeout (milliseconds)')}
+            aria-describedby="native-timeout-help"
             min={runtimeRequestTimeout.min}
             max={runtimeRequestTimeout.max}
             step="1"
@@ -124,9 +131,6 @@ export function RuntimeSettings({
             disabled={saving}
           />
         </label>
-        <p className="preference-help">
-          {t('1,000–300,000 ms. Applies to CLI requests, such as loading metadata.')}
-        </p>
       </section>
       <section className="preferences-section" aria-labelledby="runtime-paths-heading">
         <h3 id="runtime-paths-heading">{t('Runtime paths')}</h3>

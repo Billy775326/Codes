@@ -83,20 +83,22 @@ export function BackupRestoreSettings() {
     <>
       <section className="preferences-section" aria-labelledby="settings-backup-heading">
         <h3 id="settings-backup-heading">{t('Database backup')}</h3>
-        <p className="preference-help">
-          {t(
-            'Includes Codes project and conversation records, queues, and saved defaults. Back up Codex history, workspace files, uploads, and server configuration separately.',
-          )}
-        </p>
-        <button
-          className="settings-action"
-          type="button"
-          disabled={downloading}
-          onClick={() => void download()}
-        >
-          <Icon name="download" size={16} />
-          {t(downloading ? 'Preparing backup…' : 'Download database backup')}
-        </button>
+        <div className="settings-action-row">
+          <p className="preference-help">
+            {t(
+              'Includes Codes project and conversation records, queues, and saved defaults. Back up Codex history, workspace files, uploads, and server configuration separately.',
+            )}
+          </p>
+          <button
+            className="settings-action"
+            type="button"
+            disabled={downloading}
+            onClick={() => void download()}
+          >
+            <Icon name="download" size={16} />
+            {t(downloading ? 'Preparing backup…' : 'Download database backup')}
+          </button>
+        </div>
         {downloadError && <p role="alert">{t(downloadError)}</p>}
       </section>
       <section className="preferences-section" aria-labelledby="settings-restore-heading">
@@ -163,6 +165,7 @@ export function BackupRestoreSettings() {
                   <Icon name="upload" size={16} />
                   {t('Choose backup')}
                 </button>
+                {file && <span className="restore-filename">{file.name}</span>}
                 {file && (
                   <button
                     className="settings-action"
@@ -174,7 +177,6 @@ export function BackupRestoreSettings() {
                   </button>
                 )}
               </div>
-              {file && <p className="restore-filename">{file.name}</p>}
             </>
           )
         )}

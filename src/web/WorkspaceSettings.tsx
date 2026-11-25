@@ -92,11 +92,21 @@ export function WorkspaceSettings({
         }}
       >
         {snapshot && (
-          <label className={directory ? undefined : 'settings-compact-field'}>
-            {t(label)}
+          <label className={directory ? undefined : 'preference-row'}>
+            <span className="preference-description">
+              {t(label)}
+              <span className="preference-help" id={'settings-help-' + field}>
+                {t(
+                  directory
+                    ? 'Prefills Add project. Leave empty to use the server default.'
+                    : 'Applies to new sign-ins. Existing sessions keep their expiry.',
+                )}
+              </span>
+            </span>
             {directory ? (
               <input
                 value={value}
+                aria-label={t(label)}
                 placeholder={
                   fallbackDirectory ??
                   (snapshot.settings.defaultProjectDirectory ? undefined : activeDirectory)
@@ -113,6 +123,7 @@ export function WorkspaceSettings({
             ) : (
               <select
                 value={value}
+                aria-label={t(label)}
                 aria-describedby={'settings-help-' + field}
                 disabled={busy}
                 onChange={(event) => {
@@ -131,13 +142,6 @@ export function WorkspaceSettings({
             )}
           </label>
         )}
-        <p className="preference-help" id={'settings-help-' + field}>
-          {t(
-            directory
-              ? 'Prefills Add project. Leave empty to use the server default.'
-              : 'Applies to new sign-ins. Existing sessions keep their expiry.',
-          )}
-        </p>
         {!snapshot && !error && <p role="status">{t('Loading workspace settings…')}</p>}
         {error && <p role="alert">{t(error)}</p>}
         {saved && <p role="status">{t('Workspace settings saved.')}</p>}

@@ -90,7 +90,7 @@
 
 ### Changed
 
-- Reorganize Settings into consistently spaced groups with independently scrolling content. On phones, search and category selection share a row.
+- Align controls with their field descriptions and place related actions together. Rename the General, Chat defaults and Codex CLI categories.
 
 - Match the queued message editor to the composer. The field grows with the text and scrolls after reaching the height limit.
 

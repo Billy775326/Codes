@@ -25,10 +25,10 @@ const settingsSections = [
   {
     id: 'preferences',
     scope: 'browser',
-    label: 'Preferences',
+    label: 'General',
     icon: 'settings',
     keywords:
-      'appearance theme language font text size interaction shortcut review queue scroll files hidden 外观 主题 语言 字号 字体 交互 快捷键 复查 排队 滚动 文件 隐藏',
+      'preferences appearance theme language font text size interaction shortcut review queue scroll files hidden 偏好 外观 主题 语言 字号 字体 交互 快捷键 复查 排队 滚动 文件 隐藏',
   },
   {
     id: 'notifications',
@@ -41,9 +41,10 @@ const settingsSections = [
   {
     id: 'defaults',
     scope: 'workspace',
-    label: 'New conversation defaults',
+    label: 'Chat defaults',
     icon: 'newchat',
-    keywords: 'model reasoning permissions fast plan default 默认 模型 推理 权限 计划',
+    keywords:
+      'new conversation chat model reasoning permissions fast plan default 默认 模型 推理 权限 计划',
   },
   {
     id: 'network',
@@ -56,9 +57,9 @@ const settingsSections = [
   {
     id: 'runtime',
     scope: 'server',
-    label: 'Runtime',
+    label: 'Codex CLI',
     icon: 'terminal',
-    keywords: 'cli codex questions timeout executable 运行时 提问 超时 可执行文件',
+    keywords: 'runtime cli codex questions timeout executable 运行环境 运行时 提问 超时 可执行文件',
   },
   {
     id: 'maintenance',
@@ -85,7 +86,7 @@ const settingsSections = [
 ] as const;
 type SettingsSection = (typeof settingsSections)[number]['id'];
 const settingsScopes = [
-  { id: 'browser', label: 'This browser' },
+  { id: 'browser', label: 'Browser' },
   { id: 'workspace', label: 'Workspace' },
   { id: 'server', label: 'Server' },
 ] as const;
@@ -259,7 +260,7 @@ export function PreferencesDialog({
     }
   };
   const preferences = (
-    <div className="preferences-content" hidden={section !== 'preferences'}>
+    <div className="preferences-content">
       <section className="preferences-section" aria-labelledby="preferences-appearance">
         <h3 id="preferences-appearance">{t('Appearance')}</h3>
         <label className="preference-row">
@@ -358,10 +359,7 @@ export function PreferencesDialog({
           />
         </label>
       </section>
-      <section
-        className="preferences-section preferences-interaction"
-        aria-labelledby="preferences-interaction"
-      >
+      <section className="preferences-section" aria-labelledby="preferences-interaction">
         <h3 id="preferences-interaction">{t('Interaction')}</h3>
         <label className="preference-row">
           <span className="preference-description">{t('Follow-up delivery')}</span>
@@ -472,7 +470,7 @@ export function PreferencesDialog({
                 ref={searchInput}
                 type="search"
                 aria-label={t('Search settings')}
-                placeholder={t('Search')}
+                placeholder={t('Search settings')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -519,53 +517,55 @@ export function PreferencesDialog({
             </div>
           </div>
           <div className="settings-panels">
-            {preferences}
+            <div className="preferences-page" hidden={section !== 'preferences'}>
+              {preferences}
+            </div>
             {visited.defaults && (
               <div className="preferences-content" hidden={section !== 'defaults'}>
                 <section
                   className="preferences-section"
                   aria-labelledby="preferences-defaults"
                   role="region"
-                  aria-label={t('New conversation defaults')}
+                  aria-label={t('Chat defaults')}
                 >
-                  <h3 id="preferences-defaults">{t('New conversation defaults')}</h3>
+                  <h3 id="preferences-defaults">{t('Chat defaults')}</h3>
                   {defaults.settings && (
                     <>
-                      <label className="preference-row default-permissions">
-                        <span className="preference-description">
-                          {t('Permissions')}
-                          <span className="preference-help" id="default-permission-help">
-                            {t(
-                              permissionPresets.find(
-                                (preset) => preset.id === defaults.settings!.permission,
-                              )?.description ?? '',
-                            )}
-                          </span>
-                        </span>
-                        <select
-                          aria-label={t('Default permissions')}
-                          aria-describedby="default-permission-help"
-                          value={defaults.settings.permission}
-                          disabled={defaults.loading}
-                          onChange={(event) =>
-                            defaults.change({
-                              ...defaults.settings!,
-                              permission: event.target.value as Settings['permission'],
-                            })
-                          }
-                        >
-                          {permissionPresets.map((preset) => (
-                            <option
-                              key={preset.id}
-                              value={preset.id}
-                              disabled={preset.id === 'auto-review' && !defaults.autoReviewReady}
-                            >
-                              {t(preset.label)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
                       <div className="default-model-settings">
+                        <label className="preference-row">
+                          <span className="preference-description">
+                            {t('Permissions')}
+                            <span className="preference-help" id="default-permission-help">
+                              {t(
+                                permissionPresets.find(
+                                  (preset) => preset.id === defaults.settings!.permission,
+                                )?.description ?? '',
+                              )}
+                            </span>
+                          </span>
+                          <select
+                            aria-label={t('Default permissions')}
+                            aria-describedby="default-permission-help"
+                            value={defaults.settings.permission}
+                            disabled={defaults.loading}
+                            onChange={(event) =>
+                              defaults.change({
+                                ...defaults.settings!,
+                                permission: event.target.value as Settings['permission'],
+                              })
+                            }
+                          >
+                            {permissionPresets.map((preset) => (
+                              <option
+                                key={preset.id}
+                                value={preset.id}
+                                disabled={preset.id === 'auto-review' && !defaults.autoReviewReady}
+                              >
+                                {t(preset.label)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <ModelSettingsFields
                           defaults
                           settings={defaults.settings}
@@ -623,7 +623,7 @@ export function PreferencesDialog({
               </div>
             )}
             {visited.network && (
-              <div className="preferences-content" hidden={section !== 'network'}>
+              <div className="preferences-content settings-forms" hidden={section !== 'network'}>
                 <NetworkSettings onDraft={setNetworkDraft} />
                 <WorkspaceSettings field="sessionHours" onDraft={setLoginDraft} />
                 <AccessTokenSettings
@@ -634,12 +634,15 @@ export function PreferencesDialog({
               </div>
             )}
             {visited.runtime && (
-              <div className="preferences-content" hidden={section !== 'runtime'}>
+              <div className="preferences-page" hidden={section !== 'runtime'}>
                 <RuntimeSettings onDraft={setRuntimeDraft} />
               </div>
             )}
             {visited.instructions && (
-              <div className="preferences-content" hidden={section !== 'instructions'}>
+              <div
+                className="preferences-content settings-forms"
+                hidden={section !== 'instructions'}
+              >
                 <WorkspaceSettings
                   field="defaultProjectDirectory"
                   fallbackDirectory={system?.projectDirectoryFallback}

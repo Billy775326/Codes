@@ -38,23 +38,27 @@ export function MaintenanceSettings({
         <dt>{t('CLI version')}</dt>
         <dd>{system?.version || t('Unknown')}</dd>
       </dl>
-      <p className="preference-help">
-        {t('Pause new tasks and queue dispatch for up to five minutes. Running tasks can finish.')}
-      </p>
-      <button
-        className="settings-action"
-        type="button"
-        disabled={maintenanceBusy || !system}
-        onClick={() => {
-          setMaintenanceError('');
-          void changeMaintenance(maintenance ? 'cancel' : 'start', (error) =>
-            setMaintenanceError(message(error)),
-          );
-        }}
-      >
-        <Icon name={maintenance ? 'play' : 'pause'} size={16} />
-        {t(maintenance ? 'Cancel maintenance' : 'Prepare maintenance')}
-      </button>
+      <div className="settings-action-row">
+        <p className="preference-help">
+          {t(
+            'Pause new tasks and queue dispatch for up to five minutes. Running tasks can finish.',
+          )}
+        </p>
+        <button
+          className="settings-action"
+          type="button"
+          disabled={maintenanceBusy || !system}
+          onClick={() => {
+            setMaintenanceError('');
+            void changeMaintenance(maintenance ? 'cancel' : 'start', (error) =>
+              setMaintenanceError(message(error)),
+            );
+          }}
+        >
+          <Icon name={maintenance ? 'play' : 'pause'} size={16} />
+          {t(maintenance ? 'Cancel maintenance' : 'Prepare maintenance')}
+        </button>
+      </div>
       {maintenanceError && <p role="alert">{t(maintenanceError)}</p>}
     </section>
   );
