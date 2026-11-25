@@ -12,7 +12,7 @@ import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
 import { pauseQueueAfterTurn, settleQueuedOperations } from './queue-transitions.js';
 import { ProjectFiles } from './project-files.js';
-import type { ProjectInstructions } from '../shared/project-instructions.js';
+import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
 import { Images } from './images.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
@@ -286,6 +286,9 @@ export class Service {
   }
   saveProjectInstructions(id: string, update: ProjectInstructions) {
     return this.projectFiles.saveProjectInstructions(id, update);
+  }
+  globalInstructions(update?: GlobalInstructions) {
+    return this.projectFiles.globalInstructions(update);
   }
   async conversationContext(id: string) {
     const { saved } = await this.conversationOwner(id);

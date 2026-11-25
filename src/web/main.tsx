@@ -2803,7 +2803,6 @@ function App() {
             setLoginNotice(message);
             setAuth('login');
           }}
-          project={project}
           value={preferences}
           defaults={{
             settings: defaultSettings.value?.settings,

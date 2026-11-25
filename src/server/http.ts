@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { AppError, asError } from '../shared/errors.js';
 import { imageId, imageLimits, imageTypes } from '../shared/images.js';
 import { limits } from '../shared/types.js';
-import { projectInstructionsLimit } from '../shared/project-instructions.js';
+import { codexInstructionFiles, projectInstructionsLimit } from '../shared/project-instructions.js';
 import { Service } from './service.js';
 import { webEntrySignature } from '../shared/web-build.js';
 import {
@@ -34,6 +34,10 @@ import { diagnosticMinutes } from '../shared/workspace-settings.js';
 import { RestoreStaging } from './restore-staging.js';
 
 const sha256 = /^[a-f0-9]{64}$/;
+const instructionsUpdate = z.object({
+  revision: z.string().regex(sha256).nullable(),
+  text: z.string().max(projectInstructionsLimit),
+});
 const fileAttachment = z
   .object({
     kind: z.literal('file').optional(),
@@ -334,6 +338,16 @@ export async function application(
           return json(response, await service.modelSettings.permissions());
         if (url.pathname === '/api/modes' && method === 'GET')
           return json(response, await service.modelSettings.modes());
+        if (url.pathname === '/api/settings/codex-instructions') {
+          if (method === 'GET') return json(response, await service.globalInstructions());
+          if (method === 'PUT') {
+            const update = instructionsUpdate
+              .extend({ filename: z.enum(codexInstructionFiles) })
+              .strict()
+              .parse(await body(request));
+            return json(response, await service.globalInstructions(update));
+          }
+        }
         if (url.pathname === '/api/settings/workspace') {
           if (method === 'GET') return json(response, service.workspaceSettings.snapshot());
           if (method === 'PATCH')
@@ -395,13 +409,7 @@ export async function application(
             if (method === 'GET')
               return json(response, await service.projectInstructions(projectId));
             if (method === 'PUT') {
-              const update = z
-                .object({
-                  revision: z.string().regex(sha256).nullable(),
-                  text: z.string().max(projectInstructionsLimit),
-                })
-                .strict()
-                .parse(await body(request));
+              const update = instructionsUpdate.strict().parse(await body(request));
               return json(response, await service.saveProjectInstructions(projectId, update));
             }
           }

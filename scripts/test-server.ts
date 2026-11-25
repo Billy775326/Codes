@@ -17,6 +17,8 @@ await writeFile(
   join(project, 'example.ts'),
   'export function hello(name: string) {\n  return `Hello, ${name}`;\n}\n',
 );
+const codexHome = join(directory, 'codex-home');
+await mkdir(codexHome, { mode: 0o700 });
 const data = join(directory, 'data');
 await mkdir(data);
 await writeFile(join(data, 'access-token'), 'test-only-browser-token-not-a-real-secret', {
@@ -29,6 +31,7 @@ const child = spawn(process.execPath, ['dist/server/main.js'], {
   stdio: 'inherit',
   env: {
     ...env,
+    CODEX_HOME: codexHome,
     CODES_RUNTIME: 'mock',
     CODES_TEST_MODE: '1',
     CODES_DATA_DIR: data,

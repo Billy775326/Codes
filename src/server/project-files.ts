@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
-import { realpath, readFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, realpath, readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, basename, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { AppError, record } from '../shared/errors.js';
@@ -12,9 +12,13 @@ import {
 } from '../shared/types.js';
 import { projectImageType } from '../shared/images.js';
 import { hasHiddenPathSegment } from '../shared/project-files.js';
-import type { ProjectInstructions } from '../shared/project-instructions.js';
+import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
 import { openImagePreview } from './images.js';
-import { projectInstructions } from './project-instructions.js';
+import {
+  globalInstructions,
+  instructionsChanged,
+  projectInstructions,
+} from './project-instructions.js';
 import type { Store } from './store.js';
 
 function decodeFileText(bytes: Buffer) {
@@ -34,15 +38,17 @@ function isWithinDirectory(directory: string, path: string) {
 
 export class ProjectFiles {
   private readonly privateFileRoots: string[];
-  private readonly savingInstructions = new Set<string>();
+  private readonly codexHome = resolve(process.env.CODEX_HOME || resolve(homedir(), '.codex'));
   constructor(
     private readonly store: Store,
     private readonly project: (id: string) => Project,
     private readonly requireProject: (id: string) => Promise<Project>,
   ) {
-    const codexHome = resolve(process.env.CODEX_HOME ?? resolve(homedir(), '.codex'));
-    this.privateFileRoots = [realpathSync(store.directory)];
-    if (existsSync(codexHome)) this.privateFileRoots.push(realpathSync(codexHome));
+    this.privateFileRoots = [realpathSync(store.directory), this.codexHome];
+    if (existsSync(this.codexHome)) {
+      const root = realpathSync(this.codexHome);
+      if (root !== this.codexHome) this.privateFileRoots.push(root);
+    }
   }
   async projectInstructions(id: string) {
     return projectInstructions((await this.requireProject(id)).path);
@@ -51,14 +57,32 @@ export class ProjectFiles {
     const project = await this.requireProject(id);
     if (this.project(id).archived)
       throw new AppError('PROJECT_ARCHIVED', 'Restore this project before editing AGENTS.md.', 409);
-    if (this.savingInstructions.has(project.path))
-      throw new AppError('INSTRUCTIONS_BUSY', 'Another save is in progress. Try again.', 409);
-    this.savingInstructions.add(project.path);
+    return projectInstructions(project.path, update);
+  }
+  async globalInstructions(update?: GlobalInstructions): Promise<GlobalInstructions> {
+    let root: string;
     try {
-      return await projectInstructions(project.path, update);
-    } finally {
-      this.savingInstructions.delete(project.path);
+      if (update?.filename === 'AGENTS.md' && update.revision === null)
+        await mkdir(this.codexHome, { recursive: true, mode: 0o700 });
+      root = await realpath(this.codexHome);
+    } catch (error) {
+      if (record(error) && error.code === 'ENOENT') {
+        if (update) throw instructionsChanged();
+        return { filename: 'AGENTS.md', text: '', revision: null };
+      }
+      if (
+        record(error) &&
+        ['ENOTDIR', 'ELOOP', 'EEXIST', 'EACCES', 'EPERM', 'EROFS'].includes(error.code)
+      )
+        throw new AppError(
+          'CODEX_HOME_UNAVAILABLE',
+          'The Codex configuration directory is unavailable.',
+          409,
+        );
+      throw error;
     }
+    if (!this.privateFileRoots.includes(root)) this.privateFileRoots.push(root);
+    return globalInstructions(root, update);
   }
   uploadFile(projectId: string, bytes: Buffer, name: string): UploadedFileAttachment {
     if (!bytes.length || bytes.length > limits.uploadedFile)

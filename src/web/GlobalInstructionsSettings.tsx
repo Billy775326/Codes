@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ProjectInstructions } from '../shared/project-instructions';
+import type { GlobalInstructions } from '../shared/project-instructions';
 import { ApiError, message, request } from './api';
 import { useInterfaceLanguage } from './interface-language';
 
-export function ProjectInstructionsSettings({
-  project,
+const path = '/settings/codex-instructions';
+
+export function GlobalInstructionsSettings({
   onDraft,
 }: {
-  project: { id: string; name: string };
   onDraft: (value: { changed: boolean; busy: boolean }) => void;
 }) {
   const { t } = useInterfaceLanguage();
-  const path = `/projects/${encodeURIComponent(project.id)}/instructions`;
-  const [snapshot, setSnapshot] = useState<ProjectInstructions>();
+  const [snapshot, setSnapshot] = useState<GlobalInstructions>();
   const [draft, setDraft] = useState('');
   const [reload, setReload] = useState(0);
   const [error, setError] = useState('');
@@ -23,7 +22,7 @@ export function ProjectInstructionsSettings({
   const changed = !!snapshot && draft !== snapshot.text;
   useEffect(() => {
     const controller = new AbortController();
-    void request<ProjectInstructions>(path, {}, controller.signal).then(
+    void request<GlobalInstructions>(path, {}, controller.signal).then(
       (value) => {
         if (controller.signal.aborted) return;
         setSnapshot(value);
@@ -34,7 +33,7 @@ export function ProjectInstructionsSettings({
       },
     );
     return () => controller.abort();
-  }, [path, reload]);
+  }, [reload]);
   useEffect(() => onDraft({ changed, busy: saving }), [changed, saving, onDraft]);
 
   const loadAgain = () => {
@@ -50,9 +49,13 @@ export function ProjectInstructionsSettings({
     setError('');
     setSaved(false);
     try {
-      const next = await request<ProjectInstructions>(path, {
+      const next = await request<GlobalInstructions>(path, {
         method: 'PUT',
-        body: JSON.stringify({ revision: snapshot.revision, text: draft }),
+        body: JSON.stringify({
+          filename: snapshot.filename,
+          revision: snapshot.revision,
+          text: draft,
+        }),
       });
       setSnapshot(next);
       setDraft(next.text);
@@ -72,30 +75,42 @@ export function ProjectInstructionsSettings({
 
   return (
     <form
-      className="preferences-section project-instructions"
+      className="preferences-section instructions-editor"
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
-      <h3>{project.name} · AGENTS.md</h3>
+      <h3>{t('Codex global instructions')}</h3>
+      <p className="preference-help" id="codex-global-instructions-help">
+        {t('Applies to new Codex sessions that use this configuration directory.')}
+        {snapshot?.filename === 'AGENTS.override.md' && (
+          <> {t('Clearing this override activates AGENTS.md.')}</>
+        )}
+      </p>
       {snapshot ? (
-        <textarea
-          ref={editor}
-          aria-label={t('AGENTS.md contents')}
-          spellCheck={false}
-          value={draft}
-          disabled={saving}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            setSaved(false);
-          }}
-        />
+        <>
+          <p className="preference-help">
+            <code>{snapshot.filename}</code>
+          </p>
+          <textarea
+            ref={editor}
+            aria-label={t('Global instructions contents')}
+            aria-describedby="codex-global-instructions-help"
+            spellCheck={false}
+            value={draft}
+            disabled={saving}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setSaved(false);
+            }}
+          />
+        </>
       ) : (
-        !error && <p role="status">{t('Loading AGENTS.md…')}</p>
+        !error && <p role="status">{t('Loading global instructions…')}</p>
       )}
       {error && <p role="alert">{t(error)}</p>}
-      {saved && <p role="status">{t('AGENTS.md saved.')}</p>}
+      {saved && <p role="status">{t('Global instructions saved.')}</p>}
       <div className="network-actions">
         {conflict && (
           <button type="button" onClick={loadAgain}>
@@ -117,8 +132,8 @@ export function ProjectInstructionsSettings({
               saving
                 ? 'Saving…'
                 : snapshot.revision === null
-                  ? 'Create AGENTS.md'
-                  : 'Save AGENTS.md',
+                  ? 'Create global instructions'
+                  : 'Save global instructions',
             )}
           </button>
         )}

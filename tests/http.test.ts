@@ -208,6 +208,56 @@ it('edits only the authenticated project instructions and rejects stale revision
   expect((await save({ revision: null, text: 'Replace symlink' })).status).toBe(403);
   expect(await readFile(outside, 'utf8')).toBe('Keep this file');
 });
+it('edits the active global instruction file in the server Codex home', async () => {
+  const home = join(directory, 'codex-home');
+  const url = origin + '/api/settings/codex-instructions';
+  const project = await service.addProject(directory);
+  const projectInstructions = join(directory, 'AGENTS.md');
+  await writeFile(projectInstructions, '# Project instructions');
+  const base = join(home, 'AGENTS.md');
+  const override = join(home, 'AGENTS.override.md');
+  const read = () => fetch(url, { headers: { cookie } });
+  const save = (value: unknown, session = cookie, requestOrigin = origin) =>
+    fetch(url, {
+      method: 'PUT',
+      headers: { origin: requestOrigin, cookie: session, 'content-type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+
+  expect((await fetch(url)).status).toBe(401);
+  const initial = { filename: 'AGENTS.md', revision: null, text: '' };
+  expect(await (await read()).json()).toEqual(initial);
+  expect((await save(initial, '')).status).toBe(401);
+  expect((await save(initial, cookie, 'https://example.test')).status).toBe(403);
+  expect((await save({ ...initial, filename: '../AGENTS.md' })).status).toBe(400);
+  const written = await save({ ...initial, text: '# Global instructions' });
+  expect(written.status).toBe(200);
+  const standard = await written.json();
+  expect(await readFile(base, 'utf8')).toBe('# Global instructions');
+  expect(await readFile(projectInstructions, 'utf8')).toBe('# Project instructions');
+  await expect(service.file(project.id, 'codex-home/AGENTS.md', true)).rejects.toMatchObject({
+    code: 'PATH_DENIED',
+  });
+
+  await writeFile(override, standard.text);
+  const overriding = await (await read()).json();
+  expect(overriding).toEqual({ ...standard, filename: 'AGENTS.override.md' });
+  expect((await save({ ...standard, text: 'Stale target' })).status).toBe(409);
+  const editedOverride = await save({ ...overriding, text: '# Global override' });
+  expect(editedOverride.status).toBe(200);
+  expect(await readFile(override, 'utf8')).toBe('# Global override');
+  expect(await readFile(base, 'utf8')).toBe('# Global instructions');
+
+  const cleared = await save({ ...(await editedOverride.json()), text: '' });
+  expect(await cleared.json()).toEqual(standard);
+  expect(await readFile(override, 'utf8')).toBe('');
+  expect(await (await read()).json()).toEqual(standard);
+  await rm(base);
+  await symlink(projectInstructions, base);
+  expect((await read()).status).toBe(403);
+  expect((await save({ ...standard, text: 'Would replace symlink' })).status).toBe(403);
+  expect(await readFile(projectInstructions, 'utf8')).toBe('# Project instructions');
+});
 it('authenticates settings writes, applies defaults and prevents stale conversation updates', async () => {
   const project = await service.addProject(directory);
   const existing = await service.create(project.id, { permission: 'read-only' });
@@ -286,6 +336,7 @@ it('rejects malformed settings and settings changes on archived conversations', 
 });
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'codes-http-'));
+  vi.stubEnv('CODEX_HOME', join(directory, 'codex-home'));
   service = new Service(
     new Store(directory),
     new Driver('mock', { stateFile: join(directory, 'history.json') }),
@@ -314,6 +365,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await app?.close();
+  vi.unstubAllEnvs();
   await rm(directory, { recursive: true, force: true });
 });
 it('protects APIs with an HttpOnly session rather than a URL token', async () => {

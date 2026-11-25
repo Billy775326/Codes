@@ -12,7 +12,7 @@ import { ModelSettingsFields } from './ComposerControls';
 import { InteractionDialog } from './InteractionDialog';
 import { NetworkSettings } from './NetworkSettings';
 import { RuntimeSettings } from './RuntimeSettings';
-import { ProjectInstructionsSettings } from './ProjectInstructionsSettings';
+import { GlobalInstructionsSettings } from './GlobalInstructionsSettings';
 import { Icon, IconButton } from './primitives';
 import { NotificationSettings } from './NotificationSettings';
 import { MaintenanceSettings } from './MaintenanceSettings';
@@ -81,7 +81,7 @@ const settingsSections = [
     label: 'Projects',
     icon: 'folder',
     keywords:
-      'project default directory path AGENTS.md instructions rules 项目 目录 路径 默认 指令 规则',
+      'project default directory path AGENTS.md Codex global instructions rules 项目 目录 路径 默认 全局 指令 规则',
   },
 ] as const;
 type SettingsSection = (typeof settingsSections)[number]['id'];
@@ -144,7 +144,6 @@ function ResetSettings({
   );
 }
 export function PreferencesDialog({
-  project,
   value,
   change,
   changeNotifications,
@@ -157,7 +156,6 @@ export function PreferencesDialog({
   refreshSystem,
   signInAfterTokenChange,
 }: {
-  project?: { id: string; name: string };
   value: Preferences;
   change: (value: Preferences) => void;
   changeNotifications: (patch: Partial<NotificationPreferences>) => void;
@@ -187,7 +185,6 @@ export function PreferencesDialog({
   };
 }) {
   const { t } = useInterfaceLanguage();
-  const targetProject = useRef(project).current;
   const [section, setSection] = useState<SettingsSection>('preferences');
   const [visited, setVisited] = useState({
     preferences: true,
@@ -651,14 +648,7 @@ export function PreferencesDialog({
                   onDraft={setProjectDefaultDraft}
                   onSaved={refreshSystem}
                 />
-                {targetProject ? (
-                  <ProjectInstructionsSettings
-                    project={targetProject}
-                    onDraft={setInstructionsDraft}
-                  />
-                ) : (
-                  <p className="preference-help">{t('Select a project to edit AGENTS.md.')}</p>
-                )}
+                <GlobalInstructionsSettings onDraft={setInstructionsDraft} />
               </div>
             )}
           </div>

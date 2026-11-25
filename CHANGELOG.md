@@ -29,8 +29,6 @@
 - Switch API-compatible web assets independently of the running service and restore the previous entry if needed.
 - Discover Codex CLI compatibility by the installed App Server protocol. Show the actual CLI version and gate optional native features.
 
-- Edit the current project's root AGENTS.md in Settings. Saving checks for edits made on disk since the file was opened.
-
 - Resize desktop navigation and project panels by dragging their inner edges or using the arrow keys while the divider has focus. Each width is saved in the browser.
 
 - Reload Codes from the workspace header. Restore the selected conversation and saved draft after reload.
@@ -91,6 +89,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Edit the active Codex global instructions from Settings → Projects. Changes apply to new Codex sessions using that configuration directory.
 
 - Align controls with their field descriptions and place related actions together. Rename the General, Chat defaults and Codex CLI categories.
 

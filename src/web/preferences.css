@@ -506,7 +506,7 @@
 .app[data-chat-font-size] .prose h3 {
   font-size: 1em;
 }
-.project-instructions textarea {
+.instructions-editor textarea {
   display: block;
   width: 100%;
   min-height: min(220px, 36dvh);
@@ -519,7 +519,7 @@
   caret-color: var(--fg);
   font: var(--code-font-size) / 1.6 var(--font-code);
 }
-.project-instructions textarea:focus-visible {
+.instructions-editor textarea:focus-visible {
   outline-color: var(--link);
 }
 .app .preferences-dialog .network-settings input::placeholder {
@@ -617,7 +617,7 @@
   .app .network-settings :is(input, textarea) {
     font-size: 16px;
   }
-  .project-instructions textarea {
+  .instructions-editor textarea {
     font-size: max(16px, var(--code-font-size, 14px));
   }
   .preferences-preview {

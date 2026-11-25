@@ -15,19 +15,26 @@ async function fixture(page: Page, text = 'Settings dialog fixture') {
       page.locator('.turn-status').getByText('Completed', { exact: true }),
     ).toBeVisible();
 }
-test('settings save the current project AGENTS.md and protect a draft after an external edit', async ({
-  page,
-}) => {
-  await fixture(page);
+test('settings edit global Codex instructions without a selected project', async ({ page }) => {
+  await page.route('**/api/projects', (route) => route.fulfill({ json: [] }));
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await expect(page.locator('.project-card')).toHaveCount(0);
   const projects = await (await page.request.get('/api/projects')).json();
   const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
-  const path = join(project.path, 'AGENTS.md');
+  const projectInstructions = join(project.path, 'AGENTS.md');
+  const path = join(project.path, '..', 'codex-home', 'AGENTS.md');
+  await writeFile(projectInstructions, '# Project only\n', { flag: 'wx' });
   await writeFile(path, '# Original fixture\n', { flag: 'wx' });
   try {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
     const tab = page.getByRole('button', { name: 'Projects', exact: true });
     await tab.click();
-    const editor = page.getByLabel('AGENTS.md contents', { exact: true });
+    await expect(
+      page.getByRole('heading', { name: 'Codex global instructions', exact: true }),
+    ).toBeVisible();
+    const editor = page.getByLabel('Global instructions contents', { exact: true });
     await expect(editor).toHaveValue('# Original fixture\n');
     await expect(editor).toHaveCSS('background-color', 'rgb(42, 46, 52)');
     await expect(editor).toHaveCSS('color', 'rgb(225, 228, 232)');
@@ -37,12 +44,13 @@ test('settings save the current project AGENTS.md and protect a draft after an e
     await tab.click();
     await expect(editor).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await expect(editor).toHaveCSS('color', 'rgb(37, 37, 38)');
-    await page.getByRole('button', { name: 'Save AGENTS.md', exact: true }).click();
-    await expect(page.getByText('AGENTS.md saved.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Save global instructions', exact: true }).click();
+    await expect(page.getByText('Global instructions saved.', { exact: true })).toBeVisible();
     expect(await readFile(path, 'utf8')).toBe('# Saved through settings\n');
+    expect(await readFile(projectInstructions, 'utf8')).toBe('# Project only\n');
     await editor.fill('# My unsaved change');
     await writeFile(path, '# External change');
-    await page.getByRole('button', { name: 'Save AGENTS.md', exact: true }).click();
+    await page.getByRole('button', { name: 'Save global instructions', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveText(
       'AGENTS.md changed on disk. Reload before saving.',
     );
@@ -54,7 +62,7 @@ test('settings save the current project AGENTS.md and protect a draft after an e
     await page.getByRole('button', { name: 'Discard draft and reload file' }).click();
     await expect(editor).toHaveValue('# External change');
   } finally {
-    await rm(path);
+    await Promise.all([rm(path), rm(projectInstructions)]);
   }
 });
 test('edits network settings and Cloudflare Access on a narrow screen', async ({
