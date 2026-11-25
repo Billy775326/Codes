@@ -200,6 +200,8 @@
 
 ### Fixed
 
+- Refresh the pinned turn message after a confirmed follow-up joins the same turn, including its expanded content and jump target.
+
 - Restore the composer permission choices and model, reasoning, and Fast controls. Changes save through Codex with a revision check and refresh the effective project values. Use dropdown presets for native fields in Settings.
 
 - Allow messages to start when Codex returns unchanged configuration fields in a different order. Actual configuration changes still stop dispatch for review.

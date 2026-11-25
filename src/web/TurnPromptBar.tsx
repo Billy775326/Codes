@@ -8,6 +8,7 @@ import './turn-prompt-bar.css';
 export interface TurnPrompt {
   text: string;
   original?: Message;
+  canLoadEarlier?: boolean;
 }
 
 export function TurnPromptBar({
@@ -114,7 +115,8 @@ export function TurnPromptBar({
 
   const prompt = pinned ? prompts.get(pinned) : undefined;
   const locate = async () => {
-    if (!pinned || focusOriginal(pinned) || !loadEarlier) return;
+    if (!pinned || focusOriginal(pinned) || !loadEarlier || prompt?.canLoadEarlier === false)
+      return;
     locateRequest.current = pinned;
     setLocating(true);
     try {
@@ -156,7 +158,7 @@ export function TurnPromptBar({
               )}
               <Icon name="chevron" size={13} />
             </button>
-            {(prompt.original || loadEarlier) && (
+            {(prompt.original || (loadEarlier && prompt.canLoadEarlier !== false)) && (
               <IconButton
                 className="turn-prompt-jump"
                 icon="latest"

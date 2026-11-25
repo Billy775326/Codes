@@ -221,6 +221,7 @@ export function Transcript({
   viewport,
   projectId,
   pending,
+  steering,
   loadEarlier,
   render,
 }: {
@@ -231,6 +232,7 @@ export function Transcript({
   viewport: RefObject<HTMLDivElement | null>;
   projectId: string;
   pending?: Thread['pending'];
+  steering?: Thread['steering'];
   loadEarlier?: () => Promise<void>;
   render: RenderMessage;
 }) {
@@ -242,15 +244,23 @@ export function Transcript({
     const result = new Map<string, TurnPrompt>();
     for (const turn of entries) {
       const receipt = pending?.kind === 'send' && pending.turnId === turn.id ? pending : undefined;
-      const original = receipt
-        ? turn.users.find((message) => message.clientId === receipt.id)
-        : turn.prompt;
-      if (original) result.set(turn.id, { text: original.text, original });
+      const accepted = steering?.findLast(
+        (entry) =>
+          entry.turnId === turn.id &&
+          (entry.state === 'acknowledged' || entry.state === 'completed') &&
+          !entry.questionReply &&
+          !parseQuestionReplies(entry.text),
+      );
+      const original = accepted
+        ? turn.users.findLast((message) => message.clientId === accepted.id)
+        : turn.users.findLast((message) => !parseQuestionReplies(message.text));
+      if (accepted) result.set(turn.id, { text: accepted.text, original, canLoadEarlier: false });
+      else if (original) result.set(turn.id, { text: original.text, original });
       else if (receipt && !parseQuestionReplies(receipt.text ?? ''))
         result.set(turn.id, { text: receipt.text ?? '' });
     }
     return result;
-  }, [entries, pending]);
+  }, [entries, pending, steering]);
   const currentTurn = result?.turn && entries.find((turn) => turn.id === result.turn?.id);
   const currentInReply = !!(currentTurn?.replies.length && result?.turn?.usage);
   return (

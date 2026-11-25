@@ -157,6 +157,96 @@ test('a long active turn keeps the original prompt in history without recreating
   await expect(bubbles).toHaveCount(0);
 });
 
+test('the pinned message follows confirmed same-turn input and jumps to that message', async ({
+  page,
+}) => {
+  const base = await fixture(page);
+  const turnId = 'follow-up-pinned-turn';
+  const first: Message = {
+    id: 'first-turn-user',
+    clientId: 'first-send-operation',
+    turnId,
+    kind: 'user',
+    text: 'Original task instructions',
+  };
+  const later: Message = {
+    id: 'confirmed-follow-up',
+    clientId: 'steer-operation',
+    turnId,
+    kind: 'user',
+    text: 'Confirmed new instructions in the same turn',
+  };
+  const progress: Message = {
+    id: 'long-work',
+    turnId,
+    kind: 'assistant',
+    phase: 'commentary',
+    text: Array(60).fill('Task progress continues.').join('\n\n'),
+  };
+  base.thread.state = 'running';
+  base.thread.turnId = turnId;
+  base.thread.turns = [{ id: turnId, status: 'inProgress', startedAtMs: Date.now() }];
+  base.thread.pending = {
+    id: first.clientId!,
+    turnId,
+    kind: 'send',
+    state: 'acknowledged',
+    text: first.text,
+  };
+  base.thread.messages = [first, progress];
+  const timeline = page.getByRole('region', { name: 'Conversation timeline', exact: true });
+  const end = () => timeline.evaluate((node) => (node.scrollTop = node.scrollHeight));
+  const bar = page.getByRole('button', { name: /^Turn message/ });
+  await reconnectUpdates(page);
+  await end();
+  await expect(bar).toContainText(first.text);
+  base.thread.steering = [
+    {
+      id: 'unconfirmed-steer',
+      threadId: base.thread.id,
+      kind: 'steer',
+      turnId,
+      state: 'unknown',
+      text: 'Unconfirmed instructions',
+    },
+  ];
+  await reconnectUpdates(page);
+  await end();
+  await expect(bar).toContainText(first.text);
+  base.thread.steering = [
+    {
+      id: later.clientId!,
+      threadId: base.thread.id,
+      kind: 'steer',
+      turnId,
+      state: 'acknowledged',
+      text: later.text,
+    },
+  ];
+  await reconnectUpdates(page);
+  await end();
+  await expect(bar).toContainText(later.text);
+  await expect(bar).not.toContainText(first.text);
+  await expect(
+    page.getByRole('button', { name: 'Go to original message', exact: true }),
+  ).toHaveCount(0);
+  base.thread.steering = [];
+  base.thread.messages = [first, progress, later, { ...progress, id: 'after-follow-up' }];
+  await reconnectUpdates(page);
+  await end();
+  await expect(bar).toContainText(later.text);
+  await expect(bar).not.toContainText(first.text);
+  await bar.click();
+  const detail = timeline.locator('.turn-prompt-detail');
+  await expect(detail).toContainText(later.text);
+  await expect(detail).not.toContainText(first.text);
+  await page.getByRole('button', { name: 'Go to original message', exact: true }).click();
+  await expect(page.getByTestId('message-user').filter({ hasText: later.text })).toBeFocused();
+  await page.reload();
+  await end();
+  await expect(bar).toContainText(later.text);
+});
+
 test('an answered question appears only when its original turn is loaded', async ({ page }) => {
   await fixture(page, [
     {

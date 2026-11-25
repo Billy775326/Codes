@@ -2135,6 +2135,7 @@ function App() {
                     viewport={transcript}
                     projectId={preview?.projectId ?? contextProjectId}
                     pending={thread?.pending}
+                    steering={thread?.steering}
                     loadEarlier={
                       (history ? history.olderCursor : thread?.olderCursor)
                         ? () => loadHistory('older')
