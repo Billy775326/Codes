@@ -15,6 +15,34 @@ async function navigation(page: Page) {
   if (!(await page.locator('.project-card-name[aria-current="true"]').isVisible()))
     await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
 }
+async function searchForUnmatchedProject(page: Page, projectId: string, term: string) {
+  const search = page.getByLabel('Search projects and chats', { exact: true });
+  const unmatchedProject = projectCard(page, projectId);
+  const unmatchedResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/projects/${projectId}/conversations` &&
+      url.searchParams.get('search') === term
+    );
+  });
+  await search.fill(term);
+  const response = await unmatchedResponse;
+  expect(response.ok()).toBe(true);
+  const result = await response.json();
+  expect(result.data).toHaveLength(0);
+  await expect(unmatchedProject).toHaveAttribute('aria-busy', 'false');
+  await expect(unmatchedProject.locator('.thread-link')).toHaveCount(0);
+  const nextPage = unmatchedProject.getByRole('button', {
+    name: 'Next conversation page',
+    exact: true,
+  });
+  if (result.nextCursor) {
+    await expect(
+      unmatchedProject.getByText('No matches on this page', { exact: true }),
+    ).toBeVisible();
+    await expect(nextPage).toBeEnabled();
+  } else await expect(unmatchedProject).toBeHidden();
+}
 async function fixture(page: Page) {
   const projects = await (await page.request.get('/api/projects')).json();
   const a = projects.find((project: { name: string }) => project.name === 'sample-project');
@@ -369,9 +397,7 @@ test('project cards follow conversation recency across live updates and search',
       ids,
     );
   await expect.poll(order).toEqual([b.id, a.id, empty.id]);
-  const search = page.getByLabel('Search projects and chats', { exact: true });
-  await search.fill(second.title);
-  await expect(projectCard(page, a.id)).toBeHidden();
+  await searchForUnmatchedProject(page, a.id, second.title);
   await expect.poll(order).toEqual([b.id, a.id, empty.id]);
   const sent = await page.request.post('/api/threads/' + first.id + '/send', {
     data: {
@@ -568,29 +594,8 @@ test('project management and conversation links survive reload and keep the veri
   expect(requests).not.toContain(listPath);
 
   const search = page.getByLabel('Search projects and chats');
-  const unmatchedProject = projectCard(page, a.id);
-  const unmatchedRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === `/api/projects/${a.id}/conversations` &&
-      url.searchParams.get('search') === renamed.toUpperCase()
-    );
-  });
-  await search.fill(renamed.toUpperCase());
+  await searchForUnmatchedProject(page, a.id, renamed.toUpperCase());
   await expect(card.getByRole('button', { name: second.title, exact: true })).toBeVisible();
-  await unmatchedRequest;
-  await expect(unmatchedProject).toHaveAttribute('aria-busy', 'false');
-  await expect(unmatchedProject.locator('.thread-link')).toHaveCount(0);
-  const nextPage = unmatchedProject.getByRole('button', {
-    name: 'Next conversation page',
-    exact: true,
-  });
-  if (await nextPage.count()) {
-    await expect(
-      unmatchedProject.getByText('No matches on this page', { exact: true }),
-    ).toBeVisible();
-    await expect(nextPage).toBeEnabled();
-  } else await expect(unmatchedProject).toBeHidden();
   await search.fill('no match ' + randomUUID());
   await expect(card).toBeHidden();
   await page.getByRole('button', { name: 'Clear search' }).click();
