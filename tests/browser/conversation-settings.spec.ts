@@ -40,17 +40,19 @@ test('native settings save without dispatch, refresh across clients and reject s
       );
       await expect(client.getByRole('button', { name: 'Save Codex configuration' })).toBeDisabled();
     }
-    await page.getByLabel('Reasoning effort', { exact: true }).fill('high');
+    await page.getByRole('textbox', { name: 'Reasoning effort', exact: true }).fill('high');
     await page.getByRole('button', { name: 'Save Codex configuration' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Effective project values' }),
     ).toBeVisible();
     await expect(page.getByTestId('message-user')).toHaveCount(0);
-    await second.getByLabel('Reasoning effort', { exact: true }).fill('low');
+    await second.getByRole('textbox', { name: 'Reasoning effort', exact: true }).fill('low');
     await second.getByRole('button', { name: 'Save Codex configuration' }).click();
     await expect(second.getByRole('alert')).toContainText('Codex configuration changed');
     await second.getByRole('button', { name: 'Reload settings' }).click();
-    await expect(second.getByLabel('Reasoning effort', { exact: true })).toHaveValue('high');
+    await expect(
+      second.getByRole('textbox', { name: 'Reasoning effort', exact: true }),
+    ).toHaveValue('high');
     await second.keyboard.press('Escape');
     await expect(
       second.getByRole('button', { name: 'Model and reasoning', exact: true }),
