@@ -236,7 +236,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
 }) {
   const components = useMemo<Components>(
     () => ({
-      pre: assistant && !streaming ? PreviewCodeBlock : undefined,
+      ...(assistant && !streaming ? { pre: PreviewCodeBlock } : {}),
       img: ({ node: _node, src, alt, ...props }) => {
         // A partial image target can change as more of the message arrives.
         if (streaming) return alt ? <span>{alt}</span> : null;

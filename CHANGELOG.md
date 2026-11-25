@@ -198,6 +198,8 @@
 
 ### Fixed
 
+- Prevent a blank workspace when a user message or streaming reply contains a code block, including when reopening an archived conversation or restoring it after a refresh.
+
 - Match the archive sidebar to the project cards, with collapsible lists, direct restore controls, and a filter for active and archived chats inside archived projects.
 
 - Align the composer’s model, reasoning and task mode controls and place the speed reset below the Fast switch.

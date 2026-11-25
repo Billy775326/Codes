@@ -34,10 +34,15 @@ async function rename(page: Page, old: string, title: string) {
 test('rename, search, draft preservation, archive, reload, and restoration keep native history', async ({
   page,
 }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
   await login(page);
-  const first = 'Conversation fixture ' + Date.now();
+  // Keep the code block beyond the simulator's 64-character conversation title.
+  const first = ('Conversation fixture ' + Date.now()).padEnd(64, '.');
   const renamed = 'Renamed fixture ' + Date.now();
-  await create(page, first);
+  const code = 'const archived = true;';
+  await create(page, first + '\n\n```ts\n' + code + '\n```');
+  await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   await page.getByLabel('Message Codex').fill('Keep this unsent draft');
   await create(page, 'Second fixture ' + Date.now());
   await page.getByRole('button', { name: first, exact: true }).click();
@@ -65,17 +70,22 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await expect(page.getByLabel('Message Codex')).toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
+  await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
+  await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   const archives = page.getByRole('button', { name: 'Archived projects and chats', exact: true });
   await archives.click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
+  await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   await page.getByRole('button', { name: 'Restore ' + renamed, exact: true }).click();
   await expect(page.getByLabel('Message Codex')).not.toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
   await archives.click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
+  await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
+  expect(errors).toEqual([]);
   await page.screenshot({
     path: 'test-results/conversation-management-desktop.png',
     fullPage: true,
