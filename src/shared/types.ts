@@ -218,7 +218,6 @@ export interface System {
   state: string;
   version: string;
   error?: string;
-  codeQuestions?: boolean;
   capabilities?: CodexCapabilities;
 }
 export interface Envelope {

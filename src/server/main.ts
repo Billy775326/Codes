@@ -33,7 +33,6 @@ const service = new Service(
   new Driver(mode, {
     binary: process.env.CODES_CODEX_BINARY,
     stateFile: join(directory, 'mock-history.json'),
-    codeQuestions: runtime.active.codeQuestions,
     timeoutMs: runtime.active.requestTimeoutMs,
   }),
   configuredProjectPath ?? resolve(import.meta.dirname, '../..'),

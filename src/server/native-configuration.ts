@@ -20,6 +20,7 @@ const publicSources = new Set([
   ...Object.keys(nativeConfigurationEdits.shape.changes.shape),
   'sandbox_mode',
 ]);
+const approvalPolicy = z.union([z.string().max(80), z.record(z.string(), z.unknown())]).nullish();
 const responseSchema = z.object({
   config: z.object({
     model: label,
@@ -28,7 +29,7 @@ const responseSchema = z.object({
     service_tier: label,
     default_permissions: label,
     sandbox_mode: label,
-    approval_policy: z.union([z.string().max(80), z.record(z.string(), z.unknown())]).nullish(),
+    approval_policy: approvalPolicy,
     approvals_reviewer: label,
     features: z
       .object({
@@ -44,6 +45,7 @@ const responseSchema = z.object({
 const runtimeSchema = z.object({
   model: label,
   reasoningEffort: label,
+  effort: label,
   serviceTier: label,
   activePermissionProfile: z.object({ id: label }).nullish(),
   sandbox: z
@@ -53,7 +55,7 @@ const runtimeSchema = z.object({
     .passthrough()
     .nullish(),
   sandboxPolicy: z.object({ type: z.string().max(80) }).nullish(),
-  approvalPolicy: z.union([z.string().max(80), z.record(z.string(), z.unknown())]).nullish(),
+  approvalPolicy,
   approvalsReviewer: label,
   collaborationMode: z
     .object({
@@ -63,6 +65,11 @@ const runtimeSchema = z.object({
     .nullish(),
 });
 
+function approvalLabel(policy: z.infer<typeof approvalPolicy>) {
+  if (typeof policy === 'string') return policy;
+  return policy && Object.hasOwn(policy, 'granular') ? 'granular' : undefined;
+}
+
 export function nativeExecutionSettings(response: unknown): NativeExecutionSettings {
   const parsed = runtimeSchema.safeParse(response);
   if (!parsed.success) return {};
@@ -70,11 +77,14 @@ export function nativeExecutionSettings(response: unknown): NativeExecutionSetti
   return {
     model: value.collaborationMode?.settings?.model ?? value.model ?? undefined,
     effort:
-      value.collaborationMode?.settings?.reasoning_effort ?? value.reasoningEffort ?? undefined,
+      value.collaborationMode?.settings?.reasoning_effort ??
+      value.reasoningEffort ??
+      value.effort ??
+      undefined,
     serviceTier: value.serviceTier ?? undefined,
     permissionProfile: value.activePermissionProfile?.id ?? undefined,
     sandbox: value.sandbox?.type ?? value.sandboxPolicy?.type,
-    approvalPolicy: typeof value.approvalPolicy === 'string' ? value.approvalPolicy : undefined,
+    approvalPolicy: approvalLabel(value.approvalPolicy),
     approvalsReviewer: value.approvalsReviewer ?? undefined,
     mode: value.collaborationMode?.mode,
   };
@@ -164,8 +174,7 @@ export class NativeConfiguration {
       fastAvailable: config.features?.fast_mode !== false,
       permissionProfile: config.default_permissions ?? undefined,
       sandbox: config.sandbox_mode ?? undefined,
-      approvalPolicy:
-        typeof config.approval_policy === 'string' ? config.approval_policy : undefined,
+      approvalPolicy: approvalLabel(config.approval_policy),
       approvalsReviewer: config.approvals_reviewer ?? undefined,
       codeQuestions: config.features?.default_mode_request_user_input ?? undefined,
       userVersion: baseUser?.version,

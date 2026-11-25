@@ -25,7 +25,6 @@ export class Driver extends EventEmitter {
       binary?: string;
       stateFile: string;
       timeoutMs?: number;
-      codeQuestions?: boolean;
     },
   ) {
     super();
@@ -35,12 +34,6 @@ export class Driver extends EventEmitter {
       runtime: this.mode,
       state: this.state,
       version: this.mode === 'mock' ? 'simulator' : (this.version ?? 'Not reported'),
-      codeQuestions:
-        this.mode === 'mock' || this.protocol
-          ? this.mode === 'mock'
-            ? this.options.codeQuestions !== false
-            : undefined
-          : undefined,
       capabilities: this.protocol?.capabilities,
       error: this.error,
     };

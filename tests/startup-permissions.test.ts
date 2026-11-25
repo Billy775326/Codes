@@ -119,12 +119,9 @@ it('uses the saved port and allows local and HTTPS proxy origins after restart',
           active: { codeQuestions: false, requestTimeoutMs: 45000 },
           restartRequired: false,
         });
-        expect(
-          await (await fetch(base + '/api/system', { headers: { cookie } })).json(),
-        ).toMatchObject({
-          codeQuestions: false,
-          defaultProjectPath: resolve(import.meta.dirname, '..'),
-        });
+        const system = await (await fetch(base + '/api/system', { headers: { cookie } })).json();
+        expect(system).toMatchObject({ defaultProjectPath: resolve(import.meta.dirname, '..') });
+        expect(system).not.toHaveProperty('codeQuestions');
         expect(await (await fetch(base + '/api/projects', { headers: { cookie } })).json()).toEqual(
           [],
         );

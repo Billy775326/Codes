@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Driver } from '../src/codex/driver';
+import { nativeExecutionSettings } from '../src/server/native-configuration';
 import { Service } from '../src/server/service';
 import { Store } from '../src/server/store';
 import { nativeMessage } from '../src/server/transcript';
@@ -31,6 +32,16 @@ async function fixture() {
 async function until(check: () => boolean) {
   await expect.poll(check, { timeout: 4000, interval: 10 }).toBe(true);
 }
+it('reports native notification effort and granular approval alongside the sandbox', () => {
+  expect(
+    nativeExecutionSettings({
+      effort: 'high',
+      approvalPolicy: { granular: { sandbox_approval: true } },
+      sandboxPolicy: { type: 'workspaceWrite' },
+    }),
+  ).toMatchObject({ effort: 'high', approvalPolicy: 'granular', sandbox: 'workspaceWrite' });
+});
+
 it('uses the native reviewer for new threads and refreshes the reviewer for subsequent turns', async () => {
   const { service, project } = await fixture();
   const configuration = service.modelSettings.configuration;

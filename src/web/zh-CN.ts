@@ -13,6 +13,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
     '修改保存到 Codex 用户配置。此处显示所选项目的有效值。',
   'Effective project configuration': '项目有效配置',
   'Code mode questions': '执行模式提问',
+  'Applies when Codex loads a conversation.': 'Codex 加载会话时生效。',
   'Approval reviewer': '审批人',
   'Approval policy': '审批策略',
   'Permission profile': '权限配置',

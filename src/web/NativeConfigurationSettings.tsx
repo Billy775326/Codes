@@ -154,6 +154,11 @@ export function NativeConfigurationSettings({
                 <span className="preference-description">
                   {t(field.label)}
                   {source && <small className="preference-help">{t(source)}</small>}
+                  {field.value === 'codeQuestions' && (
+                    <small className="preference-help">
+                      {t('Applies when Codex loads a conversation.')}
+                    </small>
+                  )}
                 </span>
                 {field.options ? (
                   <select {...props} onChange={(event) => update(event.target.value)}>

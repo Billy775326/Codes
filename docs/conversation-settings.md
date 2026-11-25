@@ -6,7 +6,7 @@ The settings editor saves to the Codex user configuration through the App Server
 
 ## Execution and recovery
 
-Codes creates and resumes threads through the App Server. Changes to the effective configuration apply at the next dispatch. Codes refreshes a loaded thread from native runtime metadata when its effective configuration changes. Session status displays reported runtime values separately from the next task's effective project settings.
+Codes creates and resumes threads through the App Server. Effective model, reasoning, service tier, and permissions apply at the next dispatch. Codes refreshes a loaded thread from native runtime metadata when those settings change. Codex reads the Code mode question feature when it loads a native thread. Start a new native conversation to use a changed question setting immediately. Session status displays reported runtime values alongside the next task's effective project settings.
 
 Queued messages carry the prompt, attachments, and requested task mode. They resolve execution configuration at dispatch. **Add to current task** uses the active native turn. Inline and separate review use the native review operation, and branches use the native fork operation.
 
