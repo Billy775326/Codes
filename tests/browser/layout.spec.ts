@@ -262,7 +262,7 @@ for (const width of [1440, 820, 390, 320]) {
     // Geometric visibility alone misses clipping by the composer's overflow.
     for (const control of [
       page.getByRole('combobox', { name: 'Task mode', exact: true }),
-      page.getByRole('button', { name: 'Edit Codex configuration', exact: true }),
+      page.getByRole('combobox', { name: 'Reasoning effort', exact: true }),
     ]) {
       expect(
         await control.evaluate((element) => {

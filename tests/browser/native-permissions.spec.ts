@@ -1,3 +1,4 @@
+import { chooseSettingsSection } from './settings-helpers';
 import { expect, test } from '@playwright/test';
 
 test('native permissions, approval callbacks and Files / Changes remain available', async ({
@@ -7,7 +8,13 @@ test('native permissions, approval callbacks and Files / Changes remain availabl
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Codex permissions', exact: true }).click();
-  await page.getByRole('button', { name: 'Edit Codex configuration', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Read only', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  await chooseSettingsSection(
+    page.getByRole('dialog', { name: 'Settings', exact: true }),
+    'Codex configuration',
+  );
   await expect(page.getByLabel('Permission profile', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Approval policy', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Task write root', { exact: true })).toHaveCount(0);

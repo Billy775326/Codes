@@ -217,7 +217,8 @@ for (const viewport of [
     const picker = page.getByRole('button', { name: 'Codex permissions', exact: true });
     await picker.click();
     const popup = page.getByRole('dialog', { name: 'Codex permissions', exact: true });
-    await expect(popup.getByRole('button', { name: 'Edit Codex configuration' })).toBeVisible();
+    await expect(popup.getByRole('button', { name: 'Read only', exact: true })).toBeVisible();
+    await expect(popup.getByRole('button', { name: 'Edit Codex configuration' })).toHaveCount(0);
     await page.keyboard.press('Escape');
     const request = page.waitForRequest((r) => r.url().endsWith('/send') && r.method() === 'POST');
     await page.getByLabel('Message Codex').fill('[hold] Native permissions ' + Date.now());

@@ -150,8 +150,14 @@ test('composer commands retain focus and permissions without dispatching a task'
   await page.getByLabel('Message Codex').fill('/approve');
   await page.getByLabel('Message Codex').press('Enter');
   await expect(page.getByRole('dialog', { name: 'Codex permissions', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Edit Codex configuration', exact: true }).click();
-  await expect(page.getByLabel('Permission profile', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Edit Codex configuration', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('dialog', { name: 'Codex permissions', exact: true })
+      .getByRole('button', { name: 'Read only', exact: true }),
+  ).toBeVisible();
   await expect(page.getByTestId('message-user')).toHaveCount(0);
   expect(dispatches).toEqual([]);
 });

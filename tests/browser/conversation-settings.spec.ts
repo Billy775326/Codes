@@ -40,18 +40,26 @@ test('native settings save without dispatch, refresh across clients and reject s
       );
       await expect(client.getByRole('button', { name: 'Save Codex configuration' })).toBeDisabled();
     }
-    await page.getByRole('textbox', { name: 'Reasoning effort', exact: true }).fill('high');
+    await page
+      .getByRole('dialog', { name: 'Settings', exact: true })
+      .getByRole('combobox', { name: 'Reasoning effort', exact: true })
+      .selectOption('high');
     await page.getByRole('button', { name: 'Save Codex configuration' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Effective project values' }),
     ).toBeVisible();
     await expect(page.getByTestId('message-user')).toHaveCount(0);
-    await second.getByRole('textbox', { name: 'Reasoning effort', exact: true }).fill('low');
+    await second
+      .getByRole('dialog', { name: 'Settings', exact: true })
+      .getByRole('combobox', { name: 'Reasoning effort', exact: true })
+      .selectOption('low');
     await second.getByRole('button', { name: 'Save Codex configuration' }).click();
     await expect(second.getByRole('alert')).toContainText('Codex configuration changed');
     await second.getByRole('button', { name: 'Reload settings' }).click();
     await expect(
-      second.getByRole('textbox', { name: 'Reasoning effort', exact: true }),
+      second
+        .getByRole('dialog', { name: 'Settings', exact: true })
+        .getByRole('combobox', { name: 'Reasoning effort', exact: true }),
     ).toHaveValue('high');
     await second.keyboard.press('Escape');
     await expect(
@@ -151,7 +159,7 @@ for (const viewport of [
         'Approval reviewer',
         'Service tier',
       ]) {
-        const control = dialog.getByLabel(name, { exact: true });
+        const control = dialog.getByRole('combobox', { name, exact: true });
         await control.scrollIntoViewIfNeeded();
         expect(
           await control.evaluate((element) => {
@@ -172,3 +180,78 @@ for (const viewport of [
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
   });
+
+test('native dropdown presets preserve custom values and save compatible permission fields', async ({
+  page,
+}) => {
+  const current = {
+    model: 'custom-model',
+    effort: 'custom-effort',
+    planEffort: 'custom-plan',
+    serviceTier: 'custom-tier',
+    permissionProfile: 'custom-profile',
+    sandbox: undefined as string | undefined,
+    approvalPolicy: 'on-request',
+    approvalsReviewer: 'user',
+    fast: false,
+    fastAvailable: true,
+    writable: true,
+    userVersion: 'preset-version',
+    sources: {},
+  };
+  let saved: unknown;
+  await page.route('**/api/projects/*/codex-configuration', async (route) => {
+    if (route.request().method() === 'PUT') {
+      saved = route.request().postDataJSON();
+      Object.assign(current, {
+        model: 'simulated-model',
+        effort: 'low',
+        serviceTier: 'priority',
+        fast: true,
+        permissionProfile: ':workspace',
+        userVersion: 'next-version',
+      });
+    }
+    await route.fulfill({ json: current });
+  });
+  await login(page);
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await chooseSettingsSection(dialog, 'Codex configuration');
+  const section = dialog.getByRole('region', { name: 'Codex configuration', exact: true });
+  await expect(section.getByRole('textbox')).toHaveCount(0);
+  await expect(section.getByRole('combobox')).toHaveCount(9);
+  for (const [name, value] of [
+    ['Model', 'custom-model'],
+    ['Reasoning effort', 'custom-effort'],
+    ['Plan reasoning effort', 'custom-plan'],
+    ['Service tier', 'custom-tier'],
+    ['Permission profile', 'custom-profile'],
+  ] as const)
+    await expect(section.getByRole('combobox', { name, exact: true })).toHaveValue(value);
+  const model = section.getByRole('combobox', { name: 'Model', exact: true });
+  await expect(model.locator('option[value="simulated-model"]')).toHaveCount(1);
+  await model.selectOption('simulated-model');
+  await section
+    .getByRole('combobox', { name: 'Reasoning effort', exact: true })
+    .selectOption('low');
+  await section.getByRole('combobox', { name: 'Service tier', exact: true }).selectOption('fast');
+  await section
+    .getByRole('combobox', { name: 'Permission profile', exact: true })
+    .selectOption(':workspace');
+  await section.getByRole('button', { name: 'Save Codex configuration', exact: true }).click();
+  await expect(section.getByRole('status')).toBeVisible();
+  expect(saved).toEqual({
+    version: 'preset-version',
+    changes: {
+      model: 'simulated-model',
+      model_reasoning_effort: 'low',
+      service_tier: 'fast',
+      default_permissions: ':workspace',
+      sandbox_mode: null,
+    },
+  });
+  await expect(section.getByRole('combobox', { name: 'Service tier', exact: true })).toHaveValue(
+    'fast',
+  );
+});

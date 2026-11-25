@@ -242,7 +242,6 @@ function App() {
   const settings: Settings = { mode };
   const changeSettings = (next: Settings) => setMode(next.mode ?? 'default');
   const [configurationRevision, setConfigurationRevision] = useState(0);
-  const [openConfigurationFirst, setOpenConfigurationFirst] = useState(false);
   useEffect(() => setMode('default'), [projectId, threadId]);
   useEffect(() => {
     if (auth !== 'ready') return;
@@ -2649,10 +2648,6 @@ function App() {
                   models={models}
                   autoReviewReady={autoReviewReady}
                   saveConfiguration={saveComposerConfiguration}
-                  openConfiguration={() => {
-                    setOpenConfigurationFirst(true);
-                    setDialog('preferences');
-                  }}
                   planReady={modes.some((entry) => entry.mode === 'plan')}
                   disabled={
                     busy || loadingConversation || !!thread?.archived || !!thread?.managementPending
@@ -2790,11 +2785,11 @@ function App() {
           }}
           value={preferences}
           configurationProject={contextProjectId}
-          openConfigurationFirst={openConfigurationFirst}
+          models={models}
+          autoReviewReady={autoReviewReady}
           configurationChanged={() => setConfigurationRevision((value) => value + 1)}
           saveError={preferencesError}
           close={() => {
-            setOpenConfigurationFirst(false);
             setDialog(undefined);
           }}
           change={changePreferences}

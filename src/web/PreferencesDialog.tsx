@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { System } from '../shared/types';
+import type { Model, System } from '../shared/types';
 import { useInterfaceLanguage } from './interface-language';
 import { chatFontSizes, codeFontSizes, defaultTextSize } from './font-sizes';
 import {
@@ -149,7 +149,8 @@ export function PreferencesDialog({
   close,
   saveError,
   configurationProject,
-  openConfigurationFirst,
+  models,
+  autoReviewReady,
   configurationChanged,
   system,
   maintenanceBusy,
@@ -171,16 +172,15 @@ export function PreferencesDialog({
     onError: (error: unknown) => void,
   ) => Promise<void>;
   configurationProject?: string;
-  openConfigurationFirst?: boolean;
+  models: Model[];
+  autoReviewReady: boolean;
   configurationChanged: () => void;
 }) {
   const { t } = useInterfaceLanguage();
-  const [section, setSection] = useState<SettingsSection>(
-    openConfigurationFirst ? 'defaults' : 'preferences',
-  );
+  const [section, setSection] = useState<SettingsSection>('preferences');
   const [visited, setVisited] = useState({
     preferences: true,
-    defaults: !!openConfigurationFirst,
+    defaults: false,
     network: false,
     runtime: false,
     instructions: false,
@@ -517,6 +517,8 @@ export function PreferencesDialog({
                 <NativeConfigurationSettings
                   key={configurationProject}
                   projectId={configurationProject}
+                  models={models}
+                  autoReviewReady={autoReviewReady}
                   changed={configurationChanged}
                   onDraft={setConfigurationDraft}
                 />

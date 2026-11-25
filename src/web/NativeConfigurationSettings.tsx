@@ -3,6 +3,7 @@ import {
   nativeConfigurationEdits,
   type NativeConfigurationSnapshot,
 } from '../shared/native-configuration';
+import type { Model } from '../shared/types';
 import { message, request } from './api';
 import { useInterfaceLanguage } from './interface-language';
 
@@ -50,10 +51,14 @@ const fields = [
 
 export function NativeConfigurationSettings({
   projectId,
+  models,
+  autoReviewReady,
   changed,
   onDraft,
 }: {
   projectId?: string;
+  models: Model[];
+  autoReviewReady: boolean;
   changed: () => void;
   onDraft: (state: { changed: boolean; busy: boolean }) => void;
 }) {
@@ -87,6 +92,12 @@ export function NativeConfigurationSettings({
     );
     return () => abort.abort();
   }, [path, revision]);
+  const selectedModel =
+    models.find(
+      (model) =>
+        model.id === (draft.model ?? snapshot?.model) ||
+        model.model === (draft.model ?? snapshot?.model),
+    ) ?? (!(draft.model ?? snapshot?.model) ? models.find((model) => model.isDefault) : undefined);
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!path || !snapshot?.userVersion || busy || !dirty) return;
@@ -132,7 +143,48 @@ export function NativeConfigurationSettings({
             <p className="preference-help">{t('Edit this configuration using Codex CLI.')}</p>
           )}
           {fields.map((field) => {
-            const effective = String(snapshot[field.value] ?? '');
+            const effective =
+              field.value === 'serviceTier' && snapshot.serviceTier === 'priority'
+                ? 'fast'
+                : String(snapshot[field.value] ?? '');
+            const choices =
+              field.options ??
+              (field.value === 'model'
+                ? models.map((model) => model.model)
+                : field.value === 'serviceTier'
+                  ? ['default', 'fast']
+                  : field.value === 'permissionProfile'
+                    ? [':read-only', ':workspace']
+                    : (selectedModel?.supportedReasoningEfforts.map(
+                        (entry) => entry.reasoningEffort,
+                      ) ?? []));
+            const optionLabel = (option: string) => {
+              if (field.value === 'model')
+                return (
+                  models.find((model) => model.model === option || model.id === option)
+                    ?.displayName ?? option
+                );
+              return (
+                (
+                  {
+                    ':read-only': 'Read only',
+                    ':workspace': 'Ask for approval',
+                    'read-only': 'Read only',
+                    'workspace-write': 'Ask for approval',
+                    'danger-full-access': 'Full access',
+                    default: 'Standard',
+                    fast: 'Fast',
+                    'on-request': 'Ask for approval',
+                    untrusted: 'Untrusted commands',
+                    never: 'Never',
+                    user: 'User',
+                    auto_review: 'Approve for me',
+                    true: 'Enabled',
+                    false: 'Disabled',
+                  } as Record<string, string>
+                )[option] ?? option
+              );
+            };
             const value = draft[field.key] ?? effective;
             const source = snapshot.sources[field.key];
             const update = (next: string) => {
@@ -141,6 +193,8 @@ export function NativeConfigurationSettings({
                 const updated = { ...previous };
                 if (next === effective) delete updated[field.key];
                 else updated[field.key] = next;
+                if (field.value === 'permissionProfile' && next) updated.sandbox_mode = '';
+                if (field.value === 'sandbox' && next) updated.default_permissions = '';
                 return updated;
               });
             };
@@ -160,28 +214,28 @@ export function NativeConfigurationSettings({
                     </small>
                   )}
                 </span>
-                {field.options ? (
-                  <select {...props} onChange={(event) => update(event.target.value)}>
-                    <option value="">{t('Codex default')}</option>
-                    {effective && !field.options.some((option) => option === effective) && (
-                      <option value={effective}>{effective}</option>
-                    )}
-                    {field.options.map((value) => (
-                      <option key={value} value={value}>
-                        {t(value)}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    {...props}
-                    placeholder={t('Codex default')}
-                    maxLength={
-                      field.key === 'model' || field.key === 'default_permissions' ? 150 : 80
-                    }
-                    onChange={(event) => update(event.target.value)}
-                  />
-                )}
+                <select {...props} onChange={(event) => update(event.target.value)}>
+                  <option value="">{t('Codex default')}</option>
+                  {value && !choices.some((option) => option === value) && (
+                    <option value={value}>{t(optionLabel(value))}</option>
+                  )}
+                  {choices.map((option) => (
+                    <option
+                      key={option}
+                      value={option}
+                      disabled={
+                        (field.value === 'approvalsReviewer' &&
+                          option === 'auto_review' &&
+                          !autoReviewReady) ||
+                        (field.value === 'serviceTier' &&
+                          option === 'fast' &&
+                          (!selectedModel?.supportsFast || !snapshot.fastAvailable))
+                      }
+                    >
+                      {t(optionLabel(option))}
+                    </option>
+                  ))}
+                </select>
               </label>
             );
           })}

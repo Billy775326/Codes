@@ -54,9 +54,7 @@ test('English is the default and Simplified Chinese persists without changing dr
   await expect(page.getByTestId('message-user')).toContainText('Original English prompt');
   await page.getByRole('button', { name: 'Codex 权限', exact: true }).click();
   const permissions = page.getByRole('dialog', { name: 'Codex 权限', exact: true });
-  await expect(
-    permissions.getByRole('button', { name: '编辑 Codex 配置', exact: true }),
-  ).toBeInViewport();
+  await expect(permissions.getByRole('button', { name: '只读', exact: true })).toBeInViewport();
   await page.keyboard.press('Escape');
   const openNavigation = page.getByRole('button', { name: '打开侧栏', exact: true });
   await openNavigation.click();

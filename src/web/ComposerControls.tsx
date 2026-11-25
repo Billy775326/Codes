@@ -57,7 +57,6 @@ export function ComposerControls({
   models,
   autoReviewReady,
   saveConfiguration,
-  openConfiguration,
   planReady,
   disabled,
   ref,
@@ -68,7 +67,6 @@ export function ComposerControls({
   models: Model[];
   autoReviewReady: boolean;
   saveConfiguration: (changes: NativeConfigurationEdits['changes']) => Promise<void>;
-  openConfiguration: () => void;
   planReady: boolean;
   disabled: boolean;
   ref: Ref<ComposerControlsHandle>;
@@ -188,9 +186,6 @@ export function ComposerControls({
             {t(source('default_permissions') ?? source('sandbox_mode') ?? 'Codex default')}
           </small>
         )}
-        <button type="button" data-close-menu onClick={openConfiguration}>
-          {t('Edit Codex configuration')}
-        </button>
       </PanelMenu>
       {mode === 'plan' && (
         <button
@@ -304,9 +299,6 @@ export function ComposerControls({
             <span className="fast-switch-track" aria-hidden="true" />
           </span>
         </label>
-        <button type="button" data-close-menu onClick={openConfiguration}>
-          {t('Edit Codex configuration')}
-        </button>
       </PanelMenu>
     </>
   );
