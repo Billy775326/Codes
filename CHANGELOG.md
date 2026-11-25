@@ -198,6 +198,8 @@
 
 ### Fixed
 
+- Refresh an outdated workspace page after sign-in so links and previews use the running build.
+
 - Match the AGENTS.md editor to the active theme and show the server's fallback project directory in the empty default-directory field.
 
 - Make the Fast switch easy to read in either theme and keep its track and thumb aligned in new-conversation defaults.

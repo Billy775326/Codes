@@ -79,6 +79,29 @@ test('sign-in keeps token visibility, pending controls, errors, and keyboard sub
   ).toBe(false);
 });
 
+test('sign-in reloads a stale web page and restores the draft', async ({ page }) => {
+  let probes = 0;
+  let submissions = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/login') submissions++;
+  });
+  await page.route('**/api/web-build', (route) =>
+    ++probes === 1
+      ? route.fulfill({ json: { signature: '/assets/fresh-build-fixture.js' } })
+      : route.continue(),
+  );
+  await page.goto('/?view=workspace');
+  await page.evaluate(() => localStorage.setItem('codes.draft.new', 'Draft in the older tab'));
+  const navigation = page.waitForEvent('framenavigated', (frame) => frame === page.mainFrame());
+  await page.getByLabel('Workspace access token').fill(token);
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await navigation;
+  await expect(page).toHaveURL(/\/?\?view=workspace$/);
+  await expect(page.getByLabel('Message Codex')).toHaveValue('Draft in the older tab');
+  await expect(page.getByLabel('Workspace access token')).toHaveCount(0);
+  expect(submissions).toBe(1);
+});
+
 test('a failed session check can reconnect without reloading the page', async ({ page }) => {
   let unavailable = true;
   await page.route(/\/api\/(system|projects)$/, async (route) => {

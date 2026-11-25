@@ -69,7 +69,7 @@ import { useComposerTextareaHeight } from './useComposerTextareaHeight';
 import { recallComposerMessage, type ComposerHistory } from './composer-history';
 import { ConversationViewCache } from './conversation-view-cache';
 import { applyConversationEvent } from './conversation-events';
-import { useWebBuild } from './useWebBuild';
+import { reloadStaleWebBuildAfterSignIn, useWebBuild } from './useWebBuild';
 import { InteractionDialog, ReviewDialog, StatusDialog } from './InteractionDialog';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
 import { ControlTooltip } from './ControlTooltip';
@@ -1848,10 +1848,10 @@ function App() {
           setBusy(true);
           setError('');
           void post('/login', { token })
-            .then(() => {
+            .then(async () => {
               setToken('');
               setLoginNotice('');
-              return init();
+              if (!(await reloadStaleWebBuildAfterSignIn())) await init();
             })
             .catch((e) => setError(message(e)))
             .finally(() => setBusy(false));

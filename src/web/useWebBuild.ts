@@ -3,14 +3,36 @@ import { webBuildSignature } from '../shared/web-build';
 import { request } from './api';
 
 const interval = 60_000;
+function currentWebBuild() {
+  return webBuildSignature(
+    [...document.head.querySelectorAll('script[src], link[href]')].map(
+      (element) => element.getAttribute('src') ?? element.getAttribute('href'),
+    ),
+  );
+}
+
+export async function reloadStaleWebBuildAfterSignIn() {
+  const current = currentWebBuild();
+  if (!current) return false;
+  try {
+    const { signature } = await request<{ signature: string }>(
+      '/web-build',
+      {},
+      AbortSignal.timeout(1500),
+    );
+    if (typeof signature !== 'string' || !signature || signature === current) return false;
+    window.location.reload();
+    return true;
+  } catch {
+    // Version probing is optional in development and while updating the service.
+    return false;
+  }
+}
+
 export function useWebBuild(signedIn: boolean) {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   useEffect(() => {
-    const current = webBuildSignature(
-      [...document.head.querySelectorAll('script[src], link[href]')].map(
-        (element) => element.getAttribute('src') ?? element.getAttribute('href'),
-      ),
-    );
+    const current = currentWebBuild();
     if (!signedIn || !current) return;
     let controller: AbortController | undefined;
     let lastCheck = -interval;
