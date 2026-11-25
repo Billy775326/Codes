@@ -34,26 +34,21 @@ test('native settings save without dispatch, refresh across clients and reject s
   try {
     for (const client of [page, second]) {
       await client.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-      await chooseSettingsSection(
-        client.getByRole('dialog', { name: 'Settings' }),
-        'Codex configuration',
-      );
-      await expect(client.getByRole('button', { name: 'Save Codex configuration' })).toBeDisabled();
+      await chooseSettingsSection(client.getByRole('dialog', { name: 'Settings' }), 'Execution');
+      await expect(client.getByRole('button', { name: 'Save execution settings' })).toBeDisabled();
     }
     await page
       .getByRole('dialog', { name: 'Settings', exact: true })
       .getByRole('combobox', { name: 'Reasoning effort', exact: true })
       .selectOption('high');
-    await page.getByRole('button', { name: 'Save Codex configuration' }).click();
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Effective project values' }),
-    ).toBeVisible();
+    await page.getByRole('button', { name: 'Save execution settings' }).click();
+    await expect(page.getByRole('status').filter({ hasText: /^Saved$/ })).toBeVisible();
     await expect(page.getByTestId('message-user')).toHaveCount(0);
     await second
       .getByRole('dialog', { name: 'Settings', exact: true })
       .getByRole('combobox', { name: 'Reasoning effort', exact: true })
       .selectOption('low');
-    await second.getByRole('button', { name: 'Save Codex configuration' }).click();
+    await second.getByRole('button', { name: 'Save execution settings' }).click();
     await expect(second.getByRole('alert')).toContainText('Codex configuration changed');
     await second.getByRole('button', { name: 'Reload settings' }).click();
     await expect(
@@ -151,7 +146,7 @@ for (const viewport of [
     for (const theme of ['dark', 'light']) {
       await chooseSettingsSection(dialog, 'General');
       await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
-      await chooseSettingsSection(dialog, 'Codex configuration');
+      await chooseSettingsSection(dialog, 'Execution');
       for (const name of [
         'Permission profile',
         'Model',
@@ -217,8 +212,8 @@ test('native dropdown presets preserve custom values and save compatible permiss
   await login(page);
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
-  await chooseSettingsSection(dialog, 'Codex configuration');
-  const section = dialog.getByRole('region', { name: 'Codex configuration', exact: true });
+  await chooseSettingsSection(dialog, 'Execution');
+  const section = dialog.getByRole('region', { name: 'Execution', exact: true });
   await expect(section.getByRole('textbox')).toHaveCount(0);
   await expect(section.getByRole('combobox')).toHaveCount(9);
   for (const [name, value] of [
@@ -239,7 +234,7 @@ test('native dropdown presets preserve custom values and save compatible permiss
   await section
     .getByRole('combobox', { name: 'Permission profile', exact: true })
     .selectOption(':workspace');
-  await section.getByRole('button', { name: 'Save Codex configuration', exact: true }).click();
+  await section.getByRole('button', { name: 'Save execution settings', exact: true }).click();
   await expect(section.getByRole('status')).toBeVisible();
   expect(saved).toEqual({
     version: 'preset-version',

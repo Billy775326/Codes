@@ -92,6 +92,8 @@
 
 ### Changed
 
+- Simplify the composer prompts and settings menus. Find native model, reasoning, and permission controls under **Execution** in Settings.
+
 - Make the send shortcut add a draft to the running Codex turn by default. Tab queues a draft in this mode. Switch the default in Settings → General → Interaction.
 
 - Use effective Codex configuration for model, reasoning, speed, permissions, and feature flags. Edit the Codex user configuration in Settings. Existing waiting queues pause on upgrade so you can review effective permissions before resuming.

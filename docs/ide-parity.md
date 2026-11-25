@@ -47,7 +47,7 @@ The server verifies conversation/project ownership and directory health before f
 
 The composer uses one outer focus border and an unclipped model popup. Navigation owns the project picker, the header owns the conversation title, and starter drafts remain in the conversation action menu. Delivery scope is attached to the input and action controls as accessible descriptions and titles; active work retains its alternate action without a permanent instruction paragraph. It retains one rounded input area, attachment and Codex permission controls, a `/plan` toggle with a visible exit marker, a model/reasoning popup and explicit send/queue/stop actions. Edited-file cards and copy/reply/branch actions remain available. Dark/light/system themes are browser preferences. Read-only previews provide no Undo, staging or patch-application controls.
 
-The permission menu displays the effective Codex settings for the selected project. Use **Codex configuration** to edit native user settings. Codex resolves managed permission constraints and owns approval callbacks. Codes displays reviewer outcomes and bounded rationale when reported.
+The permission menu displays the effective Codex settings for the selected project. Open **Settings → Execution** to edit native user settings. Codex resolves managed permission constraints and owns approval callbacks. Codes displays reviewer outcomes and bounded rationale when reported.
 
 Browser acceptance covers pane geometry, menu/drawer focus, per-project drafts and legacy reads, delayed-file cancellation, attachment return, clipboard copying, saved themes and 1440/820/390/320px widths. Synthetic screenshots describe this Web implementation; they do not establish physical-phone acceptance or pixel equality with the extension.
 

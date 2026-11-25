@@ -40,10 +40,10 @@ const settingsSections = [
   {
     id: 'defaults',
     scope: 'workspace',
-    label: 'Codex configuration',
+    label: 'Execution',
     icon: 'newchat',
     keywords:
-      'new conversation chat model reasoning permissions fast plan default 默认 模型 推理 权限 计划',
+      'codex configuration model reasoning permissions fast plan default 配置 默认 模型 推理 权限 计划',
   },
   {
     id: 'network',
@@ -406,16 +406,8 @@ export function PreferencesDialog({
           <summary>{t('Editing and shortcuts')}</summary>
           <p>{t('Use Up and Down to recall sent messages in the current conversation.')}</p>
           <p>
-            {t('When adding to the running task is selected, Tab queues a draft during a task.')}
-          </p>
-          <p>
             {t(
               'Shift+Enter adds a line. On phones, Enter adds a line. Ctrl/Cmd+Shift+Enter switches delivery for one follow-up.',
-            )}
-          </p>
-          <p>
-            {t(
-              'Queued messages can be edited until dispatch. Immediate additions use the running task’s settings.',
             )}
           </p>
         </details>
@@ -490,8 +482,12 @@ export function PreferencesDialog({
                 const sections = matches.filter((item) => item.scope === scope);
                 return (
                   sections.length > 0 && (
-                    <div className="settings-nav-group" key={scope}>
-                      <span className="settings-nav-label">{t(scopeLabel)}</span>
+                    <div
+                      className="settings-nav-group"
+                      key={scope}
+                      role="group"
+                      aria-label={t(scopeLabel)}
+                    >
                       {sections.map(({ id, label, icon }) => (
                         <button
                           key={id}

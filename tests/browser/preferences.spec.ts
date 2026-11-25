@@ -322,7 +322,7 @@ for (const width of [1440, 320]) {
         .getByRole('combobox', { name: 'Review location', exact: true })
         .selectOption('detached');
       await dialog.getByText('Editing and shortcuts', { exact: true }).click();
-      await expect(dialog).toContainText('Queued messages can be edited until dispatch.');
+      await expect(dialog).toContainText('Use Up and Down to recall sent messages');
       const box = await dialog.boundingBox();
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.y).toBeGreaterThanOrEqual(0);

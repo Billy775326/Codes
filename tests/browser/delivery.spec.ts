@@ -22,6 +22,10 @@ for (const width of [1440, 320])
     await expect(page.locator('#message-delivery-help')).toContainText('Starts a new turn');
     await send(page, '[slow] Explicit delivery fixture');
     await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
+    await expect(page.getByLabel('Message Codex')).toHaveAttribute(
+      'placeholder',
+      'Ask Codex anything',
+    );
     await page.getByLabel('Message Codex').fill('Correct the current task');
     const dispatch = page.getByRole('group', { name: 'Message actions', exact: true });
     const buttons = dispatch.getByRole('button');
@@ -48,9 +52,6 @@ for (const width of [1440, 320])
     await steer;
     await expect(page.getByTestId('message-user')).toHaveCount(2);
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Settings' })).toContainText(
-      'Queued messages can be edited until dispatch.',
-    );
     await page
       .getByRole('combobox', { name: 'Follow-up delivery', exact: true })
       .selectOption('steer');

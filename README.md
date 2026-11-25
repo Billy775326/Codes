@@ -100,7 +100,7 @@ ssh -L 6670:127.0.0.1:6670 you@your-linux-host
 
 Then open `http://127.0.0.1:6670` on your computer. Phone access requires a private HTTPS reverse proxy or private network with HTTPS. Add the exact browser origin in **Settings → Network & access** and preserve its `Host` header when proxying. See [operations](docs/operations.md#network-and-access).
 
-This is a **single-owner workspace**. Codex resolves execution permissions for each registered project. **Settings → Codex configuration** displays the effective values and edits the native user configuration. The composer summarizes those values and lets you choose Execution or Plan for the next task. Use `/plan` to switch modes.
+This is a **single-owner workspace**. Codex resolves execution permissions for each registered project. **Settings → Execution** displays the effective values and edits the native user configuration. The composer summarizes those values and lets you choose Execution or Plan for the next task. Use `/plan` to switch modes.
 
 ## Configuration
 

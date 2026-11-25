@@ -1,6 +1,6 @@
 # Codex execution configuration
 
-Open **Settings → Codex configuration** to see the effective model, reasoning, speed, permissions, and native question settings for the selected project. The composer provides compact permission choices, model and reasoning selectors, and a Fast switch. These controls save to the Codex user configuration and display the effective project values after each write. Project overrides remain visible. Open Settings to edit additional native fields using dropdown presets. Existing custom values remain visible. Use **Task mode** in the composer to choose Plan or Execution for new work.
+Open **Settings → Execution** to see the effective model, reasoning, speed, permissions, and native question settings for the selected project. The composer provides compact permission choices, model and reasoning selectors, and a Fast switch. These controls save to the Codex user configuration and display the effective project values after each write. Project overrides remain visible. Open Settings to edit additional native fields using dropdown presets. Existing custom values remain visible. Use **Task mode** in the composer to choose Plan or Execution for new work.
 
 The settings editor saves to the Codex user configuration through the App Server. It shows the effective project value after each save. A trusted project can supply its own value. Reload after a concurrent change before editing again. Versions that cannot safely write settings show the effective configuration for inspection.
 

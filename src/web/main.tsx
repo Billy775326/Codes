@@ -1544,9 +1544,7 @@ function App() {
   const deliveryHelp = hasFollowUps
     ? deliveryMode === 'queue'
       ? queueDescription
-      : [addNowDescription, tabQueues && t('Tab queues this draft for the next turn.')]
-          .filter(Boolean)
-          .join(' ')
+      : addNowDescription
     : t('Starts a new turn.');
   const shortcut =
     phoneLayout ||
@@ -2570,11 +2568,7 @@ function App() {
                   ? t('Restore this conversation to continue…')
                   : thread?.managementPending
                     ? t('Check conversation status to continue…')
-                    : active
-                      ? deliveryMode === 'queue'
-                        ? t('Write a message for the next turn…')
-                        : t('Add a correction to this running task…')
-                      : t('Ask Codex anything')
+                    : t('Ask Codex anything')
               }
               maxLength={50_000}
               onKeyDown={(e) => {

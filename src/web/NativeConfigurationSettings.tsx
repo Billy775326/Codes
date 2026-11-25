@@ -128,17 +128,12 @@ export function NativeConfigurationSettings({
     }
   }
   return (
-    <section className="preferences-section" aria-label={t('Codex configuration')}>
-      <h3>{t('Codex configuration')}</h3>
+    <section className="preferences-section" aria-label={t('Execution')}>
       {!path && <p>{t('Choose a project to read its effective configuration.')}</p>}
       {path && !snapshot && !error && <p role="status">{t('Loading…')}</p>}
       {snapshot && (
         <form onSubmit={(event) => void save(event)}>
-          <p className="preference-help">
-            {t(
-              'Changes are saved to the Codex user configuration. This page shows the effective values for the selected project.',
-            )}
-          </p>
+          {snapshot.writable && <p className="preference-help">{t('Codex user configuration')}</p>}
           {!snapshot.writable && (
             <p className="preference-help">{t('Edit this configuration using Codex CLI.')}</p>
           )}
@@ -207,7 +202,9 @@ export function NativeConfigurationSettings({
               <label className="preference-row" key={field.key}>
                 <span className="preference-description">
                   {t(field.label)}
-                  {source && <small className="preference-help">{t(source)}</small>}
+                  {source && source !== 'user' && (
+                    <small className="preference-help">{t(source)}</small>
+                  )}
                   {field.value === 'codeQuestions' && (
                     <small className="preference-help">
                       {t('Applies when Codex loads a conversation.')}
@@ -240,13 +237,18 @@ export function NativeConfigurationSettings({
             );
           })}
           {snapshot.writable && (
-            <button type="submit" className="primary" disabled={busy || !dirty}>
-              {t('Save Codex configuration')}
+            <button
+              type="submit"
+              className="primary"
+              aria-label={t('Save execution settings')}
+              disabled={busy || !dirty}
+            >
+              {t('Save')}
             </button>
           )}
         </form>
       )}
-      {saved && <p role="status">{t('Saved. Effective project values are shown above.')}</p>}
+      {saved && <p role="status">{t('Saved')}</p>}
       {error && (
         <p role="alert">
           {t(error)}{' '}

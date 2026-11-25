@@ -15,7 +15,7 @@ const permissions = [
     policy: 'on-request',
     label: 'Read only',
     icon: 'eye',
-    detail: 'Ask before edits or access outside the sandbox.',
+    detail: 'Ask before edits or external access.',
   },
   {
     sandbox: 'workspace-write',
@@ -23,7 +23,7 @@ const permissions = [
     policy: 'on-request',
     label: 'Ask for approval',
     icon: 'lock',
-    detail: 'Ask before file access outside the workspace or network use.',
+    detail: 'Ask before external file or network access.',
   },
   {
     sandbox: 'workspace-write',
@@ -31,7 +31,7 @@ const permissions = [
     policy: 'on-request',
     label: 'Approve for me',
     icon: 'shield',
-    detail: 'Codex reviews eligible approval requests.',
+    detail: 'Codex reviews eligible requests.',
   },
   {
     sandbox: 'danger-full-access',
@@ -39,7 +39,7 @@ const permissions = [
     policy: 'never',
     label: 'Full access',
     icon: 'warning',
-    detail: 'Unrestricted server files and network without approval.',
+    detail: 'All server files and network without approval.',
   },
 ] as const;
 
@@ -125,7 +125,20 @@ export function ComposerControls({
     : (configuration?.permissionProfile ?? configuration?.sandbox ?? t('Codex default'));
   const readOnly = disabled || !configuration?.writable || !configuration.userVersion;
   const supportsFast = !!model?.supportsFast && configuration?.fastAvailable !== false;
-  const source = (key: string) => configuration?.sources?.[key];
+  const overrideSource = (key: string) => {
+    const source = configuration?.sources?.[key];
+    return source === 'user' ? undefined : source;
+  };
+  const permissionOverride = [
+    'default_permissions',
+    'sandbox_mode',
+    'approval_policy',
+    'approvals_reviewer',
+  ]
+    .map(overrideSource)
+    .find(Boolean);
+  const modelOverride = overrideSource('model');
+  const effortOverride = overrideSource(effortKey);
   return (
     <>
       <PanelMenu
@@ -141,8 +154,7 @@ export function ComposerControls({
           </>
         }
       >
-        <strong className="permission-menu-heading">{t('Conversation permissions')}</strong>
-        <small className="preference-help">{t('Codex user configuration')}</small>
+        <small className="composer-config-scope">{t('Codex user configuration')}</small>
         <div className="permission-options" role="group" aria-label={t('Permission presets')}>
           {permissions.map((option) => {
             const unavailable = option.reviewer === 'auto_review' && !autoReviewReady;
@@ -177,13 +189,9 @@ export function ComposerControls({
             );
           })}
         </div>
-        {(!selectedPermission ||
-          source('default_permissions') === 'project' ||
-          source('sandbox_mode') === 'project') && (
-          <small className="preference-help">
-            {permissionLabel}
-            {' · '}
-            {t(source('default_permissions') ?? source('sandbox_mode') ?? 'Codex default')}
+        {permissionOverride && (
+          <small className="composer-config-scope">
+            {t('Effective source') + ' · ' + t(permissionOverride)}
           </small>
         )}
       </PanelMenu>
@@ -214,12 +222,11 @@ export function ComposerControls({
           </>
         }
       >
-        <strong>{t('Model and reasoning')}</strong>
-        <small className="preference-help">{t('Codex user configuration')}</small>
+        <small className="composer-config-scope">{t('Codex user configuration')}</small>
         <label className="model-field">
           <span>
             {t('Model')}
-            {source('model') && <small className="preference-help">{t(source('model')!)}</small>}
+            {modelOverride && <small className="preference-help">{t(modelOverride)}</small>}
           </span>
           <select
             aria-label={t('Model')}
@@ -242,9 +249,7 @@ export function ComposerControls({
         <label className="model-field">
           <span>
             {t('Reasoning effort')}
-            {source(effortKey) && (
-              <small className="preference-help">{t(source(effortKey)!)}</small>
-            )}
+            {effortOverride && <small className="preference-help">{t(effortOverride)}</small>}
           </span>
           <select
             aria-label={t('Reasoning effort')}

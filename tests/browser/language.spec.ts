@@ -28,7 +28,7 @@ test('English is the default and Simplified Chinese persists without changing dr
     'aria-pressed',
     'true',
   );
-  await expect(page.getByRole('button', { name: 'Codex 配置', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '执行', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: '主题', exact: true })).toHaveValue('light');
   await page.getByRole('button', { name: '网络与访问', exact: true }).click();
   await expect(page.getByRole('combobox', { name: '监听地址', exact: true })).toBeVisible();

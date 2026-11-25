@@ -13,7 +13,7 @@ test('native permissions, approval callbacks and Files / Changes remain availabl
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
   await chooseSettingsSection(
     page.getByRole('dialog', { name: 'Settings', exact: true }),
-    'Codex configuration',
+    'Execution',
   );
   await expect(page.getByLabel('Permission profile', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Approval policy', { exact: true })).toBeVisible();
