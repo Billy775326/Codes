@@ -49,6 +49,10 @@ for (const width of [1440, 390, 320]) {
     await view.click();
     await expect(view).toHaveAttribute('aria-pressed', 'true');
     await expect(view).toHaveText('Archived');
+    await expect(navigation.getByRole('textbox', { name: 'Search archives' })).toBeVisible();
+    await expect(navigation.getByRole('button', { name: 'Add project', exact: true })).toHaveCount(
+      0,
+    );
     const archiveWidth = (await view.boundingBox())!.width;
     expect(archiveWidth).toBeGreaterThan(chatsWidth);
     expect(archiveWidth).toBeLessThan(125);

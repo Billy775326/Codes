@@ -158,6 +158,7 @@ export const Conversations = memo(function Conversations({
         a.project.id.localeCompare(b.project.id),
     );
   const inactiveBefore = Date.now() - inactiveProjectAgeMs;
+  const searchLabel = t(archived ? 'Search archives' : 'Search projects and chats');
   return (
     <section
       className="conversations"
@@ -173,18 +174,20 @@ export const Conversations = memo(function Conversations({
           data-tooltip={archived ? t('Back to chats') : t('Archive')}
           onClick={() => setArchived((value) => !value)}
         >
-          <Icon name="archive" size={16} />
+          <Icon name={archived ? 'chevron' : 'archive'} size={16} />
           {archived && <span>{t('Archived')}</span>}
         </button>
         <div className="conversation-tools">
-          <button
-            className="icon-button"
-            aria-label={t('Add project')}
-            data-tooltip=""
-            onClick={onAddProject}
-          >
-            <Icon name="folder-add" size={16} />
-          </button>
+          {!archived && (
+            <button
+              className="icon-button"
+              aria-label={t('Add project')}
+              data-tooltip=""
+              onClick={onAddProject}
+            >
+              <Icon name="folder-add" size={16} />
+            </button>
+          )}
           <button
             className="icon-button"
             aria-label={t('Refresh projects and chats')}
@@ -202,8 +205,8 @@ export const Conversations = memo(function Conversations({
         <div className="conversation-search">
           <Icon name="search" size={14} />
           <input
-            aria-label={t('Search projects and chats')}
-            placeholder={t('Search projects and chats')}
+            aria-label={searchLabel}
+            placeholder={searchLabel}
             value={query}
             maxLength={120}
             onChange={(e) => setQuery(e.target.value)}
@@ -215,7 +218,10 @@ export const Conversations = memo(function Conversations({
           )}
         </div>
       </div>
-      <nav className="project-cards" aria-label={t('Conversations')}>
+      <nav
+        className="project-cards"
+        aria-label={t(archived ? 'Archived projects and chats' : 'Conversations')}
+      >
         {orderedProjects.map(({ project, updatedAt }) => {
           const projectMatch =
             !!search && project.name.toLowerCase().includes(search.toLowerCase());
@@ -238,12 +244,24 @@ export const Conversations = memo(function Conversations({
             />
           );
         })}
-        {search && (
+        {archived && (
+          <>
+            <p className="archive-loading conversation-empty" role="status">
+              {t('Loading…')}
+            </p>
+            <p className="archive-empty conversation-empty">
+              {t(
+                search ? 'No matching projects or conversations' : 'No archived projects or chats',
+              )}
+            </p>
+          </>
+        )}
+        {!archived && search && (
           <p className="sidebar-search-empty conversation-empty">
             {t('No matching projects or conversations')}
           </p>
         )}
-        {!search && !orderedProjects.length && (
+        {!archived && !search && !orderedProjects.length && (
           <p className="conversation-empty">{t('No active projects')}</p>
         )}
       </nav>
@@ -299,12 +317,13 @@ const ProjectCard = memo(function ProjectCard({
   const listId = 'project-conversations-' + projectId;
   const actionsId = 'project-actions-' + projectId;
   const projectName = useRef<HTMLButtonElement>(null);
+  const [archiveExpanded, setArchiveExpanded] = useState(true);
   const [archivedChats, setArchivedChats] = useState(true);
   const archived = archiveView && (!project.archived || archivedChats);
   const [cursor, setCursor] = useState<string>();
   const [previous, setPrevious] = useState<(string | undefined)[]>([]);
   const [page, setPage] = useState<ConversationPage>({ data: [], nextCursor: null, scanned: 0 });
-  const [loading, setLoading] = useState(filtering);
+  const [loading, setLoading] = useState(filtering || archiveView);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const [projectMenu, setProjectMenu] = useState(false);
@@ -336,9 +355,20 @@ const ProjectCard = memo(function ProjectCard({
   latestUpdates.current = updates;
   const defaultExpanded =
     !inactive || active || updates.some(isWorking) || page.data.some(isWorking);
-  const isExpanded = preference?.expanded ?? defaultExpanded;
+  const isExpanded = archiveView ? archiveExpanded : (preference?.expanded ?? defaultExpanded);
+  const setExpanded = (expanded: boolean) => {
+    if (archiveView) setArchiveExpanded(expanded);
+    else onSidebarPreference(projectId, { expanded });
+  };
   const shouldLoad = filtering || archiveView || isExpanded;
-  const keepOpen = !!(filtering || archiveView || error || pending || confirmation || projectEdit);
+  const keepOpen = !!(
+    filtering ||
+    error ||
+    pending ||
+    confirmation ||
+    projectEdit ||
+    savingProject
+  );
   const collapsed = !keepOpen && !isExpanded;
   const projectConfirmation = confirmation === 'project';
   const archiveBusy = projectConfirmation ? savingProject : !!pending;
@@ -507,9 +537,13 @@ const ProjectCard = memo(function ProjectCard({
     setCursor(previous.at(-1));
     setPrevious((old) => old.slice(0, -1));
   };
-  const rows = collapsed
-    ? noUpdates
-    : page.data.filter((row) => row.projectId === projectId && matches(row, archived, search));
+  const rows = page.data.filter(
+    (row) => row.projectId === projectId && matches(row, archived, search),
+  );
+  const empty = !rows.length && !page.nextCursor && !previous.length && !error && !projectError;
+  const hideEmpty =
+    (archiveView && !project.archived) || (!!search && !loading && !projectEdit && archivedChats);
+  const showProjectActions = !collapsed && (!archiveView || project.archived);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -525,15 +559,7 @@ const ProjectCard = memo(function ProjectCard({
         setProjectMenu(false);
         projectMenuButton.current?.focus();
       }}
-      hidden={
-        !!search &&
-        !loading &&
-        !error &&
-        !rows.length &&
-        !page.nextCursor &&
-        !previous.length &&
-        !projectEdit
-      }
+      hidden={empty && hideEmpty}
     >
       <header className="project-card-header">
         <IconButton
@@ -548,7 +574,7 @@ const ProjectCard = memo(function ProjectCard({
           disabled={keepOpen}
           onClick={() => {
             setProjectMenu(false);
-            onSidebarPreference(projectId, { expanded: collapsed });
+            setExpanded(collapsed);
           }}
         />
         <h2 id={'project-heading-' + projectId}>
@@ -568,7 +594,7 @@ const ProjectCard = memo(function ProjectCard({
             title={project.path}
             disabled={!collapsed && disabled}
             onClick={() => {
-              if (collapsed) onSidebarPreference(projectId, { expanded: true });
+              if (collapsed) setExpanded(true);
               else onProject(projectId);
             }}
           >
@@ -578,7 +604,7 @@ const ProjectCard = memo(function ProjectCard({
             <span>{project.name}</span>
           </button>
         </h2>
-        {!collapsed && !project.archived && (
+        {!collapsed && !archiveView && (
           <button
             className="icon-button project-card-new"
             aria-label={
@@ -593,7 +619,15 @@ const ProjectCard = memo(function ProjectCard({
             <Icon name="newchat" size={16} />
           </button>
         )}
-        {!collapsed && (
+        {project.archived && (
+          <IconButton
+            icon="unarchive"
+            label={t('Restore project')}
+            disabled={savingProject}
+            onClick={() => void changeProjectArchive()}
+          />
+        )}
+        {showProjectActions && (
           <button
             ref={projectMenuButton}
             className="icon-button"
@@ -612,7 +646,7 @@ const ProjectCard = memo(function ProjectCard({
           </button>
         )}
       </header>
-      {!collapsed && projectMenu && (
+      {showProjectActions && projectMenu && (
         <div
           id={actionsId}
           className="project-actions"
@@ -633,17 +667,18 @@ const ProjectCard = memo(function ProjectCard({
             label={preference?.pinned ? t('Unpin') : t('Pin')}
             onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}
           />
-          <SidebarAction
-            icon={project.archived ? 'unarchive' : 'archive'}
-            label={project.archived ? t('Restore project') : t('Archive project')}
-            disabled={savingProject}
-            onClick={() => {
-              setProjectEdit(undefined);
-              setProjectError('');
-              if (project.archived) void changeProjectArchive();
-              else setConfirmation('project');
-            }}
-          />
+          {!archiveView && (
+            <SidebarAction
+              icon="archive"
+              label={t('Archive project')}
+              disabled={savingProject}
+              onClick={() => {
+                setProjectEdit(undefined);
+                setProjectError('');
+                setConfirmation('project');
+              }}
+            />
+          )}
         </div>
       )}
       {projectError && !projectEdit && !projectConfirmation && (
@@ -702,26 +737,33 @@ const ProjectCard = memo(function ProjectCard({
           <button onClick={refresh}>{t('Refresh list')}</button>
         </div>
       )}
-      {project.archived && (
-        <div className="project-chat-filter">
-          <select
-            aria-label={t('Chats in {project}', { project: project.name })}
-            value={archivedChats ? 'archived' : 'active'}
-            disabled={!!pending || !!confirmation}
-            onChange={(event) => {
-              setArchivedChats(event.target.value === 'archived');
-              setPage({ data: [], nextCursor: null, scanned: 0 });
-              setLoading(true);
-              refresh();
-            }}
-          >
-            <option value="archived">{t('Archived chats')}</option>
-            <option value="active">{t('Active chats')}</option>
-          </select>
-        </div>
-      )}
       <div className="project-conversations" id={listId} hidden={collapsed}>
-        {rows.map((row) => {
+        {project.archived && !collapsed && (
+          <div
+            className="project-chat-filter"
+            role="group"
+            aria-label={t('Chats in {project}', { project: project.name })}
+          >
+            {[true, false].map((showArchived) => (
+              <button
+                key={String(showArchived)}
+                type="button"
+                aria-pressed={showArchived === archivedChats}
+                disabled={!!pending || !!confirmation}
+                onClick={() => {
+                  if (showArchived === archivedChats) return;
+                  setArchivedChats(showArchived);
+                  setPage({ data: [], nextCursor: null, scanned: 0 });
+                  setLoading(true);
+                  refresh();
+                }}
+              >
+                {t(showArchived ? 'Archived chats' : 'Active chats')}
+              </button>
+            ))}
+          </div>
+        )}
+        {(collapsed ? noUpdates : rows).map((row) => {
           const status = conversationStatus(row, t);
           const routine = status.tone === 'neutral' && row.state === 'idle';
           const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt, locale) : undefined;
@@ -839,7 +881,7 @@ const ProjectCard = memo(function ProjectCard({
             </div>
           );
         })}
-        {!rows.length && !loading && !error && (search || archiveView) && (
+        {!collapsed && !rows.length && !loading && !error && (search || archiveView) && (
           <p className="conversation-empty">
             {search
               ? page.nextCursor

@@ -198,6 +198,8 @@
 
 ### Fixed
 
+- Match the archive sidebar to the project cards, with collapsible lists, direct restore controls, and a filter for active and archived chats inside archived projects.
+
 - Align the composer’s model, reasoning and task mode controls and place the speed reset below the Fast switch.
 
 - Keep the composer’s send arrow visible in dark and light themes, including when the input is empty or the button is hovered.

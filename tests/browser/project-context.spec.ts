@@ -99,7 +99,15 @@ test('project archive survives reload, preserves native chat states, and syncs r
   browser,
 }) => {
   await login(page);
-  const { b, second } = await fixture(page);
+  const { a, b, second } = await fixture(page);
+  const unrelatedPath = join(a.path, 'conversation-fixtures', 'empty-' + randomUUID());
+  await mkdir(unrelatedPath);
+  const unrelatedResponse = await page.request.post('/api/projects', {
+    data: { path: unrelatedPath, name: 'Empty archive fixture' },
+    headers: { Origin: origin },
+  });
+  expect(unrelatedResponse.ok()).toBe(true);
+  const unrelated = await unrelatedResponse.json();
   const archivedChat = await page.request.post('/api/threads/' + second.id + '/archive', {
     data: { operationId: randomUUID(), archived: true },
     headers: { Origin: origin },
@@ -133,17 +141,31 @@ test('project archive survives reload, preserves native chat states, and syncs r
     await expect(
       card.getByRole('button', { name: b.name, exact: true }),
     ).toHaveAccessibleDescription('Archived project');
-    const filters = card.getByRole('combobox', { name: 'Chats in ' + b.name });
+    const unrelatedCard = projectCard(page, unrelated.id);
+    await expect(unrelatedCard).toHaveAttribute('aria-busy', 'false');
+    await expect(unrelatedCard).toBeHidden();
+    const filters = card.getByRole('group', { name: 'Chats in ' + b.name });
+    const archived = filters.getByRole('button', { name: 'Archived chats', exact: true });
+    const active = filters.getByRole('button', { name: 'Active chats', exact: true });
+    const restore = card.getByRole('button', { name: 'Restore project', exact: true });
+    const disclosure = card.locator('.project-card-disclosure');
     const savedChat = card.getByRole('button', { name: second.title, exact: true });
     await expect(savedChat).toBeVisible();
-    await filters.selectOption('active');
+    await expect(archived).toHaveAttribute('aria-pressed', 'true');
+    await disclosure.click();
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    await expect(savedChat).toBeHidden();
+    await expect(restore).toBeVisible();
+    await disclosure.press('Enter');
+    await expect(savedChat).toBeVisible();
+    await active.click();
+    await expect(active).toHaveAttribute('aria-pressed', 'true');
     await expect(card.getByText('No active chats', { exact: true })).toBeVisible();
-    await filters.selectOption('archived');
+    await archived.click();
     await savedChat.click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
     await expect(page.getByLabel('Message Codex')).toHaveAttribute('readonly', '');
-    await menu.click();
-    await card.getByRole('button', { name: 'Restore project', exact: true }).click();
+    await restore.click();
     await expect(mirror).toBeVisible();
     await expect(filters).toHaveCount(0);
     await expect(savedChat).toBeVisible();
