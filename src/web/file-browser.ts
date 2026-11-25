@@ -1,3 +1,5 @@
+export const isHtmlFile = (path: string) => /\.html?$/i.test(path);
+
 export function fileBrowserUrl(
   kind: 'directory' | 'location' | 'file' | 'image',
   path: string,

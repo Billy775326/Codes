@@ -1,13 +1,15 @@
 import { useInterfaceLanguage } from './interface-language';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import Markdown, { type Components } from 'react-markdown';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import Markdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MarkdownLink } from './MarkdownLink';
 import {
   remarkProjectFileLinks,
+  resolveMessageFile,
   workspaceImagePath,
   type ProjectFileReference,
 } from './remarkProjectFileLinks';
+import { remarkVisualizationLinks } from './remarkVisualizationLinks';
 import { workspaceImageUrl } from '../shared/images';
 import type { FileBrowserResult, FileLocation } from '../shared/project-files';
 import { message, request } from './api';
@@ -38,16 +40,28 @@ function htmlPreviewIssue(html: string) {
     : 'No visible static HTML to preview.';
 }
 
-export function HtmlPreview({ html }: { html: string }) {
+export function HtmlPreview({
+  html,
+  initiallyOpen = false,
+}: {
+  html: string;
+  initiallyOpen?: boolean;
+}) {
   const { t } = useInterfaceLanguage();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const issue = useMemo(() => (open ? htmlPreviewIssue(html) : undefined), [open, html]);
+  const disclosure = useRef<HTMLDetailsElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  useLayoutEffect(() => {
+    // Open after insertion so the browser also closes the previously expanded preview.
+    if (initiallyOpen && disclosure.current) disclosure.current.open = true;
+  }, [initiallyOpen]);
   useEffect(() => {
     frame.current?.contentWindow?.postMessage(html, '*');
   }, [html]);
   return (
     <details
+      ref={disclosure}
       name="codes-html-preview"
       className="html-preview"
       onToggle={(event) => setOpen(event.currentTarget.open)}
@@ -234,6 +248,11 @@ export const MessageMarkdown = memo(function MessageMarkdown({
   assistant: boolean;
   streaming?: boolean;
 }) {
+  const { t } = useInterfaceLanguage();
+  const resolve = useMemo(
+    () => (href: string | undefined) => resolveMessageFile(href, projectPath, resolveFile),
+    [projectPath, resolveFile],
+  );
   const components = useMemo<Components>(
     () => ({
       ...(assistant && !streaming ? { pre: PreviewCodeBlock } : {}),
@@ -254,7 +273,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
             </button>
           );
         }
-        const file = assistant ? resolveFile(href) : undefined;
+        const file = assistant ? resolve(href) : undefined;
         if (file) {
           return (
             <button type="button" className="project-file-link" onClick={() => onOpenFile(file)}>
@@ -269,20 +288,22 @@ export const MessageMarkdown = memo(function MessageMarkdown({
         );
       },
     }),
-    [assistant, onOpenFile, onOpenImage, projectPath, resolveFile, streaming],
+    [assistant, onOpenFile, onOpenImage, projectPath, resolve, streaming],
   );
   if (streaming && text.length > liveMarkdownLimit)
     return <div className="stream-text">{text}</div>;
+  const remarkPlugins: NonNullable<Options['remarkPlugins']> = [remarkGfm];
+  if (assistant) {
+    remarkPlugins.push([remarkProjectFileLinks, { projectPath, resolveFile: resolve }]);
+    if (!streaming)
+      remarkPlugins.push([
+        remarkVisualizationLinks,
+        { resolveFile: resolve, label: (file: string) => t('Preview {file}', { file }) },
+      ]);
+  }
   return (
     <>
-      <Markdown
-        remarkPlugins={
-          assistant
-            ? [remarkGfm, [remarkProjectFileLinks, { projectPath, resolveFile }]]
-            : [remarkGfm]
-        }
-        components={components}
-      >
+      <Markdown remarkPlugins={remarkPlugins} components={components}>
         {text}
       </Markdown>
       {assistant && !streaming && /^(?:\s*<!doctype\s+html\b|\s*<html[\s>])/i.test(text) && (

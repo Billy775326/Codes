@@ -206,6 +206,8 @@
 
 ### Fixed
 
+- Open HTML file links and visualization references directly in the Files preview. HTML source remains available below the isolated preview.
+
 - Refresh the pinned turn message after a confirmed follow-up joins the same turn, including its expanded content and jump target.
 
 - Restore the composer permission choices and model, reasoning, and Fast controls. Changes save through Codex with a revision check and refresh the effective project values. Use dropdown presets for native fields in Settings.

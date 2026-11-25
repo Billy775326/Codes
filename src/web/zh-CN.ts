@@ -604,6 +604,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   General: '常规',
   'Prepare maintenance': '准备维护',
   'Preview HTML': '预览 HTML',
+  'Preview {file}': '预览 {file}',
   'Previous conversation page': '上一页会话',
   'Previous lines': '上一页文件行',
   'Previous patch lines': '上一页补丁',

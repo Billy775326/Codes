@@ -370,7 +370,6 @@ test('answers and project files preview raster images and isolated static HTML',
   await files.getByRole('button', { name: 'Back to files', exact: true }).click();
   await files.getByRole('button', { name: htmlName, exact: true }).click();
   await expect(files.locator('.file-lines')).toContainText('<h1');
-  await files.getByText('Preview HTML', { exact: true }).click();
   await expect(
     files.frameLocator('iframe').getByRole('heading', { name: 'Preview headline' }),
   ).toHaveCSS('color', 'rgb(12, 34, 56)');
@@ -390,11 +389,65 @@ test('HTML preview explains an empty JavaScript app shell and keeps its source v
   await page.getByRole('button', { name: 'Browse files', exact: true }).click();
   await page.getByRole('button', { name: 'app-entry.html', exact: true }).click();
   const preview = page.getByRole('region', { name: 'File preview', exact: true });
-  await preview.getByText('Preview HTML', { exact: true }).click();
   await expect(preview.getByRole('status')).toContainText('This page needs JavaScript to render.');
   await expect(preview.locator('iframe')).toHaveCount(0);
   await expect(preview.getByRole('group', { name: 'File lines' })).toContainText('/src/main.tsx');
 });
+
+test('HTML reply links and visualization references open the preview in one click', async ({
+  page,
+}) => {
+  const { base } = await fixture(page, 0);
+  const root = base.context!.project.path;
+  const mockup = join(dirname(root), '.local', 'mockup # draft.html');
+  const local = join(root, 'linked.html');
+  await mkdir(dirname(mockup), { recursive: true });
+  await writeFile(
+    mockup,
+    '<h1>File browser design</h1><script>throw Error("should not run")</script>',
+  );
+  await writeFile(local, '<h1>Project HTML</h1>');
+  const visualization = (path: string) =>
+    'visualize' + JSON.stringify({ path, mode: 'wide' }) + '';
+  const reply = base.thread.messages.find((message) => message.phase === 'final_answer')!;
+  reply.text = [
+    '[Open project HTML](./linked.html)',
+    `<a href="${local}">Open HTML anchor</a>`,
+    visualization(mockup),
+    visualization('https://example.com/remote.html'),
+    '`' + visualization(join(root, 'example.html')) + '`',
+  ].join('\n\n');
+  await reconnectUpdates(page);
+  const input = page.getByLabel('Message Codex');
+  await input.fill('Keep the draft');
+  const url = page.url();
+  const panel = page.locator('.context-panel');
+  await page.getByRole('button', { name: 'Open project HTML', exact: true }).click();
+  await expect(
+    panel.frameLocator('iframe').getByRole('heading', { name: 'Project HTML' }),
+  ).toBeVisible();
+  await panel.getByRole('button', { name: 'Close file preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Open HTML anchor', exact: true }).click();
+  await expect(
+    panel.frameLocator('iframe').getByRole('heading', { name: 'Project HTML' }),
+  ).toBeVisible();
+
+  const link = page.getByRole('button', { name: 'Preview mockup # draft.html', exact: true });
+  await link.press('Enter');
+  const dialog = page.getByRole('dialog', { name: mockup, exact: true });
+  await expect(
+    dialog.frameLocator('iframe').getByRole('heading', { name: 'File browser design' }),
+  ).toBeVisible();
+  await expect(dialog.locator('.file-lines')).toContainText('<script>');
+  await expect(page.getByRole('button', { name: 'Preview remote.html' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Preview example.html' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(link).toBeFocused();
+  await expect(page).toHaveURL(url);
+  await expect(input).toHaveValue('Keep the draft');
+});
+
 test('work sections around a question expand independently with commands collapsed', async ({
   page,
 }) => {

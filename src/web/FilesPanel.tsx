@@ -9,7 +9,7 @@ import {
 } from '../shared/project-files';
 import type { FileContent } from '../shared/types';
 import { ApiError, message, request } from './api';
-import { fileBrowserUrl } from './file-browser';
+import { fileBrowserUrl, isHtmlFile } from './file-browser';
 import { BrowserImagePreview, HtmlPreview } from './ContentPreview';
 import { InteractionDialog } from './InteractionDialog';
 import { Icon, IconButton } from './primitives';
@@ -105,7 +105,7 @@ function TextPreview({ file, attachment }: { file: FileContent; attachment?: Att
   return (
     <>
       <div className="file-preview-scroll" ref={scroller}>
-        {/\.html?$/i.test(file.path) && <HtmlPreview html={file.text} />}
+        {isHtmlFile(file.path) && <HtmlPreview html={file.text} initiallyOpen />}
         <div
           className="file-lines"
           role="group"
