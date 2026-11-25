@@ -11,6 +11,7 @@ See [Conversation settings](conversation-settings.md) for the configuration edit
 - Read effective settings through the Codex App Server for the conversation's verified project directory. Let Codex apply its configuration layers, project trust, and managed requirements. Project only the fields and source information needed by the interface.
 - Persist execution changes through supported native configuration interfaces. Show the target scope before saving, use the native version check where available, and read the effective value after the write. If a higher-priority layer determines the value, show that source. Represent unsupported operations and unavailable values explicitly.
 - Treat copies of execution settings in Codes preferences, drafts, SQLite, and queue payloads as historical or migration data once the native path is active. Any cache of native configuration is disposable and must be refreshed after a write and verified before execution.
+- Compare native configuration independently of object field order. Preserve value changes, array order, source versions, and runtime identity when detecting changes before execution.
 
 ### Dispatch and report execution
 

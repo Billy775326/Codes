@@ -93,6 +93,51 @@ it('rejects unavailable native review and branching before reserving an operatio
   expect(service.store.operation(fork)).toBeUndefined();
 });
 
+it('dispatches once when unchanged native configuration arrives in a different field order', async () => {
+  const { service, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  let reads = 0;
+  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
+    const result = await call(method, params, timeout);
+    if (method === 'config/read') {
+      result.config = { model: 'configured-model', model_reasoning_effort: 'medium' };
+      if (++reads % 2 === 0)
+        result.config = Object.fromEntries(Object.entries(result.config).reverse());
+    }
+    return result;
+  });
+  const operation = randomUUID();
+  await service.send(thread.id, operation, 'Unchanged native configuration', {});
+  await until(() => thread.state === 'completed');
+  expect(service.store.operation(operation)?.state).toBe('completed');
+  expect(
+    (await service.history(thread.id)).messages.filter((item) => item.clientId === operation),
+  ).toHaveLength(1);
+});
+
+it('refuses dispatch when native configuration really changes during synchronization', async () => {
+  const { service, thread } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  let changed = false;
+  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
+    const result = await call(method, params, timeout);
+    if (method === 'thread/settings/update') changed = true;
+    if (method === 'config/read') {
+      result.config.model = 'configured-model';
+      if (changed) result.config.approval_policy = 'never';
+    }
+    return result;
+  });
+  const operation = randomUUID();
+  await expect(
+    service.send(thread.id, operation, 'Configuration changed before dispatch', {}),
+  ).rejects.toMatchObject({ code: 'SETTINGS_CONFLICT', uncertain: false });
+  expect(service.store.operation(operation)).toMatchObject({ state: 'failed', turnId: undefined });
+  expect(
+    (await service.history(thread.id)).messages.some((item) => item.clientId === operation),
+  ).toBe(false);
+});
+
 it('refreshes the loaded thread when native configuration changes', async () => {
   const { service, thread, project } = await fixture();
   const call = service.driver.call.bind(service.driver);

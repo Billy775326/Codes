@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Driver } from '../codex/driver.js';
-import { AppError } from '../shared/errors.js';
+import { AppError, record } from '../shared/errors.js';
 import {
   nativeConfigurationEdits,
   type NativeConfigurationEdits,
@@ -91,7 +91,17 @@ export function nativeExecutionSettings(response: unknown): NativeExecutionSetti
 }
 
 function digest(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  // Native map fields can arrive in a different order on each config/read.
+  const serialized = JSON.stringify(value, (_key, entry: unknown) =>
+    record(entry)
+      ? Object.fromEntries(
+          Object.keys(entry)
+            .sort()
+            .map((key) => [key, entry[key]]),
+        )
+      : entry,
+  );
+  return createHash('sha256').update(serialized).digest('hex');
 }
 
 export class NativeConfiguration {
