@@ -1,343 +1,77 @@
 import { chooseSettingsSection } from './settings-helpers';
 import { test, expect, type Page } from '@playwright/test';
 const origin = 'http://127.0.0.1:19140';
-let restoreDefaults: unknown;
-test.afterEach(async ({ page }) => {
-  if (restoreDefaults) {
-    const settings = restoreDefaults;
-    restoreDefaults = undefined;
-    const current = await (await page.request.get('/api/settings/defaults')).json();
-    await page.request.put('/api/settings/defaults', {
-      data: { revision: current.revision, settings },
-      headers: { Origin: origin },
-    });
-  }
-  const id = await page.evaluate(() => localStorage.getItem('codes.thread')).catch(() => null);
-  if (id) {
-    const response = await page.request.get('/api/threads/' + id + '/snapshot');
-    const snapshot = await response.json();
-    if (['running', 'waitingApproval', 'waitingInput'].includes(snapshot.thread?.state))
-      await page.request.post('/api/threads/' + id + '/interrupt', {
-        data: {},
-        headers: { Origin: origin },
-      });
-  }
-});
 
 async function login(page: Page) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.locator('.connection')).toHaveText('Connected');
-  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toBeEnabled();
-}
-async function send(page: Page, text: string) {
-  await page.getByLabel('Message Codex').fill(text);
-  await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  return (await page.evaluate(() => localStorage.getItem('codes.thread')))!;
-}
-async function permission(page: Page, name: string) {
-  await page.getByRole('button', { name: 'Codex permissions', exact: true }).click();
-  await page
-    .getByRole('group', { name: 'Permission presets', exact: true })
-    .getByRole('button', { name: new RegExp('^' + name) })
-    .click();
-}
-async function model(page: Page, effort: string) {
-  await page.getByRole('button', { name: 'Model and reasoning', exact: true }).click();
-  await page.getByLabel('Model', { exact: true }).selectOption('simulated-model');
-  await page.getByLabel('Reasoning effort', { exact: true }).selectOption(effort);
-  await page.keyboard.press('Escape');
-}
-async function profile(page: Page, id: string) {
-  return (await page.request.get('/api/threads/' + id + '/settings')).json();
 }
 
-test('conversation choices persist without sending and stay independent across switches and reload', async ({
-  page,
-}) => {
-  await login(page);
-  const a = 'Settings A ' + Date.now(),
-    b = 'Settings B ' + Date.now();
-  const first = await send(page, a);
-  await permission(page, 'Ask for approval');
-  await model(page, 'high');
-  await page.getByRole('button', { name: 'Model and reasoning', exact: true }).click();
-  await page.getByRole('switch', { name: 'Fast mode', exact: true }).check();
-  await page.getByLabel('Task mode', { exact: true }).selectOption('plan');
-  await page.keyboard.press('Escape');
-  await expect
-    .poll(async () => (await profile(page, first)).settings)
-    .toEqual({
-      permission: 'workspace-write',
-      model: 'simulated-model',
-      effort: 'high',
-      fast: true,
-      mode: 'plan',
+test.afterEach(async ({ page }) => {
+  const id = await page.evaluate(() => localStorage.getItem('codes.thread')).catch(() => null);
+  if (!id) return;
+  const snapshot = await (await page.request.get('/api/threads/' + id + '/snapshot')).json();
+  if (['running', 'waitingApproval', 'waitingInput'].includes(snapshot.thread?.state))
+    await page.request.post('/api/threads/' + id + '/interrupt', {
+      data: {},
+      headers: { Origin: origin },
     });
-  await page.getByRole('button', { name: 'New conversation', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
-    'Read only',
-  );
-  await expect(
-    page.getByRole('button', { name: 'Model and reasoning', exact: true }),
-  ).toContainText('Medium');
-  const second = await send(page, b);
-  await model(page, 'low');
-  await page.locator('.thread-link').filter({ hasText: a }).click();
-  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
-    'Ask for approval',
-  );
-  await expect(
-    page.getByRole('button', { name: 'Model and reasoning', exact: true }),
-  ).toContainText('High');
-  await expect(page.getByRole('button', { name: 'Exit Plan mode', exact: true })).toBeVisible();
-  await page.reload();
-  await expect(
-    page.getByRole('button', { name: 'Model and reasoning', exact: true }),
-  ).toContainText('High');
-  expect((await profile(page, second)).settings).toMatchObject({
-    permission: 'read-only',
-    effort: 'low',
-  });
-  expect((await profile(page, first)).settings.fast).toBe(true);
-  await expect(page.getByTestId('message-user')).toHaveCount(1);
 });
 
-test('new-conversation defaults persist on the server and leave an existing conversation unchanged', async ({
+test('native settings save without dispatch, refresh across clients and reject stale edits', async ({
   page,
   browser,
 }) => {
   await login(page);
-  const original = await (await page.request.get('/api/settings/defaults')).json();
-  restoreDefaults = original.settings;
-  const id = await send(page, 'Existing defaults fixture ' + Date.now());
-  const previous = await profile(page, id);
-  const other = await browser.newContext();
+  const observer = await browser.newContext();
+  const second = await observer.newPage();
+  await login(second);
+  const projectId = await page.evaluate(() => localStorage.getItem('codes.project'));
+  const path = '/api/projects/' + projectId + '/codex-configuration';
+  const before = await (await page.request.get(path)).json();
   try {
-    await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await chooseSettingsSection(page, 'Chat defaults');
-    const section = page.getByRole('region', { name: 'Chat defaults', exact: true });
-    await section
-      .getByLabel('Default permissions', { exact: true })
-      .selectOption('workspace-write');
-    await section.getByLabel('Default model', { exact: true }).selectOption('simulated-model');
-    await section.getByLabel('Default reasoning effort', { exact: true }).selectOption('low');
-    await section.getByLabel('Default task mode', { exact: true }).selectOption('plan');
-    await section.getByRole('switch', { name: 'Default fast mode', exact: true }).check();
-    await expect(section.locator('.fast-switch-track')).toHaveCSS('width', '38px');
-    await expect
-      .poll(
-        async () => (await (await page.request.get('/api/settings/defaults')).json()).settings.fast,
-      )
-      .toBe(true);
-    await page.keyboard.press('Escape');
-    expect(await profile(page, id)).toEqual(previous);
-    await page.getByRole('button', { name: 'New conversation', exact: true }).click();
+    for (const client of [page, second]) {
+      await client.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+      await chooseSettingsSection(
+        client.getByRole('dialog', { name: 'Settings' }),
+        'Codex configuration',
+      );
+      await expect(client.getByRole('button', { name: 'Save Codex configuration' })).toBeDisabled();
+    }
+    await page.getByLabel('Reasoning effort', { exact: true }).fill('high');
+    await page.getByRole('button', { name: 'Save Codex configuration' }).click();
     await expect(
-      page.getByRole('button', { name: 'Codex permissions', exact: true }),
-    ).toContainText('Ask for approval');
+      page.getByRole('status').filter({ hasText: 'Effective project values' }),
+    ).toBeVisible();
+    await expect(page.getByTestId('message-user')).toHaveCount(0);
+    await second.getByLabel('Reasoning effort', { exact: true }).fill('low');
+    await second.getByRole('button', { name: 'Save Codex configuration' }).click();
+    await expect(second.getByRole('alert')).toContainText('Codex configuration changed');
+    await second.getByRole('button', { name: 'Reload settings' }).click();
+    await expect(second.getByLabel('Reasoning effort', { exact: true })).toHaveValue('high');
+    await second.keyboard.press('Escape');
     await expect(
-      page.getByRole('button', { name: 'Model and reasoning', exact: true }),
-    ).toContainText('Low');
-    await expect(page.getByRole('button', { name: 'Exit Plan mode', exact: true })).toBeVisible();
-    await page.reload();
-    await expect(
-      page.getByRole('button', { name: 'Model and reasoning', exact: true }),
-    ).toContainText('Low');
-    const observer = await other.newPage();
-    await login(observer);
-    await expect(
-      observer.getByRole('button', { name: 'Codex permissions', exact: true }),
-    ).toContainText('Ask for approval');
-    await expect(
-      observer.getByRole('button', { name: 'Model and reasoning', exact: true }),
-    ).toContainText('Low');
-    await expect(observer.getByTestId('message-user')).toHaveCount(0);
-    await observer.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await chooseSettingsSection(observer, 'Chat defaults');
-    const resetScope = observer.getByRole('region', {
-      name: 'Chat defaults',
-      exact: true,
-    });
-    await resetScope
-      .getByRole('button', { name: 'Reset new conversation defaults', exact: true })
-      .click();
-    await resetScope.getByRole('button', { name: 'Confirm reset', exact: true }).click();
-    await expect
-      .poll(async () => (await (await page.request.get('/api/settings/defaults')).json()).settings)
-      .toEqual({ permission: 'read-only' });
-    expect(await profile(page, id)).toEqual(previous);
-    await expect(
-      page.getByRole('button', { name: 'Codex permissions', exact: true }),
-    ).toContainText('Read only');
+      second.getByRole('button', { name: 'Model and reasoning', exact: true }),
+    ).toContainText('high');
   } finally {
-    await other.close();
-  }
-});
-
-test('changing future settings does not reconfigure the active task or existing queued messages', async ({
-  page,
-}) => {
-  await login(page);
-  await page.getByLabel('Message Codex').fill('[hold] Active profile fixture ' + Date.now());
-  await page.getByRole('button', { name: 'Send message', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
-  const id = (await page.evaluate(() => localStorage.getItem('codes.thread')))!;
-  await page.getByLabel('Message Codex').fill('Old queued settings');
-  await page.getByRole('button', { name: 'Queue message', exact: true }).click();
-  await permission(page, 'Ask for approval');
-  await model(page, 'high');
-  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-  await page
-    .getByRole('combobox', { name: 'Follow-up delivery', exact: true })
-    .selectOption('steer');
-  await page.keyboard.press('Escape');
-  const draft = page.getByLabel('Message Codex');
-  await draft.fill('New queued settings');
-  await expect(
-    page.getByRole('button', { name: 'Add to current task', exact: true }),
-  ).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled();
-  await draft.press('Enter');
-  await expect(page.getByRole('region', { name: 'Queued messages' })).toContainText(
-    'New queued settings',
-  );
-  const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
-  const queuedAdd = queue
-    .getByRole('button', { name: 'Add queued message to current task' })
-    .last();
-  await expect(queuedAdd).toBeDisabled();
-  await queuedAdd.hover();
-  await expect(page.locator('.control-tooltip')).toHaveText(
-    'Add queued message to current task · Requires matching task settings.',
-  );
-  const snapshot = await (await page.request.get('/api/threads/' + id + '/snapshot')).json();
-  expect(snapshot.thread.settings.permission).toBe('read-only');
-  expect(
-    snapshot.thread.queue.items.map(
-      (item: { settings: { permission: string } }) => item.settings.permission,
-    ),
-  ).toEqual(['read-only', 'workspace-write']);
-  await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
-  await queue.getByRole('button', { name: 'Remove queued message', exact: true }).first().click();
-  await queue.getByRole('button', { name: 'Remove queued message', exact: true }).first().click();
-  await page.reload();
-  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
-    'Ask for approval',
-  );
-  await expect(
-    page.getByRole('button', { name: 'Model and reasoning', exact: true }),
-  ).toContainText('High');
-});
-
-test('a late save acknowledgement cannot change another conversation', async ({ page }) => {
-  await login(page);
-  const a = 'Late settings A ' + Date.now(),
-    b = 'Late settings B ' + Date.now();
-  const first = await send(page, a);
-  await page.getByRole('button', { name: 'New conversation', exact: true }).click();
-  const second = await send(page, b);
-  await page.locator('.thread-link').filter({ hasText: a }).click();
-  let release!: () => void;
-  const hold = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let intercept = true;
-  await page.route('**/api/threads/' + first + '/settings', async (route) => {
-    if (route.request().method() !== 'PUT' || !intercept) return route.continue();
-    intercept = false;
-    const response = await route.fetch();
-    await hold;
-    await route.fulfill({ response });
-  });
-  await permission(page, 'Ask for approval');
-  await expect(page.getByText('Saving conversation settings…', { exact: true })).toBeVisible();
-  await page.locator('.thread-link').filter({ hasText: b }).click();
-  release();
-  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
-    'Read only',
-  );
-  expect((await profile(page, second)).settings.permission).toBe('read-only');
-  await page.locator('.thread-link').filter({ hasText: a }).click();
-  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
-    'Ask for approval',
-  );
-});
-
-for (const queueAnotherChoice of [false, true])
-  test(`a remote update during a delayed save preserves revision ordering (queued=${queueAnotherChoice})`, async ({
-    page,
-  }) => {
-    await login(page);
-    const id = await send(page, 'Concurrent settings ' + Date.now());
-    let release!: () => void;
-    const hold = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let intercept = true;
-    await page.route('**/api/threads/' + id + '/settings', async (route) => {
-      if (route.request().method() !== 'PUT' || !intercept) return route.continue();
-      intercept = false;
-      const response = await route.fetch();
-      await hold;
-      await route.fulfill({ response });
-    });
-    await permission(page, 'Ask for approval');
-    await expect(page.getByText('Saving conversation settings…', { exact: true })).toBeVisible();
-    if (queueAnotherChoice) await permission(page, 'Read only');
-    const saved = await profile(page, id);
-    const remote = await page.request.put('/api/threads/' + id + '/settings', {
-      data: { revision: saved.revision, settings: { permission: 'danger-full-access' } },
+    const current = await (await page.request.get(path)).json();
+    await page.request.put(path, {
+      data: {
+        version: current.userVersion,
+        changes: { model_reasoning_effort: before.effort ?? null },
+      },
       headers: { Origin: origin },
     });
-    expect(remote.status()).toBe(200);
-    release();
-    if (queueAnotherChoice) {
-      await expect(
-        page.getByRole('button', { name: 'Reload settings', exact: true }),
-      ).toBeVisible();
-      await page.getByRole('button', { name: 'Reload settings', exact: true }).click();
-    }
-    await expect(
-      page.getByRole('button', { name: 'Codex permissions', exact: true }),
-    ).toContainText('Full access');
-    expect((await profile(page, id)).settings.permission).toBe('danger-full-access');
-    await expect(page.getByTestId('message-user')).toHaveCount(1);
-  });
-
-test('a lost save response is confirmed by reading without creating task receipts', async ({
-  page,
-}) => {
-  await login(page);
-  const id = await send(page, 'Lost settings response ' + Date.now());
-  let writes = 0;
-  let intercept = true;
-  await page.route('**/api/threads/' + id + '/settings', async (route) => {
-    if (route.request().method() !== 'PUT' || !intercept) return route.continue();
-    intercept = false;
-    writes++;
-    await route.fetch();
-    await route.abort();
-  });
-  await permission(page, 'Ask for approval');
-  await page.getByLabel('Message Codex').fill('Unsent follow-up');
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-  await expect(
-    page.getByText('A request may still be running. Check before continuing.', { exact: true }),
-  ).toHaveCount(0);
-  expect(writes).toBe(1);
-  expect((await profile(page, id)).settings.permission).toBe('workspace-write');
-  await expect(page.getByTestId('message-user')).toHaveCount(1);
+    await observer.close();
+  }
 });
 
 test('queued receipt checks preserve settings semantics across serialization and never resend a task', async ({
   page,
 }) => {
   await login(page);
-  await model(page, 'high');
   await page.getByLabel('Message Codex').fill('[hold] Settings receipt fixture ' + Date.now());
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
@@ -349,7 +83,7 @@ test('queued receipt checks preserve settings semantics across serialization and
     await route.fetch();
     await route.abort();
   });
-  await page.getByLabel('Message Codex').fill('Captured pending settings');
+  await page.getByLabel('Message Codex').fill('Captured queued intent');
   await page.getByRole('button', { name: 'Queue message', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Check queue receipt', exact: true }),
@@ -392,35 +126,12 @@ test('queued receipt checks preserve settings semantics across serialization and
   await expect(page.getByTestId('message-user')).toHaveCount(1);
 });
 
-test('failed saves block dispatch and allow explicit retry', async ({ page }) => {
-  await login(page);
-  const id = await send(page, 'Failed settings save ' + Date.now());
-  let intercept = true;
-  await page.route('**/api/threads/' + id + '/settings', async (route) => {
-    if (route.request().method() !== 'PUT' || !intercept) return route.continue();
-    intercept = false;
-    await route.fulfill({
-      status: 503,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: { code: 'UNAVAILABLE', message: 'Fixture unavailable' } }),
-    });
-  });
-  await permission(page, 'Ask for approval');
-  await page.getByLabel('Message Codex').fill('Keep this unsent draft');
-  await expect(page.getByRole('button', { name: 'Retry settings', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Retry settings', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-  await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
-  expect((await profile(page, id)).settings.permission).toBe('workspace-write');
-});
-
 for (const viewport of [
   { width: 1440, height: 1000 },
   { width: 320, height: 640 },
   { width: 390, height: 480 },
 ])
-  test(`default settings remain reachable in both themes at ${viewport.width}x${viewport.height}`, async ({
+  test(`native settings remain reachable in both themes at ${viewport.width}x${viewport.height}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -430,13 +141,13 @@ for (const viewport of [
     for (const theme of ['dark', 'light']) {
       await chooseSettingsSection(dialog, 'General');
       await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
-      await chooseSettingsSection(dialog, 'Chat defaults');
+      await chooseSettingsSection(dialog, 'Codex configuration');
       for (const name of [
-        'Default permissions',
-        'Default model',
-        'Default reasoning effort',
-        'Default task mode',
-        'Default fast mode',
+        'Permission profile',
+        'Model',
+        'Reasoning effort',
+        'Approval reviewer',
+        'Service tier',
       ]) {
         const control = dialog.getByLabel(name, { exact: true });
         await control.scrollIntoViewIfNeeded();

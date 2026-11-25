@@ -15,25 +15,15 @@ async function stop(page: Page) {
   await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
 }
 
-test('native model, reasoning and Plan mode survive reconnect and expose real plan/context metadata', async ({
-  page,
-}) => {
+test('native Plan exposes plan and context metadata across reconnect', async ({ page }) => {
   await login(page);
-  await page.getByRole('button', { name: 'Model and reasoning', exact: true }).click();
-  await page.getByLabel('Model', { exact: true }).selectOption('simulated-model');
-  await page.getByLabel('Reasoning effort').selectOption('high');
-  await page.keyboard.press('Escape');
   await page.getByLabel('Message Codex').fill('/plan');
   await page.getByLabel('Message Codex').press('Enter');
   const request = page.waitForRequest(
     (request) => request.url().endsWith('/send') && request.method() === 'POST',
   );
   await send(page, 'Plan mode fixture ' + Date.now());
-  expect((await request).postDataJSON().settings).toMatchObject({
-    mode: 'plan',
-    effort: 'high',
-    model: 'simulated-model',
-  });
+  expect((await request).postDataJSON().settings).toEqual({ mode: 'plan' });
   await expect(page.getByRole('region', { name: 'Task plan' })).toContainText('Propose a change');
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Session status', exact: true }).click();
@@ -42,9 +32,7 @@ test('native model, reasoning and Plan mode survive reconnect and expose real pl
   await expect(dialog).toContainText('3,400 tokens');
   await page.keyboard.press('Escape');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Exit Plan mode', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Reasoning effort')).toHaveValue('high');
-  await page.getByRole('button', { name: 'Exit Plan mode', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Exit Plan mode', exact: true })).toHaveCount(0);
   await send(page, 'Return to Code mode');
   await expect(page.getByRole('region', { name: 'Task plan' })).toHaveCount(0);
 });
@@ -174,7 +162,7 @@ test('review uses native targets inline and in a separate conversation while pre
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).not.toBe(source);
   await expect(page.getByTestId('message-user')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toHaveText(
-    'Read only',
+    'Codex default',
   );
 });
 

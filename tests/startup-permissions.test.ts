@@ -218,27 +218,29 @@ it('ignores retired global policy settings and preserves native permissions acro
       const projects = await (await fetch(base + '/api/projects', { headers: { cookie } })).json();
       const project = projects.find((item: { path: string }) => item.path === root);
       expect(project).toBeDefined();
-      const profile = await (
-        await fetch(base + '/api/settings/defaults', { headers: { cookie } })
-      ).json();
+      const path = base + '/api/projects/' + project.id + '/codex-configuration';
+      const config = await (await fetch(path, { headers: { cookie } })).json();
       if (attempt === 0) {
-        const saved = await fetch(base + '/api/settings/defaults', {
+        const saved = await fetch(path, {
           method: 'PUT',
           headers: { cookie, Origin: base, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            revision: profile.revision,
-            settings: { permission: 'danger-full-access' },
+            version: config.userVersion,
+            changes: { default_permissions: ':workspace' },
           }),
         });
         expect(saved.status).toBe(200);
-      } else expect(profile.settings.permission).toBe('danger-full-access');
+      } else expect(config.permissionProfile).toBe(':workspace');
       const created = await fetch(base + '/api/projects/' + project.id + '/threads', {
         method: 'POST',
         headers: { cookie, Origin: base, 'Content-Type': 'application/json' },
         body: '{}',
       });
       expect(created.status).toBe(200);
-      expect((await created.json()).settings.permission).toBe('danger-full-access');
+      expect((await created.json()).nativeSettings).toMatchObject({
+        permissionProfile: ':workspace',
+        sandbox: 'workspaceWrite',
+      });
       await stop(child);
       child = undefined;
     }

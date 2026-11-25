@@ -125,7 +125,7 @@ If the process was started with `CODES_ACCESS_TOKEN`, that environment value rem
 
 ## Runtime settings
 
-In **Settings → Codex CLI**, set the default native RPC deadline (1,000–300,000 ms) and whether native questions are available in Code mode. The form also shows the Codex executable and Codes data directory. Save and restart Codes to apply changes. `runtime-settings.json` in the private data directory takes precedence over `CODES_CODE_QUESTIONS` and `CODES_CODEX_REQUEST_TIMEOUT_MS`. Before a save, Code-mode questions are enabled when the installed CLI supports them and the native request deadline is 30,000 ms. Operations with dedicated deadlines retain those deadlines.
+In **Settings → Codex CLI**, set the default native RPC deadline (1,000–300,000 ms). The form also shows the Codex executable and Codes data directory. Save and restart Codes to apply changes. `runtime-settings.json` in the private data directory takes precedence over `CODES_CODE_QUESTIONS` and `CODES_CODEX_REQUEST_TIMEOUT_MS`. Before a save, Code-mode questions are enabled when the installed CLI supports them and the native request deadline is 30,000 ms. Operations with dedicated deadlines retain those deadlines.
 
 To recover from invalid runtime settings, stop Codes, move `runtime-settings.json` to a backup outside the active path, and restart with the desired environment values.
 

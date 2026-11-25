@@ -12,7 +12,6 @@ export function RuntimeSettings({
 }) {
   const { t, locale } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<RuntimeSettingsSnapshot>();
-  const [questions, setQuestions] = useState(true);
   const [timeout, setTimeout] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -22,7 +21,6 @@ export function RuntimeSettings({
 
   function populate(next: RuntimeSettingsSnapshot) {
     setSnapshot(next);
-    setQuestions(next.settings.codeQuestions);
     setTimeout(String(next.settings.requestTimeoutMs));
   }
 
@@ -43,9 +41,7 @@ export function RuntimeSettings({
   }
 
   const settings = snapshot?.settings;
-  const changed =
-    !!settings &&
-    (questions !== settings.codeQuestions || timeout !== String(settings.requestTimeoutMs));
+  const changed = !!settings && timeout !== String(settings.requestTimeoutMs);
   useEffect(() => {
     onDraft({ changed, busy: saving });
   }, [changed, saving, onDraft]);
@@ -77,7 +73,10 @@ export function RuntimeSettings({
           method: 'PUT',
           body: JSON.stringify({
             revision: snapshot.revision,
-            settings: { codeQuestions: questions, requestTimeoutMs: Number(timeout) },
+            settings: {
+              codeQuestions: snapshot.settings.codeQuestions,
+              requestTimeoutMs: Number(timeout),
+            },
           }),
         }),
       );
@@ -100,17 +99,6 @@ export function RuntimeSettings({
     >
       <section className="preferences-section" aria-labelledby="native-requests-heading">
         <h3 id="native-requests-heading">{t('Native requests')}</h3>
-        <label className="preference-row">
-          <span>{t('Codex questions in Code mode')}</span>
-          <input
-            className="preference-checkbox"
-            type="checkbox"
-            role="switch"
-            checked={questions}
-            onChange={(event) => setQuestions(event.target.checked)}
-            disabled={saving}
-          />
-        </label>
         <label className="preference-row">
           <span className="preference-description">
             {t('Native request timeout (milliseconds)')}
@@ -147,13 +135,9 @@ export function RuntimeSettings({
       </section>
       {snapshot.restartRequired ? (
         <p role="status">
-          {t(
-            'Saved. Restart Codes to apply. Active timeout {timeout} ms. Code-mode questions {state}.',
-            {
-              timeout: snapshot.active.requestTimeoutMs.toLocaleString(locale),
-              state: t(snapshot.active.codeQuestions ? 'enabled' : 'disabled'),
-            },
-          )}
+          {t('Saved. Restart Codes to apply. Active timeout {timeout} ms.', {
+            timeout: snapshot.active.requestTimeoutMs.toLocaleString(locale),
+          })}
         </p>
       ) : saved && !changed ? (
         <p role="status">{t('Runtime settings saved.')}</p>

@@ -298,7 +298,7 @@ test('branching from a completed turn copies only earlier context and preserves 
   ).toBeVisible();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toHaveText(
-    'Read only',
+    'Codex default',
   );
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).not.toBe(source);
   await page.reload();

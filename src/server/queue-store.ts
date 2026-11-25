@@ -14,6 +14,7 @@ export const queueSchema = `
   thread_id TEXT PRIMARY KEY REFERENCES threads(id), paused INTEGER NOT NULL DEFAULT 0, reason TEXT);
 `;
 const manualPause = 'Paused by you.';
+export const legacyQueueReview = 'Review Codex permissions before resuming this legacy queue.';
 export class QueueStore {
   constructor(private db: DatabaseSync) {}
   count(threadId: string) {
@@ -181,9 +182,9 @@ export class QueueStore {
   pause(threadId: string) {
     this.db
       .prepare(
-        'INSERT INTO queue_controls VALUES(?,1,?) ON CONFLICT(thread_id) DO UPDATE SET paused=1,reason=excluded.reason',
+        'INSERT INTO queue_controls VALUES(?,1,?) ON CONFLICT(thread_id) DO UPDATE SET paused=1,reason=excluded.reason WHERE queue_controls.reason IS NOT ?',
       )
-      .run(threadId, manualPause);
+      .run(threadId, manualPause, legacyQueueReview);
   }
   pauseForReview(threadId: string, reason: string) {
     this.db

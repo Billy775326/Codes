@@ -1,3 +1,4 @@
+import type { NativeConfigurationSnapshot } from '../shared/native-configuration';
 import { PreferencesDialog } from './PreferencesDialog';
 import { taskActivity } from './conversation-status';
 import {
@@ -16,8 +17,6 @@ import { sameSettings } from '../shared/types';
 import { parseQuestionReplies, questionSourceItemId } from '../shared/question-replies';
 import { imageLimits } from '../shared/images';
 import { hasHiddenPathSegment } from '../shared/project-files';
-import { useSettingsProfile } from './useSettingsProfile';
-import { settingsSchema } from '../shared/settings';
 import { ImageAttachmentView } from './ImageAttachments';
 import { ImagePreviewDialog } from './ContentPreview';
 import { MessageView } from './ConversationMessage';
@@ -30,8 +29,6 @@ import { createRoot } from 'react-dom/client';
 import type {
   Action,
   Attachment,
-  CodexDefaults,
-  SettingsProfile,
   Envelope,
   FileContent,
   Message,
@@ -45,7 +42,6 @@ import type {
   Thread,
   QueueState,
   QueuePayload,
-  Model,
   ReviewTarget,
   FileChange,
 } from '../shared/types';
@@ -100,12 +96,9 @@ const saved = (key: string) => {
 };
 const save = (key: string, value: string) => {
   try {
-    if ((key.startsWith('codes.draft.') || key.startsWith('codes.new-settings.')) && value) {
+    if (key.startsWith('codes.draft.') && value) {
       const drafts = Object.keys(localStorage).filter(
-        (entry) =>
-          entry.startsWith(
-            key.startsWith('codes.new-settings.') ? 'codes.new-settings.' : 'codes.draft.',
-          ) && entry !== key,
+        (entry) => entry.startsWith('codes.draft.') && entry !== key,
       );
       while (drafts.length >= 20) localStorage.removeItem(drafts.shift()!);
     }
@@ -192,7 +185,7 @@ function App() {
   const directoryBlocked = contextReady && !context.directory.available;
   const [nativeDefaults, setNativeDefaults] = useState<{
     projectId: string;
-    value: CodexDefaults;
+    value: NativeConfigurationSnapshot;
   }>();
   const codexDefaults =
     nativeDefaults?.projectId === contextProjectId ? nativeDefaults.value : undefined;
@@ -201,8 +194,6 @@ function App() {
     views.current = rememberProject(views.current, owner, id);
     save('codes.project-views', JSON.stringify(views.current));
   };
-  const [models, setModels] = useState<Model[]>([]);
-  const [autoReviewReady, setAutoReviewReady] = useState(false);
   const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
   const [previewedImage, setPreviewedImage] = useState<string>();
@@ -240,40 +231,18 @@ function App() {
   const threadRef = useRef(threadId);
   threadRef.current = threadId;
   const composerControls = useRef<ComposerControlsHandle>(null);
-  const [newSettings, setNewSettings] = useState<Settings>({ permission: 'read-only' });
-  const defaultSettings = useSettingsProfile(auth === 'ready' ? '/settings/defaults' : undefined);
-  const conversationSettings = useSettingsProfile(
-    auth === 'ready' && threadId ? '/threads/' + threadId + '/settings' : undefined,
-  );
-  const settings = threadId
-    ? (conversationSettings.value?.settings ??
-      (thread?.id === threadId
-        ? (thread.composerSettings?.settings ?? thread.settings)
-        : { permission: 'read-only' as const }))
-    : newSettings;
-  const profile = threadId ? conversationSettings : defaultSettings;
-  const settingsBlocked = profile.loading || profile.saving || !!profile.error || !profile.saved;
-  const changeSettings = (next: Settings) => {
-    if (threadId) conversationSettings.change(next);
-    else {
-      setNewSettings(next);
-      if (!save('codes.new-settings.' + projectId, JSON.stringify(next)))
-        setError('Draft settings apply now, but this browser could not save them.');
-    }
-  };
+  const [mode, setMode] = useState<'default' | 'plan'>('default');
+  const settings: Settings = { mode };
+  const changeSettings = (next: Settings) => setMode(next.mode ?? 'default');
+  const [configurationRevision, setConfigurationRevision] = useState(0);
+  const [openConfigurationFirst, setOpenConfigurationFirst] = useState(false);
+  useEffect(() => setMode('default'), [projectId, threadId]);
   useEffect(() => {
-    if (threadId || !defaultSettings.saved) return;
-    let restored: Settings | undefined;
-    try {
-      const parsed = settingsSchema.safeParse(
-        JSON.parse(saved('codes.new-settings.' + projectId) || 'null'),
-      );
-      if (parsed.success) restored = parsed.data;
-    } catch {
-      /* An invalid browser-only draft falls back to the server defaults. */
-    }
-    setNewSettings(restored ?? defaultSettings.saved.settings);
-  }, [projectId, threadId, defaultSettings.saved]);
+    if (auth !== 'ready') return;
+    const refresh = () => setConfigurationRevision((value) => value + 1);
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [auth]);
   const [draft, setDraft] = useState('');
   const [queueEditing, setQueueEditing] = useState(false);
   const draftRevision = useRef(0);
@@ -506,8 +475,8 @@ function App() {
   useEffect(() => {
     if (auth !== 'ready' || !contextProjectId || connection !== 'Connected') return;
     const controller = new AbortController();
-    void request<CodexDefaults>(
-      '/projects/' + contextProjectId + '/codex-defaults',
+    void request<NativeConfigurationSnapshot>(
+      '/projects/' + contextProjectId + '/codex-configuration',
       {},
       controller.signal,
     ).then(
@@ -522,7 +491,7 @@ function App() {
       },
     );
     return () => controller.abort();
-  }, [auth, contextProjectId, connection]);
+  }, [auth, contextProjectId, connection, configurationRevision]);
   useEffect(() => {
     if (auth === 'ready') return onAuthenticationRequired(notice);
   }, [auth, notice]);
@@ -550,25 +519,13 @@ function App() {
   useEffect(() => {
     if (auth !== 'ready') return;
     const controller = new AbortController();
-    void Promise.all([
-      request<Model[]>('/models', {}, controller.signal),
-      request<typeof modes>('/modes', {}, controller.signal),
-    ])
-      .then(async ([models, modes]) => {
-        setModels(models);
+    void request<typeof modes>('/modes', {}, controller.signal)
+      .then(async (modes) => {
         setModes(modes);
         setSystem(await request<System>('/system', {}, controller.signal));
       })
-      .catch((e) => {
-        if (!controller.signal.aborted) notice(e);
-      });
-    void request<{ autoReview: boolean }>('/permissions', {}, controller.signal)
-      .then((permissions) => setAutoReviewReady(permissions.autoReview))
       .catch((error) => {
-        if (!controller.signal.aborted) {
-          setAutoReviewReady(false);
-          notice(error);
-        }
+        if (!controller.signal.aborted) notice(error);
       });
     return () => controller.abort();
   }, [auth]);
@@ -699,7 +656,8 @@ function App() {
           const { id, name } = event.data as Project;
           projectUpdated({ id, name });
         } else if (event.kind === 'project-archive') projectUpdated(event.data as ProjectUpdate);
-        else if (event.kind === 'defaults') defaultSettings.sync(event.data as SettingsProfile);
+        else if (event.kind === 'codex-configuration')
+          setConfigurationRevision((value) => value + 1);
         else if (event.kind === 'runtime') setSystem(event.data as System);
       },
       connectionStatus,
@@ -819,12 +777,10 @@ function App() {
       );
     };
     const event = (e: Envelope) => {
-      if (e.kind === 'defaults') {
-        defaultSettings.sync(e.data as SettingsProfile);
+      if (e.kind === 'codex-configuration') {
+        setConfigurationRevision((value) => value + 1);
         return;
       }
-      if (e.kind === 'settings' && e.threadId === threadId)
-        conversationSettings.sync(e.data as SettingsProfile);
       if (e.kind === 'runtime') {
         setSystem(e.data as System);
         return;
@@ -903,8 +859,6 @@ function App() {
         // snapshot is also the authoritative summary for the navigation list.
         if (notifyInBackground) notifications.observe(snapshot.thread, false);
         conversationUpdated(snapshot.thread);
-        conversationSettings.sync(snapshot.thread.composerSettings);
-        void defaultSettings.refresh();
       },
       event,
       (status) => {
@@ -1021,7 +975,6 @@ function App() {
       !threadId ||
       busy ||
       localAttachments.pending ||
-      settingsBlocked ||
       !!thread?.writerConflict ||
       !hasInput ||
       thread?.archived ||
@@ -1161,11 +1114,10 @@ function App() {
     (owner: string) => {
       select('', owner);
       requestAnimationFrame(() => composer.current?.focus());
-      save('codes.new-settings.' + owner, '');
-      setNewSettings(defaultSettings.saved?.settings ?? { permission: 'read-only' });
+      setMode('default');
       setError('');
     },
-    [select, defaultSettings.saved],
+    [select],
   );
   const newThread = () => newThreadIn(projectId);
   const verifiedProject = thread?.projectId;
@@ -1186,7 +1138,6 @@ function App() {
     if (
       busy ||
       localAttachments.pending ||
-      settingsBlocked ||
       !!thread?.writerConflict ||
       queueRequest ||
       !hasInput ||
@@ -1209,7 +1160,6 @@ function App() {
       if (!id) {
         const created = await post<Thread>(`/projects/${projectId}/threads`, settings);
         id = created.id;
-        save('codes.new-settings.' + projectId, '');
         save(`codes.draft.${id}`, threadRef.current === origin ? draftValue.current : draft);
         conversationUpdated(created);
         select(id);
@@ -1504,9 +1454,7 @@ function App() {
     thread.pending?.kind !== 'review' &&
     !thread.archived &&
     !thread.managementPending;
-  const matchesTaskSettings = !!thread && sameSettings(settings, thread.settings);
-  const deliveryMode =
-    canSteer && preferences.followUp === 'steer' && matchesTaskSettings ? 'steer' : 'queue';
+  const deliveryMode = canSteer && preferences.followUp === 'steer' ? 'steer' : 'queue';
   const alternateDelivery = deliveryMode === 'queue' ? 'steer' : 'queue';
   const hasFollowUps = active || !!thread?.queue?.items.length;
   const deliveryReason = (
@@ -1519,7 +1467,6 @@ function App() {
       [steerReceipt || queueRequest, 'Check the pending result first.'],
       [localAttachments.pending, 'Wait for attachments to upload.'],
       [busy || thread?.managementPending, 'Wait for the current request.'],
-      [settingsBlocked, 'Check conversation settings.'],
       [!contextReady, 'Wait for project context.'],
       [!hasInput, 'Write a message first.'],
     ] as const
@@ -1536,7 +1483,6 @@ function App() {
       ],
       [thread?.pending?.kind === 'review', 'Wait for the review to finish.'],
       [!canSteer, 'No task is accepting messages.'],
-      [!matchesTaskSettings, 'Requires matching task settings.'],
     ] as const
   ).find(([blocked]) => blocked)?.[1];
   const addNowReason = steerReason ?? deliveryReason;
@@ -1760,9 +1706,7 @@ function App() {
     try {
       if (delivery === 'detached' || !id) {
         const created = await post<Thread>(`/projects/${projectId}/threads`, {
-          ...settings,
           mode: 'default',
-          permission: 'read-only',
         });
         id = created.id;
         conversationUpdated(created);
@@ -2442,7 +2386,6 @@ function App() {
               }
               onCheck={reconcile}
               turnId={canSteer ? thread?.turnId : undefined}
-              settings={thread?.settings}
               onEditingChange={setQueueEditing}
               onStop={
                 active && thread?.turnId
@@ -2569,19 +2512,6 @@ function App() {
                 {t('Uploading {count} attachment(s)…', { count: localAttachments.pending })}
               </p>
             )}
-            {threadId && conversationSettings.saving && (
-              <p role="status" className="settings-save-status">
-                {t('Saving conversation settings…')}
-              </p>
-            )}
-            {settingsBlocked && profile.error && (
-              <p role="alert" className="settings-save-status">
-                {t(profile.error)}{' '}
-                <button onClick={() => void profile.retry()}>
-                  {profile.conflict ? t('Reload settings') : t('Retry settings')}
-                </button>
-              </p>
-            )}
             <textarea
               onPaste={localAttachments.paste}
               aria-label={t('Message Codex')}
@@ -2674,20 +2604,16 @@ function App() {
                 />
                 <ComposerControls
                   ref={composerControls}
-                  settings={settings}
-                  autoReviewReady={autoReviewReady}
-                  change={changeSettings}
-                  models={models}
-                  codexDefaults={codexDefaults}
-                  modesReady={modes.some((entry) => entry.mode === 'default')}
+                  mode={mode}
+                  changeMode={setMode}
+                  configuration={codexDefaults}
+                  openConfiguration={() => {
+                    setOpenConfigurationFirst(true);
+                    setDialog('preferences');
+                  }}
                   planReady={modes.some((entry) => entry.mode === 'plan')}
                   disabled={
-                    busy ||
-                    loadingConversation ||
-                    profile.loading ||
-                    !profile.saved ||
-                    !!thread?.archived ||
-                    !!thread?.managementPending
+                    busy || loadingConversation || !!thread?.archived || !!thread?.managementPending
                   }
                 />
               </div>
@@ -2821,22 +2747,14 @@ function App() {
             setAuth('login');
           }}
           value={preferences}
-          defaults={{
-            settings: defaultSettings.value?.settings,
-            saving: defaultSettings.saving,
-            loading: defaultSettings.loading,
-            error: defaultSettings.error,
-            conflict: defaultSettings.conflict,
-            change: defaultSettings.change,
-            retry: () => void defaultSettings.retry(),
-            models,
-            codexDefaults,
-            autoReviewReady,
-            modesReady: modes.some((entry) => entry.mode === 'default'),
-            planReady: modes.some((entry) => entry.mode === 'plan'),
-          }}
+          configurationProject={contextProjectId}
+          openConfigurationFirst={openConfigurationFirst}
+          configurationChanged={() => setConfigurationRevision((value) => value + 1)}
           saveError={preferencesError}
-          close={() => setDialog(undefined)}
+          close={() => {
+            setOpenConfigurationFirst(false);
+            setDialog(undefined);
+          }}
           change={changePreferences}
           changeNotifications={(patch) =>
             changePreferences({ ...latestPreferences.current, ...patch })
@@ -2865,7 +2783,7 @@ function App() {
           maintenanceBusy={maintenanceBusy}
           changeMaintenance={changeMaintenance}
           thread={thread}
-          settings={thread?.settings ?? settings}
+          configuration={codexDefaults}
           connection={t(connection)}
           close={() => setDialog(undefined)}
         />
@@ -2888,7 +2806,7 @@ function App() {
           >
             <p>
               {t(
-                'Copy history through this turn. Later turns and queued messages stay here. The branch shares project files and starts in Read only.',
+                'Copy history through this turn. Later turns and queued messages stay here. The branch shares project files and uses the effective Codex configuration.',
               )}
             </p>
             {recoveryFork && <p>{t('Copy the draft and attachments without sending.')}</p>}

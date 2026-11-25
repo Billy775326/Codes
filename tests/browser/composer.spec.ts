@@ -186,8 +186,8 @@ test('the model picker remains usable above a tall draft in a short phone viewpo
   const box = await popup.boundingBox();
   expect(box!.y).toBeGreaterThanOrEqual(0);
   expect(box!.y + box!.height).toBeLessThanOrEqual(480);
-  for (const label of ['Model', 'Reasoning effort']) {
-    const field = page.getByLabel(label, { exact: true });
+  for (const label of ['Task mode']) {
+    const field = popup.getByLabel(label, { exact: true });
     await field.scrollIntoViewIfNeeded();
     expect(
       await field.evaluate((element) => {
@@ -209,64 +209,21 @@ for (const viewport of [
   { width: 320, height: 640 },
   { width: 390, height: 480 },
 ]) {
-  test(`Codex permissions replace Code and reach task dispatch at ${viewport.width}x${viewport.height}`, async ({
+  test(`native permissions and dispatch fit at ${viewport.width}x${viewport.height}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
-    await page.goto('/');
-    await page
-      .getByLabel('Workspace access token')
-      .fill('test-only-browser-token-not-a-real-secret');
-    await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+    await login(page);
     const picker = page.getByRole('button', { name: 'Codex permissions', exact: true });
-    await expect(picker).toBeEnabled();
-    await expect(page.getByLabel('Mode', { exact: true })).toHaveCount(0);
-    for (const [label, value] of [
-      ['Full access', 'danger-full-access'],
-      ['Ask for approval', 'workspace-write'],
-      ['Read only', 'read-only'],
-    ] as const) {
-      await picker.click();
-      const option = page.getByRole('button', { name: new RegExp('^' + label) });
-      await option.scrollIntoViewIfNeeded();
-      expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-      expect(
-        await option.evaluate((element) => {
-          const box = element.getBoundingClientRect();
-          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-          return element === hit || element.contains(hit);
-        }),
-      ).toBe(true);
-      await option.click();
-      await expect(picker).toHaveText(label);
-      expect(
-        await picker
-          .locator('.permission-selection')
-          .evaluate((text) => text.scrollWidth <= text.clientWidth),
-      ).toBe(true);
-      const request = page.waitForRequest(
-        (request) => request.url().endsWith('/send') && request.method() === 'POST',
-      );
-      await page.getByLabel('Message Codex').fill('[slow] Permissions ' + label + Date.now());
-      await page.getByRole('button', { name: 'Send message', exact: true }).click();
-      expect((await request).postDataJSON().settings.permission).toBe(value);
-      await expect(picker).toBeEnabled();
-      await picker.click();
-      await expect(
-        page.getByRole('dialog', { name: 'Codex permissions', exact: true }),
-      ).toBeVisible();
-      await expect(page.getByText('Conversation permissions', { exact: true })).toBeVisible();
-      await expect(
-        page
-          .getByRole('group', { name: 'Permission presets' })
-          .getByRole('button', { pressed: true }),
-      ).toHaveAccessibleName(label);
-      await page.keyboard.press('Escape');
-      await page.getByRole('button', { name: 'Stop task', exact: true }).click();
-      await expect(picker).toBeEnabled();
-    }
-    await page.reload();
-    await expect(picker).toHaveText('Read only');
+    await picker.click();
+    const popup = page.getByRole('dialog', { name: 'Codex permissions', exact: true });
+    await expect(popup.getByRole('button', { name: 'Edit Codex configuration' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    const request = page.waitForRequest((r) => r.url().endsWith('/send') && r.method() === 'POST');
+    await page.getByLabel('Message Codex').fill('[hold] Native permissions ' + Date.now());
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    expect((await request).postDataJSON().settings).toEqual({ mode: 'default' });
+    await page.getByRole('button', { name: 'Stop task', exact: true }).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

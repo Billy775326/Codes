@@ -1,5 +1,26 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
+  'Legacy sandbox mode': '传统沙箱模式',
+  'Saved. Restart Codes to apply. Active timeout {timeout} ms.':
+    '已保存。重启 Codes 后生效。当前超时为 {timeout} 毫秒。',
+  'Codex configuration changed. Reload before saving.': 'Codex 配置已变更。请重新加载后再保存。',
+  'Review Codex permissions before resuming this legacy queue.':
+    '恢复旧队列前，请检查 Codex 权限。',
+  'Edit this configuration using Codex CLI.': '请通过 Codex CLI 编辑这项配置。',
+  'Choose a project to read its effective configuration.': '选择项目以查看有效配置。',
+  'Saved. Effective project values are shown above.': '已保存。上方显示项目的有效配置。',
+  'Changes are saved to the Codex user configuration. This page shows the effective values for the selected project.':
+    '修改保存到 Codex 用户配置。此处显示所选项目的有效值。',
+  'Effective project configuration': '项目有效配置',
+  'Code mode questions': '执行模式提问',
+  'Approval reviewer': '审批人',
+  'Approval policy': '审批策略',
+  'Permission profile': '权限配置',
+  'Service tier': '速度档位',
+  'Plan reasoning effort': '计划模式推理强度',
+  'Save Codex configuration': '保存 Codex 配置',
+  'Edit Codex configuration': '编辑 Codex 配置',
+  'Codex configuration': 'Codex 配置',
   'Access token': '访问令牌',
   'This server uses CODES_ACCESS_TOKEN. Change it in the server environment and restart Codes.':
     '此服务使用 CODES_ACCESS_TOKEN。请在服务端环境中修改，然后重启 Codes。',

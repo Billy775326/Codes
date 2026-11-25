@@ -4,6 +4,25 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 
 const path = process.env.CODES_MOCK_STATE_FILE;
+const configPath = path && path + '.config';
+const nativeConfig: { version: number; config: Record<string, any> } =
+  configPath && existsSync(configPath)
+    ? JSON.parse(readFileSync(configPath, 'utf8'))
+    : { version: 0, config: {} };
+const effective = () => ({
+  model: nativeConfig.config.model ?? 'simulated-model',
+  reasoningEffort: nativeConfig.config.model_reasoning_effort ?? 'medium',
+  serviceTier:
+    nativeConfig.config.service_tier === 'fast'
+      ? 'priority'
+      : (nativeConfig.config.service_tier ?? null),
+  approvalPolicy: nativeConfig.config.approval_policy ?? 'on-request',
+  approvalsReviewer: nativeConfig.config.approvals_reviewer ?? 'user',
+  activePermissionProfile: { id: nativeConfig.config.default_permissions ?? ':read-only' },
+  sandbox: {
+    type: nativeConfig.config.default_permissions === ':workspace' ? 'workspaceWrite' : 'readOnly',
+  },
+});
 const threads = new Map<string, any>(
   path && existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : [],
 );
@@ -109,7 +128,26 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         platformOs: 'linux',
       });
     if (method === 'configRequirements/read') return result(id, { requirements: null });
-    if (method === 'config/read') return result(id, { config: {} });
+    if (method === 'config/read')
+      return result(id, {
+        config: nativeConfig.config,
+        layers: p.includeLayers
+          ? [{ name: { type: 'user' }, version: String(nativeConfig.version) }]
+          : null,
+      });
+    if (method === 'config/batchWrite') {
+      if (p.expectedVersion !== String(nativeConfig.version))
+        return send({ id, error: { code: -32600, message: 'Configuration version is stale.' } });
+      for (const { keyPath, value } of p.edits) {
+        if (keyPath === 'features.default_mode_request_user_input')
+          nativeConfig.config.features = { default_mode_request_user_input: value };
+        else if (value === null) delete nativeConfig.config[keyPath];
+        else nativeConfig.config[keyPath] = value;
+      }
+      nativeConfig.version++;
+      if (configPath) writeFileSync(configPath, JSON.stringify(nativeConfig), { mode: 0o600 });
+      return result(id, { version: String(nativeConfig.version), status: 'ok' });
+    }
     if (method === 'model/list')
       return result(id, {
         data: [
@@ -163,9 +201,11 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       return result(id, {});
     }
     if (method === 'thread/start') {
+      if (p.ephemeral)
+        return result(id, { ...effective(), thread: { id: randomUUID(), cwd: p.cwd } });
       const thread = create(p.cwd);
       note('thread/started', { thread: summary(thread) });
-      return result(id, { thread: summary(thread), model: 'simulated-model' });
+      return result(id, { ...effective(), thread: summary(thread) });
     }
     if (method === 'test/seed') {
       const thread: any = create(p.cwd);
@@ -219,6 +259,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       save();
       return result(id, { thread: summary(thread), model: 'simulated-model' });
     }
+    if (method === 'thread/unsubscribe') return result(id, { status: 'unsubscribed' });
     const thread: any = threads.get(p.threadId);
     if (!thread) return send({ id, error: { code: -32600, message: 'Thread not found' } });
     if (method === 'thread/fork') {
@@ -248,9 +289,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           error: { code: -32600, message: 'thread ' + thread.id + ' already has an active writer' },
         });
       }
-      return result(id, { thread: summary(thread), model: 'simulated-model' });
+      return result(id, { ...effective(), thread: summary(thread) });
     }
-    if (method === 'thread/unsubscribe') return result(id, { status: 'unsubscribed' });
     if (method === 'thread/turns/list') {
       const ascending = p.sortDirection === 'asc';
       const size = p.limit ?? 12;
@@ -368,6 +408,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       thread.updatedAt = Date.now() / 1000;
       thread.status = { type: 'active', activeFlags: [] };
       save();
+      note('thread/settings/updated', {
+        threadId: thread.id,
+        threadSettings: { ...effective(), collaborationMode: p.collaborationMode },
+      });
       note('turn/started', { threadId: thread.id, turn });
       note('item/completed', { threadId: thread.id, turnId: turn.id, item: turn.items[0] });
       note('thread/tokenUsage/updated', {

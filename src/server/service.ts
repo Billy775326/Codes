@@ -1,6 +1,6 @@
 import { WorkspaceConfiguration } from './workspace-settings.js';
 import { directoryStatus, directoryError } from './project-context.js';
-import { nativePermissions } from '../shared/permissions.js';
+import { nativeExecutionSettings } from './native-configuration.js';
 import { activeTurn, interactionActivity } from '../shared/conversation-activity.js';
 import { randomUUID } from 'node:crypto';
 import { realpath, stat } from 'node:fs/promises';
@@ -10,6 +10,7 @@ import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
 import { Events } from './events.js';
 import { MessageQueue } from './message-queue.js';
+import { legacyQueueReview } from './queue-store.js';
 import { pauseQueueAfterTurn, settleQueuedOperations } from './queue-transitions.js';
 import { ProjectFiles } from './project-files.js';
 import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
@@ -25,7 +26,6 @@ import { z } from 'zod';
 import { AppError, record } from '../shared/errors.js';
 import {
   limits,
-  sameSettings,
   type Thread,
   type TurnInfo,
   type Settings,
@@ -46,6 +46,7 @@ export class Service {
   readonly images: Images;
   private cache = new Map<string, Thread>();
   private loaded = new Set<string>();
+  private readonly appliedNativeConfig = new WeakMap<Thread, string>();
   private readonly reads = new ConversationReads();
   private admission: Promise<void> = Promise.resolve();
   private managing = new Set<string>();
@@ -740,15 +741,11 @@ export class Service {
       409,
     );
   }
-  async create(projectId: string, settings: Settings = this.store.settingsProfile().settings) {
+  async create(projectId: string, settings: Settings = {}) {
     const project = await this.requireProject(projectId);
-    await this.modelSettings.checkPermissions(settings);
+    const native = await this.modelSettings.configuration.read(project.path);
     const result = await this.driver.call('thread/start', {
       cwd: project.path,
-      sandbox: settings.permission === 'auto-review' ? 'workspace-write' : settings.permission,
-      approvalsReviewer: nativePermissions(settings.permission, project.path).approvalsReviewer,
-      approvalPolicy: nativePermissions(settings.permission, project.path).approvalPolicy,
-      ...(settings.model ? { model: settings.model } : {}),
     });
     if (
       !record(result.thread) ||
@@ -767,11 +764,13 @@ export class Service {
       olderCursor: null,
       settings,
       diff: '',
-      resolvedModel: typeof result.model === 'string' ? result.model : settings.model,
+      resolvedModel: nativeExecutionSettings(result).model,
+      nativeSettings: nativeExecutionSettings(result),
       queue: this.store.queue.state(result.thread.id),
     };
     this.store.saveThread(thread, settings);
     this.loaded.add(thread.id);
+    this.appliedNativeConfig.set(thread, native.key);
     await this.remember(thread);
     this.boundary(thread);
     return thread;
@@ -955,13 +954,11 @@ export class Service {
     }
     if (entry.state !== 'queued')
       throw new AppError('QUEUE_STARTED', 'This message has already started.', 409);
+    if (this.store.queue.state(id).reason === legacyQueueReview)
+      throw new AppError('QUEUE_REVIEW', legacyQueueReview, 409);
     const thread = this.cache.get(id);
-    if (!thread || !sameSettings(entry.settings, thread.settings))
-      throw new AppError(
-        'STEER_SETTINGS',
-        'This queued message uses different task settings. Leave it queued for its own turn.',
-        409,
-      );
+    if (!thread)
+      throw new AppError('CONVERSATION_ACTIVE', 'Open the active conversation first.', 409);
     await this.conversationOwner(id);
     await this.requireProject(thread.projectId);
     this.requireTaskAdmission();
@@ -992,7 +989,10 @@ export class Service {
           receipt.error,
         );
     } catch (error) {
-      if (error instanceof AppError && error.code === 'MAINTENANCE_ACTIVE') {
+      if (
+        error instanceof AppError &&
+        ['MAINTENANCE_ACTIVE', 'STEER_UNAVAILABLE', 'STEER_LIMIT'].includes(error.code)
+      ) {
         this.store.queue.set(messageId, 'queued');
         throw error;
       }
@@ -1213,10 +1213,6 @@ export class Service {
         lastTurnId,
         excludeTurns: true,
         cwd: this.project(saved.projectId).path,
-        sandbox: 'read-only',
-        approvalPolicy: 'on-request',
-        approvalsReviewer: 'user',
-        ...(saved.settings.model ? { model: saved.settings.model } : {}),
       });
       if (
         typeof response.thread?.id !== 'string' ||
@@ -1238,10 +1234,7 @@ export class Service {
         archived: false,
         forkedFromId: id,
       };
-      this.store.saveThread(child, {
-        permission: 'read-only',
-        ...(saved.settings.model ? { model: saved.settings.model } : {}),
-      });
+      this.store.saveThread(child, {});
       this.store.result(operationId, child.id);
       this.store.update(operationId, 'completed');
       try {
@@ -1322,15 +1315,7 @@ export class Service {
           : target.type === 'custom'
             ? target.instructions
             : 'uncommitted changes';
-    return this.send(
-      id,
-      operationId,
-      'Review: ' + title,
-      { ...settings, permission: 'read-only', mode: 'default' },
-      [],
-      false,
-      target,
-    );
+    return this.send(id, operationId, 'Review: ' + title, settings, [], false, target);
   }
   async steer(
     id: string,
@@ -1507,38 +1492,43 @@ export class Service {
           cwd: project.path,
         });
         thread.resolvedModel = typeof resumed.model === 'string' ? resumed.model : undefined;
+        thread.nativeSettings = nativeExecutionSettings(resumed);
         this.loaded.add(id);
+        this.appliedNativeConfig.delete(thread);
       }
       thread.writerConflict = false;
-      const { collaborationMode, serviceTier } = await this.modelSettings.resolve(
-        settings,
-        project.path,
-        nativeInput.some((entry) => entry.type === 'localImage'),
-      );
-      await this.modelSettings.checkPermissions(settings);
-      const { sandboxPolicy, approvalPolicy, approvalsReviewer } = nativePermissions(
-        settings.permission,
-        project.path,
-      );
-      if (review) {
-        const { native } = await this.conversationOwner(id);
-        if (native.status?.type === 'active')
+      const native = await this.modelSettings.configuration.read(project.path);
+      if (review || this.appliedNativeConfig.get(thread) !== native.key) {
+        const owner = await this.conversationOwner(id);
+        if (owner.native.status?.type === 'active')
+          throw new AppError('CONVERSATION_ACTIVE', 'Finish the active native task first.', 409);
+      }
+      if (this.appliedNativeConfig.get(thread) !== native.key) {
+        thread.nativeSettings = await this.modelSettings.configuration.synchronizeThread(
+          id,
+          project.path,
+          native.key,
+        );
+        if ((await this.modelSettings.configuration.read(project.path)).key !== native.key)
           throw new AppError(
-            'CONVERSATION_ACTIVE',
-            'Finish the active native task before reviewing.',
+            'SETTINGS_CONFLICT',
+            'Codex configuration changed. Review it before retrying.',
             409,
           );
-        await this.driver.call('thread/settings/update', {
-          threadId: id,
-          cwd: project.path,
-          sandboxPolicy,
-          approvalPolicy,
-          approvalsReviewer,
-          collaborationMode,
-          serviceTier,
-        });
+        thread.resolvedModel = thread.nativeSettings.model;
+        this.appliedNativeConfig.set(thread, native.key);
       }
-      thread.resolvedModel = collaborationMode.settings.model;
+      const collaborationMode = review
+        ? undefined
+        : (
+            await this.modelSettings.resolve(
+              settings,
+              project.path,
+              nativeInput.some((entry) => entry.type === 'localImage'),
+              thread.resolvedModel,
+              native,
+            )
+          ).collaborationMode;
       thread.settings = settings;
       thread.title =
         thread.title === 'Untitled conversation'
@@ -1563,11 +1553,7 @@ export class Service {
               clientUserMessageId: operationId,
               cwd: project.path,
               input: nativeInput,
-              sandboxPolicy,
-              approvalPolicy,
-              approvalsReviewer,
               collaborationMode,
-              ...(this.driver.supports('turnSpeed') ? { serviceTierForTurn: serviceTier } : {}),
             },
       );
       if (typeof result.turn?.id !== 'string')
@@ -1860,12 +1846,7 @@ export class Service {
       const receipt =
         thread.state === 'running' && thread.turnId
           ? await this.steer(threadId, operationId, thread.turnId, prompt)
-          : await this.send(
-              threadId,
-              operationId,
-              prompt,
-              this.store.settingsProfile(threadId).settings,
-            );
+          : await this.send(threadId, operationId, prompt, {});
       if (receipt.state === 'acknowledged' || receipt.state === 'completed')
         this.asyncQuestions.confirmReply(threadId, replies);
       return receipt;
@@ -1903,6 +1884,7 @@ export class Service {
         settings: thread.settings,
         steering: thread.steering,
         resolvedModel: thread.resolvedModel,
+        nativeSettings: thread.nativeSettings,
         writerConflict: thread.writerConflict ?? false,
         expiredQuestion: thread.expiredQuestion,
       },
@@ -1974,6 +1956,11 @@ export class Service {
     }
     const thread = this.cache.get(p.threadId);
     if (!thread) return;
+    if (event.method === 'thread/settings/updated') {
+      thread.nativeSettings = nativeExecutionSettings(p.threadSettings);
+      this.events.publish('state', { nativeSettings: thread.nativeSettings }, thread.id);
+      return;
+    }
     if (
       event.method === 'item/autoApprovalReview/started' ||
       event.method === 'item/autoApprovalReview/completed'

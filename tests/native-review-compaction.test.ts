@@ -31,84 +31,58 @@ async function fixture() {
 async function until(check: () => boolean) {
   await expect.poll(check, { timeout: 4000, interval: 10 }).toBe(true);
 }
-it('uses native Auto-review in a workspace sandbox and explicitly restores the human reviewer', async () => {
+it('uses the native reviewer for new threads and refreshes the reviewer for subsequent turns', async () => {
   const { service, project } = await fixture();
-  const spy = vi.spyOn(service.driver, 'call');
-  const thread = await service.create(project.id, { permission: 'auto-review' });
-  expect(spy.mock.calls.find(([method]) => method === 'thread/start')?.[1]).toMatchObject({
-    sandbox: 'workspace-write',
-    approvalPolicy: 'on-request',
+  const configuration = service.modelSettings.configuration;
+  const before = await configuration.read(project.path, true);
+  const auto = await configuration.save(project.path, {
+    version: before.userVersion!,
+    changes: { default_permissions: ':workspace', approvals_reviewer: 'auto_review' },
+  });
+  const thread = await service.create(project.id, { permission: 'read-only' });
+  expect(thread.nativeSettings).toMatchObject({
     approvalsReviewer: 'auto_review',
+    sandbox: 'workspaceWrite',
   });
-  for (const permission of [
-    'auto-review',
-    'read-only',
-    'workspace-write',
-    'danger-full-access',
-  ] as const) {
-    await service.send(thread.id, randomUUID(), '[hold] Reviewer selection', { permission });
-    const params = spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)![1] as any;
-    expect(params.approvalsReviewer).toBe(permission === 'auto-review' ? 'auto_review' : 'user');
-    expect(params.approvalPolicy).toBe(
-      permission === 'danger-full-access' ? 'never' : 'on-request',
-    );
-    expect(params.sandboxPolicy.type).toBe(
-      permission === 'auto-review' || permission === 'workspace-write'
-        ? 'workspaceWrite'
-        : permission === 'read-only'
-          ? 'readOnly'
-          : 'dangerFullAccess',
-    );
-    await service.interrupt(thread.id);
-  }
-});
-it('preserves per-chat/default choices and already captured queue permissions', async () => {
-  const { service, project, thread } = await fixture();
-  service.saveDefaultSettings(0, { permission: 'auto-review' });
-  const second = await service.create(project.id);
-  expect(second.settings.permission).toBe('auto-review');
-  expect(service.store.settingsProfile(thread.id).settings.permission).toBe('read-only');
-  await service.send(second.id, randomUUID(), '[hold] Captured Auto-review', second.settings);
-  const queued = randomUUID();
-  await service.enqueue(second.id, queued, {
-    text: 'Waiting Auto-review',
-    settings: second.settings,
-    attachments: [],
+  const spy = vi.spyOn(service.driver, 'call');
+  await configuration.save(project.path, {
+    version: auto.userVersion!,
+    changes: { approvals_reviewer: 'user' },
   });
-  service.saveConversationSettings(second.id, 0, { permission: 'read-only' });
-  expect(service.store.queue.get(queued)?.settings.permission).toBe('auto-review');
-  expect(second.settings.permission).toBe('auto-review');
-  expect(service.store.settingsProfile(second.id).settings.permission).toBe('read-only');
-  await service.interrupt(second.id);
+  await service.send(thread.id, randomUUID(), '[hold] Native reviewer selection', {
+    permission: 'auto-review',
+  });
+  expect(spy.mock.calls.find(([method]) => method === 'thread/settings/update')?.[1]).toMatchObject(
+    { approvalsReviewer: 'user' },
+  );
+  expect(spy.mock.calls.find(([method]) => method === 'turn/start')?.[1]).not.toHaveProperty(
+    'approvalsReviewer',
+  );
+  await service.interrupt(thread.id);
 });
-it('blocks managed-policy restrictions before native dispatch without silently selecting another permission', async () => {
-  const { service, project, thread } = await fixture();
+
+it('surfaces native policy rejections without another configuration write', async () => {
+  const { service, project } = await fixture();
+  const configuration = service.modelSettings.configuration;
+  const before = await configuration.read(project.path, true);
   const call = service.driver.call.bind(service.driver);
   const spy = vi
     .spyOn(service.driver, 'call')
     .mockImplementation((method, params, timeout) =>
-      method === 'configRequirements/read'
-        ? Promise.resolve({ requirements: { allowedApprovalsReviewers: ['user'] } })
+      method === 'config/batchWrite'
+        ? Promise.reject(new Error('Rejected by managed policy'))
         : call(method, params, timeout),
     );
-  expect(await service.modelSettings.permissions()).toEqual({ autoReview: false });
-  await expect(service.create(project.id, { permission: 'auto-review' })).rejects.toMatchObject({
-    code: 'AUTO_REVIEW_UNAVAILABLE',
-  });
   await expect(
-    service.send(thread.id, randomUUID(), 'Blocked', { permission: 'auto-review' }),
-  ).rejects.toMatchObject({ code: 'AUTO_REVIEW_UNAVAILABLE' });
-  expect(spy.mock.calls.some(([method]) => method === 'turn/start')).toBe(false);
-  expect(service.store.activeCount()).toBe(0);
-  spy.mockImplementation((method, params, timeout) =>
-    method === 'configRequirements/read'
-      ? Promise.resolve({ requirements: 'invalid' })
-      : call(method, params, timeout),
-  );
-  await expect(service.modelSettings.permissions()).rejects.toMatchObject({
-    code: 'PROTOCOL_ERROR',
-  });
+    configuration.save(project.path, {
+      version: before.userVersion!,
+      changes: { approvals_reviewer: 'auto_review' },
+    }),
+  ).rejects.toThrow('Rejected by managed policy');
+  expect(spy.mock.calls.filter(([method]) => method === 'config/batchWrite')).toHaveLength(1);
+  expect((await configuration.read(project.path, true)).userVersion).toBe(before.userVersion);
 });
+
 it('keeps compaction inside its turn, survives snapshot reads and never releases the queue on item completion', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[hold] Original turn', thread.settings);

@@ -4,7 +4,7 @@
 
 The effective configuration resolved by the installed Codex CLI for the actual execution directory is the **single source of truth** for agent execution in Codes. This covers the model, reasoning effort, speed tier, permission profile, sandbox, approval policy and reviewer, agent network access, and native feature flags.
 
-This is the target specification for the configuration rewrite. [Conversation settings](conversation-settings.md) documents the current behavior during the transition.
+See [Conversation settings](conversation-settings.md) for the configuration editor and migration behavior.
 
 ### Read and write configuration
 

@@ -22,7 +22,8 @@ import {
 } from './read-diagnostics.js';
 import type { openImagePreview } from './images.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
-import { settingsSchema as settings, settingsProfileInput } from '../shared/settings.js';
+import { settingsSchema as settings } from '../shared/settings.js';
+import { nativeConfigurationEdits } from '../shared/native-configuration.js';
 import type { NetworkConfiguration } from './network-settings.js';
 import type { RuntimeConfiguration } from './runtime-settings.js';
 import type { AccessToken } from './access-token.js';
@@ -396,10 +397,8 @@ export async function application(
           return await workspaceBackup.download(response);
         if (url.pathname === '/api/settings/defaults' && method === 'GET')
           return json(response, service.store.settingsProfile());
-        if (url.pathname === '/api/settings/defaults' && method === 'PUT') {
-          const input = settingsProfileInput.parse(await body(request));
-          return json(response, service.saveDefaultSettings(input.revision, input.settings));
-        }
+        if (url.pathname === '/api/settings/defaults' && method === 'PUT')
+          throw new AppError('SETTINGS_RETIRED', 'Edit the native Codex configuration.', 410);
         if (url.pathname === '/api/settings/network' && method === 'GET')
           return json(response, options.network.snapshot());
         if (url.pathname === '/api/settings/network' && method === 'PUT')
@@ -560,20 +559,23 @@ export async function application(
             const project = await service.requireProject(projectId);
             return json(response, await service.modelSettings.defaults(project.path));
           }
+          if (segments[3] === 'codex-configuration' && !segments[4]) {
+            const project = await service.requireProject(projectId);
+            const configuration = service.modelSettings.configuration;
+            if (method === 'GET') return json(response, await configuration.overview(project.path));
+            if (method === 'PUT') {
+              const saved = await configuration.save(
+                project.path,
+                nativeConfigurationEdits.parse(await body(request)),
+              );
+              service.events.publish('codex-configuration', {});
+              return json(response, saved);
+            }
+          }
           if (segments[3] === 'threads' && method === 'POST')
             return json(
               response,
-              await service.create(
-                projectId,
-                settings
-                  .or(
-                    z
-                      .object({})
-                      .strict()
-                      .transform(() => service.store.settingsProfile().settings),
-                  )
-                  .parse(await body(request)),
-              ),
+              await service.create(projectId, settings.parse(await body(request))),
             );
           if (segments[3] === 'files' && method === 'GET')
             return json(
@@ -660,13 +662,8 @@ export async function application(
             );
           if (segments[3] === 'settings' && !segments[4]) {
             if (method === 'GET') return json(response, service.store.settingsProfile(id));
-            if (method === 'PUT') {
-              const input = settingsProfileInput.parse(await body(request));
-              return json(
-                response,
-                service.saveConversationSettings(id, input.revision, input.settings),
-              );
-            }
+            if (method === 'PUT')
+              throw new AppError('SETTINGS_RETIRED', 'Edit the native Codex configuration.', 410);
           }
           if (segments[3] === 'branch-point' && method === 'GET')
             return json(response, await service.branchPoint(id));

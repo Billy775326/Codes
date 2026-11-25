@@ -92,6 +92,8 @@
 
 ### Changed
 
+- Use effective Codex configuration for model, reasoning, speed, permissions, and feature flags. Edit the Codex user configuration in Settings. Existing waiting queues pause on upgrade so you can review effective permissions before resuming.
+
 - Edit the active Codex global instructions from Settings → Projects. Changes apply to new Codex sessions using that configuration directory.
 
 - Align controls with their field descriptions and place related actions together. Rename the General, Chat defaults and Codex CLI categories.

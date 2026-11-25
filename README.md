@@ -30,7 +30,7 @@ The owner-provided V3 SVG identity is active in navigation, sign-in, and the fav
 - Context-compaction progress, completion, and interruption within the existing task lifecycle.
 - Command, file, and turn-scoped permission approvals; proactive native questions in Code and Plan, with choices, custom answers, secret inputs, and explicit skipping for optional questions.
 - Quoted follow-up drafts, compact durable FIFO queue cards, immediate native steering, and conversation branches through completed turns. Confirmed deliveries leave the queue immediately while task status stays in the conversation. Edit waiting text in the composer area without replacing a separate unsent draft; editing pauses the queue until you resume it.
-- Server-backed per-conversation permissions and model/reasoning preferences, saved immediately, with separate new-conversation defaults in the settings modal. See [settings behavior](docs/conversation-settings.md).
+- Effective Codex execution settings with a revision-checked user configuration editor. The composer shows the project settings and selects Plan or Execution. See [settings behavior](docs/conversation-settings.md).
 - Edit Codex global instructions under Settings → Projects. Codes opens the active `AGENTS.override.md` or `AGENTS.md` in the server account’s Codex home. Reload the file if it changes on disk while editing.
 - Native Execution/Plan modes, model-specific reasoning effort, Fast speed control, task-plan steps, inline/separate code reviews, and session/context-token status.
 - A browser workspace with persistent desktop project/conversation navigation, central chat, right-side file/change previews, larger text and controls, and dark/light/system themes.
@@ -100,25 +100,22 @@ ssh -L 6670:127.0.0.1:6670 you@your-linux-host
 
 Then open `http://127.0.0.1:6670` on your computer. Phone access requires a private HTTPS reverse proxy or private network with HTTPS. Add the exact browser origin in **Settings → Network & access** and preserve its `Host` header when proxying. See [operations](docs/operations.md#network-and-access).
 
-This is a **single-owner workspace** with that owner's host permissions. It is not a multi-user service or a sandbox for untrusted users. Start with **Read only**; choose **Ask for approval** to edit workspace files with approval for external access. **Approve for me** keeps the workspace sandbox and routes eligible requests to native Auto-review, which may use additional quota; native policy/account restrictions still apply. **Full access** removes file/network sandbox restrictions and approval prompts on the server. The composer permission menu saves independently for each conversation and applies to its future tasks. It preserves the current task and existing queue entries, and does not modify global CLI configuration. Use the model/reasoning popup to choose Execution or Plan and toggle Fast; the input bar shows the model and effective reasoning effort. Fast uses a supported native speed tier with higher usage, independently of reasoning effort. It defaults off; Standard is explicitly selected for new tasks instead of inheriting the host tier. Conversation choices save immediately; each dispatched or queued message captures its settings. Settings → Chat defaults defines the starting configuration for later conversations without changing existing ones. Model changes reset Fast and reasoning overrides. This does not change global CLI configuration or an active task. Use `/plan` to toggle native Plan mode; its visible Plan marker exits back to Code.
-
-The preview's extra global directory restriction has been removed. `CODES_TASK_WRITE_ROOT` and `CODES_DATA_DIR/task-policy.json` are no longer read. Projects can use existing directories independently of the codes installation directory; each conversation retains its selected native permission preset. This does not automatically select Full access or change the host's Codex configuration. The right-side Files / Changes viewers retain their existing project scope.
+This is a **single-owner workspace**. Codex resolves execution permissions for each registered project. **Settings → Codex configuration** displays the effective values and edits the native user configuration. The composer summarizes those values and lets you choose Execution or Plan for the next task. Use `/plan` to switch modes.
 
 ## Configuration
 
 Set environment variables in the process environment; the application does not automatically load `.env` files.
 
-| Variable               | Default                            | Purpose                                                                   |
-| ---------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
-| `CODES_RUNTIME`        | `codex`                            | `codex` or `mock`                                                         |
-| `CODES_HOST`           | `127.0.0.1`                        | Loopback address used before saving network settings                      |
-| `CODES_PORT`           | `6670`                             | Initial listener port, 1–65535                                            |
-| `CODES_PUBLIC_ORIGIN`  | Local origins on the listener port | Exact initial browser origin when specified                               |
-| `CODES_DATA_DIR`       | `.local`                           | Private database, token, lock, and simulator data                         |
-| `CODES_PROJECT_ROOT`   | unset                              | Register a directory at startup and prefill it in Add project             |
-| `CODES_CODEX_BINARY`   | `codex`                            | CLI executable path                                                       |
-| `CODES_CODE_QUESTIONS` | `1`                                | Enable native Code-mode questions; `0` leaves them available in Plan only |
-| `CODES_ACCESS_TOKEN`   | generated token file               | Optional access token, minimum 16 characters                              |
+| Variable              | Default                            | Purpose                                                       |
+| --------------------- | ---------------------------------- | ------------------------------------------------------------- |
+| `CODES_RUNTIME`       | `codex`                            | `codex` or `mock`                                             |
+| `CODES_HOST`          | `127.0.0.1`                        | Loopback address used before saving network settings          |
+| `CODES_PORT`          | `6670`                             | Initial listener port, 1–65535                                |
+| `CODES_PUBLIC_ORIGIN` | Local origins on the listener port | Exact initial browser origin when specified                   |
+| `CODES_DATA_DIR`      | `.local`                           | Private database, token, lock, and simulator data             |
+| `CODES_PROJECT_ROOT`  | unset                              | Register a directory at startup and prefill it in Add project |
+| `CODES_CODEX_BINARY`  | `codex`                            | CLI executable path                                           |
+| `CODES_ACCESS_TOKEN`  | generated token file               | Optional access token, minimum 16 characters                  |
 
 Codex inherits the server user's environment and `CODEX_HOME`. Run codes as the intended user, not as root by default. Keep the same CLI login and filesystem access you would use from the command line.
 

@@ -1,3 +1,5 @@
+import type { NativeExecutionSettings } from './native-configuration.js';
+
 export type State =
   | 'idle'
   | 'running'
@@ -31,7 +33,7 @@ export interface Settings {
   /** Inherits the effective Codex speed when absent. */
   fast?: boolean;
   mode?: 'default' | 'plan';
-  permission: 'read-only' | 'workspace-write' | 'auto-review' | 'danger-full-access';
+  permission?: 'read-only' | 'workspace-write' | 'auto-review' | 'danger-full-access';
 }
 export interface SettingsProfile {
   revision: number;
@@ -148,6 +150,7 @@ export interface Thread extends Summary {
   diff: string;
   diffTruncated?: boolean;
   resolvedModel?: string;
+  nativeSettings?: NativeExecutionSettings;
   steering?: (Operation & { text: string; questionReply?: boolean })[];
   /** Native progress only; does not end the turn or release its execution lease. */
   compaction?: { id: string; turnId: string };

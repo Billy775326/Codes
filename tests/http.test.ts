@@ -162,7 +162,9 @@ it('returns only effective execution defaults for an authenticated registered pr
             features: { fast_mode: false },
             mcp_servers: { private: { env: { TOKEN: 'private-fixture-only' } } },
           },
-          origins: { model: { source: 'private-config.toml' } },
+          origins: {
+            model: { name: { type: 'user', file: 'private-config.toml' }, version: 'fixture' },
+          },
         })
       : call(method, params, timeout),
   );
@@ -312,81 +314,52 @@ it('edits the active global instruction file in the server Codex home', async ()
   expect((await save({ ...standard, text: 'Would replace symlink' })).status).toBe(403);
   expect(await readFile(projectInstructions, 'utf8')).toBe('# Project instructions');
 });
-it('authenticates settings writes, applies defaults and prevents stale conversation updates', async () => {
+it('authenticates and validates native configuration writes and rejects stale versions', async () => {
   const project = await service.addProject(directory);
-  const existing = await service.create(project.id, { permission: 'read-only' });
-  const read = async (path: string) =>
-    (await fetch(origin + '/api' + path, { headers: { cookie } })).json();
-  const put = (path: string, value: unknown, session = cookie) =>
-    fetch(origin + '/api' + path, {
+  const path = '/api/projects/' + project.id + '/codex-configuration';
+  const put = (value: unknown, session = cookie) =>
+    fetch(origin + path, {
       method: 'PUT',
       headers: { origin, cookie: session, 'content-type': 'application/json' },
       body: JSON.stringify(value),
     });
+  const read = async () => (await fetch(origin + path, { headers: { cookie } })).json();
+  const before = await read();
+  const input = {
+    version: before.userVersion,
+    changes: { model_reasoning_effort: 'high', service_tier: 'fast' },
+  };
+  expect((await put(input, '')).status).toBe(401);
+  expect((await put({ ...input, filePath: '/private-fixture' })).status).toBe(400);
   expect(
     (
-      await put(
-        '/settings/defaults',
-        { revision: 0, settings: { permission: 'workspace-write' } },
-        '',
-      )
+      await put({
+        version: before.userVersion,
+        changes: { 'mcp_servers.example.env.TOKEN': 'fixture' },
+      })
     ).status,
-  ).toBe(401);
-  const defaults = {
-    permission: 'workspace-write',
-    model: 'simulated-model',
-    effort: 'high',
-    fast: true,
-    mode: 'plan',
-  };
-  expect((await put('/settings/defaults', { revision: 0, settings: defaults })).status).toBe(200);
-  const created = await (
-    await fetch(origin + '/api/projects/' + project.id + '/threads', {
-      method: 'POST',
-      headers: { origin, cookie, 'content-type': 'application/json' },
-      body: '{}',
-    })
-  ).json();
-  expect(created.composerSettings.settings).toEqual(defaults);
-  expect((await read('/threads/' + existing.id + '/settings')).settings).toEqual({
-    permission: 'read-only',
-  });
-  const path = '/threads/' + existing.id + '/settings';
-  expect((await put(path, { revision: 0, settings: defaults })).status).toBe(200);
-  expect(
-    (await put(path, { revision: 0, settings: { permission: 'danger-full-access' } })).status,
-  ).toBe(409);
-  expect((await read(path)).settings).toEqual(defaults);
+  ).toBe(400);
+  expect((await put(input)).status).toBe(200);
+  expect(await read()).toMatchObject({ effort: 'high', fast: true });
+  expect((await put(input)).status).toBe(409);
   expect(service.store.db.prepare('SELECT count(*) AS count FROM operations').get()).toMatchObject({
     count: 0,
   });
 });
-it('rejects malformed settings and settings changes on archived conversations', async () => {
+
+it('keeps legacy settings readable and refuses writes to retired preference routes', async () => {
   const project = await service.addProject(directory);
   const thread = await service.create(project.id, { permission: 'read-only' });
-  const put = (path: string, value: unknown) =>
-    fetch(origin + '/api' + path, {
-      method: 'PUT',
-      headers: { origin, cookie, 'content-type': 'application/json' },
-      body: JSON.stringify(value),
-    });
-  for (const value of [
-    { revision: -1, settings: { permission: 'read-only' } },
-    { revision: 0, settings: { permission: 'invalid' } },
-    { revision: 0, settings: { permission: 'read-only', effort: 3 } },
-    { revision: 0, settings: { permission: 'read-only' }, unknown: true },
-  ])
-    expect((await put('/settings/defaults', value)).status).toBe(400);
-  await service.archive(thread.id, randomUUID(), true);
-  expect(
-    (
-      await put('/threads/' + thread.id + '/settings', {
-        revision: 0,
-        settings: { permission: 'workspace-write' },
-      })
-    ).status,
-  ).toBe(409);
-  expect(service.store.settingsProfile(thread.id).settings.permission).toBe('read-only');
+  const path = origin + '/api/threads/' + thread.id + '/settings';
+  const response = await fetch(path, {
+    method: 'PUT',
+    headers: { origin, cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ revision: 0, settings: { permission: 'workspace-write' } }),
+  });
+  expect(response.status).toBe(410);
+  expect(await (await fetch(path, { headers: { cookie } })).json()).toMatchObject({
+    settings: { permission: 'read-only' },
+  });
 });
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'codes-http-'));

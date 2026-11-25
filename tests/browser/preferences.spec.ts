@@ -194,13 +194,12 @@ test('runtime settings save independently of the active configuration and surviv
     const [fieldBox, helpBox] = await Promise.all([timeout.boundingBox(), help.boundingBox()]);
     expect(fieldBox!.x).toBeGreaterThan(helpBox!.x + helpBox!.width);
     await expect(dialog.getByText('Data directory', { exact: true })).toBeVisible();
-    await dialog.getByRole('switch', { name: 'Codex questions in Code mode' }).uncheck();
     await timeout.fill('45000');
     await dialog.getByRole('button', { name: 'Save runtime settings' }).click();
     await expect(dialog.getByRole('status')).toContainText('Restart Codes to apply');
     expect(await get()).toMatchObject({
       active: initial.active,
-      settings: { codeQuestions: false, requestTimeoutMs: 45000 },
+      settings: { codeQuestions: initial.settings.codeQuestions, requestTimeoutMs: 45000 },
     });
     await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await open();

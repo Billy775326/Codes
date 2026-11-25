@@ -64,7 +64,7 @@ for (const width of [1440, 390])
     const child = (await (await page.request.get('/api/threads/' + branch + '/snapshot')).json())
       .thread;
     expect(child.forkedFromId).toBe(source);
-    expect(child.settings.permission).toBe('read-only');
+    expect(child.settings.permission).toBeUndefined();
     expect(
       child.messages.filter((entry: { text: string }) =>
         entry.text.includes('Keep this unsent recovery draft'),

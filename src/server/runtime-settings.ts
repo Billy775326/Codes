@@ -27,12 +27,10 @@ export class RuntimeConfiguration {
     this.executable = env.CODES_CODEX_BINARY ?? 'codex';
     const content = readSettingsFile(this.path);
     if (content === undefined) {
-      if (env.CODES_CODE_QUESTIONS && !['0', '1'].includes(env.CODES_CODE_QUESTIONS))
-        throw new Error('CODES_CODE_QUESTIONS must be 0 or 1.');
       this.saved = {
         revision: 0,
         settings: runtimeSettingsSchema.parse({
-          codeQuestions: env.CODES_CODE_QUESTIONS !== '0',
+          codeQuestions: true,
           requestTimeoutMs: Number(
             env.CODES_CODEX_REQUEST_TIMEOUT_MS ?? runtimeRequestTimeout.default,
           ),
@@ -49,9 +47,7 @@ export class RuntimeConfiguration {
     return {
       ...this.saved,
       active: this.active,
-      restartRequired:
-        this.saved.settings.codeQuestions !== this.active.codeQuestions ||
-        this.saved.settings.requestTimeoutMs !== this.active.requestTimeoutMs,
+      restartRequired: this.saved.settings.requestTimeoutMs !== this.active.requestTimeoutMs,
       dataDirectory: this.directory,
       executable: this.executable,
     };

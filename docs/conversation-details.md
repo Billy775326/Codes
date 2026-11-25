@@ -46,7 +46,7 @@ This is progress display, not browser-side context summarization, transcript del
 
 ## When Codex asks a question
 
-The native agent decides whether to call `request_user_input`. codes does not manufacture a question for every prompt or treat ordinary assistant prose as a structured request. Code-mode availability is enabled by default for the codes child process with the pinned CLI's `features.default_mode_request_user_input` setting. Set `CODES_CODE_QUESTIONS=0` before starting to retain Plan-only availability. Global Codex configuration is unchanged.
+Codex decides when to request structured input. Availability in Code mode follows the effective native feature setting. Optional questions can be skipped explicitly.
 
 Question cards appear inside the turn that requested input. Codes joins renumbered legacy history items to the matching live request using the full question group and choice labels. When multiple live requests match or separate matching items appear together in one history page, Codes keeps the entries separate. Confirmed replies to asynchronous questions stay on the original card and remain visible after refresh. If delivery is uncertain, **Check answer status** appears on that card. A historical answer without a matching source card remains visible in its stored turn.
 

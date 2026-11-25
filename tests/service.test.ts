@@ -60,7 +60,7 @@ it('keeps future conversation choices independent of an active task and captured
   expect(thread.settings).toEqual(before);
   expect(service.store.settingsProfile(thread.id).settings).toEqual(next);
 });
-it('applies saved defaults only to subsequently created conversations', async () => {
+it('keeps saved legacy defaults out of subsequently created conversations', async () => {
   const { service, project, thread } = await fixture();
   const initial = service.store.settingsProfile(thread.id);
   const next = {
@@ -73,8 +73,8 @@ it('applies saved defaults only to subsequently created conversations', async ()
   service.saveDefaultSettings(0, next);
   expect(service.store.settingsProfile(thread.id)).toEqual(initial);
   const created = await service.create(project.id);
-  expect(created.composerSettings?.settings).toEqual(next);
-  expect(created.settings).toEqual(next);
+  expect(created.composerSettings?.settings).toEqual({});
+  expect(created.settings).toEqual({});
   expect(service.store.activeCount()).toBe(0);
 });
 it('hydrates history without eager turn items and keeps large tool payloads outside snapshots', async () => {
@@ -1098,7 +1098,7 @@ it('forks through an exact completed turn without changing the source history or
     code: 'OPERATION_CONFLICT',
   });
   const branch = await service.read(child.id);
-  expect(branch.settings.permission).toBe('read-only');
+  expect(branch.settings.permission).toBeUndefined();
   expect((await service.source(child.id)).id).toBe(thread.id);
   expect(branch.messages.filter((row) => row.kind === 'user').map((row) => row.text)).toEqual([
     'First source turn',
@@ -1484,7 +1484,7 @@ it('retains history and task status when an imported conversation belongs to ano
   expect(branch.id).not.toBe(thread.id);
   expect(branch.forkedFromId).toBe(thread.id);
   expect((await service.history(thread.id)).messages).toEqual(messages);
-  expect((await service.read(branch.id)).settings.permission).toBe('read-only');
+  expect((await service.read(branch.id)).settings.permission).toBeUndefined();
 });
 it('checks a released writer without sending the rejected task automatically', async () => {
   const { service, project } = await fixture();

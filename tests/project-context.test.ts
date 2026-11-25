@@ -65,7 +65,7 @@ it('preserves history and settings while a missing directory blocks file access,
     available: false,
     code: 'DIRECTORY_UNAVAILABLE',
   });
-  expect(service.store.settingsProfile(threadA.id).settings.permission).toBe('read-only');
+  expect(service.store.settingsProfile(threadA.id).settings.permission).toBeUndefined();
   for (const work of [
     () => service.conversationFiles(threadA.id, ''),
     () => service.conversationFile(threadA.id, 'same.ts'),

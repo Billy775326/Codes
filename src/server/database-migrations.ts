@@ -3,10 +3,10 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { AppError } from '../shared/errors.js';
-import { queueSchema } from './queue-store.js';
+import { legacyQueueReview, queueSchema } from './queue-store.js';
 import { asyncQuestionSchema } from './async-questions.js';
 
-export const databaseVersion = 5;
+export const databaseVersion = 6;
 
 const base = `
       CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL);
@@ -149,6 +149,16 @@ export function migrateDatabase(db: DatabaseSync, directory: string) {
         'ALTER TABLE threads ADD COLUMN forked_from_id TEXT; ALTER TABLE operations ADD COLUMN result_id TEXT;',
       );
     db.exec(queueSchema + executionLease + metadata);
+    if (!fresh) {
+      db.prepare(
+        `
+        INSERT INTO queue_controls(thread_id,paused,reason)
+        SELECT DISTINCT thread_id,1,?
+        FROM queued_messages WHERE state='queued'
+        ON CONFLICT(thread_id) DO UPDATE SET paused=1,reason=excluded.reason
+      `,
+      ).run(legacyQueueReview);
+    }
     verifySchema(db);
     if (fresh) db.prepare('INSERT INTO meta VALUES(?)').run(databaseVersion);
     else db.prepare('UPDATE meta SET version=?').run(databaseVersion);

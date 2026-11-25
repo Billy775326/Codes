@@ -53,7 +53,7 @@ Approvals are addressed by the runtime epoch and native request ID. Concurrent c
 
 A separate queue controller serializes waiting messages through the existing task-dispatch path. SQLite retains payloads, order, controls, and mutation identities; the browser subscribes to bounded previews. Native approvals remain independent callbacks. Uncertain dispatches hold the queue, and restart never automatically replays work. A successful terminal receipt can advance the queue; stop, failure, or decline pauses it for explicit review. Readiness is checked again after asynchronous native reads.
 
-Native `thread/fork` copies conversation context through a completed turn. Branch result IDs are journaled separately from execution receipts, and source metadata is scoped to the registered project. A branch uses the same current files and receives a fresh read-only configuration and empty queue. Codes does not implement file rollback or Git worktrees through this control. See [workflow behavior](conversation-workflow.md).
+Native `thread/fork` copies conversation context through a completed turn. Branch result IDs are journaled separately from execution receipts, and source metadata is scoped to the registered project. A branch uses the same current files and receives the effective Codex configuration and empty queue. Codes does not implement file rollback or Git worktrees through this control. See [workflow behavior](conversation-workflow.md).
 
 ## Rendering and resource limits
 
@@ -95,7 +95,7 @@ Legacy Codex histories use native `thread/turns/list` with full items and a one-
 
 ## Project and conversation context
 
-SQLite schema 5 retains project registrations and conversation associations. Browser navigation stores at most 20 recent project views, separately from conversation drafts and server-backed settings. The native conversation header validates ownership; selected snapshots add bounded project/directory metadata, and conversation file APIs derive their directory from the thread ID. Project-level file APIs remain compatible for uncreated drafts and older callers.
+SQLite schema 6 retains project registrations and conversation associations. Browser navigation stores at most 20 recent project views, separately from conversation drafts and native execution configuration. The native conversation header validates ownership; selected snapshots add bounded project/directory metadata, and conversation file APIs derive their directory from the thread ID. Project-level file APIs remain compatible for uncreated drafts and older callers.
 
 Directory health uses asynchronous filesystem checks. Missing or inaccessible directories do not erase history; new execution and filesystem access fail explicitly. Queues pause before claiming their next item. Existing configured registrations survive service startup with a missing path. These checks preserve directory context and native permissions rather than adding another tool authorization engine. See [project/conversation behavior](session-navigation-proposal.md).
 

@@ -16,21 +16,13 @@ const mandatory = {
   'thread/list': ['cwd', 'limit', 'archived', 'cursor'],
   'thread/read': ['threadId', 'includeTurns'],
   'thread/turns/list': ['threadId', 'itemsView', 'cursor', 'sortDirection', 'limit'],
-  'thread/start': ['cwd', 'sandbox', 'approvalPolicy', 'approvalsReviewer', 'model'],
+  'thread/start': ['cwd', 'ephemeral'],
   'thread/resume': ['threadId', 'excludeTurns', 'cwd'],
   'thread/unsubscribe': ['threadId'],
   'thread/name/set': ['threadId', 'name'],
   'thread/archive': ['threadId'],
   'thread/unarchive': ['threadId'],
-  'turn/start': [
-    'threadId',
-    'input',
-    'clientUserMessageId',
-    'sandboxPolicy',
-    'approvalPolicy',
-    'approvalsReviewer',
-    'collaborationMode',
-  ],
+  'turn/start': ['threadId', 'input', 'clientUserMessageId', 'collaborationMode'],
   'turn/steer': ['threadId', 'input', 'expectedTurnId', 'clientUserMessageId'],
   'turn/interrupt': ['threadId', 'turnId'],
 };
@@ -136,15 +128,7 @@ export async function inspectNativeProtocol(
       'limit',
       'sortDirection',
     ]),
-    branch: supports('thread/fork', [
-      'threadId',
-      'lastTurnId',
-      'cwd',
-      'excludeTurns',
-      'sandbox',
-      'approvalPolicy',
-      'approvalsReviewer',
-    ]),
+    branch: supports('thread/fork', ['threadId', 'lastTurnId', 'cwd', 'excludeTurns']),
     review:
       supports('review/start') &&
       supports('thread/settings/update', [

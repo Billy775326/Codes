@@ -1,9 +1,7 @@
 import { useInterfaceLanguage } from './interface-language';
 import { ImageAttachmentView } from './ImageAttachments';
-import { permissionLabel } from '../shared/permissions';
 import { useEffect, useRef, useState } from 'react';
-import type { QueueState, QueueItem, Settings } from '../shared/types';
-import { sameSettings } from '../shared/types';
+import type { QueueState, QueueItem } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon, IconButton } from './primitives';
 import { useComposerTextareaHeight } from './useComposerTextareaHeight';
@@ -15,7 +13,6 @@ export function QueuePanel({
   onChange,
   onCheck,
   turnId,
-  settings,
   onEditingChange,
   onStop,
   dispatchUnavailable,
@@ -23,7 +20,6 @@ export function QueuePanel({
   threadId: string;
   projectId: string;
   turnId?: string;
-  settings?: Settings;
   onEditingChange: (editing: boolean) => void;
   onStop?: () => void;
   dispatchUnavailable?: string;
@@ -58,11 +54,11 @@ export function QueuePanel({
     }
   };
   const pauseReason = state.paused && state.reason !== 'Paused by you.' ? state.reason : undefined;
-  const addNowUnavailable = (entry: QueueItem) => {
+  const addNowUnavailable = () => {
     if (busy) return t('Wait for the current request.');
-    if (dispatchUnavailable || !settings)
-      return t(dispatchUnavailable ?? 'Wait for project context.');
-    if (!sameSettings(entry.settings, settings)) return t('Requires matching task settings.');
+    if (state.reason === 'Review Codex permissions before resuming this legacy queue.')
+      return t(state.reason);
+    if (dispatchUnavailable) return t(dispatchUnavailable);
   };
   const entryBeingEdited = state.items.find((entry) => entry.id === editing);
   const editable = entryBeingEdited?.state === 'queued';
@@ -187,7 +183,7 @@ export function QueuePanel({
                       size={15}
                       label={t('Add queued message to current task')}
                       hint={t('Add to current task')}
-                      unavailable={addNowUnavailable(entry)}
+                      unavailable={addNowUnavailable()}
                       aria-description={t('Accepted additions cannot be edited.')}
                       onClick={() =>
                         void run(() =>
@@ -252,9 +248,7 @@ export function QueuePanel({
                   )}
                 </div>
               )}
-              {(entry.state !== 'queued' ||
-                entry.settings.permission !== settings?.permission ||
-                (!!entry.text && entry.attachments.length > 0)) && (
+              {(entry.state !== 'queued' || (!!entry.text && entry.attachments.length > 0)) && (
                 <div className="queue-entry-details">
                   {entry.state !== 'queued' && (
                     <span>
@@ -266,9 +260,6 @@ export function QueuePanel({
                             : 'Needs review',
                       )}
                     </span>
-                  )}
-                  {entry.settings.permission !== settings?.permission && (
-                    <span>{t(permissionLabel(entry.settings.permission))}</span>
                   )}
                   {entry.text && entry.attachments.length > 0 && (
                     <span>{t('{count} attachment(s)', { count: entry.attachments.length })}</span>
@@ -289,14 +280,6 @@ export function QueuePanel({
                 </div>
               )}
               {entry.error && <p className="queue-error">{t(entry.error)}</p>}
-              {entry.state === 'queued' &&
-                turnId &&
-                settings &&
-                !sameSettings(entry.settings, settings) && (
-                  <p className="queue-edit-scope">
-                    {t('Add now requires matching task settings.')}
-                  </p>
-                )}
             </div>
           </li>
         ))}

@@ -1,8 +1,8 @@
 import { useInterfaceLanguage } from './interface-language';
 import type { Preferences } from './browser-preferences';
-import { permissionLabel } from '../shared/permissions';
+import type { NativeConfigurationSnapshot } from '../shared/native-configuration';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ReviewTarget, Settings, System, Thread } from '../shared/types';
+import type { ReviewTarget, System, Thread } from '../shared/types';
 import { message } from './api';
 import { IconButton } from './primitives';
 export function InteractionDialog({
@@ -187,7 +187,7 @@ export function StatusDialog({
   maintenanceBusy,
   changeMaintenance,
   thread,
-  settings,
+  configuration,
   connection,
   close,
 }: {
@@ -195,7 +195,7 @@ export function StatusDialog({
   maintenanceBusy: boolean;
   changeMaintenance: (action: 'start' | 'cancel') => Promise<void>;
   thread?: Thread;
-  settings: Settings;
+  configuration?: NativeConfigurationSnapshot;
   connection: string;
   close: () => void;
 }) {
@@ -212,22 +212,45 @@ export function StatusDialog({
         </dd>
         <dt>{t('CLI version')}</dt>
         <dd>{system?.version ?? t('Unknown')}</dd>
+        <dt>{t('Effective project configuration')}</dt>
+        <dd>
+          {[
+            configuration?.model,
+            configuration?.effort,
+            configuration?.serviceTier,
+            configuration?.permissionProfile ?? configuration?.sandbox,
+          ]
+            .filter(Boolean)
+            .join(' · ') || t('Not reported')}
+        </dd>
         <dt>{t('Model')}</dt>
-        <dd>{settings.model || thread?.resolvedModel || t('CLI default')}</dd>
+        <dd>{thread?.nativeSettings?.model ?? t('Not reported')}</dd>
         <dt>{t('Reasoning')}</dt>
-        <dd>{t(settings.effort || 'Codex default')}</dd>
+        <dd>{thread?.nativeSettings?.effort ?? t('Not reported')}</dd>
+        <dt>{t('Service tier')}</dt>
+        <dd>{thread?.nativeSettings?.serviceTier ?? t('Not reported')}</dd>
         <dt>{t('Mode')}</dt>
-        <dd>{settings.mode === 'plan' ? t('Plan') : t('Code')}</dd>
+        <dd>
+          {thread?.nativeSettings?.mode
+            ? t(thread.nativeSettings.mode === 'plan' ? 'Plan' : 'Code')
+            : t('Not reported')}
+        </dd>
         <dt>{t('Clarification questions')}</dt>
         <dd>
-          {system?.codeQuestions === true
-            ? t('Code and Plan, when Codex needs input')
-            : system?.codeQuestions === false
-              ? t('Plan mode only')
-              : t('Not reported')}
+          {configuration?.codeQuestions === undefined
+            ? t('Not reported')
+            : t(configuration.codeQuestions ? 'Enabled' : 'Disabled')}
         </dd>
         <dt>{t('Permissions')}</dt>
-        <dd>{t(permissionLabel(settings.permission))}</dd>
+        <dd>
+          {[
+            thread?.nativeSettings?.permissionProfile ?? thread?.nativeSettings?.sandbox,
+            thread?.nativeSettings?.approvalPolicy,
+            thread?.nativeSettings?.approvalsReviewer,
+          ]
+            .filter(Boolean)
+            .join(' · ') || t('Not reported')}
+        </dd>
         <dt>{t('Conversation')}</dt>
         <dd>{thread?.id ?? t('Not created')}</dd>
         <dt>{t('Turn')}</dt>

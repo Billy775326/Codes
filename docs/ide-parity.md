@@ -47,7 +47,7 @@ The server verifies conversation/project ownership and directory health before f
 
 The composer uses one outer focus border and an unclipped model popup. Navigation owns the project picker, the header owns the conversation title, and starter drafts remain in the conversation action menu. Delivery scope is attached to the input and action controls as accessible descriptions and titles; active work retains its alternate action without a permanent instruction paragraph. It retains one rounded input area, attachment and Codex permission controls, a `/plan` toggle with a visible exit marker, a model/reasoning popup and explicit send/queue/stop actions. Edited-file cards and copy/reply/branch actions remain available. Dark/light/system themes are browser preferences. Read-only previews provide no Undo, staging or patch-application controls.
 
-The permission menu fixes both native sandbox and approval policy: Read only uses `read-only` with `on-request`; Ask for approval uses `workspace-write` with `on-request` and sandbox network access disabled; Full access uses `danger-full-access` with `never`. Selection applies to subsequent tasks, retains existing queued settings, and does not write global Codex configuration. Approve for me uses `workspace-write`, `on-request`, and `approvalsReviewer: auto_review`; manual presets explicitly restore `approvalsReviewer: user`. Native requirements can disable Auto-review. Custom permission profiles are not exposed. The metadata-only smoke checks all four presets against CLI 0.167.0 without executing model prompts. Live reviewer results and bounded rationale are shown when the native notifications supply them; this is not a Codes approval engine.
+The permission menu displays the effective Codex settings for the selected project. Use **Codex configuration** to edit native user settings. Codex resolves managed permission constraints and owns approval callbacks. Codes displays reviewer outcomes and bounded rationale when reported.
 
 Browser acceptance covers pane geometry, menu/drawer focus, per-project drafts and legacy reads, delayed-file cancellation, attachment return, clipboard copying, saved themes and 1440/820/390/320px widths. Synthetic screenshots describe this Web implementation; they do not establish physical-phone acceptance or pixel equality with the extension.
 
@@ -79,9 +79,9 @@ The [interface design](interface-design.md) records component ownership, modal p
 
 Steering uses the running task's model, mode and permissions. It does not interrupt and restart the task. Waiting approvals/questions must be answered or canceled; immediate steering is unavailable in those states and during native reviews. Queue remains available. Legacy stored `interrupt` preferences are normalized to `steer`.
 
-Code questions use a process-local experimental setting, enabled by default in codes and disabled with `CODES_CODE_QUESTIONS=0`. Their presence remains the model's choice. codes never auto-resolves an unanswered request based on elapsed time; explicit Skip sends an empty native map only for an optional request. This intentionally differs from the published host's optional-request auto-resolution mechanism. Question state and patches remain bounded in runtime snapshots; schema 4 does not change.
+Code-mode question availability follows the installed Codex runtime and the effective native configuration. Explicit Skip supplies an empty native answer map only for an optional request.
 
-Review starts in Read only, including when the composer previously selected Workspace write. A separate review shares current project files, without a Git worktree, file rollback, or copied source conversation history. These are explicit product choices at the Web adapter boundary.
+Native review uses the effective Codex configuration. A separate review shares current project files and starts a new conversation in the same project.
 
 ## Recovery and compatibility
 
@@ -93,7 +93,7 @@ A review cannot attach a client message ID with this CLI. A returned native turn
 
 Metadata schema **4** expands the execution lease to include reviews. Schemas 1–3 are backed up to a private `codes.schema-v<version>-<timestamp>-<uuid>.sqlite` before migration. Existing projects, settings, native conversation references and receipts are retained. Old settings and queue payloads without mode/effort fields remain readable. The older application cannot read schema 4; restoring a backup requires a coordinated metadata/native-history recovery, not an in-place downgrade.
 
-The app-server connection opts into experimental API fields because native collaboration modes require them. This remains tied to CLI 0.167.0. No arbitrary RPC or configuration-writing endpoint is exposed to the browser.
+The App Server connection opts into experimental protocol fields and detects supported operations from the installed CLI. The configuration editor permits specific execution settings through the native write interface.
 
 ## Remaining local differences
 

@@ -220,8 +220,6 @@ test('projects restore their last conversation and draft without cancelling runn
   await expect(cardA.getByRole('button', { name: first.title, exact: true })).toBeVisible();
   await expect(cardB.getByRole('button', { name: second.title, exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Codex permissions', exact: true }).click();
-  await page.getByRole('button', { name: 'Ask for approval', exact: true }).click();
   await page.getByLabel('Message Codex').fill('[hold] Project task');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
@@ -238,7 +236,7 @@ test('projects restore their last conversation and draft without cancelling runn
   await openProject(page, a.id);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft A stays here');
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
-    'Ask for approval',
+    'Codex default',
   );
   const after = await (await page.request.get('/api/threads/' + first.id + '/snapshot')).json();
   expect(after.thread.turnId).toBe(before.thread.turnId);
@@ -250,7 +248,7 @@ test('projects restore their last conversation and draft without cancelling runn
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft B stays here');
   await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toContainText(
-    'Read only',
+    'Codex default',
   );
   await page.reload();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft B stays here');

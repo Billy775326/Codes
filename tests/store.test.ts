@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../src/server/store';
 
 const cleanups: (() => void)[] = [];
-it('persists independent settings and defaults without changing execution snapshots or schema 5', () => {
+it('persists independent settings and defaults without changing execution snapshots or schema 6', () => {
   const { store, directory } = fixture();
   const original = store.thread('a')!.settings;
   const selected = {
@@ -35,7 +35,7 @@ it('persists independent settings and defaults without changing execution snapsh
     expect(reopened.settingsProfile('a')).toEqual(profile);
     expect(reopened.settingsProfile()).toEqual(defaults);
     expect(reopened.settingsProfile('b').settings).toEqual(original);
-    expect(reopened.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 5 });
+    expect(reopened.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 6 });
     expect(() => reopened.settingsProfile('missing')).toThrow(/not found/);
   } finally {
     reopened.close();
@@ -57,6 +57,31 @@ it('keeps project archives across restart and preserves the original conversatio
     expect(reopened.projects()).toEqual([project]);
     expect(reopened.thread('a')).toEqual(active);
     expect(reopened.thread('b')).toEqual(archived);
+  } finally {
+    reopened.close();
+  }
+});
+it('holds schema 5 waiting messages for permission review without changing their payloads', () => {
+  const { store, directory } = fixture();
+  const payload = {
+    text: 'Waiting before upgrade',
+    settings: { permission: 'read-only' as const },
+    attachments: [],
+  };
+  store.queue.add('queued-before-upgrade', 'a', payload);
+  store.db.exec('UPDATE meta SET version=5');
+  store.close();
+  const reopened = new Store(directory);
+  try {
+    expect(reopened.queue.state('a')).toMatchObject({
+      paused: true,
+      reason: 'Review Codex permissions before resuming this legacy queue.',
+      items: [{ id: 'queued-before-upgrade', ...payload }],
+    });
+    reopened.queue.pause('a');
+    expect(reopened.queue.state('a').reason).toMatch(/legacy queue/);
+    reopened.queue.resume('a');
+    expect(reopened.queue.state('a')).toMatchObject({ paused: false, items: [payload] });
   } finally {
     reopened.close();
   }
@@ -221,7 +246,7 @@ it('backs up schema 1 before adding archive metadata and preserves pending recei
       state: 'unknown',
     });
     expect(migrated.active('t')).toMatchObject({ id: 'op', state: 'unknown', text: 'saved draft' });
-    expect(migrated.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 5 });
+    expect(migrated.db.prepare('SELECT version FROM meta').get()).toMatchObject({ version: 6 });
     const backupName = readdirSync(directory).find((name) => name.startsWith('codes.schema-v1-'))!;
     expect(statSync(join(directory, backupName)).mode & 0o777).toBe(0o600);
     const backup = new DatabaseSync(join(directory, backupName), { readOnly: true });

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CodexDefaults, Model, Settings, System } from '../shared/types';
-import { permissionPresets } from '../shared/permissions';
+import type { System } from '../shared/types';
 import { useInterfaceLanguage } from './interface-language';
 import { chatFontSizes, codeFontSizes, defaultTextSize } from './font-sizes';
 import {
@@ -8,7 +7,7 @@ import {
   type NotificationPreferences,
   type Preferences,
 } from './browser-preferences';
-import { ModelSettingsFields } from './ComposerControls';
+import { NativeConfigurationSettings } from './NativeConfigurationSettings';
 import { InteractionDialog } from './InteractionDialog';
 import { NetworkSettings } from './NetworkSettings';
 import { RuntimeSettings } from './RuntimeSettings';
@@ -41,7 +40,7 @@ const settingsSections = [
   {
     id: 'defaults',
     scope: 'workspace',
-    label: 'Chat defaults',
+    label: 'Codex configuration',
     icon: 'newchat',
     keywords:
       'new conversation chat model reasoning permissions fast plan default 默认 模型 推理 权限 计划',
@@ -149,7 +148,9 @@ export function PreferencesDialog({
   changeNotifications,
   close,
   saveError,
-  defaults,
+  configurationProject,
+  openConfigurationFirst,
+  configurationChanged,
   system,
   maintenanceBusy,
   changeMaintenance,
@@ -169,26 +170,17 @@ export function PreferencesDialog({
     action: 'start' | 'cancel',
     onError: (error: unknown) => void,
   ) => Promise<void>;
-  defaults: {
-    settings?: Settings;
-    saving: boolean;
-    loading: boolean;
-    error: string;
-    conflict: boolean;
-    change: (value: Settings) => void;
-    retry: () => void;
-    models: Model[];
-    codexDefaults?: CodexDefaults;
-    autoReviewReady: boolean;
-    modesReady: boolean;
-    planReady: boolean;
-  };
+  configurationProject?: string;
+  openConfigurationFirst?: boolean;
+  configurationChanged: () => void;
 }) {
   const { t } = useInterfaceLanguage();
-  const [section, setSection] = useState<SettingsSection>('preferences');
+  const [section, setSection] = useState<SettingsSection>(
+    openConfigurationFirst ? 'defaults' : 'preferences',
+  );
   const [visited, setVisited] = useState({
     preferences: true,
-    defaults: false,
+    defaults: !!openConfigurationFirst,
     network: false,
     runtime: false,
     instructions: false,
@@ -196,6 +188,7 @@ export function PreferencesDialog({
     maintenance: false,
     backup: false,
   });
+  const [configurationDraft, setConfigurationDraft] = useState({ changed: false, busy: false });
   const [networkDraft, setNetworkDraft] = useState({ changed: false, busy: false });
   const [runtimeDraft, setRuntimeDraft] = useState({ changed: false, busy: false });
   const [instructionsDraft, setInstructionsDraft] = useState({ changed: false, busy: false });
@@ -203,6 +196,7 @@ export function PreferencesDialog({
   const [loginDraft, setLoginDraft] = useState({ changed: false, busy: false });
   const [tokenDraft, setTokenDraft] = useState({ changed: false, busy: false });
   const otherDrafts = [
+    configurationDraft,
     networkDraft,
     runtimeDraft,
     instructionsDraft,
@@ -520,84 +514,12 @@ export function PreferencesDialog({
             </div>
             {visited.defaults && (
               <div className="preferences-content" hidden={section !== 'defaults'}>
-                <section
-                  className="preferences-section"
-                  aria-labelledby="preferences-defaults"
-                  role="region"
-                  aria-label={t('Chat defaults')}
-                >
-                  <h3 id="preferences-defaults">{t('Chat defaults')}</h3>
-                  {defaults.settings && (
-                    <>
-                      <div className="default-model-settings">
-                        <label className="preference-row">
-                          <span className="preference-description">
-                            {t('Permissions')}
-                            <span className="preference-help" id="default-permission-help">
-                              {t(
-                                permissionPresets.find(
-                                  (preset) => preset.id === defaults.settings!.permission,
-                                )?.description ?? '',
-                              )}
-                            </span>
-                          </span>
-                          <select
-                            aria-label={t('Default permissions')}
-                            aria-describedby="default-permission-help"
-                            value={defaults.settings.permission}
-                            disabled={defaults.loading}
-                            onChange={(event) =>
-                              defaults.change({
-                                ...defaults.settings!,
-                                permission: event.target.value as Settings['permission'],
-                              })
-                            }
-                          >
-                            {permissionPresets.map((preset) => (
-                              <option
-                                key={preset.id}
-                                value={preset.id}
-                                disabled={preset.id === 'auto-review' && !defaults.autoReviewReady}
-                              >
-                                {t(preset.label)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <ModelSettingsFields
-                          defaults
-                          settings={defaults.settings}
-                          change={defaults.change}
-                          models={defaults.models}
-                          codexDefaults={defaults.codexDefaults}
-                          modesReady={defaults.modesReady}
-                          planReady={defaults.planReady}
-                          disabled={defaults.loading}
-                        />
-                      </div>
-                      <ResetSettings
-                        label={t('Reset new conversation defaults')}
-                        detail={t(
-                          'Restore default permissions, model, reasoning, mode, and speed.',
-                        )}
-                        disabled={defaults.loading || defaults.conflict}
-                        reset={() => defaults.change({ permission: 'read-only' })}
-                      />
-                    </>
-                  )}
-                  {defaults.loading && <p role="status">{t('Loading defaults…')}</p>}
-                  {defaults.saving && <p role="status">{t('Saving defaults…')}</p>}
-                  {defaults.error && (
-                    <p role="alert">
-                      {t(defaults.error)}{' '}
-                      <button onClick={defaults.retry}>
-                        {defaults.conflict
-                          ? t('Reload default settings')
-                          : t('Retry default settings')}
-                      </button>
-                    </p>
-                  )}
-                </section>
+                <NativeConfigurationSettings
+                  key={configurationProject}
+                  projectId={configurationProject}
+                  changed={configurationChanged}
+                  onDraft={setConfigurationDraft}
+                />
               </div>
             )}
             {visited.notifications && (

@@ -37,8 +37,9 @@ export class Driver extends EventEmitter {
       version: this.mode === 'mock' ? 'simulator' : (this.version ?? 'Not reported'),
       codeQuestions:
         this.mode === 'mock' || this.protocol
-          ? this.options.codeQuestions !== false &&
-            (this.mode === 'mock' || !!this.protocol?.codeQuestions)
+          ? this.mode === 'mock'
+            ? this.options.codeQuestions !== false
+            : undefined
           : undefined,
       capabilities: this.protocol?.capabilities,
       error: this.error,
@@ -81,18 +82,7 @@ export class Driver extends EventEmitter {
         ? existsSync(compiled)
           ? [fileURLToPath(compiled)]
           : ['--import', 'tsx', fileURLToPath(new URL('./simulator.ts', import.meta.url))]
-        : [
-            'app-server',
-            '--listen',
-            'stdio://',
-            ...(this.protocol?.codeQuestions
-              ? [
-                  '-c',
-                  'features.default_mode_request_user_input=' +
-                    (this.options.codeQuestions !== false),
-                ]
-              : []),
-          ];
+        : ['app-server', '--listen', 'stdio://'];
     const child = spawn(binary, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,

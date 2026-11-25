@@ -32,7 +32,7 @@ async function until(check: () => boolean) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
-it('uses native Plan instructions and catalog reasoning without replacing a requested model', async () => {
+it('uses native Plan instructions and ignores legacy reasoning overrides', async () => {
   const { service, thread } = await fixture();
   const spy = vi.spyOn(service.driver, 'call');
   const settings = {
@@ -46,7 +46,7 @@ it('uses native Plan instructions and catalog reasoning without replacing a requ
   const start = spy.mock.calls.find(([method]) => method === 'turn/start')![1] as any;
   expect(start.collaborationMode).toEqual({
     mode: 'plan',
-    settings: { model: 'simulated-model', reasoning_effort: 'high', developer_instructions: null },
+    settings: { model: 'simulated-model', reasoning_effort: null, developer_instructions: null },
   });
   expect(start.input[0].text).toBe('Propose a plan');
   expect(thread.plan?.steps[0]).toMatchObject({ status: 'completed' });
@@ -61,20 +61,16 @@ it('uses native Plan instructions and catalog reasoning without replacing a requ
   expect(thread.plan).toBeUndefined();
   await service.interrupt(thread.id);
 });
-it('rejects unadvertised reasoning before dispatch and preserves custom model identifiers', async () => {
-  const { service, thread, project } = await fixture();
-  const invalid = randomUUID();
-  await expect(
-    service.send(thread.id, invalid, 'No execution', {
-      permission: 'read-only',
-      model: 'simulated-model',
-      effort: 'invented',
-    }),
-  ).rejects.toMatchObject({ code: 'EFFORT_UNAVAILABLE' });
-  expect(thread.messages).toHaveLength(0);
-  expect(service.store.operation(invalid)?.state).toBe('failed');
+it('preserves model identifiers supplied by native configuration', async () => {
+  const { service, project } = await fixture();
+  const config = service.modelSettings.configuration;
+  const before = await config.read(project.path, true);
+  await config.save(project.path, {
+    version: before.userVersion!,
+    changes: { model: 'custom-exact-name' },
+  });
   const { collaborationMode } = await service.modelSettings.resolve(
-    { permission: 'read-only', model: 'custom-exact-name' },
+    { model: 'retired' },
     project.path,
   );
   expect(collaborationMode.settings.model).toBe('custom-exact-name');
@@ -97,7 +93,7 @@ it('rejects unavailable native review and branching before reserving an operatio
   expect(service.store.operation(fork)).toBeUndefined();
 });
 
-it('restores the current project Codex model, effort and speed after explicit turn overrides', async () => {
+it('refreshes the loaded thread when native configuration changes', async () => {
   const { service, thread, project } = await fixture();
   const call = service.driver.call.bind(service.driver);
   const config = {
@@ -120,8 +116,9 @@ it('restores the current project Codex model, effort and speed after explicit tu
   await until(() => thread.state === 'completed');
   const lastStart = () => spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)?.[1];
   expect(lastStart()).toMatchObject({
-    collaborationMode: { settings: { model: 'simulated-model', reasoning_effort: 'low' } },
-    serviceTierForTurn: 'default',
+    collaborationMode: {
+      settings: { model: 'first-configured-model', reasoning_effort: 'medium' },
+    },
   });
   config.model = 'new-configured-model';
   await service.send(thread.id, randomUUID(), 'Inherit current project', {
@@ -131,7 +128,6 @@ it('restores the current project Codex model, effort and speed after explicit tu
   expect(spy).toHaveBeenCalledWith('config/read', { cwd: project.path, includeLayers: false });
   expect(lastStart()).toMatchObject({
     collaborationMode: { settings: { model: 'new-configured-model', reasoning_effort: 'medium' } },
-    serviceTierForTurn: 'priority',
   });
   await service.send(thread.id, randomUUID(), 'Inherit Plan effort', {
     permission: 'read-only',
@@ -222,7 +218,7 @@ it('uses a native user item to reconcile a lost steer acknowledgement without re
   expect(service.store.operation(id)?.state).toBe('completed');
   expect(thread.messages.filter((entry) => entry.clientId === id)).toHaveLength(1);
 });
-it('claims queued Send now atomically and refuses different settings', async () => {
+it('claims queued Send now atomically and joins the running native turn', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[slow] Queue promotion', thread.settings);
   await service.controlQueue(thread.id, true);
@@ -245,10 +241,8 @@ it('claims queued Send now atomically and refuses different settings', async () 
     settings: { permission: 'workspace-write' },
     attachments: [],
   });
-  await expect(service.steerQueued(thread.id, other, thread.turnId!)).rejects.toMatchObject({
-    code: 'STEER_SETTINGS',
-  });
-  expect(service.store.queue.get(other)?.state).toBe('queued');
+  await service.steerQueued(thread.id, other, thread.turnId!);
+  expect(thread.messages.filter((entry) => entry.clientId === other)).toHaveLength(1);
   await service.interrupt(thread.id);
   await until(() => thread.state === 'interrupted');
   expect(service.store.operation(id)?.state).toBe('completed');
@@ -256,10 +250,10 @@ it('claims queued Send now atomically and refuses different settings', async () 
     state: 'completed',
     error: 'The task ended interrupted.',
   });
-  expect(service.queueState(thread.id).items.map((entry) => entry.id)).toEqual([other]);
+  expect(service.queueState(thread.id).items.map((entry) => entry.id)).toEqual([]);
   expect(service.store.queue.state(thread.id).paused).toBe(true);
 });
-it('runs native reviews in Read only with idempotent receipts and visible review output', async () => {
+it('runs native reviews with idempotent receipts and visible review output', async () => {
   const { service, thread } = await fixture();
   const spy = vi.spyOn(service.driver, 'call');
   const id = randomUUID();
@@ -267,11 +261,8 @@ it('runs native reviews in Read only with idempotent receipts and visible review
   await service.review(thread.id, id, target, { permission: 'workspace-write' });
   await until(() => !thread.pending);
   expect(service.store.operation(id)).toMatchObject({ kind: 'review', state: 'completed' });
-  expect(thread.settings.permission).toBe('read-only');
   expect(thread.messages.some((entry) => entry.text.includes('Simulated review:'))).toBe(true);
-  expect(spy.mock.calls.find(([method]) => method === 'thread/settings/update')?.[1]).toMatchObject(
-    { sandboxPolicy: { type: 'readOnly' } },
-  );
+  expect(spy.mock.calls.some(([method]) => method === 'thread/settings/update')).toBe(false);
   expect(spy.mock.calls.find(([method]) => method === 'review/start')?.[1]).toMatchObject({
     delivery: 'inline',
     target,
@@ -426,111 +417,59 @@ it('streams native plan text but uses the final completed item as canonical cont
   );
 });
 
-for (const [permission, sandboxPolicy, approvalPolicy] of [
-  ['read-only', { type: 'readOnly' }, 'on-request'],
-  ['workspace-write', { type: 'workspaceWrite', networkAccess: false }, 'on-request'],
-  ['danger-full-access', { type: 'dangerFullAccess' }, 'never'],
-] as const) {
-  it(`applies ${permission} to native creation and subsequent turns, then restores read-only`, async () => {
-    const { service, project } = await fixture();
-    const spy = vi.spyOn(service.driver, 'call');
-    const thread = await service.create(project.id, { permission });
-    expect(spy.mock.calls.find(([method]) => method === 'thread/start')![1]).toMatchObject({
-      sandbox: permission,
-      approvalPolicy,
-    });
-    await service.send(thread.id, randomUUID(), 'Permission fixture', { permission });
-    await until(() => thread.state === 'completed');
-    expect(spy.mock.calls.find(([method]) => method === 'turn/start')![1]).toMatchObject({
-      sandboxPolicy: {
-        ...sandboxPolicy,
-        ...(permission === 'workspace-write' ? { writableRoots: [project.path] } : {}),
-      },
-      approvalPolicy,
-    });
-    await service.send(thread.id, randomUUID(), 'Restore sandbox', { permission: 'read-only' });
-    await until(() => thread.state === 'completed');
-    expect(spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)![1]).toMatchObject({
-      sandboxPolicy: { type: 'readOnly' },
-      approvalPolicy: 'on-request',
-    });
-    expect(thread.settings.permission).toBe('read-only');
-  });
-}
-
-it('keeps Fast independent of reasoning and maps on/off to native task speed overrides', async () => {
-  const { service, thread } = await fixture();
+it('ignores permission and speed overrides in legacy browser requests', async () => {
+  const { service, project } = await fixture();
   const spy = vi.spyOn(service.driver, 'call');
-  await service.send(thread.id, randomUUID(), 'Fast plan', {
-    permission: 'read-only',
-    mode: 'plan',
-    effort: 'high',
-    fast: true,
+  const configuration = service.modelSettings.configuration;
+  const before = await configuration.read(project.path, true);
+  await configuration.save(project.path, {
+    version: before.userVersion!,
+    changes: { default_permissions: ':workspace', service_tier: 'fast' },
   });
-  await until(() => thread.state === 'completed');
-  let start = spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)![1] as any;
-  expect(start.serviceTierForTurn).toBe('priority');
-  expect(start.collaborationMode).toMatchObject({
-    mode: 'plan',
-    settings: { reasoning_effort: 'high' },
+  const thread = await service.create(project.id, { permission: 'danger-full-access' });
+  expect(thread.nativeSettings).toMatchObject({
+    sandbox: 'workspaceWrite',
+    serviceTier: 'priority',
   });
-  expect(service.store.thread(thread.id)?.settings.fast).toBe(true);
-  await service.send(thread.id, randomUUID(), 'Standard execution', {
-    permission: 'read-only',
-    mode: 'default',
-    effort: 'high',
+  expect(spy.mock.calls.find(([method]) => method === 'thread/start')?.[1]).toEqual({
+    cwd: project.path,
+  });
+  await service.send(thread.id, randomUUID(), 'Inherited configuration', {
+    permission: 'danger-full-access',
     fast: false,
   });
   await until(() => thread.state === 'completed');
-  start = spy.mock.calls.filter(([method]) => method === 'turn/start').at(-1)![1] as any;
-  expect(start.serviceTierForTurn).toBe('default');
-  expect(start.collaborationMode).toMatchObject({
-    mode: 'default',
-    settings: { reasoning_effort: 'high' },
-  });
-  expect(service.store.thread(thread.id)?.settings.fast).toBe(false);
+  const turn = spy.mock.calls.find(([method]) => method === 'turn/start')?.[1];
+  for (const key of ['sandboxPolicy', 'approvalPolicy', 'approvalsReviewer', 'serviceTierForTurn'])
+    expect(turn).not.toHaveProperty(key);
 });
 
-it('refuses unavailable Fast before execution and excludes private/native model configuration from public metadata', async () => {
-  const { service, thread } = await fixture();
+it('keeps model capabilities public while withholding private metadata', async () => {
+  const { service } = await fixture();
   const call = service.driver.call.bind(service.driver);
-  const spy = vi
-    .spyOn(service.driver, 'call')
-    .mockImplementation(async (method, params, timeout) => {
-      const response = await call(method, params, timeout);
-      if (method === 'model/list') {
-        response.data[0].serviceTiers = [
-          { id: 'default', name: 'Standard', description: 'Standard' },
-        ];
-        response.data[0].privateConfig = 'not-public';
-      }
-      return response;
-    });
+  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
+    const result = await call(method, params, timeout);
+    if (method === 'model/list') {
+      result.data[0].serviceTiers = [{ id: 'default', name: 'Standard', description: 'Standard' }];
+      result.data[0].privateConfig = 'not-public';
+    }
+    return result;
+  });
   const models = await service.modelSettings.models();
   expect(models[0]?.supportsFast).toBe(false);
   expect(models[0]).not.toHaveProperty('privateConfig');
-  const operationId = randomUUID();
-  await expect(
-    service.send(thread.id, operationId, 'Do not run', { permission: 'read-only', fast: true }),
-  ).rejects.toMatchObject({ code: 'FAST_UNAVAILABLE' });
-  expect(spy.mock.calls.filter(([method]) => method === 'turn/start')).toHaveLength(0);
-  expect(service.store.operation(operationId)?.state).toBe('failed');
 });
 
-it('keeps queued Fast settings and refuses to apply them by steering a different-speed task', async () => {
+it('keeps queued input waiting while a native approval is pending', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[approve] Standard task', thread.settings);
   await until(() => thread.actions.length > 0);
   const id = randomUUID();
-  await service.enqueue(thread.id, id, {
-    text: 'Fast next turn',
-    settings: { ...thread.settings, fast: true },
-    attachments: [],
-  });
+  await service.enqueue(thread.id, id, { text: 'Waiting task', settings: {}, attachments: [] });
   await expect(service.steerQueued(thread.id, id, thread.turnId!)).rejects.toMatchObject({
-    code: 'STEER_SETTINGS',
+    code: 'STEER_UNAVAILABLE',
   });
-  expect(service.store.queue.get(id)).toMatchObject({ state: 'queued', settings: { fast: true } });
+  expect(service.store.queue.get(id)?.state).toBe('queued');
   service.cancelQueued(thread.id, id);
   await service.interrupt(thread.id);
 });

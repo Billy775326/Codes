@@ -19,7 +19,7 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
     await expect(control).toHaveText('');
   }
   const permissions = page.getByRole('button', { name: 'Codex permissions', exact: true });
-  await expect(permissions).toContainText('Read only');
+  await expect(permissions).toContainText('Codex default');
   const tooltip = page.locator('.control-tooltip');
   await files.hover();
   await expect(tooltip).toHaveText('Browse files');
@@ -44,7 +44,7 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
   await permissions.press('Tab');
   const model = page.getByRole('button', { name: 'Model and reasoning', exact: true });
   await expect(model).toBeFocused();
-  await expect(tooltip).toHaveText('Demo model');
+  await expect(tooltip).toHaveText('Codex default');
   await expect(tooltip).toBeVisible();
 });
 
@@ -131,29 +131,29 @@ test('composer commands retain focus and permissions without dispatching a task'
     const press = (target: Element, key: string) =>
       target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     press(element, 'Enter');
-    if (document.activeElement?.getAttribute('aria-label') !== 'Model')
-      throw new Error('The Model field did not receive focus');
+    if (document.activeElement?.textContent !== 'Edit Codex configuration')
+      throw new Error('The configuration action did not receive focus');
     press(document.activeElement, 'Escape');
   });
   await expect(modelButton).toBeFocused();
   await expect(modelButton).toHaveAttribute('aria-expanded', 'false');
-  for (const [command, label] of [
+  for (const [command] of [
     ['/model', 'Model'],
     ['/reasoning', 'Reasoning effort'],
   ] as const) {
     await input.fill(command);
     await input.press('Enter');
-    await expect(page.getByLabel(label, { exact: true })).toBeFocused();
+    await expect(
+      page.getByRole('button', { name: 'Edit Codex configuration', exact: true }),
+    ).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(modelButton).toBeFocused();
   }
   await page.getByLabel('Message Codex').fill('/approve');
   await page.getByLabel('Message Codex').press('Enter');
   await expect(page.getByRole('dialog', { name: 'Codex permissions', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /^Ask for approval/ }).click();
-  await expect(page.getByRole('button', { name: 'Codex permissions', exact: true })).toHaveText(
-    'Ask for approval',
-  );
+  await page.getByRole('button', { name: 'Edit Codex configuration', exact: true }).click();
+  await expect(page.getByLabel('Permission profile', { exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user')).toHaveCount(0);
   expect(dispatches).toEqual([]);
 });
