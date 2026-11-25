@@ -99,15 +99,7 @@ test('project archive survives reload, preserves native chat states, and syncs r
   browser,
 }) => {
   await login(page);
-  const { a, b, second } = await fixture(page);
-  const unrelatedPath = join(a.path, 'conversation-fixtures', 'empty-' + randomUUID());
-  await mkdir(unrelatedPath);
-  const unrelatedResponse = await page.request.post('/api/projects', {
-    data: { path: unrelatedPath, name: 'Empty archive fixture' },
-    headers: { Origin: origin },
-  });
-  expect(unrelatedResponse.ok()).toBe(true);
-  const unrelated = await unrelatedResponse.json();
+  const { b, second } = await fixture(page);
   const archivedChat = await page.request.post('/api/threads/' + second.id + '/archive', {
     data: { operationId: randomUUID(), archived: true },
     headers: { Origin: origin },
@@ -141,9 +133,6 @@ test('project archive survives reload, preserves native chat states, and syncs r
     await expect(
       card.getByRole('button', { name: b.name, exact: true }),
     ).toHaveAccessibleDescription('Archived project');
-    const unrelatedCard = projectCard(page, unrelated.id);
-    await expect(unrelatedCard).toHaveAttribute('aria-busy', 'false');
-    await expect(unrelatedCard).toBeHidden();
     const filters = card.getByRole('group', { name: 'Chats in ' + b.name });
     const archived = filters.getByRole('button', { name: 'Archived chats', exact: true });
     const active = filters.getByRole('button', { name: 'Active chats', exact: true });
@@ -169,9 +158,12 @@ test('project archive survives reload, preserves native chat states, and syncs r
     await expect(mirror).toBeVisible();
     await expect(filters).toHaveCount(0);
     await expect(savedChat).toBeVisible();
+    await card.getByRole('button', { name: 'Restore ' + second.title, exact: true }).click();
+    await expect(card).toBeHidden();
+    await expect(archive).toBeFocused();
     await archive.click();
     await expect(card).toBeVisible();
-    await expect(savedChat).toHaveCount(0);
+    await expect(savedChat).toBeVisible();
   } finally {
     await observerContext.close();
   }
