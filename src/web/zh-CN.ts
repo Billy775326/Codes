@@ -261,7 +261,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Add to current task': '加入当前任务',
   'Add to running task': '加入当前任务',
   Added: '已添加',
-  'Added to current task': '已加入当前任务',
   'Adding…': '正在添加…',
   'Additional permissions': '额外权限',
   'Allowed addresses': '允许访问的地址',

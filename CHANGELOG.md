@@ -4,6 +4,8 @@
 
 ### Removed
 
+- Hide the confirmation above the composer for follow-ups already added to the current turn. Follow-ups with uncertain delivery retain their recovery controls.
+
 - Use direct controls for Sign out, Session status, and Review code. Suggested prompts appear in empty project conversations.
 
 - Remove the conversation row's actions drawer and Copy link button. Existing conversation links still open in their registered projects.

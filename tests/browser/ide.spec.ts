@@ -58,11 +58,8 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
     await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled();
     await page.getByLabel('Message Codex').press('Control+Shift+Enter');
     await expect(page.getByTestId('message-user')).toHaveCount(2);
-    await expect(page.getByRole('region', { name: 'Immediate follow-ups' })).toContainText(
-      'Added to current task',
-    );
-    const receipt = page.getByRole('region', { name: 'Immediate follow-ups' });
-    await expect(receipt.getByRole('button', { name: 'Check follow-up results' })).toHaveCount(0);
+    const receipts = page.getByRole('region', { name: 'Immediate follow-ups' });
+    await expect(receipts).toHaveCount(0);
     await page.getByLabel('Message Codex').fill('Queued then promoted');
     await page.getByRole('button', { name: 'Queue message', exact: true }).click();
     const queue = page.getByRole('region', { name: 'Queued messages' });
@@ -70,6 +67,7 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
       .getByRole('button', { name: 'Add queued message to current task', exact: true })
       .click();
     await expect(page.getByTestId('message-user')).toHaveCount(3);
+    await expect(receipts).toHaveCount(0);
     await expect(page.getByTestId('message-user').first()).toHaveAttribute(
       'data-message-id',
       first!,
@@ -97,6 +95,7 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
     await page.getByRole('button', { name: 'Check follow-up receipt', exact: true }).click();
     await expect(page.getByLabel('Message Codex')).toHaveValue('');
     await expect(page.getByTestId('message-user')).toHaveCount(4);
+    await expect(receipts).toHaveCount(0);
     await stop(page);
     await expect(page.getByRole('region', { name: 'Immediate follow-ups' })).toHaveCount(0);
   } finally {

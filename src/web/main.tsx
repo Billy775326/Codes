@@ -1398,7 +1398,11 @@ function App() {
           .map((id) => [id, action] as const),
       ),
   );
-  const steering = thread?.steering?.filter((entry) => !entry.questionReply) ?? [];
+  const pendingFollowUps =
+    thread?.steering?.filter(
+      (entry) =>
+        !entry.questionReply && (entry.state === 'dispatching' || entry.state === 'unknown'),
+    ) ?? [];
   const pending = thread?.pending;
   // A native turn owns an accepted prompt even after it leaves the live window.
   // Reviews have no guaranteed native user item to replace their preview.
@@ -2362,19 +2366,17 @@ function App() {
               </button>
             </div>
           )}
-          {!!steering.length && (
+          {!!pendingFollowUps.length && (
             <section className="steering-receipt" aria-label={t('Immediate follow-ups')}>
-              {steering.map((entry) => (
+              {pendingFollowUps.map((entry) => (
                 <p key={entry.id}>
                   {entry.state === 'unknown'
                     ? t('Follow-up acceptance unconfirmed')
-                    : entry.state === 'acknowledged'
-                      ? t('Added to current task')
-                      : t('Sending follow-up')}{' '}
+                    : t('Sending follow-up')}{' '}
                   · {entry.text.slice(0, 200)}
                 </p>
               ))}
-              {steering.some(
+              {pendingFollowUps.some(
                 (entry) => entry.state === 'unknown' && entry.id !== steerReceipt?.operationId,
               ) && (
                 <button disabled={busy} onClick={() => void checkFollowUpStatus()}>
