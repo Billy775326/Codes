@@ -152,6 +152,7 @@ Both pilots are excluded from CI and the default test command. Unexpected approv
 
 ## Documentation
 
+- [Spec Coding: Codex execution configuration](docs/spec-coding.md)
 - [Architecture and decisions](docs/architecture.md)
 - [Project and conversation navigation](docs/session-navigation-proposal.md)
 - [Interface structure and UX/DX/AX criteria](docs/interface-design.md)
