@@ -1,7 +1,4 @@
-import type {
-  NativeConfigurationEdits,
-  NativeConfigurationSnapshot,
-} from '../shared/native-configuration';
+import { useCodexConfiguration } from './useCodexConfiguration';
 import { PreferencesDialog } from './PreferencesDialog';
 import { taskActivity } from './conversation-status';
 import {
@@ -36,7 +33,6 @@ import type {
   Envelope,
   FileContent,
   Message,
-  Model,
   Project,
   ProjectContext,
   ProjectUpdate,
@@ -57,7 +53,7 @@ import { DiffView, type DiffLayout } from './DiffView';
 import { FilesPanel, LinkedFilePreview } from './FilesPanel';
 import { resolveProjectFile, type ProjectFileReference } from './remarkProjectFileLinks';
 import { PanelMenu } from './PanelMenu';
-import { usePanelFocus } from './usePanelFocus';
+import { useWorkspaceLayout } from './useWorkspaceLayout';
 import { Transcript } from './Transcript';
 import { isTurnOutcome } from './TurnResult';
 import { historyLimit, liveRevision } from './history';
@@ -73,7 +69,7 @@ import { ControlTooltip } from './ControlTooltip';
 import { AddProjectDialog } from './AddProjectDialog';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import { ConnectionStatus } from './ConnectionStatus';
-import { readSidebarWidth, SidebarResize, useSidebarLayout } from './SidebarResize';
+import { SidebarResize } from './SidebarResize';
 import './foundation.css';
 import './interactions.css';
 import './workflow.css';
@@ -154,21 +150,11 @@ function App() {
   const contextBase = threadId ? '/threads/' + threadId : '/projects/' + projectId;
   const contextReady = !!contextProjectId && context?.project.id === contextProjectId;
   const directoryBlocked = contextReady && !context.directory.available;
-  const [nativeDefaults, setNativeDefaults] = useState<{
-    projectId: string;
-    value: NativeConfigurationSnapshot;
-  }>();
-  const codexDefaults =
-    nativeDefaults?.projectId === contextProjectId ? nativeDefaults.value : undefined;
   const remember = (owner: string, id: string) => {
     if (!owner) return;
     views.current = rememberProject(views.current, owner, id);
     save('codes.project-views', JSON.stringify(views.current));
   };
-  const [models, setModels] = useState<Model[]>([]);
-  const [autoReviewReady, setAutoReviewReady] = useState(false);
-  const configurationWrite = useRef(false);
-  const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
   const [previewedImage, setPreviewedImage] = useState<string>();
   const [linkedFile, setLinkedFile] = useState<ProjectFileReference>();
@@ -203,14 +189,7 @@ function App() {
   const [mode, setMode] = useState<'default' | 'plan'>('default');
   const settings: Settings = { mode };
   const changeSettings = (next: Settings) => setMode(next.mode ?? 'default');
-  const [configurationRevision, setConfigurationRevision] = useState(0);
   useEffect(() => setMode('default'), [projectId, threadId]);
-  useEffect(() => {
-    if (auth !== 'ready') return;
-    const refresh = () => setConfigurationRevision((value) => value + 1);
-    window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
-  }, [auth]);
   const [draft, setDraft] = useState('');
   const [queueEditing, setQueueEditing] = useState(false);
   const draftRevision = useRef(0);
@@ -230,9 +209,6 @@ function App() {
   const [connection, setConnection] = useState('Connecting');
   const [connectionError, setConnectionError] = useState('');
   const [retry, setRetry] = useState(0);
-  const [sidebar, setSidebar] = useState(
-    window.innerWidth > 1099 && saved('codes.navigation') !== 'closed',
-  );
   const [prefersDark, setPrefersDark] = useState(
     window.matchMedia('(prefers-color-scheme: dark)').matches,
   );
@@ -248,67 +224,25 @@ function App() {
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
-  useEffect(() => {
-    if (window.innerWidth > 1099) save('codes.navigation', sidebar ? 'open' : 'closed');
-  }, [sidebar]);
-  const [panel, setPanel] = useState<'files' | 'diff' | null>(null);
-  const workspaceElement = useRef<HTMLDivElement>(null);
-  const navigationElement = useRef<HTMLElement>(null);
-  const navigationClose = useRef<HTMLButtonElement>(null);
-  const contextElement = useRef<HTMLElement>(null);
-  const [navigationWidth, setNavigationWidth] = useState(() =>
-    readSidebarWidth(saved('codes.navigation-width')),
-  );
-  const [contextWidth, setContextWidth] = useState(() =>
-    readSidebarWidth(saved('codes.context-width')),
-  );
-  const sidebarLayout = useSidebarLayout(sidebar, panel, navigationWidth, contextWidth);
-  const [narrow, setNarrow] = useState(window.innerWidth <= 1099);
-  const [phoneLayout, setPhoneLayout] = useState(window.innerWidth <= 700);
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 700px)');
-    const resize = () => setPhoneLayout(media.matches);
-    media.addEventListener('change', resize);
-    return () => media.removeEventListener('change', resize);
-  }, []);
-  const closeNavigation = useCallback(() => {
-    setSidebar(false);
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLButtonElement>('[data-open-navigation]')?.focus(),
-    );
-  }, []);
-  const openNavigation = () => {
-    setSidebar(true);
-    if (!narrow)
-      requestAnimationFrame(() => navigationClose.current?.focus({ preventScroll: true }));
-  };
-  const closeContext = useCallback(() => setPanel(null), []);
-  const dismissContext = () => {
-    closeContext();
-    if (!narrow)
-      requestAnimationFrame(() => {
-        workspaceElement.current
-          ?.querySelector<HTMLElement>(`[data-project-view="${panel}"]`)
-          ?.focus({ preventScroll: true });
-      });
-  };
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 1099px)');
-    const resize = () => {
-      setNarrow(media.matches);
-      setSidebar(media.matches ? false : saved('codes.navigation') !== 'closed');
-    };
-    media.addEventListener('change', resize);
-    return () => media.removeEventListener('change', resize);
-  }, []);
-  usePanelFocus(navigationElement, narrow && sidebar, closeNavigation, '[data-open-navigation]');
-  usePanelFocus(
+  const {
+    sidebar,
+    setSidebar,
+    panel,
+    setPanel,
+    narrow,
+    phoneLayout,
+    workspaceElement,
+    navigationElement,
+    navigationClose,
     contextElement,
-    narrow && !!panel && !sidebar,
+    sidebarLayout,
+    openNavigation,
+    closeNavigation,
     closeContext,
-    '[data-browse-files]',
-    '.context-close',
-  );
+    dismissContext,
+    changeNavigationWidth,
+    changeContextWidth,
+  } = useWorkspaceLayout();
   const [diffTurn, setDiffTurn] = useState('');
   const [diffLayout, setDiffLayout] = useState<DiffLayout>(() =>
     saved('codes.diff-layout') === 'split' ? 'split' : 'unified',
@@ -433,54 +367,17 @@ function App() {
   useEffect(() => {
     if (auth === 'ready' && connection === 'Connected') refreshProjects();
   }, [auth, connection, refreshProjects]);
-  useEffect(() => {
-    if (auth !== 'ready' || !contextProjectId || connection !== 'Connected') return;
-    const controller = new AbortController();
-    void request<NativeConfigurationSnapshot>(
-      '/projects/' + contextProjectId + '/codex-configuration',
-      {},
-      controller.signal,
-    ).then(
-      (value) => {
-        if (!controller.signal.aborted) setNativeDefaults({ projectId: contextProjectId, value });
-      },
-      () => {
-        if (!controller.signal.aborted)
-          setNativeDefaults((current) =>
-            current?.projectId === contextProjectId ? undefined : current,
-          );
-      },
-    );
-    return () => controller.abort();
-  }, [auth, contextProjectId, connection, configurationRevision]);
+  const {
+    codexDefaults,
+    models,
+    planReady,
+    autoReviewReady,
+    refreshConfiguration,
+    saveComposerConfiguration,
+  } = useCodexConfiguration({ auth, connection, contextProjectId, setBusy, setSystem, notice });
   useEffect(() => {
     if (auth === 'ready') return onAuthenticationRequired(notice);
   }, [auth, notice]);
-  async function saveComposerConfiguration(changes: NativeConfigurationEdits['changes']) {
-    if (
-      !contextProjectId ||
-      !codexDefaults?.writable ||
-      !codexDefaults.userVersion ||
-      configurationWrite.current
-    )
-      return;
-    const owner = contextProjectId;
-    configurationWrite.current = true;
-    setBusy(true);
-    try {
-      const value = await request<NativeConfigurationSnapshot>(
-        '/projects/' + encodeURIComponent(owner) + '/codex-configuration',
-        { method: 'PUT', body: JSON.stringify({ version: codexDefaults.userVersion, changes }) },
-      );
-      setNativeDefaults({ projectId: owner, value });
-    } catch (error) {
-      notice(error);
-    } finally {
-      configurationWrite.current = false;
-      setConfigurationRevision((value) => value + 1);
-      setBusy(false);
-    }
-  }
   const init = async () => {
     try {
       const [system, projects] = await Promise.all([
@@ -502,26 +399,6 @@ function App() {
   useEffect(() => {
     void init();
   }, []);
-  useEffect(() => {
-    if (auth !== 'ready') return;
-    const controller = new AbortController();
-    void Promise.all([
-      request<typeof modes>('/modes', {}, controller.signal),
-      request<Model[]>('/models', {}, controller.signal),
-      request<{ autoReview: boolean }>('/permissions', {}, controller.signal),
-    ])
-      .then(async ([modes, models, permissions]) => {
-        if (controller.signal.aborted) return;
-        setModes(modes);
-        setModels(models);
-        setAutoReviewReady(permissions.autoReview);
-        setSystem(await request<System>('/system', {}, controller.signal));
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) notice(error);
-      });
-    return () => controller.abort();
-  }, [auth]);
   useEffect(() => {
     if (auth !== 'ready' || !maintenanceExpiresAt) return;
     const controller = new AbortController();
@@ -649,8 +526,7 @@ function App() {
           const { id, name } = event.data as Project;
           projectUpdated({ id, name });
         } else if (event.kind === 'project-archive') projectUpdated(event.data as ProjectUpdate);
-        else if (event.kind === 'codex-configuration')
-          setConfigurationRevision((value) => value + 1);
+        else if (event.kind === 'codex-configuration') refreshConfiguration();
         else if (event.kind === 'runtime') setSystem(event.data as System);
       },
       connectionStatus,
@@ -826,7 +702,7 @@ function App() {
     };
     const event = (e: Envelope) => {
       if (e.kind === 'codex-configuration') {
-        setConfigurationRevision((value) => value + 1);
+        refreshConfiguration();
         return;
       }
       if (e.kind === 'runtime') {
@@ -1553,10 +1429,7 @@ function App() {
           side="navigation"
           range={sidebarLayout.navigation}
           workspace={workspaceElement}
-          change={(width) => {
-            setNavigationWidth(width);
-            save('codes.navigation-width', width === undefined ? '' : String(width));
-          }}
+          change={changeNavigationWidth}
         />
       )}
       <main
@@ -2262,7 +2135,7 @@ function App() {
                   models={models}
                   autoReviewReady={autoReviewReady}
                   saveConfiguration={saveComposerConfiguration}
-                  planReady={modes.some((entry) => entry.mode === 'plan')}
+                  planReady={planReady}
                   disabled={
                     busy || loadingConversation || !!thread?.archived || !!thread?.managementPending
                   }
@@ -2398,7 +2271,7 @@ function App() {
           configurationProject={contextProjectId}
           models={models}
           autoReviewReady={autoReviewReady}
-          configurationChanged={() => setConfigurationRevision((value) => value + 1)}
+          configurationChanged={refreshConfiguration}
           saveError={preferencesError}
           close={() => {
             setDialog(undefined);
@@ -2488,10 +2361,7 @@ function App() {
           side="context"
           range={sidebarLayout.context}
           workspace={workspaceElement}
-          change={(width) => {
-            setContextWidth(width);
-            save('codes.context-width', width === undefined ? '' : String(width));
-          }}
+          change={changeContextWidth}
         />
       )}
       {panel && (

@@ -1,169 +1,24 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, join, extname, relative } from 'node:path';
-import { createReadStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
-import { promisify } from 'node:util';
-import { gzip } from 'node:zlib';
 import { z } from 'zod';
 import { AppError, asError } from '../shared/errors.js';
-import { imageId, imageLimits, imageTypes } from '../shared/images.js';
-import { limits } from '../shared/types.js';
-import { codexInstructionFiles, projectInstructionsLimit } from '../shared/project-instructions.js';
-import { Service } from './service.js';
+import type { Service } from './service.js';
+import { body, json, type HttpRequest } from './http-io.js';
+import { conversationRoutes } from './routes/conversations.js';
+import { workspaceFileRoutes } from './routes/files.js';
+import { createProjectRoutes, projectCollection } from './routes/projects.js';
+import { createSettingsRoutes } from './routes/settings.js';
 import { webEntrySignature } from '../shared/web-build.js';
-import {
-  readPhase,
-  readReplay,
-  readResult,
-  traceRead,
-  ReadDiagnostics,
-} from './read-diagnostics.js';
-import type { openImagePreview } from './images.js';
-import { htmlPreviewDocument, htmlPreviewPolicy } from './html-preview.js';
-import { settingsSchema as settings } from '../shared/settings.js';
-import { nativeConfigurationEdits } from '../shared/native-configuration.js';
+import { readReplay, traceRead, ReadDiagnostics } from './read-diagnostics.js';
 import type { NetworkConfiguration } from './network-settings.js';
 import type { RuntimeConfiguration } from './runtime-settings.js';
 import type { AccessToken } from './access-token.js';
 import { accessTokenLimits } from '../shared/access-token.js';
 import type { JWTVerifyGetKey } from 'jose';
 import { cloudflareAuthenticator } from './cloudflare-access.js';
-import { WorkspaceBackup } from './workspace-backup.js';
-import { diagnosticMinutes } from '../shared/workspace-settings.js';
-import { RestoreStaging } from './restore-staging.js';
 
-const sha256 = /^[a-f0-9]{64}$/;
-const instructionsUpdate = z.object({
-  revision: z.string().regex(sha256).nullable(),
-  text: z.string().max(projectInstructionsLimit),
-});
-const fileAttachment = z
-  .object({
-    kind: z.literal('file').optional(),
-    path: z.string().min(1).max(1024),
-    showHidden: z.literal(true).optional(),
-    sha: z.string().regex(sha256),
-    fromLine: z.number().int().positive(),
-    toLine: z.number().int().positive(),
-  })
-  .strict();
-const attachment = z.union([
-  fileAttachment,
-  z
-    .object({
-      kind: z.literal('uploaded-file'),
-      id: z.string().regex(sha256),
-      name: z.string().min(1).max(160),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('image'),
-      id: z.string().regex(imageId),
-      name: z.string().min(1).max(160),
-    })
-    .strict(),
-]);
-const messageInput = z
-  .object({
-    operationId: z.uuid(),
-    text: z.string().trim().max(50_000),
-    attachments: z.array(attachment).max(imageLimits.attachments).default([]),
-  })
-  .strict();
-const nonemptyMessage = (value: z.infer<typeof messageInput>) =>
-  !!value.text || value.attachments.some((item) => item.kind === 'image');
-const sendInput = messageInput
-  .extend({ settings })
-  .refine(nonemptyMessage, 'Enter a message or attach an image.');
-const answerInput = z
-  .object({
-    operationId: z.uuid(),
-    decision: z.string().max(50).optional(),
-    answers: z.record(z.string(), z.string().max(4000)).optional(),
-  })
-  .strict();
-async function body(request: IncomingMessage) {
-  const chunks: Buffer[] = [];
-  let bytes = 0;
-  for await (const chunk of request) {
-    bytes += chunk.length;
-    if (bytes > limits.body) throw new AppError('BODY_LIMIT', 'Request exceeds 256 KB.', 413);
-    chunks.push(chunk);
-  }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  } catch {
-    throw new AppError('INVALID_JSON', 'Expected a JSON request.');
-  }
-}
-const compress = promisify(gzip);
-const compressionThresholdBytes = 16 * 1024;
-function acceptsGzip(header: string | undefined) {
-  const offers = new Map(
-    (header ?? '').split(',').map((offer) => {
-      const [name = '', ...parameters] = offer.split(';').map((part) => part.trim());
-      const quality = parameters.find((part) => /^q=/i.test(part));
-      const q = quality ? Number(quality.slice(2)) : 1;
-      return [name.toLowerCase(), Number.isFinite(q) && q >= 0 && q <= 1 ? q : 0];
-    }),
-  );
-  return (offers.get('gzip') ?? offers.get('*') ?? 0) > 0;
-}
-async function json(response: ServerResponse, data: unknown, status = 200) {
-  const startedAt = performance.now();
-  let bytes = Buffer.from(JSON.stringify(data));
-  let encoding: string | undefined;
-  if (
-    bytes.length >= compressionThresholdBytes &&
-    acceptsGzip(response.req.headers['accept-encoding'])
-  ) {
-    // Compression runs off the event loop. The event
-    // cursor is captured before compression, so replay still covers this delay.
-    const compressed = await compress(bytes, { level: 4 });
-    if (compressed.length < bytes.length) {
-      bytes = compressed;
-      encoding = 'gzip';
-    }
-  }
-  readPhase('serialize', startedAt);
-  readResult(bytes.length);
-  if (response.destroyed) return;
-  response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-    'content-length': bytes.length,
-    vary: 'Accept-Encoding',
-    ...(encoding ? { 'content-encoding': encoding } : {}),
-  });
-  response.end(bytes);
-}
-async function untilClosed<T>(response: ServerResponse, read: (signal: AbortSignal) => Promise<T>) {
-  const controller = new AbortController();
-  const close = () => controller.abort();
-  response.once('close', close);
-  if (response.destroyed) close();
-  try {
-    return await read(controller.signal);
-  } finally {
-    response.removeListener('close', close);
-  }
-}
-async function serveImagePreview(
-  response: ServerResponse,
-  { stream, size, contentType }: Awaited<ReturnType<typeof openImagePreview>>,
-) {
-  response.writeHead(200, {
-    'content-type': contentType,
-    'content-length': size,
-    'cache-control': 'private,no-store',
-    'cross-origin-resource-policy': 'same-origin',
-    'x-content-type-options': 'nosniff',
-  });
-  await pipeline(stream, response);
-}
 export async function application(
   service: Service,
   options: {
@@ -215,16 +70,14 @@ export async function application(
     const session = cookie ? sessions.get(cookie) : undefined;
     return !!session && session.expiry > Date.now() && session.subject === subject;
   };
-  const workspaceBackup = new WorkspaceBackup(service.store.db);
-  const restoreStaging = new RestoreStaging(service.store.directory);
   const diagnostics = new ReadDiagnostics();
-  const traceWorkspaceRead = <T>(
-    response: ServerResponse,
-    route: Parameters<typeof traceRead>[1],
-    threadId: string | undefined,
-    work: () => Promise<T>,
-  ) => traceRead(response, route, threadId, work, () => diagnostics.verbose());
-  let attachmentUploads = 0;
+  const settingsRoutes = createSettingsRoutes(
+    service,
+    options.network,
+    options.runtime,
+    diagnostics,
+  );
+  const projectRoutes = createProjectRoutes(service, diagnostics, options.test);
   server.on('request', (request, response) => {
     response.setHeader('x-content-type-options', 'nosniff');
     response.setHeader('referrer-policy', 'no-referrer');
@@ -273,39 +126,12 @@ export async function application(
       if (url.pathname.startsWith('/api/')) {
         if (!authenticated(request, access?.subject))
           throw new AppError('AUTH_REQUIRED', 'Sign in to your workspace.', 401);
-        if (url.pathname === '/api/file-browser' && method === 'GET') {
-          const projectId = url.searchParams.get('projectId') || undefined;
-          const path = url.searchParams.get('path') ?? '';
-          const showHidden = url.searchParams.get('showHidden') === 'true';
-          const kind = z
-            .enum(['directory', 'location', 'file', 'image'])
-            .parse(url.searchParams.get('kind'));
-          if (kind === 'image')
-            return await serveImagePreview(
-              response,
-              await service.browseImage(projectId, path, showHidden),
-            );
-          if (kind === 'directory')
-            return json(response, await service.browseDirectory(projectId, path, showHidden));
-          if (kind === 'location')
-            return json(response, await service.browseLocation(projectId, path, showHidden));
-          return json(response, await service.browseFile(projectId, path, showHidden));
-        }
-        if (url.pathname === '/api/image-preview' && method === 'GET')
-          return await serveImagePreview(
-            response,
-            await service.workspaceImage(url.searchParams.get('path') ?? ''),
-          );
-        if (url.pathname === '/api/html-preview' && method === 'GET') {
-          response.writeHead(200, {
-            'content-type': 'text/html; charset=utf-8',
-            'content-security-policy': htmlPreviewPolicy,
-            'x-frame-options': 'SAMEORIGIN',
-            'cache-control': 'no-store',
-          });
-          response.end(htmlPreviewDocument);
+        const context: HttpRequest = { request, response, url, method };
+        if (
+          ['/api/file-browser', '/api/image-preview', '/api/html-preview'].includes(url.pathname) &&
+          (await workspaceFileRoutes(context, service)) !== false
+        )
           return;
-        }
         if (url.pathname === '/api/logout' && method === 'POST') {
           sessions.delete(sessionId(request) ?? '');
           response.setHeader('set-cookie', clearedCookie);
@@ -357,530 +183,67 @@ export async function application(
           return json(response, await service.modelSettings.permissions());
         if (url.pathname === '/api/modes' && method === 'GET')
           return json(response, await service.modelSettings.modes());
-        if (url.pathname === '/api/settings/codex-instructions') {
-          if (method === 'GET') return json(response, await service.globalInstructions());
-          if (method === 'PUT') {
-            const update = instructionsUpdate
-              .extend({ filename: z.enum(codexInstructionFiles) })
-              .strict()
-              .parse(await body(request));
-            return json(response, await service.globalInstructions(update));
-          }
-        }
-        if (url.pathname === '/api/settings/workspace') {
-          if (method === 'GET') return json(response, service.workspaceSettings.snapshot());
-          if (method === 'PATCH')
-            return json(response, await service.saveWorkspaceSettings(await body(request)));
-        }
-        if (url.pathname === '/api/settings/diagnostics') {
-          if (method === 'GET') return json(response, diagnostics.status());
-          if (method === 'POST') {
-            const { minutes } = z
-              .object({ minutes: z.literal([0, ...diagnosticMinutes]) })
-              .strict()
-              .parse(await body(request));
-            return json(response, diagnostics.setMinutes(minutes));
-          }
-        }
-        if (url.pathname === '/api/settings/restore') {
-          if (method === 'GET') return json(response, await restoreStaging.status());
-          if (method === 'POST') return json(response, await restoreStaging.stage(request));
-          if (method === 'DELETE') {
-            const pending = z
-              .object({ bytes: z.number().int().positive(), stagedAt: z.number().int() })
-              .strict()
-              .parse(await body(request));
-            return json(response, await restoreStaging.clear(pending));
-          }
-        }
-        if (url.pathname === '/api/settings/backup' && method === 'POST')
-          return await workspaceBackup.download(response);
-        if (url.pathname === '/api/settings/defaults' && method === 'GET')
-          return json(response, service.store.settingsProfile());
-        if (url.pathname === '/api/settings/defaults' && method === 'PUT')
-          throw new AppError('SETTINGS_RETIRED', 'Edit the native Codex configuration.', 410);
-        if (url.pathname === '/api/settings/network' && method === 'GET')
-          return json(response, options.network.snapshot());
-        if (url.pathname === '/api/settings/network' && method === 'PUT')
-          return json(response, options.network.save(await body(request)));
-        if (url.pathname === '/api/settings/runtime' && options.runtime) {
-          if (method === 'GET') return json(response, options.runtime.snapshot());
-          if (method === 'PUT') return json(response, options.runtime.save(await body(request)));
-        }
-        if (url.pathname === '/api/projects' && method === 'GET')
-          return json(response, service.store.projectsWithActivity());
-        if (url.pathname === '/api/projects' && method === 'POST') {
-          const p = z
-            .object({
-              path: z.string().min(1).max(2048),
-              name: z.string().trim().min(1).max(80).optional(),
-            })
-            .strict()
-            .parse(await body(request));
-          return json(response, await service.addProject(p.path, p.name));
-        }
+        if (
+          url.pathname.startsWith('/api/settings/') &&
+          (await settingsRoutes.handle(context)) !== false
+        )
+          return;
+        if (
+          url.pathname === '/api/projects' &&
+          (await projectCollection(context, service)) !== false
+        )
+          return;
         const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
-        if (segments[1] === 'projects' && segments[2]) {
-          const projectId = segments[2];
-          if (segments.length === 4 && segments[3] === 'instructions') {
-            if (method === 'GET')
-              return json(response, await service.projectInstructions(projectId));
-            if (method === 'PUT') {
-              const update = instructionsUpdate.strict().parse(await body(request));
-              return json(response, await service.saveProjectInstructions(projectId, update));
-            }
-          }
-          if (segments.length === 3 && method === 'PUT') {
-            const { name, expectedName } = z
-              .object({
-                name: z.string().trim().min(1).max(80),
-                expectedName: z.string().max(2048),
-              })
-              .strict()
-              .parse(await body(request));
-            return json(response, service.renameProject(projectId, name, expectedName));
-          }
-          if (segments.length === 4 && segments[3] === 'archive' && method === 'PUT') {
-            const { archived } = z
-              .object({ archived: z.boolean() })
-              .strict()
-              .parse(await body(request));
-            return json(response, service.archiveProject(projectId, archived));
-          }
-          if (segments[3] === 'context' && method === 'GET')
-            return json(response, await service.projectContext(projectId));
-          if (segments[3] === 'images' || segments[3] === 'uploaded-files') {
-            const image = segments[3] === 'images';
-            service.project(projectId);
-            if (method === 'POST' && !segments[4]) {
-              try {
-                await service.requireProject(projectId);
-              } catch (error) {
-                request.resume();
-                throw error;
-              }
-              const contentType = request.headers['content-type'] ?? '';
-              if (image && !imageTypes.includes(contentType as (typeof imageTypes)[number])) {
-                request.resume();
-                throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP image.', 415);
-              }
-              const maxBytes = image ? imageLimits.bytes : limits.uploadedFile;
-              const limitError = image
-                ? new AppError('IMAGE_LIMIT', 'Images must be at most 8 MiB.', 413)
-                : new AppError('FILE_LIMIT', 'Text files must be at most 64 KiB.', 413);
-              if (Number(request.headers['content-length'] ?? 0) > maxBytes) {
-                request.resume();
-                throw limitError;
-              }
-              if (attachmentUploads >= 4) {
-                request.resume();
-                throw new AppError(
-                  image ? 'IMAGE_UPLOAD_BUSY' : 'FILE_UPLOAD_BUSY',
-                  'Attachment uploads are busy. Try again shortly.',
-                  429,
-                );
-              }
-              attachmentUploads++;
-              try {
-                const chunks: Buffer[] = [];
-                let bytes = 0;
-                for await (const chunk of request) {
-                  bytes += chunk.length;
-                  if (bytes > maxBytes) throw limitError;
-                  chunks.push(chunk);
-                }
-                const encodedName = z
-                  .string()
-                  .max(1500)
-                  .parse(
-                    request.headers[image ? 'x-image-name' : 'x-file-name'] ??
-                      (image ? 'Image' : 'File'),
-                  );
-                let name: string;
-                try {
-                  name = decodeURIComponent(encodedName);
-                } catch {
-                  throw new AppError(
-                    image ? 'IMAGE_NAME' : 'FILE_NAME',
-                    'Invalid attachment filename.',
-                  );
-                }
-                const buffer = Buffer.concat(chunks);
-                return json(
-                  response,
-                  image
-                    ? await service.images.save(projectId, buffer, name, contentType)
-                    : service.uploadFile(projectId, buffer, name),
-                );
-              } finally {
-                attachmentUploads--;
-              }
-            }
-            if (image && method === 'GET' && segments[4] && !segments[5]) {
-              const image = await service.images.file(projectId, segments[4]);
-              response.writeHead(200, {
-                'content-type': image.contentType,
-                'cache-control': 'private,no-store',
-                'content-length': image.size,
-              });
-              await pipeline(createReadStream(image.path), response);
-              return;
-            }
-            throw new AppError('NOT_FOUND', 'Attachment endpoint not found.', 404);
-          }
-          if (segments[3] === 'snapshot' && method === 'GET') {
-            return traceWorkspaceRead(response, 'project-snapshot', undefined, async () => {
-              await service.list(projectId);
-              return json(response, {
-                threads: service.summaries(projectId),
-                cursor: { seq: service.events.seq, epoch: service.events.epoch },
-              });
-            });
-          }
-          if (segments[3] === 'conversations' && method === 'GET') {
-            const options = z
-              .object({
-                search: z.string().max(120).default(''),
-                archived: z.enum(['true', 'false']).default('false'),
-                cursor: z.string().max(4096).optional(),
-              })
-              .parse(Object.fromEntries(url.searchParams));
-            return json(
-              response,
-              await service.conversations(projectId, {
-                ...options,
-                archived: options.archived === 'true',
-              }),
-            );
-          }
-          if (segments[3] === 'threads' && method === 'GET')
-            return json(response, await service.list(projectId));
-          if (segments[3] === 'codex-defaults' && !segments[4] && method === 'GET') {
-            const project = await service.requireProject(projectId);
-            return json(response, await service.modelSettings.defaults(project.path));
-          }
-          if (segments[3] === 'codex-configuration' && !segments[4]) {
-            const project = await service.requireProject(projectId);
-            const configuration = service.modelSettings.configuration;
-            if (method === 'GET') return json(response, await configuration.overview(project.path));
-            if (method === 'PUT') {
-              const saved = await configuration.save(
-                project.path,
-                nativeConfigurationEdits.parse(await body(request)),
-              );
-              service.events.publish('codex-configuration', {});
-              return json(response, saved);
-            }
-          }
-          if (segments[3] === 'threads' && method === 'POST')
-            return json(
-              response,
-              await service.create(projectId, settings.parse(await body(request))),
-            );
-          if (segments[3] === 'files' && method === 'GET')
-            return json(
-              response,
-              await service.files(
-                projectId,
-                url.searchParams.get('path') ?? '',
-                url.searchParams.get('showHidden') === 'true',
-              ),
-            );
-          if (segments[3] === 'file' && method === 'GET')
-            return json(
-              response,
-              await service.file(
-                projectId,
-                url.searchParams.get('path') ?? '',
-                url.searchParams.get('showHidden') === 'true',
-              ),
-            );
-          if (segments[3] === 'image-preview' && !segments[4] && method === 'GET') {
-            return await serveImagePreview(
-              response,
-              await service.projectImage(
-                projectId,
-                url.searchParams.get('path') ?? '',
-                url.searchParams.get('showHidden') === 'true',
-              ),
-            );
-          }
-          if (
-            segments[3] === 'seed-conversations' &&
-            method === 'POST' &&
-            options.test &&
-            service.driver.mode === 'mock'
-          ) {
-            const p = service.project(projectId);
-            const input = z
-              .object({ count: z.number().int().min(1).max(400) })
-              .strict()
-              .parse(await body(request));
-            await service.driver.call('test/seedConversations', {
-              cwd: p.path,
-              count: input.count,
-            });
-            return json(response, await service.conversations(projectId));
-          }
-          if (
-            segments[3] === 'seed' &&
-            method === 'POST' &&
-            options.test &&
-            service.driver.mode === 'mock'
-          ) {
-            const p = service.project(projectId);
-            await service.driver.call('test/seed', {
-              cwd: p.path,
-              count: 100,
-              foreignWriter: ['busy', 'once'].includes(url.searchParams.get('writer') ?? ''),
-              releaseWriterOnRetry: url.searchParams.get('writer') === 'once',
-            });
-            return json(response, await service.list(projectId));
-          }
-        }
-        if (segments[1] === 'threads' && segments[2]) {
-          const id = segments[2];
-          if (segments[3] === 'context' && method === 'GET')
-            return json(response, await service.conversationContext(id));
-          if (segments[3] === 'files' && method === 'GET')
-            return json(
-              response,
-              await service.conversationFiles(
-                id,
-                url.searchParams.get('path') ?? '',
-                url.searchParams.get('showHidden') === 'true',
-              ),
-            );
-          if (segments[3] === 'file' && method === 'GET')
-            return json(
-              response,
-              await service.conversationFile(
-                id,
-                url.searchParams.get('path') ?? '',
-                url.searchParams.get('showHidden') === 'true',
-              ),
-            );
-          if (segments[3] === 'settings' && !segments[4]) {
-            if (method === 'GET') return json(response, service.store.settingsProfile(id));
-            if (method === 'PUT')
-              throw new AppError('SETTINGS_RETIRED', 'Edit the native Codex configuration.', 410);
-          }
-          if (segments[3] === 'branch-point' && method === 'GET')
-            return json(response, await service.branchPoint(id));
-          if (segments[3] === 'retry-writer' && method === 'POST') {
-            z.object({})
-              .strict()
-              .parse(await body(request));
-            return json(response, await service.retryWriter(id));
-          }
-          if (segments[3] === 'source' && method === 'GET')
-            return json(response, await service.source(id));
-          if (segments[3] === 'fork' && method === 'POST') {
-            const input = z
-              .object({ operationId: z.uuid(), lastTurnId: z.string().min(1).max(200) })
-              .strict()
-              .parse(await body(request));
-            return json(response, await service.fork(id, input.operationId, input.lastTurnId));
-          }
-          if (segments[3] === 'queue') {
-            if (method === 'GET' && !segments[4]) return json(response, service.queueState(id));
-            if (segments[4] === 'control' && method === 'POST') {
-              const input = z
-                .object({ paused: z.boolean() })
-                .strict()
-                .parse(await body(request));
-              return json(response, service.controlQueue(id, input.paused));
-            }
-            if (segments[4] && segments[5] === 'steer' && method === 'POST') {
-              const input = z
-                .object({ expectedTurnId: z.string().min(1).max(200) })
-                .strict()
-                .parse(await body(request));
-              return json(
-                response,
-                await service.steerQueued(id, segments[4], input.expectedTurnId),
-              );
-            }
-            if (segments[4] && method === 'GET') {
-              service.queueState(id);
-              const item = service.store.queue.get(segments[4]);
-              if (!item || item.threadId !== id)
-                throw new AppError('NOT_FOUND', 'Queued message not found.', 404);
-              return json(response, item);
-            }
-            if (segments[4] && method === 'PATCH') {
-              const input = z
-                .object({ text: z.string().trim().max(50_000) })
-                .strict()
-                .parse(await body(request));
-              return json(response, service.editQueued(id, segments[4], input.text));
-            }
-            if (segments[4] && method === 'DELETE')
-              return json(response, service.cancelQueued(id, segments[4]));
-            if (method === 'POST') {
-              const input = sendInput.parse(await body(request));
-              return json(
-                response,
-                await service.enqueue(id, input.operationId, {
-                  text: input.text,
-                  settings: input.settings,
-                  attachments: input.attachments,
-                }),
-              );
-            }
-          }
-          if (segments[3] === 'rename' && method === 'POST') {
-            const p = z
-              .object({ operationId: z.uuid(), name: z.string().trim().min(1).max(80) })
-              .strict()
-              .parse(await body(request));
-            return json(response, await service.rename(id, p.operationId, p.name));
-          }
-          if (segments[3] === 'archive' && method === 'POST') {
-            const p = z
-              .object({ operationId: z.uuid(), archived: z.boolean() })
-              .strict()
-              .parse(await body(request));
-            return json(response, await service.archive(id, p.operationId, p.archived));
-          }
-          if (segments[3] === 'management-status' && method === 'POST')
-            return json(response, await service.checkManagement(id));
-          if (segments[3] === 'snapshot' && method === 'GET') {
-            return traceWorkspaceRead(response, 'snapshot', id, () =>
-              untilClosed(response, async (signal) => {
-                const thread = await service.read(id, signal);
-                // Cached history stays readable while native execution is offline.
-                const context = await service.projectContext(thread.projectId);
-                return json(response, {
-                  thread: {
-                    ...service.withSidebarActivity(thread),
-                    actions: service.conversationActions(id),
-                  },
-                  context,
-                  cursor: { seq: service.events.seq, epoch: service.events.epoch },
-                });
-              }),
-            );
-          }
-          if (segments[3] === 'history' && method === 'GET') {
-            return traceWorkspaceRead(response, 'history', id, () =>
-              untilClosed(response, async (signal) => {
-                const cursor = url.searchParams.get('cursor');
-                if (!cursor || cursor.length > 4096)
-                  throw new AppError('HISTORY_CURSOR', 'A valid history cursor is required.');
-                return json(response, await service.history(id, cursor, signal));
-              }),
-            );
-          }
-          if (segments[3] === 'send' && method === 'POST') {
-            const p = sendInput.parse(await body(request));
-            return json(
-              response,
-              await service.send(id, p.operationId, p.text, p.settings, p.attachments),
-            );
-          }
-          if (segments[3] === 'steer' && method === 'POST') {
-            const input = messageInput
-              .extend({ expectedTurnId: z.string().min(1).max(200) })
-              .strict()
-              .refine(nonemptyMessage, 'Enter a message or attach an image.')
-              .parse(await body(request));
-            return json(
-              response,
-              await service.steer(
-                id,
-                input.operationId,
-                input.expectedTurnId,
-                input.text,
-                input.attachments,
-              ),
-            );
-          }
-          if (segments[3] === 'review' && method === 'POST') {
-            const input = z
-              .object({
-                operationId: z.uuid(),
-                settings,
-                target: z.discriminatedUnion('type', [
-                  z.object({ type: z.literal('uncommittedChanges') }).strict(),
-                  z
-                    .object({
-                      type: z.literal('baseBranch'),
-                      branch: z.string().trim().min(1).max(200),
-                    })
-                    .strict(),
-                  z
-                    .object({
-                      type: z.literal('commit'),
-                      sha: z.string().regex(/^[a-fA-F0-9]{7,64}$/),
-                    })
-                    .strict(),
-                  z
-                    .object({
-                      type: z.literal('custom'),
-                      instructions: z.string().trim().min(1).max(4000),
-                    })
-                    .strict(),
-                ]),
-              })
-              .strict()
-              .parse(await body(request));
-            return json(
-              response,
-              await service.review(id, input.operationId, input.target, input.settings),
-            );
-          }
-          if (segments[3] === 'interrupt' && method === 'POST')
-            return json(response, await service.interrupt(id));
-          if (segments[3] === 'reconcile' && method === 'POST')
-            return json(response, await service.reconcile(id));
-        }
-        if (segments[1] === 'operations' && segments[2] && method === 'GET') {
-          const op = service.store.operation(segments[2]);
-          if (!op) throw new AppError('NOT_FOUND', 'Operation not found.', 404);
-          return json(response, op);
-        }
-        if (segments[1] === 'actions' && segments[2] && method === 'POST') {
-          const { operationId, ...resolution } = answerInput.parse(await body(request));
-          return json(response, await service.answer(segments[2], operationId, resolution));
-        }
+        if (segments[1] === 'projects' && (await projectRoutes(context, segments)) !== false)
+          return;
+        if (
+          ['threads', 'operations', 'actions'].includes(segments[1] ?? '') &&
+          (await conversationRoutes(context, segments, service, diagnostics)) !== false
+        )
+          return;
         if (url.pathname === '/api/events' && method === 'GET') {
           const id = url.searchParams.get('threadId') ?? '';
-          return traceWorkspaceRead(response, 'events', id, async () => {
-            if (id) {
-              const thread = service.store.thread(id);
-              if (!thread) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
-              service.project(thread.projectId);
-            } else service.project(url.searchParams.get('projectId') ?? '');
-            service.events.checkCapacity();
-            response.writeHead(200, {
-              'content-type': 'text/event-stream',
-              'cache-control': 'no-store',
-              connection: 'keep-alive',
-              'x-accel-buffering': 'no',
-            });
-            response.flushHeaders();
-            const expiry = setInterval(() => {
-              if (!authenticated(request, access?.subject)) response.end();
-            }, 30_000);
-            const loginExpiry = sessions.get(sessionId(request) ?? '')?.expiry ?? Date.now();
-            const streamExpiry = setTimeout(
-              () => response.end(),
-              Math.max(0, Math.min(loginExpiry, access?.expiresAt ?? Infinity) - Date.now()),
-            );
-            response.once('close', () => {
-              clearInterval(expiry);
-              clearTimeout(streamExpiry);
-            });
-            readReplay(
-              service.events.subscribe(
-                id,
-                Number(url.searchParams.get('after') ?? -1),
-                url.searchParams.get('epoch') ?? '',
-                response,
-              ),
-            );
-          });
+          return traceRead(
+            response,
+            'events',
+            id,
+            async () => {
+              if (id) {
+                const thread = service.store.thread(id);
+                if (!thread) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+                service.project(thread.projectId);
+              } else service.project(url.searchParams.get('projectId') ?? '');
+              service.events.checkCapacity();
+              response.writeHead(200, {
+                'content-type': 'text/event-stream',
+                'cache-control': 'no-store',
+                connection: 'keep-alive',
+                'x-accel-buffering': 'no',
+              });
+              response.flushHeaders();
+              const expiry = setInterval(() => {
+                if (!authenticated(request, access?.subject)) response.end();
+              }, 30_000);
+              const loginExpiry = sessions.get(sessionId(request) ?? '')?.expiry ?? Date.now();
+              const streamExpiry = setTimeout(
+                () => response.end(),
+                Math.max(0, Math.min(loginExpiry, access?.expiresAt ?? Infinity) - Date.now()),
+              );
+              response.once('close', () => {
+                clearInterval(expiry);
+                clearTimeout(streamExpiry);
+              });
+              readReplay(
+                service.events.subscribe(
+                  id,
+                  Number(url.searchParams.get('after') ?? -1),
+                  url.searchParams.get('epoch') ?? '',
+                  response,
+                ),
+              );
+            },
+            () => diagnostics.verbose(),
+          );
         }
         throw new AppError('NOT_FOUND', 'API endpoint not found.', 404);
       }
@@ -941,7 +304,7 @@ export async function application(
       const closed = new Promise<void>((yes) => server.close(() => yes()));
       service.events.close();
       await vite?.close();
-      await Promise.all([workspaceBackup.close(), restoreStaging.close()]);
+      await settingsRoutes.close();
       await service.close();
       server.closeAllConnections();
       await closed;

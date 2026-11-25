@@ -35,10 +35,14 @@ flowchart LR
 - `src/server/project-context.ts`: asynchronous registered-directory health checks, separate from native history and permissions.
 - `src/web/project-navigation.ts`: bounded browser project-view memory; execution/settings remain server-owned.
 - `src/server/events.ts`: bounded replay ring and slow-client disconnection.
-- `src/server/http.ts`: authenticated same-origin API, SSE, and static assets.
+- `src/server/http.ts` checks Host, Origin, and sessions, dispatches API requests, serves static assets, and manages SSE. `src/server/http-io.ts` handles bounded JSON input, compression, and read cancellation.
+- `src/server/routes/` groups handlers for workspace settings, projects, conversations, previews, and uploads. Handlers validate inputs before calling the service.
+- `src/server/conversation-queue.ts` owns queue commands and their state transitions. `src/server/message-queue.ts` schedules automatic dispatch. Both use the same persisted queue.
 - `src/web/feed.ts`: snapshot/replay handshake, finite reconnect backoff, and stale-navigation cancellation.
 - `src/web/main.tsx`: workspace composition, navigation, coalesced deltas, and local draft handling.
 - `src/web/useMessageDelivery.ts`: send, queue, immediate follow-up, review dispatch, stop, and browser receipt recovery. It uses the workspace selection and draft revision to apply results to the right conversation and draft.
+- `src/web/useCodexConfiguration.ts` loads the native catalog and reads and updates Codex configuration for the verified project. Writes use the native revision check.
+- `src/web/useWorkspaceLayout.ts` manages responsive navigation, context panels, persisted widths, and focus restoration.
 
 ## Execution and recovery
 
