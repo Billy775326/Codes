@@ -29,9 +29,14 @@ test('settings save the current project AGENTS.md and protect a draft after an e
     await tab.click();
     const editor = page.getByLabel('AGENTS.md contents', { exact: true });
     await expect(editor).toHaveValue('# Original fixture\n');
+    await expect(editor).toHaveCSS('background-color', 'rgb(42, 46, 52)');
+    await expect(editor).toHaveCSS('color', 'rgb(225, 228, 232)');
     await editor.fill('# Saved through settings\n');
     await page.getByRole('button', { name: 'Preferences', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('light');
     await tab.click();
+    await expect(editor).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(editor).toHaveCSS('color', 'rgb(37, 37, 38)');
     await page.getByRole('button', { name: 'Save AGENTS.md', exact: true }).click();
     await expect(page.getByText('AGENTS.md saved.', { exact: true })).toBeVisible();
     expect(await readFile(path, 'utf8')).toBe('# Saved through settings\n');
@@ -612,6 +617,10 @@ test('searches settings in both languages and downloads a database backup on a n
   const search = dialog.getByRole('searchbox', { name: 'Search settings' });
   const categories = dialog.getByRole('button', { name: 'Settings categories', exact: true });
   await expect(categories).toHaveAttribute('aria-expanded', 'false');
+  const searchBox = (await search.boundingBox())!;
+  const categoryBox = (await categories.boundingBox())!;
+  expect(searchBox.y).toBeLessThan(categoryBox.y + categoryBox.height);
+  expect(searchBox.x).toBeGreaterThan(categoryBox.x + categoryBox.width);
   await search.fill('backup');
   const settings = dialog.getByRole('group', { name: 'Settings sections' });
   await expect(settings.getByRole('button')).toHaveCount(1);
@@ -688,6 +697,8 @@ test('saves project and sign-in settings independently and remembers file visibi
     name: 'Default project directory',
     exact: true,
   });
+  await expect(defaultPath).toHaveValue('');
+  await expect(defaultPath).toHaveAttribute('placeholder', project.path);
   await defaultPath.fill(directory);
   const refresh = page.waitForResponse((response) => response.url().endsWith('/api/system'));
   await dialog.getByRole('button', { name: 'Save default project directory' }).click();
@@ -713,6 +724,10 @@ test('saves project and sign-in settings independently and remembers file visibi
     ).toBeChecked();
     await chooseSettingsSection(dialog, 'Network & access');
     await expect(validity).toHaveValue('24');
+    await chooseSettingsSection(dialog, 'Projects');
+    await expect(defaultPath).toHaveValue(directory);
+    await defaultPath.clear();
+    await expect(defaultPath).toHaveAttribute('placeholder', project.path);
   } finally {
     const headers = { Origin: new URL(page.url()).origin };
     for (const patch of [

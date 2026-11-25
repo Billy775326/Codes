@@ -219,7 +219,7 @@ export function PreferencesDialog({
   const currentCategory = settingsSections.find(({ id }) => id === section)!;
   const searchInput = useRef<HTMLInputElement>(null);
   const discardBusy = drafts.some((draft) => draft.busy);
-  const selectSection = (value: typeof section) => {
+  const selectSection = (value: SettingsSection) => {
     setVisited((previous) => (previous[value] ? previous : { ...previous, [value]: true }));
     setSection(value);
     setQuery('');
@@ -259,7 +259,7 @@ export function PreferencesDialog({
     }
   };
   const preferences = (
-    <div className="preferences-content">
+    <div className="preferences-content" hidden={section !== 'preferences'}>
       <section className="preferences-section" aria-labelledby="preferences-appearance">
         <h3 id="preferences-appearance">{t('Appearance')}</h3>
         <label className="preference-row">
@@ -292,48 +292,46 @@ export function PreferencesDialog({
             <option value="system">{t('System')}</option>
           </select>
         </label>
-        <div className="preferences-fonts">
-          <label>
-            {t('Chat text size')}
-            <select
-              aria-label={t('Chat text size')}
-              value={value.chatFontSize ?? ''}
-              onChange={(event) =>
-                change({
-                  ...value,
-                  chatFontSize: event.target.value ? Number(event.target.value) : undefined,
-                })
-              }
-            >
-              <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
-              {chatFontSizes.map((size) => (
-                <option key={size} value={size}>
-                  {size} px
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t('Code text size')}
-            <select
-              aria-label={t('Code text size')}
-              value={value.codeFontSize ?? ''}
-              onChange={(event) =>
-                change({
-                  ...value,
-                  codeFontSize: event.target.value ? Number(event.target.value) : undefined,
-                })
-              }
-            >
-              <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
-              {codeFontSizes.map((size) => (
-                <option key={size} value={size}>
-                  {size} px
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <label className="preference-row">
+          <span>{t('Chat text size')}</span>
+          <select
+            aria-label={t('Chat text size')}
+            value={value.chatFontSize ?? ''}
+            onChange={(event) =>
+              change({
+                ...value,
+                chatFontSize: event.target.value ? Number(event.target.value) : undefined,
+              })
+            }
+          >
+            <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
+            {chatFontSizes.map((size) => (
+              <option key={size} value={size}>
+                {size} px
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="preference-row">
+          <span>{t('Code text size')}</span>
+          <select
+            aria-label={t('Code text size')}
+            value={value.codeFontSize ?? ''}
+            onChange={(event) =>
+              change({
+                ...value,
+                codeFontSize: event.target.value ? Number(event.target.value) : undefined,
+              })
+            }
+          >
+            <option value="">{t('Default ({size} px)', { size: defaultTextSize })}</option>
+            {codeFontSizes.map((size) => (
+              <option key={size} value={size}>
+                {size} px
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="preferences-preview" role="region" aria-label={t('Text preview')}>
           <div className="prose">
             <p>
@@ -360,7 +358,10 @@ export function PreferencesDialog({
           />
         </label>
       </section>
-      <section className="preferences-section" aria-labelledby="preferences-interaction">
+      <section
+        className="preferences-section preferences-interaction"
+        aria-labelledby="preferences-interaction"
+      >
         <h3 id="preferences-interaction">{t('Interaction')}</h3>
         <label className="preference-row">
           <span className="preference-description">{t('Follow-up delivery')}</span>
@@ -471,7 +472,7 @@ export function PreferencesDialog({
                 ref={searchInput}
                 type="search"
                 aria-label={t('Search settings')}
-                placeholder={t('Search settings')}
+                placeholder={t('Search')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -518,9 +519,7 @@ export function PreferencesDialog({
             </div>
           </div>
           <div className="settings-panels">
-            <div className="preferences-page" hidden={section !== 'preferences'}>
-              {preferences}
-            </div>
+            {preferences}
             {visited.defaults && (
               <div className="preferences-content" hidden={section !== 'defaults'}>
                 <section
@@ -532,10 +531,20 @@ export function PreferencesDialog({
                   <h3 id="preferences-defaults">{t('New conversation defaults')}</h3>
                   {defaults.settings && (
                     <>
-                      <label className="preference-row">
-                        <span className="preference-description">{t('Permissions')}</span>
+                      <label className="preference-row default-permissions">
+                        <span className="preference-description">
+                          {t('Permissions')}
+                          <span className="preference-help" id="default-permission-help">
+                            {t(
+                              permissionPresets.find(
+                                (preset) => preset.id === defaults.settings!.permission,
+                              )?.description ?? '',
+                            )}
+                          </span>
+                        </span>
                         <select
                           aria-label={t('Default permissions')}
+                          aria-describedby="default-permission-help"
                           value={defaults.settings.permission}
                           disabled={defaults.loading}
                           onChange={(event) =>
@@ -556,13 +565,6 @@ export function PreferencesDialog({
                           ))}
                         </select>
                       </label>
-                      <p className="preference-help">
-                        {t(
-                          permissionPresets.find(
-                            (preset) => preset.id === defaults.settings!.permission,
-                          )?.description ?? '',
-                        )}
-                      </p>
                       <div className="default-model-settings">
                         <ModelSettingsFields
                           defaults
@@ -621,7 +623,7 @@ export function PreferencesDialog({
               </div>
             )}
             {visited.network && (
-              <div className="preferences-content settings-forms" hidden={section !== 'network'}>
+              <div className="preferences-content" hidden={section !== 'network'}>
                 <NetworkSettings onDraft={setNetworkDraft} />
                 <WorkspaceSettings field="sessionHours" onDraft={setLoginDraft} />
                 <AccessTokenSettings
@@ -632,17 +634,16 @@ export function PreferencesDialog({
               </div>
             )}
             {visited.runtime && (
-              <div className="preferences-page" hidden={section !== 'runtime'}>
+              <div className="preferences-content" hidden={section !== 'runtime'}>
                 <RuntimeSettings onDraft={setRuntimeDraft} />
               </div>
             )}
             {visited.instructions && (
-              <div
-                className="preferences-content settings-forms"
-                hidden={section !== 'instructions'}
-              >
+              <div className="preferences-content" hidden={section !== 'instructions'}>
                 <WorkspaceSettings
                   field="defaultProjectDirectory"
+                  fallbackDirectory={system?.projectDirectoryFallback}
+                  activeDirectory={system?.defaultProjectPath}
                   onDraft={setProjectDefaultDraft}
                   onSaved={refreshSystem}
                 />

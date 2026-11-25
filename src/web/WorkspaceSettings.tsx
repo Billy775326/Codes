@@ -10,10 +10,14 @@ export function WorkspaceSettings({
   field,
   onDraft,
   onSaved,
+  fallbackDirectory,
+  activeDirectory,
 }: {
   field: 'defaultProjectDirectory' | 'sessionHours';
   onDraft: (draft: Draft) => void;
   onSaved?: () => void;
+  fallbackDirectory?: string;
+  activeDirectory?: string;
 }) {
   const { t } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<WorkspaceSettingsSnapshot>();
@@ -93,6 +97,10 @@ export function WorkspaceSettings({
             {directory ? (
               <input
                 value={value}
+                placeholder={
+                  fallbackDirectory ??
+                  (snapshot.settings.defaultProjectDirectory ? undefined : activeDirectory)
+                }
                 aria-describedby={'settings-help-' + field}
                 disabled={busy}
                 maxLength={2048}

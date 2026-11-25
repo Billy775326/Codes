@@ -52,7 +52,7 @@ export function RuntimeSettings({
 
   if (!snapshot)
     return (
-      <div className="preferences-content">
+      <section className="preferences-section">
         {error ? (
           <>
             <p role="alert">{t(error)}</p>
@@ -63,7 +63,7 @@ export function RuntimeSettings({
         ) : (
           <p role="status">{t('Loading runtime settings…')}</p>
         )}
-      </div>
+      </section>
     );
 
   async function saveSettings() {
@@ -92,7 +92,7 @@ export function RuntimeSettings({
 
   return (
     <form
-      className="preferences-content network-settings"
+      className="network-settings"
       onSubmit={(event) => {
         event.preventDefault();
         void saveSettings();

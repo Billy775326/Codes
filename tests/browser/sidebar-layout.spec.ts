@@ -65,16 +65,12 @@ for (const width of [1440, 390, 320]) {
         .locator('.conversation-controls')
         .getByRole('button', { name: 'Add project', exact: true }),
     ).toBeVisible();
-    await navigation.getByRole('button', { name: 'Workspace actions', exact: true }).click();
-    const menu = navigation.getByRole('dialog', { name: 'Workspace actions', exact: true });
-    await expect(menu.getByRole('button')).toHaveText(['Sign out']);
-    const box = await menu.boundingBox();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.y).toBeGreaterThanOrEqual(0);
-    await page.keyboard.press('Escape');
+    const signOut = navigation.getByRole('button', { name: 'Sign out', exact: true });
+    await expect(signOut).toBeInViewport({ ratio: 1 });
+    await expect(signOut).toHaveText('');
     await expect(
       navigation.getByRole('button', { name: 'Workspace actions', exact: true }),
-    ).toBeFocused();
+    ).toHaveCount(0);
     for (const theme of ['light', 'dark']) {
       await navigation.getByRole('button', { name: 'Interaction settings', exact: true }).click();
       await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);

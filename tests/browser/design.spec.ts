@@ -103,7 +103,6 @@ for (const width of [1440, 320]) {
     await expect(add).toBeFocused();
     if (width === 320)
       await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
-    await page.getByRole('button', { name: 'Conversation actions', exact: true }).click();
     await page.getByRole('button', { name: 'Explore this project', exact: true }).click();
     await expect(page.getByLabel('Message Codex')).toHaveValue(
       'Explain the architecture of this project and its main entry points.',
@@ -175,7 +174,6 @@ test('light theme reaches sign-in and portaled archive dialogs', async ({ page }
     'rgb(255, 255, 255)',
   );
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await page.getByRole('button', { name: 'Workspace actions', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByLabel('Workspace access token')).toBeVisible();
   expect(
@@ -209,21 +207,19 @@ test('a phone archive confirmation owns the modal while navigation stays inert',
 });
 
 for (const width of [320, 390]) {
-  test(`conversation actions fit the viewport at ${width}px`, async ({ page }) => {
+  test(`direct workspace tools fit the viewport at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 740 });
     await login(page);
-    const trigger = page.getByRole('button', { name: 'Conversation actions', exact: true });
-    await trigger.click();
-    const popup = page.getByRole('dialog', { name: 'Conversation actions', exact: true });
-    const box = (await popup.boundingBox())!;
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(width);
-    const status = popup.getByRole('button', { name: 'Session status', exact: true });
-    await expect(status).toBeInViewport({ ratio: 1 });
+    const header = page.locator('header.topbar');
+    await expect(header.getByRole('button', { name: 'Conversation actions' })).toHaveCount(0);
+    for (const control of await header.getByRole('button').all()) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+    }
+    const status = header.getByRole('button', { name: 'Session status', exact: true });
     await status.click();
     await expect(page.getByRole('dialog', { name: 'Session status', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(trigger).toBeFocused();
+    await expect(status).toBeFocused();
   });
 }
 

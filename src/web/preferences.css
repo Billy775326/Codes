@@ -2,8 +2,8 @@
   z-index: 80;
 }
 .app .preferences-dialog {
-  width: min(780px, 100%);
-  height: min(680px, calc(100dvh - 40px));
+  width: min(940px, 100%);
+  height: min(740px, calc(100dvh - 40px));
   max-height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
@@ -22,7 +22,7 @@
 }
 .preferences-dialog > .modal-heading {
   flex: 0 0 auto;
-  padding: 10px 20px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--line);
   gap: 12px;
 }
@@ -31,14 +31,14 @@
 }
 .settings-layout {
   display: grid;
-  grid-template-columns: 204px minmax(0, 1fr);
+  grid-template-columns: minmax(198px, 24%) minmax(0, 1fr);
   min-height: 0;
   flex: 1;
 }
 .settings-navigation {
   min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: 14px 12px;
   border-inline-end: 1px solid var(--line);
   background: var(--editor);
 }
@@ -85,7 +85,7 @@
 }
 .preferences-nav {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   margin-top: 16px;
 }
 .settings-nav-group {
@@ -94,7 +94,7 @@
 }
 .settings-nav-label {
   color: var(--muted);
-  margin: 0 8px 4px;
+  margin: 0 10px 4px;
   font-size: 12px;
   font-weight: 600;
 }
@@ -103,7 +103,7 @@
   align-items: center;
   gap: 8px;
   min-height: var(--control-size);
-  padding: 6px 8px;
+  padding: 6px 10px;
   border-radius: 6px;
   color: var(--muted);
   text-align: start;
@@ -115,18 +115,13 @@
   margin: 4px 8px;
   color: var(--muted);
 }
-.settings-forms > * + * {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
-}
 .settings-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 16px;
   min-width: 0;
-  margin: 0 0 16px;
-  padding: 12px;
+  margin: 12px 0;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -151,7 +146,7 @@
 }
 .app .preferences-dialog .settings-compact-field select {
   width: auto;
-  margin: 0;
+  margin: 0 0 0 auto;
 }
 .settings-action-row {
   display: flex;
@@ -204,9 +199,9 @@
   display: grid;
   gap: 6px;
   margin: 12px 0 0;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 6px;
-  background: var(--editor);
+  background: var(--panel);
   color: var(--muted);
   font-size: 13px;
 }
@@ -253,6 +248,10 @@
   width: 100%;
   min-height: var(--control-size);
   margin: 6px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
   background: var(--field);
 }
 .app .network-settings textarea {
@@ -269,7 +268,11 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
+  align-items: center;
+  margin-top: 12px;
+}
+.network-actions button:not(.icon-button) {
+  min-height: var(--control-size);
 }
 .network-transfer {
   display: flex;
@@ -279,32 +282,42 @@
 .runtime-paths {
   font-size: 13px;
   color: var(--muted);
-  margin: 16px 0 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 8px 12px;
+  margin: 0;
 }
 .runtime-paths dd {
-  margin: 4px 0 10px;
+  color: var(--fg);
+  margin: 0;
   overflow-wrap: anywhere;
 }
 .preferences-content {
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 22px 24px;
+  overflow-wrap: anywhere;
+  padding: 18px;
   scrollbar-gutter: stable;
 }
-.settings-panels > .preferences-content,
-.settings-panels .preferences-page:not([hidden]) > .preferences-content {
+.settings-panels > .preferences-content:not([hidden]) {
   flex: 1;
 }
-.preferences-section + .preferences-section {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
+.preferences-section {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--editor);
+}
+.preferences-section + .preferences-section,
+.network-settings + .preferences-section {
+  margin-top: 12px;
 }
 .preferences-section h3 {
   font-size: 15px;
   font-weight: 600;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   color: var(--fg);
 }
 .app .preferences-dialog label {
@@ -314,40 +327,48 @@
   min-width: 0;
 }
 .app .preferences-dialog .preference-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
+  gap: 8px 16px;
   align-items: center;
-  margin: 0 0 16px;
+  min-height: 44px;
+  padding-block: 4px;
+}
+.app .preferences-dialog .preference-row + .preference-row {
+  border-top: 1px solid var(--line);
+}
+.preference-row > :is(input, select) {
+  justify-self: end;
 }
 .preference-help {
   display: block;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
-  margin-top: 4px;
+  margin-block: 4px 0;
 }
 .app .preferences-dialog select {
   margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   min-height: 40px;
   font-size: 14px;
   min-width: 0;
   background: var(--field);
 }
-.preferences-fonts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
 .default-model-settings {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 12px;
 }
 .app .preferences-dialog .default-model-settings select {
-  margin-top: 8px;
+  display: block;
+  width: 100%;
+  margin-top: 6px;
 }
 .default-model-settings .fast-option {
   display: flex;
@@ -372,14 +393,12 @@
 .settings-save-status button {
   text-decoration: underline;
 }
-.app .preferences-fonts select {
-  margin-top: 8px;
-}
 .preferences-preview {
-  background: var(--editor);
+  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px 16px;
+  border-radius: 6px;
+  margin-top: 10px;
+  padding: 10px 12px;
 }
 .app .preferences-preview .prose p {
   font-size: inherit;
@@ -411,7 +430,7 @@
   justify-content: space-between;
   flex: 0 0 auto;
   gap: 8px 16px;
-  padding: 12px 20px;
+  padding: 8px 18px;
   border-top: 1px solid var(--line);
 }
 .preferences-save-error {
@@ -461,9 +480,9 @@
   color: #a13535;
 }
 .preferences-done {
-  margin-left: auto;
-  min-height: 40px;
-  padding: 8px 20px;
+  margin-inline-start: auto;
+  min-height: var(--control-size);
+  padding: 6px 16px;
   border: 1px solid var(--border);
   border-radius: 6px;
   flex-shrink: 0;
@@ -483,10 +502,24 @@
   font-size: 1em;
 }
 .project-instructions textarea {
+  display: block;
   width: 100%;
-  min-height: min(240px, 38dvh);
+  min-height: min(220px, 36dvh);
   resize: vertical;
-  font: var(--code-font-size) / 1.55 var(--font-code);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--fg);
+  caret-color: var(--fg);
+  font: var(--code-font-size) / 1.6 var(--font-code);
+}
+.project-instructions textarea:focus-visible {
+  outline-color: var(--link);
+}
+.app .preferences-dialog .network-settings input::placeholder {
+  color: var(--muted);
+  opacity: 1;
 }
 @media (max-width: 560px) {
   .app .preferences-dialog {
@@ -501,7 +534,11 @@
     padding: 6px 12px;
   }
   .preferences-content {
-    padding: 16px;
+    padding: 12px 10px;
+    scrollbar-gutter: auto;
+  }
+  .preferences-section {
+    padding: 12px;
   }
   .settings-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -511,7 +548,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .settings-navigation {
-    padding: 8px 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
     border-inline-end: 0;
     border-bottom: 1px solid var(--line);
   }
@@ -520,11 +561,18 @@
     width: 100%;
     min-height: 44px;
     justify-content: space-between;
+    padding-inline: 6px;
+    gap: 4px;
     text-align: start;
-    margin-bottom: 6px;
+    line-height: 1.2;
   }
   .settings-category-toggle span {
     flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .settings-category-toggle svg {
+    flex-shrink: 0;
   }
   .settings-category-toggle svg:last-child {
     transform: rotate(90deg);
@@ -542,11 +590,12 @@
     display: none;
   }
   .preferences-nav {
-    gap: 10px;
-    max-height: min(206px, 34dvh);
+    grid-column: 1 / -1;
+    gap: 8px;
+    max-height: min(224px, 35dvh);
     overflow-y: auto;
     overscroll-behavior: contain;
-    margin-top: 8px;
+    margin-top: 0;
   }
   .settings-nav-group {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -576,19 +625,37 @@
     min-height: 44px;
     min-width: 44px;
   }
-  .preferences-fonts {
-    gap: 12px;
-  }
   .default-model-settings {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
-  .preferences-preview {
-    padding: 12px;
+  .app .network-settings :is(input, textarea),
+  .project-instructions textarea {
+    font-size: max(16px, var(--code-font-size, 14px));
   }
 }
 
 @media (max-width: 390px) {
+  .app
+    .preferences-dialog
+    :is(.preferences-interaction .preference-row:has(select), .default-permissions) {
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 8px;
+  }
+  .preferences-interaction select,
+  .default-permissions select {
+    justify-self: start;
+  }
+  .settings-category-toggle svg:first-child {
+    display: none;
+  }
+  .runtime-paths {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 4px;
+  }
+  .runtime-paths dd + dt {
+    margin-top: 6px;
+  }
   .settings-options {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 4px;

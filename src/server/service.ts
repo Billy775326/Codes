@@ -188,6 +188,7 @@ export class Service {
     const maintenance = this.maintenance;
     return {
       ...this.driver.system(),
+      projectDirectoryFallback: this.defaultProjectPath,
       defaultProjectPath:
         this.workspaceSettings.snapshot().settings.defaultProjectDirectory ||
         this.defaultProjectPath,

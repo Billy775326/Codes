@@ -4,6 +4,8 @@
 
 ### Removed
 
+- Use direct controls for Sign out, Session status, and Review code. Suggested prompts appear in empty project conversations.
+
 - Remove the conversation row's actions drawer and Copy link button. Existing conversation links still open in their registered projects.
 
 - Remove the preview-only global task write-root policy and its forced permission, network, temporary-directory and tool overrides. Restore the existing native conversation permission presets and approval callbacks while preserving saved conversation/default settings and the Files / Changes interface. Retired `CODES_TASK_WRITE_ROOT` and `task-policy.json` configuration no longer applies.
@@ -87,6 +89,8 @@
 - Add workspace-token sign-in, same-origin mutation checks, and loopback binding by default.
 
 ### Changed
+
+- Reorganize Settings into consistently spaced groups with independently scrolling content. On phones, search and category selection share a row.
 
 - Match the queued message editor to the composer. The field grows with the text and scrolls after reaching the height limit.
 
@@ -189,6 +193,8 @@
 - Improve the sign-in layout for desktop and mobile, with clearer token input, visibility controls, token-location help, and retry after a failed initial connection check.
 
 ### Fixed
+
+- Match the AGENTS.md editor to the active theme and show the server's fallback project directory in the empty default-directory field.
 
 - Make the Fast switch easy to read in either theme and keep its track and thumb aligned in new-conversation defaults.
 

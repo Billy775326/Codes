@@ -210,6 +210,7 @@ export interface CodexCapabilities {
 export interface System {
   maintenance?: MaintenanceState;
   defaultProjectPath?: string;
+  projectDirectoryFallback?: string;
   runtime: 'codex' | 'mock';
   state: string;
   version: string;

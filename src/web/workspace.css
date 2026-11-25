@@ -156,10 +156,15 @@
   background: var(--hover);
 }
 .app .breadcrumb {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
   flex: 1;
   min-width: 0;
-  gap: 0;
+}
+.app .breadcrumb .project-breadcrumb {
+  grid-column: 1 / -1;
 }
 .app .breadcrumb .compact-page-reload {
   display: none;
@@ -534,12 +539,6 @@
   width: min(280px, calc(100vw - 32px));
   text-align: left;
 }
-.conversation-menu .panel-menu-content {
-  top: calc(100% + 6px);
-  bottom: auto;
-  width: 210px;
-  padding: 5px;
-}
 .panel-menu-content > strong {
   font-size: 14.3px;
   font-weight: 500;
@@ -807,14 +806,6 @@
     position: relative;
     z-index: 20;
   }
-  .app .topbar .conversation-menu {
-    position: static;
-  }
-  .app .topbar .conversation-menu .panel-menu-content {
-    top: calc(100% + 4px);
-    right: 10px;
-    width: min(210px, calc(100% - 20px));
-  }
   .app .topbar > .icon-button {
     grid-column: 1;
     grid-row: 1;
@@ -828,8 +819,8 @@
     grid-column: 1 / -1;
     grid-row: 2;
     display: flex;
-    gap: 10px;
-    align-items: baseline;
+    gap: 4px;
+    align-items: center;
   }
   .app .topbar:has(> .header-connection-controls) > .breadcrumb {
     grid-column: 1 / 3;
@@ -848,8 +839,11 @@
   }
   .app .project-breadcrumb {
     order: 1;
-    max-width: 35%;
+    max-width: 28%;
     margin: 0;
+  }
+  .app .breadcrumb .session-status-button {
+    order: 2;
   }
   .app .top-actions,
   .top-action-group {
@@ -883,7 +877,7 @@
   }
   .app .breadcrumb .compact-page-reload {
     display: inline-flex;
-    order: 2;
+    order: 3;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1113,33 +1107,27 @@
   align-items: center;
   gap: 4px;
 }
-.workspace-menu > summary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-size);
-  height: var(--control-size);
-}
-.workspace-menu .panel-menu-content {
-  bottom: calc(100% + 8px);
-  top: auto;
-  right: 0;
-  left: auto;
-  width: 220px;
-}
-.workspace-menu .panel-menu-content > button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: var(--control-size);
-  padding: 7px 9px;
-  text-align: left;
-}
 .app .conversation-start {
   display: grid;
   place-items: center;
   min-height: 180px;
+}
+.conversation-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.conversation-starters button {
+  min-height: var(--control-size);
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+}
+.conversation-starters button:hover {
+  background: var(--hover);
+  color: var(--fg);
 }
 .app .topbar .header-connection {
   max-width: 100px;

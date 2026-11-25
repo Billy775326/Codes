@@ -72,7 +72,7 @@ export function ProjectInstructionsSettings({
 
   return (
     <form
-      className="project-instructions"
+      className="preferences-section project-instructions"
       onSubmit={(event) => {
         event.preventDefault();
         void save();

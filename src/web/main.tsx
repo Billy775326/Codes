@@ -84,6 +84,12 @@ import './workspace.css';
 import './preferences.css';
 import './composer.css';
 
+const starters = [
+  ['Explore this project', 'Explain the architecture of this project and its main entry points.'],
+  ['Plan a change', 'Review this project and help me plan a small, verifiable improvement.'],
+  ['Review the code', 'Review the current code for potential bugs and explain your findings.'],
+] as const;
+
 const saved = (key: string) => {
   try {
     return localStorage.getItem(key) ?? '';
@@ -1905,27 +1911,18 @@ function App() {
             >
               <Icon name="settings" size={16} />
             </button>
-            <PanelMenu
-              label={t('Workspace actions')}
-              className="workspace-menu"
-              iconOnly
-              trigger={<Icon name="more" size={16} />}
-            >
-              <button
-                data-close-menu
-                onClick={() =>
-                  void post('/logout')
-                    .then(() => {
-                      feed.current?.close();
-                      setAuth('login');
-                    })
-                    .catch(notice)
-                }
-              >
-                <Icon name="logout" size={14} />
-                {t('Sign out')}
-              </button>
-            </PanelMenu>
+            <IconButton
+              icon="logout"
+              label={t('Sign out')}
+              onClick={() =>
+                void post('/logout')
+                  .then(() => {
+                    feed.current?.close();
+                    setAuth('login');
+                  })
+                  .catch(notice)
+              }
+            />
           </div>
         </div>
       </aside>
@@ -1974,7 +1971,6 @@ function App() {
             if (kind === 'diff' || (contextReady && !directoryBlocked))
               setPanel(panel === kind ? null : kind);
           }}
-          onDraft={changeDraft}
           onRename={async (id, name) => {
             const result = await post<Summary>('/threads/' + encodeURIComponent(id) + '/rename', {
               operationId: crypto.randomUUID(),
@@ -1982,7 +1978,6 @@ function App() {
             });
             conversationUpdated(result);
           }}
-          showStarters={!loadingConversation && !thread?.messages.length && !active}
         />
         {system?.runtime === 'mock' && (
           <div className="simulation-strip">{t('Simulation · No model or command execution')}</div>
@@ -2100,7 +2095,15 @@ function App() {
               </section>
             ) : !visibleMessages.length && !active ? (
               <section className="conversation-start" aria-label={t('New conversation')}>
-                {!projectId && (
+                {projectId ? (
+                  <div className="conversation-starters">
+                    {starters.map(([label, text]) => (
+                      <button key={label} type="button" onClick={() => changeDraft(text)}>
+                        {t(label)}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
                   <button className="primary" onClick={openAddProject}>
                     <Icon name="folder-add" />
                     {t('Add project')}

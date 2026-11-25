@@ -1,7 +1,6 @@
 import { useInterfaceLanguage } from './interface-language';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { message } from './api';
-import { PanelMenu } from './PanelMenu';
 import { ConnectionStatus } from './ConnectionStatus';
 import { Icon, IconButton } from './primitives';
 
@@ -17,7 +16,6 @@ interface Props {
   panel: Panel | null;
   busy: boolean;
   hasProject: boolean;
-  showStarters: boolean;
   onNavigation: () => void;
   onNewConversation: () => void;
   onSettings: () => void;
@@ -28,15 +26,8 @@ interface Props {
   onReview?: () => void;
   onStatus: () => void;
   onPanel: (panel: Panel) => void;
-  onDraft: (text: string) => void;
   onRename: (id: string, title: string) => Promise<void>;
 }
-const starters = [
-  ['Explore this project', 'Explain the architecture of this project and its main entry points.'],
-  ['Plan a change', 'Review this project and help me plan a small, verifiable improvement.'],
-  ['Review the code', 'Review the current code for potential bugs and explain your findings.'],
-] as const;
-
 function ConversationHeading({
   title,
   conversationId,
@@ -160,6 +151,12 @@ export function WorkspaceHeader(props: Props) {
           onRename={props.onRename}
         />
         <IconButton
+          className="session-status-button"
+          icon="activity"
+          label={t('Session status')}
+          onClick={props.onStatus}
+        />
+        <IconButton
           className={'compact-page-reload' + (props.updateAvailable ? ' web-update-available' : '')}
           icon="reload-page"
           label={reloadLabel}
@@ -174,31 +171,6 @@ export function WorkspaceHeader(props: Props) {
         />
       )}
       <div className="top-actions">
-        <PanelMenu
-          label={t('Conversation actions')}
-          className="conversation-menu"
-          iconOnly
-          trigger={<Icon name="more" size={17} />}
-        >
-          {props.showStarters &&
-            starters.map(([title, text]) => (
-              <button key={title} data-close-menu onClick={() => props.onDraft(text)}>
-                {t(title)}
-              </button>
-            ))}
-          <button
-            data-close-menu
-            onClick={props.onReview}
-            disabled={!props.onReview || !props.hasProject || props.busy}
-          >
-            <Icon name="review" size={14} />
-            {t('Review code')}
-          </button>
-          <button data-close-menu onClick={props.onStatus}>
-            <Icon name="activity" size={14} />
-            {t('Session status')}
-          </button>
-        </PanelMenu>
         <div className="top-action-group" role="group" aria-label={t('Project views')}>
           <button
             data-browse-files=""
@@ -222,6 +194,12 @@ export function WorkspaceHeader(props: Props) {
           >
             <Icon name="diff" size={17} />
           </button>
+          <IconButton
+            icon="review"
+            label={t('Review code')}
+            disabled={!props.onReview || !props.hasProject || props.busy}
+            onClick={props.onReview}
+          />
         </div>
         <div className="top-action-group" role="group" aria-label={t('Workspace tools')}>
           <IconButton
