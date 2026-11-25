@@ -66,12 +66,26 @@ for (const viewport of [
         requests++;
     });
     await picker.click();
+    const popup = page.getByRole('dialog', { name: 'Model and reasoning', exact: true });
+    const model = popup.getByLabel('Model', { exact: true });
+    const effort = popup.getByLabel('Reasoning effort', { exact: true });
     const mode = page.getByLabel('Task mode', { exact: true });
-    const executionWidth = (await mode.boundingBox())!.width;
-    await page.getByLabel('Reasoning effort', { exact: true }).selectOption('high');
+    const modelBounds = (await model.boundingBox())!;
+    for (const field of [effort, mode]) {
+      const bounds = (await field.boundingBox())!;
+      expect(bounds.x).toBeCloseTo(modelBounds.x, 0);
+      expect(bounds.width).toBeCloseTo(modelBounds.width, 0);
+    }
+    await effort.selectOption('high');
     await mode.selectOption('plan');
-    expect((await mode.boundingBox())!.width).toBeLessThan(executionWidth);
+    expect((await mode.boundingBox())!.width).toBeCloseTo(modelBounds.width, 0);
     await page.getByRole('switch', { name: 'Fast mode', exact: true }).check();
+    const reset = popup.getByRole('button', { name: 'Use Codex default speed', exact: true });
+    await reset.scrollIntoViewIfNeeded();
+    const resetBounds = (await reset.boundingBox())!;
+    const modeBounds = (await mode.boundingBox())!;
+    expect(resetBounds.x).toBeGreaterThan((await popup.boundingBox())!.x + 12);
+    expect(resetBounds.x + resetBounds.width).toBeCloseTo(modeBounds.x + modeBounds.width, 0);
     await expect(page.getByLabel('Reasoning effort', { exact: true })).toHaveValue('high');
     for (const locator of [
       page.getByLabel('Model', { exact: true }),

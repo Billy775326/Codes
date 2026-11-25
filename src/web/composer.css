@@ -155,14 +155,19 @@
   margin-inline-start: auto;
   max-width: min(228px, 50%);
 }
+.app .model-menu .panel-menu-content {
+  width: min(320px, calc(100vw - 32px));
+}
 .app .model-menu .model-field {
-  display: flex;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  margin-block-start: 8px;
 }
 .app .model-menu .model-field select {
-  max-width: 62%;
+  width: 100%;
+  field-sizing: fixed;
+  text-overflow: ellipsis;
 }
 .app .model-menu .model-selection {
   display: flex;
@@ -181,9 +186,22 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 40px;
   gap: 12px;
+  margin-block-start: 10px;
+  padding-block-start: 6px;
+  border-block-start: 1px solid var(--line);
   color: var(--fg);
+}
+.app .model-menu .fast-switch {
+  justify-items: end;
+}
+.app .model-menu .preference-reset-speed {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  margin-inline-start: auto;
+  padding: 4px 6px;
+  font-size: 12px;
 }
 .fast-option-copy {
   display: grid;
