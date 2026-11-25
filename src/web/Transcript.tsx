@@ -254,7 +254,12 @@ export function Transcript({
       const original = accepted
         ? turn.users.findLast((message) => message.clientId === accepted.id)
         : turn.users.findLast((message) => !parseQuestionReplies(message.text));
-      if (accepted) result.set(turn.id, { text: accepted.text, original, canLoadEarlier: false });
+      if (accepted)
+        result.set(turn.id, {
+          text: original?.text ?? accepted.text,
+          original,
+          canLoadEarlier: false,
+        });
       else if (original) result.set(turn.id, { text: original.text, original });
       else if (receipt && !parseQuestionReplies(receipt.text ?? ''))
         result.set(turn.id, { text: receipt.text ?? '' });

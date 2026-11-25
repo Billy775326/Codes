@@ -230,12 +230,16 @@ test('the pinned message follows confirmed same-turn input and jumps to that mes
   await expect(
     page.getByRole('button', { name: 'Go to original message', exact: true }),
   ).toHaveCount(0);
-  base.thread.steering = [];
+  base.thread.steering[0]!.text = later.text.slice(0, 20);
   base.thread.messages = [first, progress, later, { ...progress, id: 'after-follow-up' }];
   await reconnectUpdates(page);
   await end();
   await expect(bar).toContainText(later.text);
   await expect(bar).not.toContainText(first.text);
+  base.thread.steering = [];
+  await reconnectUpdates(page);
+  await end();
+  await expect(bar).toContainText(later.text);
   await bar.click();
   const detail = timeline.locator('.turn-prompt-detail');
   await expect(detail).toContainText(later.text);
