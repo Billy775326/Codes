@@ -18,15 +18,16 @@ async function navigation(page: Page) {
 async function searchForUnmatchedProject(page: Page, projectId: string, term: string) {
   const search = page.getByLabel('Search projects and chats', { exact: true });
   const unmatchedProject = projectCard(page, projectId);
-  const unmatchedResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
+  const unmatchedRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
     return (
       url.pathname === `/api/projects/${projectId}/conversations` &&
       url.searchParams.get('search') === term
     );
   });
   await search.fill(term);
-  const response = await unmatchedResponse;
+  // An immediate sidebar refresh can cancel the browser fetch after headers arrive.
+  const response = await page.request.get((await unmatchedRequest).url());
   expect(response.ok()).toBe(true);
   const result = await response.json();
   expect(result.data).toHaveLength(0);
