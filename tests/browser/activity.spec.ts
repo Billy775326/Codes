@@ -396,10 +396,11 @@ test('HTML preview explains an empty JavaScript app shell and keeps its source v
 
 test('HTML reply links and visualization references open the preview in one click', async ({
   page,
-}) => {
+}, testInfo) => {
   const { base } = await fixture(page, 0);
   const root = base.context!.project.path;
-  const mockup = join(dirname(root), '.local', 'mockup # draft.html');
+  // Other tests can register parents of the browser server's shared project.
+  const mockup = testInfo.outputPath('.local', 'mockup # draft.html');
   const local = join(root, 'linked.html');
   await mkdir(dirname(mockup), { recursive: true });
   await writeFile(
