@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { writeFile, rm } from 'node:fs/promises';
+import { readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 async function openFiles(page: Page) {
@@ -18,9 +18,12 @@ for (const width of [1440, 320]) {
       const name = `fixture-${index}.txt`;
       return { name, path: name, directory: false };
     });
-    await page.route('**/api/projects/*/files?*', async (route) => {
+    await page.route('**/api/projects/*/file-management?*', async (route) => {
       const response = await route.fetch();
-      await route.fulfill({ json: [...(await response.json()), ...extraFiles] });
+      const directory = await response.json();
+      await route.fulfill({
+        json: { ...directory, entries: [...directory.entries, ...extraFiles] },
+      });
     });
     await openFiles(page);
     const panel = page.locator('.context-panel');
@@ -114,7 +117,7 @@ test('folder navigation clears stale rows and previews, and failed directory rea
     await fileGate;
     await route.fulfill({ json: { path: 'example.ts', text: 'Late file', sha: 'old', lines: 1 } });
   });
-  await page.route('**/api/projects/*/files?*', async (route) => {
+  await page.route('**/api/projects/*/file-management?*', async (route) => {
     const path = new URL(route.request().url()).searchParams.get('path');
     if (path !== folder) return route.continue();
     if (++directoryReads === 1) {
@@ -124,7 +127,9 @@ test('folder navigation clears stale rows and previews, and failed directory rea
         json: { error: { code: 'FILE_NOT_FOUND', message: 'The directory could not be read.' } },
       });
     }
-    return route.fulfill({ json: [{ directory: true, name: 'nested', path: `${folder}/nested` }] });
+    return route.fulfill({
+      json: { entries: [{ directory: true, name: 'nested', path: `${folder}/nested` }] },
+    });
   });
   await openFiles(page);
   const files = page.getByRole('region', { name: 'Project files', exact: true });
@@ -144,7 +149,9 @@ test('folder navigation clears stale rows and previews, and failed directory rea
   const error = files.getByRole('alert');
   await expect(error).toContainText('The directory could not be read.');
   await error.getByRole('button', { name: 'Retry' }).click();
-  await page.route('**/api/projects/*/files?path=*nested', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/projects/*/file-management?path=*nested', (route) =>
+    route.fulfill({ json: { entries: [] } }),
+  );
   await files.getByRole('button', { name: 'nested', exact: true }).click();
   await expect(files.getByText('No visible files.', { exact: true })).toBeVisible();
   const breadcrumbs = files.getByRole('navigation', { name: 'File location' });
@@ -153,6 +160,46 @@ test('folder navigation clears stale rows and previews, and failed directory rea
   await expect(breadcrumbs.locator('[aria-current]')).toHaveText(folder);
   await expect(files.getByRole('button', { name: 'nested', exact: true })).toBeVisible();
   await expect(page.getByText('Late file', { exact: true })).toHaveCount(0);
+});
+
+test('manages a project folder and references a file larger than the preview limit', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openFiles(page);
+  const panel = page.locator('.context-panel');
+  const add = panel.getByRole('button', { name: 'Upload or create' });
+  await add.click();
+  await panel.getByRole('button', { name: 'New folder', exact: true }).click();
+  await panel.getByLabel('Folder name').fill('reports');
+  await panel.getByRole('button', { name: 'Create folder', exact: true }).click();
+  await panel.getByRole('button', { name: 'reports', exact: true }).click();
+  const content = Buffer.alloc(280 * 1024, 'a');
+  const pick = async () => {
+    await add.click();
+    const chooser = page.waitForEvent('filechooser');
+    await panel.getByRole('button', { name: 'Upload to this folder', exact: true }).click();
+    await (
+      await chooser
+    ).setFiles({ name: 'summary.log', mimeType: 'text/plain', buffer: content });
+    await panel.getByRole('button', { name: 'Start upload', exact: true }).click();
+  };
+  await pick();
+  await expect(panel.getByRole('button', { name: 'summary.log', exact: true })).toBeVisible();
+  await pick();
+  await expect(panel.getByRole('alert')).toContainText('That name is already in use.');
+  await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await panel.getByRole('button', { name: 'Actions for summary.log', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await panel.getByRole('link', { name: 'Download', exact: true }).click();
+  const saved = await download;
+  expect(saved.suggestedFilename()).toBe('summary.log');
+  expect(await readFile((await saved.path())!)).toEqual(content);
+  await panel.getByRole('button', { name: 'Reference in conversation', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Remove reports/summary.log', exact: true }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
 test('long source lines wrap inside Files at desktop and phone widths', async ({ page }) => {

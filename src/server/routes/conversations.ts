@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../../shared/errors.js';
 import { imageId, imageLimits } from '../../shared/images.js';
+import { projectFileLimits } from '../../shared/project-files.js';
 import { settingsSchema as settings } from '../../shared/settings.js';
 import { body, json, untilClosed, type HttpRequest, type RouteResult } from '../http-io.js';
 import { traceRead, type ReadDiagnostics } from '../read-diagnostics.js';
@@ -19,6 +20,14 @@ const fileAttachment = z
   .strict();
 const attachment = z.union([
   fileAttachment,
+  z
+    .object({
+      kind: z.literal('file-reference'),
+      path: z.string().min(1).max(projectFileLimits.pathLength),
+      version: z.string().regex(sha256),
+      showHidden: z.literal(true).optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('uploaded-file'),
@@ -129,10 +138,16 @@ export async function conversationRoutes(
       }
       if (segments[4] && method === 'PATCH') {
         const input = z
-          .object({ text: z.string().trim().max(50_000) })
+          .object({
+            text: z.string().trim().max(50_000),
+            removeFileReferences: z.boolean().optional(),
+          })
           .strict()
           .parse(await body(request));
-        return json(response, service.editQueued(id, segments[4], input.text));
+        return json(
+          response,
+          service.editQueued(id, segments[4], input.text, input.removeFileReferences),
+        );
       }
       if (segments[4] && method === 'DELETE')
         return json(response, service.cancelQueued(id, segments[4]));

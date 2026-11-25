@@ -75,6 +75,95 @@
 .file-list {
   padding: 4px;
 }
+.file-add-menu .panel-menu-content {
+  top: calc(100% + 4px);
+  bottom: auto;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 4px;
+}
+.file-entry-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+.file-entry-row .file-entry {
+  flex: 1;
+  min-width: 0;
+}
+.file-row-actions,
+.file-reference-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 8px;
+}
+.file-reference-actions {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+}
+.file-row-actions :is(button, a),
+.file-reference-actions button,
+.file-load-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.file-row-actions :is(button, a):hover,
+.file-reference-actions button:hover,
+.file-load-more:hover {
+  background: var(--hover);
+}
+.file-create {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.file-create label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.file-create input {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  margin-top: 3px;
+}
+.file-create-actions {
+  display: flex;
+  gap: 4px;
+}
+.file-create :is(progress, p) {
+  width: 100%;
+  margin: 0;
+}
+.file-create progress {
+  height: 7px;
+  accent-color: var(--accent);
+}
+.file-create p[role='alert'] {
+  color: var(--status-error);
+  font-size: 12px;
+}
+@media (pointer: coarse) {
+  .file-row-actions :is(button, a),
+  .file-reference-actions button,
+  .file-load-more {
+    min-height: 40px;
+  }
+}
 .file-entry {
   display: flex;
   align-items: center;

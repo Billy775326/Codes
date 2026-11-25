@@ -58,9 +58,9 @@ export class ConversationQueue {
     this.queue.wake(id);
     return this.queueState(id);
   }
-  editQueued(id: string, messageId: string, text: string) {
+  editQueued(id: string, messageId: string, text: string, removeFileReferences = false) {
     this.queueState(id);
-    this.store.queue.edit(messageId, id, text);
+    this.store.queue.edit(messageId, id, text, removeFileReferences);
     this.queue.notify(id);
     return this.queueState(id);
   }
@@ -113,6 +113,11 @@ export class ConversationQueue {
           receipt.error,
         );
     } catch (error) {
+      if (error instanceof AppError && error.code === 'FILE_REFERENCE_CHANGED') {
+        this.store.queue.set(messageId, 'queued', error.message);
+        this.store.queue.pauseForReview(id, error.message);
+        throw error;
+      }
       if (
         error instanceof AppError &&
         ['MAINTENANCE_ACTIVE', 'STEER_UNAVAILABLE', 'STEER_LIMIT'].includes(error.code)

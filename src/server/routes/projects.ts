@@ -6,6 +6,7 @@ import { traceRead, type ReadDiagnostics } from '../read-diagnostics.js';
 import type { Service } from '../service.js';
 import { createProjectAttachmentRoutes, serveImagePreview } from './files.js';
 import { instructionsUpdate } from './instructions-input.js';
+import { projectFileRoutes } from './project-file-management.js';
 
 export async function projectCollection(
   { request, response, url, method }: HttpRequest,
@@ -33,6 +34,8 @@ export function createProjectRoutes(service: Service, diagnostics: ReadDiagnosti
     const { request, response, url, method } = context;
     if (segments[1] === 'projects' && segments[2]) {
       const projectId = segments[2];
+      if (segments[3] === 'file-management' && segments.length <= 5)
+        return projectFileRoutes(context, projectId, segments[4], service.fileManagement);
       if (segments.length === 4 && segments[3] === 'instructions') {
         if (method === 'GET') return json(response, await service.projectInstructions(projectId));
         if (method === 'PUT') {

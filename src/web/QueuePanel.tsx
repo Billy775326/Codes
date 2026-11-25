@@ -29,6 +29,7 @@ export function QueuePanel({
 }) {
   const { t } = useInterfaceLanguage();
   const [editing, setEditing] = useState('');
+  const [removeFileReferences, setRemoveFileReferences] = useState(false);
   const [text, setText] = useState('');
   const textarea = useRef<HTMLTextAreaElement>(null);
   useComposerTextareaHeight(textarea, text, !!editing);
@@ -77,7 +78,10 @@ export function QueuePanel({
           () =>
             request<QueueState>('/threads/' + threadId + '/queue/' + editing, {
               method: 'PATCH',
-              body: JSON.stringify({ text: text.trim() }),
+              body: JSON.stringify({
+                text: text.trim(),
+                ...(removeFileReferences ? { removeFileReferences: true } : {}),
+              }),
             }),
           true,
         );
@@ -101,6 +105,20 @@ export function QueuePanel({
         autoFocus
       />
       <div className="queue-editor-actions">
+        {editable &&
+          entryBeingEdited.attachments.some(
+            (attachment) => attachment.kind === 'file-reference',
+          ) && (
+            <label className="queue-remove-file-references">
+              <input
+                type="checkbox"
+                checked={removeFileReferences}
+                disabled={busy}
+                onChange={(event) => setRemoveFileReferences(event.target.checked)}
+              />
+              {t('Remove file references')}
+            </label>
+          )}
         {onStop && (
           <IconButton
             className="queue-editor-stop"
@@ -221,6 +239,7 @@ export function QueuePanel({
                           if (full.state !== 'queued')
                             throw new Error('This message has already started.');
                           setEditing(entry.id);
+                          setRemoveFileReferences(false);
                           setText(full.text);
                         })
                       }

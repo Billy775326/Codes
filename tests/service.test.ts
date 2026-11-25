@@ -1061,6 +1061,49 @@ it('revalidates queued file context at dispatch and holds later messages on fail
   expect(service.queueState(thread.id)).toMatchObject({ paused: true });
   expect(thread.messages.filter((row) => row.kind === 'user')).toHaveLength(1);
 });
+it('keeps stale project references editable in the queue and dispatches only after review', async () => {
+  const { service } = await fixture();
+  const workspace = await mkdtemp(join(tmpdir(), 'codes-reference-queue-'));
+  cleanup.push(() => rm(workspace, { recursive: true, force: true }));
+  const project = await service.addProject(workspace);
+  const thread = await service.create(project.id);
+  await writeFile(
+    join(workspace, 'build.log'),
+    'keep this content out of the prompt\n'.repeat(20_000),
+  );
+  const reference = await service.fileManagement.reference(project.id, 'build.log', false);
+  const native = vi.spyOn(service.driver, 'call');
+  await service.send(
+    thread.id,
+    randomUUID(),
+    '[approve] Read the referenced file',
+    thread.settings,
+    [reference],
+  );
+  const started = native.mock.calls.find(([method]) => method === 'turn/start');
+  expect(JSON.stringify(started?.[1])).toContain('build.log');
+  expect(JSON.stringify(started?.[1])).not.toContain('keep this content out of the prompt');
+  await until(() => thread.actions.length > 0);
+  const queued = randomUUID();
+  await service.enqueue(thread.id, queued, {
+    text: 'Process the file',
+    settings: thread.settings,
+    attachments: [reference],
+  });
+  await writeFile(join(workspace, 'build.log'), 'A different version');
+  await service.answer(thread.actions[0]!.id, randomUUID(), { decision: 'accept' });
+  await until(() => service.queueState(thread.id).paused);
+  expect(service.store.queue.get(queued)).toMatchObject({
+    state: 'queued',
+    error: expect.stringContaining('referenced file changed'),
+  });
+  expect(service.store.operation(queued)).toBeUndefined();
+  service.editQueued(thread.id, queued, 'Continue without the file', true);
+  expect(service.store.queue.get(queued)).toMatchObject({ state: 'queued', attachments: [] });
+  service.controlQueue(thread.id, false);
+  await until(() => service.store.operation(queued)?.state === 'completed');
+});
+
 it('bounds the per-conversation queue and does not bypass waiting messages with direct sends', async () => {
   const { service, thread } = await fixture();
   await service.send(thread.id, randomUUID(), '[approve] Capacity fixture', thread.settings);

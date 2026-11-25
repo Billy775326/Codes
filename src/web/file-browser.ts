@@ -1,5 +1,27 @@
 export const isHtmlFile = (path: string) => /\.html?$/i.test(path);
 
+export function projectFileUrl(
+  projectId: string,
+  path: string,
+  showHidden: boolean,
+  operation = '',
+  extra: Record<string, string> = {},
+) {
+  const query = new URLSearchParams({
+    path,
+    ...(showHidden ? { showHidden: 'true' } : {}),
+    ...extra,
+  });
+  return (
+    '/projects/' +
+    encodeURIComponent(projectId) +
+    '/file-management' +
+    (operation ? '/' + operation : '') +
+    '?' +
+    query
+  );
+}
+
 export function fileBrowserUrl(
   kind: 'directory' | 'location' | 'file' | 'image',
   path: string,

@@ -9,6 +9,9 @@ export class ApiError extends Error {
   }
 }
 const authenticationListeners = new Set<(error: ApiError) => void>();
+export function reportAuthenticationError(error: ApiError) {
+  authenticationListeners.forEach((listener) => listener(error));
+}
 /** One workspace owner listens while signed in; token values never enter this signal. */
 export function onAuthenticationRequired(listener: (error: ApiError) => void) {
   authenticationListeners.add(listener);
@@ -86,8 +89,7 @@ async function sendRequest<T>(
         writing && (response.ok || response.status >= 500),
         response.status,
       );
-      if (unauthenticated && !signal?.aborted)
-        authenticationListeners.forEach((listener) => listener(failure));
+      if (unauthenticated && !signal?.aborted) reportAuthenticationError(failure);
       throw failure;
     }
     if (!response.ok) {
@@ -97,8 +99,7 @@ async function sendRequest<T>(
         data?.error?.uncertain === true,
         response.status,
       );
-      if (response.status === 401 && !signal?.aborted)
-        authenticationListeners.forEach((listener) => listener(error));
+      if (response.status === 401 && !signal?.aborted) reportAuthenticationError(error);
       throw error;
     }
     if (!data || typeof data !== 'object')

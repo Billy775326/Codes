@@ -37,7 +37,7 @@ The owner-provided V3 SVG identity is active in navigation, sign-in, and the fav
 - IDE-style model/reasoning controls, edited-file cards, questions, approvals and follow-up actions within that Web layout.
 - Browser interaction preferences for Enter, queue/steer inversion, review delivery, and local slash commands.
 - English and Simplified Chinese interface languages in Settings → General → Appearance. English is the default. The language choice is saved in the browser and applies to app controls, not conversation content.
-- Read-only file browsing with project-scoped attachments and file-change checks. Use **Open server path** to preview readable files and directories by absolute path. Paths outside the usual project file scope show a warning.
+- Manage the current project's files from **Browse files**. Upload, create folders, download, and reference files from the composer. **Open server path** browses readable server paths and shows a warning outside the usual project file scope. See [project files](docs/conversation-details.md#manage-project-files).
 - Use the composer plus menu to upload local text files or images and to browse project files. Paste images directly and preview or remove attachments before sending, queueing, or adding to a turn. See [composer attachments and limits](docs/image-attachments.md).
 - Per-file patch previews with line numbers, change counts, unified/side-by-side layouts, earlier loaded turns, and bounded patch windows; paginated native conversation history.
 - Browser reconnection through snapshots and bounded event replay.

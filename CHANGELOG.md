@@ -14,6 +14,8 @@
 
 ### Added
 
+- Manage files in the current project from Browse files. Upload files up to 64 MiB, create folders, download files, and reference paths from the composer. Changed file references pause queued delivery until reviewed.
+
 - Open readable server paths in Files or from conversation links. Paths outside the usual project file scope show a warning and open read-only.
 
 - Use Up and Down in the composer to recall sent messages from the current conversation and return to the unsent draft.

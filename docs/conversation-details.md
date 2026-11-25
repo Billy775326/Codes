@@ -2,6 +2,16 @@
 
 codes follows the published Codex IDE interaction contracts for native clarifications and local patch inspection. Use a desktop to review changes and a phone to answer a pending question. This is an independent Web implementation; it does not include VS Code editor integration or Git stage/revert actions.
 
+## Manage project files
+
+In the **Files** sidebar, use **Upload or create** to save a file to the current folder or make a new folder. The file row menu offers **Download**, **Copy path**, and **Reference in conversation**. Files larger than the text preview limit can still be downloaded or referenced. Use **Load more files** to continue through large folders. Refresh if the directory changes between pages.
+
+Upload accepts one selected file per operation, up to 64 MiB, with two concurrent uploads across the workspace. The upload streams into a temporary file in the destination folder and publishes it under the chosen name when complete. A name conflict preserves the existing file and lets the user submit the same upload with a different name. Browse files reserves 256 MiB of free disk space at upload admission. Project files can be created only in the current registered project directory. Operations protect Git metadata, the Codex configuration directory, and the Codes data directory. **Open server path** also supports read-only browsing of other paths.
+
+A file reference adds the relative path to the draft. Include a message when using a file reference on its own. Codes checks the referenced file version before dispatch. Codex reads the live file within its effective tool permissions. A changed reference pauses the conversation queue, and the waiting message remains editable in its original position. Edit it to remove the file references, then resume the queue explicitly.
+
+The SQLite backup covers workspace metadata. Project files require their own filesystem backup. Before downgrading to a build without path references, complete or remove queued messages that use them.
+
 ## Preview documents, images and HTML
 
 External web links in chat open in a new tab. Links within the Codes workspace use the current tab.

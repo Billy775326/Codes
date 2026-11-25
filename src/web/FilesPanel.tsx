@@ -1,15 +1,18 @@
 import { useInterfaceLanguage } from './interface-language';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { projectImageType } from '../shared/images';
 import {
   hasHiddenPathSegment,
   type FileBrowserResult,
   type FileEntry,
   type FileLocation,
+  type ProjectFilePage,
+  type ProjectFileReferenceAttachment,
 } from '../shared/project-files';
 import type { FileContent } from '../shared/types';
 import { ApiError, message, request } from './api';
-import { fileBrowserUrl, isHtmlFile } from './file-browser';
+import { fileBrowserUrl, isHtmlFile, projectFileUrl } from './file-browser';
+import { ProjectFileControls } from './ProjectFileControls';
 import { BrowserImagePreview, HtmlPreview } from './ContentPreview';
 import { InteractionDialog } from './InteractionDialog';
 import { Icon, IconButton } from './primitives';
@@ -17,7 +20,7 @@ import type { ProjectFileReference } from './remarkProjectFileLinks';
 import './files-panel.css';
 
 type ReadResult<T> =
-  { url: string; value: T; outsideScope?: boolean } | { url: string; error: string };
+  { url: string; value: T; outsideScope?: boolean } | { url: string; error: string; code?: string };
 
 function useRead<T>(url: string | undefined, browserUrl?: string, onScopeWarning?: () => void) {
   const [result, setResult] = useState<ReadResult<T>>();
@@ -45,7 +48,12 @@ function useRead<T>(url: string | undefined, browserUrl?: string, onScopeWarning
         }
       },
       (error) => {
-        if (!controller.signal.aborted) setResult({ url: key, error: message(error) });
+        if (!controller.signal.aborted)
+          setResult({
+            url: key,
+            error: message(error),
+            code: error instanceof ApiError ? error.code : undefined,
+          });
       },
     );
     return () => controller.abort();
@@ -319,6 +327,7 @@ function FilePreview({
   showHidden,
   onScopeWarning,
   close,
+  onReference,
   ...attachment
 }: AttachmentControls & {
   apiBase?: string;
@@ -328,6 +337,7 @@ function FilePreview({
   showHidden: boolean;
   onScopeWarning: () => void;
   close: () => void;
+  onReference?: () => void;
 }) {
   const { t } = useInterfaceLanguage();
   const image = projectImageType(path);
@@ -384,6 +394,14 @@ function FilePreview({
           attachment={attachment}
         />
       )}
+      {onReference && (
+        <div className="file-reference-actions">
+          <button type="button" onClick={onReference} disabled={attachment.attachmentBlocked}>
+            <Icon name="link" size={14} />
+            {t('Reference in conversation')}
+          </button>
+        </div>
+      )}
     </section>
   );
 }
@@ -393,6 +411,8 @@ interface Props extends AttachmentControls {
   directoryIssue?: string;
   projectId: string;
   projectName: string;
+  projectArchived?: boolean;
+  onAttachReference: (reference: ProjectFileReferenceAttachment) => void;
   directory: string;
   filePath?: string;
   narrow: boolean;
@@ -417,6 +437,8 @@ export const FilesPanel = memo(function FilesPanel({
   directoryIssue,
   projectId,
   projectName,
+  projectArchived,
+  onAttachReference,
   directory,
   filePath,
   narrow,
@@ -430,15 +452,122 @@ export const FilesPanel = memo(function FilesPanel({
   const { t } = useInterfaceLanguage();
   const absolute = directory.startsWith('/');
   const scopeProject = projectId || undefined;
-  const { result, reload } = useRead<FileEntry[]>(
-    apiBase && !absolute && !showHidden
+  const managementUrl =
+    apiBase && projectId && !absolute
+      ? projectFileUrl(projectId, directory, showHidden)
+      : undefined;
+  const managed = useRead<ProjectFilePage>(managementUrl);
+  const fallback =
+    !managementUrl ||
+    (managed.result &&
+      'error' in managed.result &&
+      managed.result.code === 'FILE_MANAGEMENT_SCOPE');
+  const ordinary = useRead<FileEntry[]>(
+    fallback && apiBase && !absolute && !showHidden
       ? fileReadUrl(apiBase, 'files', directory, false)
       : undefined,
-    apiBase || absolute
+    fallback && (apiBase || absolute)
       ? fileBrowserUrl('directory', directory, showHidden, scopeProject)
       : undefined,
     onScopeWarning,
   );
+  const firstPage = managed.result && 'value' in managed.result ? managed.result.value : undefined;
+  const [pages, setPages] = useState<{
+    first: ProjectFilePage;
+    rows: FileEntry[];
+    next?: ProjectFilePage['next'];
+  }>();
+  const loaded = pages?.first === firstPage ? pages : undefined;
+  const next = loaded ? loaded.next : firstPage?.next;
+  const pageRequest = useRef<AbortController | null>(null);
+  const referenceRequest = useRef<AbortController | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [operationError, setOperationError] = useState('');
+  const [rowMenu, setRowMenu] = useState('');
+  useEffect(() => {
+    setOperationError('');
+    setLoadingMore(false);
+    setRowMenu('');
+    return () => {
+      pageRequest.current?.abort();
+      pageRequest.current = null;
+      referenceRequest.current?.abort();
+      referenceRequest.current = null;
+    };
+  }, [managementUrl]);
+  const result = fallback
+    ? ordinary.result
+    : managed.result &&
+      ('error' in managed.result
+        ? managed.result
+        : { ...managed.result, value: loaded?.rows ?? managed.result.value.entries });
+  const reload = () => {
+    setOperationError('');
+    pageRequest.current?.abort();
+    pageRequest.current = null;
+    setLoadingMore(false);
+    if (fallback) ordinary.reload();
+    else managed.reload();
+  };
+  const loadMore = async () => {
+    if (!firstPage || !next || pageRequest.current) return;
+    const controller = new AbortController();
+    pageRequest.current = controller;
+    setLoadingMore(true);
+    setOperationError('');
+    try {
+      const page = await request<ProjectFilePage>(
+        projectFileUrl(projectId, directory, showHidden, '', {
+          offset: String(next.offset),
+          revision: next.revision,
+        }),
+        {},
+        controller.signal,
+      );
+      if (!controller.signal.aborted)
+        setPages({
+          first: firstPage,
+          rows: [...(loaded?.rows ?? firstPage.entries), ...page.entries],
+          next: page.next,
+        });
+    } catch (error) {
+      if (!controller.signal.aborted) setOperationError(message(error));
+    } finally {
+      if (pageRequest.current === controller) {
+        pageRequest.current = null;
+        setLoadingMore(false);
+      }
+    }
+  };
+  const reference = async (path: string) => {
+    if (referenceRequest.current || attachment.attachmentBlocked) return;
+    const controller = new AbortController();
+    referenceRequest.current = controller;
+    setOperationError('');
+    try {
+      const result = await request<ProjectFileReferenceAttachment>(
+        projectFileUrl(projectId, path, showHidden, 'reference'),
+        {},
+        controller.signal,
+      );
+      if (!controller.signal.aborted) {
+        setRowMenu('');
+        onAttachReference(result);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) setOperationError(message(error));
+    } finally {
+      if (referenceRequest.current === controller) referenceRequest.current = null;
+    }
+  };
+  const copyPath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      setRowMenu('');
+    } catch {
+      setOperationError('Clipboard unavailable.');
+    }
+  };
   const preview = apiBase || filePath?.startsWith('/') ? filePath : undefined;
   const location = useRef<HTMLSpanElement>(null);
   const pathButton = useRef<HTMLButtonElement>(null);
@@ -502,6 +631,62 @@ export const FilesPanel = memo(function FilesPanel({
     }
     onShowHiddenChange(!showHidden);
   };
+  const toolbar = (add?: ReactNode) => (
+    <div className="file-location">
+      <nav className="file-breadcrumb" aria-label={t('File location')}>
+        {breadcrumbs.map((part, index) => {
+          const path = at(index);
+          const current = index === breadcrumbs.length - 1;
+          return (
+            <span key={path}>
+              {index > 0 && <Icon name="chevron" size={11} />}
+              {current ? (
+                <span ref={location} tabIndex={-1} aria-current="location" title={path || part}>
+                  {part}
+                </span>
+              ) : (
+                <button title={path || part} onClick={() => navigate(path)}>
+                  {part}
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </nav>
+      <IconButton
+        ref={pathButton}
+        icon="open-file"
+        label={t('Open server path')}
+        aria-expanded={pathInput !== undefined}
+        aria-controls={pathInput !== undefined ? 'server-file-path' : undefined}
+        onClick={() => {
+          if (pathInput !== undefined) hidePathInput();
+          else {
+            setPathError('');
+            setPathInput(directory);
+          }
+        }}
+      />
+      <IconButton
+        icon={showHidden ? 'eye' : 'hidden'}
+        label={t('Show hidden files')}
+        className={showHidden ? 'selected' : undefined}
+        aria-pressed={showHidden}
+        disabled={!apiBase && !absolute}
+        onClick={toggleHidden}
+      />
+      <button
+        className="icon-button"
+        aria-label={t('Refresh file list')}
+        data-tooltip=""
+        onClick={reload}
+        disabled={!result}
+      >
+        <Icon name="refresh" size={15} />
+      </button>
+      {add}
+    </div>
+  );
   return (
     <div className={'files-panel' + (preview ? ' has-file-preview' : '')}>
       <section
@@ -509,59 +694,18 @@ export const FilesPanel = memo(function FilesPanel({
         aria-label={t('Project files')}
         hidden={narrow && !!preview}
       >
-        <div className="file-location">
-          <nav className="file-breadcrumb" aria-label={t('File location')}>
-            {breadcrumbs.map((part, index) => {
-              const path = at(index);
-              const current = index === breadcrumbs.length - 1;
-              return (
-                <span key={path}>
-                  {index > 0 && <Icon name="chevron" size={11} />}
-                  {current ? (
-                    <span ref={location} tabIndex={-1} aria-current="location" title={path || part}>
-                      {part}
-                    </span>
-                  ) : (
-                    <button title={path || part} onClick={() => navigate(path)}>
-                      {part}
-                    </button>
-                  )}
-                </span>
-              );
-            })}
-          </nav>
-          <IconButton
-            ref={pathButton}
-            icon="open-file"
-            label={t('Open server path')}
-            aria-expanded={pathInput !== undefined}
-            aria-controls={pathInput !== undefined ? 'server-file-path' : undefined}
-            onClick={() => {
-              if (pathInput !== undefined) hidePathInput();
-              else {
-                setPathError('');
-                setPathInput(directory);
-              }
-            }}
+        {managementUrl && !fallback && !projectArchived ? (
+          <ProjectFileControls
+            key={managementUrl}
+            projectId={projectId}
+            directory={directory}
+            showHidden={showHidden}
+            refresh={reload}
+            toolbar={toolbar}
           />
-          <IconButton
-            icon={showHidden ? 'eye' : 'hidden'}
-            label={t('Show hidden files')}
-            className={showHidden ? 'selected' : undefined}
-            aria-pressed={showHidden}
-            disabled={!apiBase && !absolute}
-            onClick={toggleHidden}
-          />
-          <button
-            className="icon-button"
-            aria-label={t('Refresh file list')}
-            data-tooltip=""
-            onClick={reload}
-            disabled={!result}
-          >
-            <Icon name="refresh" size={15} />
-          </button>
-        </div>
+        ) : (
+          toolbar()
+        )}
         {pathInput !== undefined && (
           <form
             id="server-file-path"
@@ -615,40 +759,92 @@ export const FilesPanel = memo(function FilesPanel({
             <ReadError error={result.error} retry={reload} />
           ) : result.value.length ? (
             result.value.map((entry) => (
-              <button
-                className="file-entry"
-                key={entry.path}
-                ref={preview === entry.path ? selectedEntry : undefined}
-                aria-current={preview === entry.path ? 'true' : undefined}
-                onClick={() => {
-                  if (entry.symbolicLink) void openLocation(entry.path);
-                  else if (entry.directory) navigate(entry.path);
-                  else {
-                    cancelOpening();
-                    setPathError('');
-                    onFile(entry.path);
-                  }
-                }}
-              >
-                <Icon
-                  name={
-                    entry.directory ? 'folder' : projectImageType(entry.path) ? 'image' : 'file'
-                  }
-                  size={16}
-                />
-                <span className="file-name" data-tooltip-overflow="">
-                  {entry.name}
-                </span>
-                {entry.directory && <Icon name="chevron" size={12} />}
-              </button>
+              <div key={entry.path} className="file-entry-group">
+                <div className="file-entry-row">
+                  <button
+                    className="file-entry"
+                    ref={preview === entry.path ? selectedEntry : undefined}
+                    aria-current={preview === entry.path ? 'true' : undefined}
+                    onClick={() => {
+                      if (entry.symbolicLink) void openLocation(entry.path);
+                      else if (entry.directory) navigate(entry.path);
+                      else {
+                        cancelOpening();
+                        setPathError('');
+                        onFile(entry.path);
+                      }
+                    }}
+                  >
+                    <Icon
+                      name={
+                        entry.directory ? 'folder' : projectImageType(entry.path) ? 'image' : 'file'
+                      }
+                      size={16}
+                    />
+                    <span className="file-name" data-tooltip-overflow="">
+                      {entry.name}
+                    </span>
+                    {entry.directory && <Icon name="chevron" size={12} />}
+                  </button>
+                  {firstPage && !entry.symbolicLink && (
+                    <IconButton
+                      icon="more"
+                      label={t('Actions for {name}', { name: entry.name })}
+                      aria-expanded={rowMenu === entry.path}
+                      onClick={() => setRowMenu(rowMenu === entry.path ? '' : entry.path)}
+                    />
+                  )}
+                </div>
+                {firstPage && rowMenu === entry.path && (
+                  <div className="file-row-actions" role="group" aria-label={t('File actions')}>
+                    {!entry.directory && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={attachment.attachmentBlocked}
+                          onClick={() => void reference(entry.path)}
+                        >
+                          {t('Reference in conversation')}
+                        </button>
+                        <a
+                          href={
+                            '/api' + projectFileUrl(projectId, entry.path, showHidden, 'download')
+                          }
+                          download={entry.name}
+                        >
+                          {t('Download')}
+                        </a>
+                      </>
+                    )}
+                    <button type="button" onClick={() => void copyPath(entry.path)}>
+                      {t('Copy path')}
+                    </button>
+                  </div>
+                )}
+              </div>
             ))
           ) : (
             <p className="file-state" role="status">
               {t('No visible files.')}
             </p>
           )}
+          {next && (
+            <button
+              type="button"
+              className="file-load-more"
+              disabled={loadingMore}
+              onClick={() => void loadMore()}
+            >
+              {t(loadingMore ? 'Loading files…' : 'Load more files')}
+            </button>
+          )}
         </div>
       </section>
+      {operationError && (
+        <p role="alert" className="file-state">
+          {t(operationError)}
+        </p>
+      )}
       {preview && (
         <FilePreview
           key={preview}
@@ -659,6 +855,9 @@ export const FilesPanel = memo(function FilesPanel({
           narrow={narrow}
           showHidden={showHidden}
           close={closePreview}
+          onReference={
+            firstPage && !preview.startsWith('/') ? () => void reference(preview) : undefined
+          }
           {...attachment}
         />
       )}

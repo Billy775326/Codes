@@ -9,6 +9,26 @@ export interface FileEntry {
   symbolicLink?: boolean;
 }
 
+export const projectFileLimits = {
+  uploadBytes: 64 * 1024 * 1024,
+  concurrentUploads: 2,
+  pageSize: 200,
+  pathLength: 1024,
+};
+export const projectUploadStagingPrefix = '.codes-upload-';
+
+export interface ProjectFileReferenceAttachment {
+  kind: 'file-reference';
+  path: string;
+  version: string;
+  showHidden?: true;
+}
+
+export interface ProjectFilePage {
+  entries: FileEntry[];
+  next?: { offset: number; revision: string };
+}
+
 export interface FileBrowserResult<T> {
   value: T;
   outsideScope: boolean;

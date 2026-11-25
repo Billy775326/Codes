@@ -17,7 +17,7 @@ import { draftKey, save, saved } from './browser-storage';
 import { useMessageDelivery } from './useMessageDelivery';
 import { parseQuestionReplies, questionSourceItemId } from '../shared/question-replies';
 import { imageLimits } from '../shared/images';
-import { hasHiddenPathSegment } from '../shared/project-files';
+import { hasHiddenPathSegment, type ProjectFileReferenceAttachment } from '../shared/project-files';
 import { ImageAttachmentView } from './ImageAttachments';
 import { ImagePreviewDialog } from './ContentPreview';
 import { MessageView } from './ConversationMessage';
@@ -968,6 +968,19 @@ function App() {
       requestAnimationFrame(() => composer.current?.focus());
     },
     [attachmentBlocked, narrow, showHiddenFiles],
+  );
+  const attachProjectReference = useCallback(
+    (reference: ProjectFileReferenceAttachment) => {
+      if (attachmentBlocked) return;
+      draftRevision.current++;
+      setAttachments((list) => [
+        ...list.filter((entry) => !('path' in entry) || entry.path !== reference.path),
+        reference,
+      ]);
+      if (narrow) setPanel(null);
+      requestAnimationFrame(() => composer.current?.focus());
+    },
+    [attachmentBlocked, narrow],
   );
   const active =
     !!thread?.pending ||
@@ -2010,7 +2023,9 @@ function App() {
                       >
                         {a.kind === 'uploaded-file'
                           ? a.name
-                          : `${a.path}:${a.fromLine}–${a.toLine}`}
+                          : a.kind === 'file-reference'
+                            ? a.path
+                            : `${a.path}:${a.fromLine}–${a.toLine}`}
                       </span>
                       <IconButton
                         icon="close"
@@ -2455,6 +2470,7 @@ function App() {
               directoryIssue={directoryBlocked ? context.directory.message : undefined}
               projectId={contextProjectId}
               projectName={project?.name ?? t('Project')}
+              projectArchived={project?.archived}
               directory={directory}
               filePath={filePath}
               narrow={narrow}
@@ -2466,6 +2482,7 @@ function App() {
               onFile={setFilePath}
               onScopeWarning={showFileScopeWarning}
               onAttach={attachProjectFile}
+              onAttachReference={attachProjectReference}
               attachmentBlocked={attachmentBlocked}
             />
           )}

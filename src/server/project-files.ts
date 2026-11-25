@@ -13,6 +13,7 @@ import {
 import { projectImageType } from '../shared/images.js';
 import {
   hasHiddenPathSegment,
+  projectUploadStagingPrefix,
   type FileBrowserResult,
   type FileEntry,
   type FileLocation,
@@ -304,7 +305,12 @@ export class ProjectFiles {
   ) {
     const entries: FileEntry[] = [];
     for await (const entry of await opendir(absolute)) {
-      if ((!showHidden && hasHiddenPathSegment(entry.name)) || excluded.has(entry.name)) continue;
+      if (
+        (!showHidden && hasHiddenPathSegment(entry.name)) ||
+        excluded.has(entry.name) ||
+        entry.name.startsWith(projectUploadStagingPrefix)
+      )
+        continue;
       entries.push({
         name: entry.name,
         path: path ? `${path.replace(/\/$/, '')}/${entry.name}` : entry.name,

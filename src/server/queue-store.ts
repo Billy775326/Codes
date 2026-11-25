@@ -148,7 +148,7 @@ export class QueueStore {
         .all() as any[]
     ).map((row) => row.thread_id);
   }
-  edit(id: string, threadId: string, text: string) {
+  edit(id: string, threadId: string, text: string, removeFileReferences = false) {
     if (Buffer.byteLength(text) > 100_000)
       throw new AppError('INPUT_LIMIT', 'The queued text exceeds 100 KB.');
     const entry = this.get(id);
@@ -158,9 +158,18 @@ export class QueueStore {
       throw new AppError('INPUT_REQUIRED', 'Enter a message or attach an image.');
     if (entry.state !== 'queued')
       throw new AppError('QUEUE_STARTED', 'Only a waiting message can be edited.', 409);
+    const attachments = removeFileReferences
+      ? entry.attachments.filter((attachment) => attachment.kind !== 'file-reference')
+      : entry.attachments;
     this.db
-      .prepare("UPDATE queued_messages SET payload=? WHERE id=? AND state='queued'")
-      .run(JSON.stringify({ text, settings: entry.settings, attachments: entry.attachments }), id);
+      .prepare(
+        "UPDATE queued_messages SET payload=?,error=CASE WHEN ? THEN NULL ELSE error END WHERE id=? AND state='queued'",
+      )
+      .run(
+        JSON.stringify({ text, settings: entry.settings, attachments }),
+        Number(removeFileReferences),
+        id,
+      );
   }
   cancel(id: string, threadId: string) {
     const entry = this.get(id);

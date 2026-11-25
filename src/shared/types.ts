@@ -193,7 +193,8 @@ export interface UploadedFileAttachment {
   id: string;
   name: string;
 }
-export type Attachment = FileAttachment | ImageAttachment | UploadedFileAttachment;
+export type Attachment =
+  FileAttachment | ImageAttachment | UploadedFileAttachment | ProjectFileReferenceAttachment;
 export interface FileContent {
   path: string;
   text: string;
@@ -298,3 +299,4 @@ export function sameSettings(a: Settings, b: Settings): boolean {
     a.fast === b.fast
   );
 }
+import type { ProjectFileReferenceAttachment } from './project-files.js';

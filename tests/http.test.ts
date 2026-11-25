@@ -1,7 +1,7 @@
 import { deferred } from '../src/shared/deferred';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -863,6 +863,105 @@ it('previews named raster images across workspace paths without exposing private
     expect((await read(join(external, 'notes.txt'))).status).toBe(415);
   } finally {
     await rm(external, { recursive: true, force: true });
+  }
+});
+
+it('saves project uploads without overwrite and streams downloads', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'codes-managed-files-'));
+  try {
+    const project = await service.addProject(workspace);
+    const api = origin + '/api/projects/' + project.id + '/file-management';
+    const headers = { origin, cookie };
+    const put = (contents: string) =>
+      fetch(api + '/upload?path=reports&name=large.log', {
+        method: 'POST',
+        headers,
+        body: contents,
+      });
+    expect(
+      (
+        await fetch(api + '/directory', {
+          method: 'POST',
+          headers: { ...headers, 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'reports' }),
+        })
+      ).status,
+    ).toBe(201);
+    const data = 'sample\n'.repeat(50_000);
+    const responses = await Promise.all([put(data), put('concurrent content')]);
+    expect(responses.map((item) => item.status).sort()).toEqual([201, 409]);
+    const saved = await readFile(join(workspace, 'reports', 'large.log'), 'utf8');
+    expect(saved).toBe(responses[0]!.status === 201 ? data : 'concurrent content');
+    const download = await fetch(api + '/download?path=reports%2Flarge.log', { headers });
+    expect(download.status).toBe(200);
+    expect(download.headers.get('content-disposition')).toContain('attachment;');
+    expect(await download.text()).toBe(saved);
+
+    await symlink(directory, join(workspace, 'external'));
+    expect(
+      (
+        await fetch(api + '/upload?path=external&name=blocked.txt', {
+          method: 'POST',
+          headers,
+          body: 'blocked',
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await fetch(api + '/upload?name=.git&showHidden=true', {
+          method: 'POST',
+          headers,
+          body: 'blocked',
+        })
+      ).status,
+    ).toBe(403);
+    const stopped = async function* () {
+      yield Buffer.from('partial');
+      throw new Error('Upload interrupted');
+    };
+    await expect(
+      service.fileManagement.upload(
+        project.id,
+        'reports',
+        'partial.log',
+        false,
+        stopped(),
+        () => true,
+      ),
+    ).rejects.toThrow('Upload interrupted');
+    expect(await readdir(join(workspace, 'reports'))).toEqual(['large.log']);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+it('paginates a managed project folder and invalidates the page when the directory changes', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'codes-file-pages-'));
+  try {
+    const project = await service.addProject(workspace);
+    const names = Array.from({ length: 205 }, (_, index) => 'entry-' + index + '.txt');
+    for (const name of names) await writeFile(join(workspace, name), '');
+    const first = await service.fileManagement.list(project.id, '', false, 0);
+    expect(first.entries).toHaveLength(200);
+    const next = first.next!;
+    const last = await service.fileManagement.list(
+      project.id,
+      '',
+      false,
+      next.offset,
+      next.revision,
+    );
+    expect(last.next).toBeUndefined();
+    expect(new Set([...first.entries, ...last.entries].map((entry) => entry.name))).toEqual(
+      new Set(names),
+    );
+    await writeFile(join(workspace, 'added.txt'), '');
+    await expect(
+      service.fileManagement.list(project.id, '', false, next.offset, next.revision),
+    ).rejects.toMatchObject({ code: 'FILE_LIST_CHANGED' });
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
   }
 });
 

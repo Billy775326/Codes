@@ -12,6 +12,7 @@ import { MessageQueue } from './message-queue.js';
 import { ConversationQueue } from './conversation-queue.js';
 import { pauseQueueAfterTurn, settleQueuedOperations } from './queue-transitions.js';
 import { ProjectFiles } from './project-files.js';
+import { ProjectFileManagement } from './project-file-management.js';
 import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
 import { Images } from './images.js';
 import { ModelSettings } from './model-settings.js';
@@ -61,6 +62,7 @@ export class Service {
   private metadataRevisions = new Map<string, number>();
   private readonly interactions: NativeInteractions;
   private readonly projectFiles: ProjectFiles;
+  readonly fileManagement: ProjectFileManagement;
   readonly workspaceSettings: WorkspaceConfiguration;
   constructor(
     readonly store: Store,
@@ -72,6 +74,11 @@ export class Service {
       store,
       (id) => this.project(id),
       (id) => this.requireProject(id),
+    );
+    this.fileManagement = new ProjectFileManagement(
+      store.directory,
+      (id) => this.requireProject(id),
+      (id) => this.project(id),
     );
     this.images = new Images(store.directory);
     this.asyncQuestions = new AsyncQuestions(store.db);
@@ -923,8 +930,8 @@ export class Service {
   enqueue(id: string, messageId: string, payload: QueuePayload) {
     return this.conversationQueue.enqueue(id, messageId, payload);
   }
-  editQueued(id: string, messageId: string, text: string) {
-    return this.conversationQueue.editQueued(id, messageId, text);
+  editQueued(id: string, messageId: string, text: string, removeFileReferences = false) {
+    return this.conversationQueue.editQueued(id, messageId, text, removeFileReferences);
   }
   cancelQueued(id: string, messageId: string) {
     return this.conversationQueue.cancelQueued(id, messageId);
@@ -1178,6 +1185,11 @@ export class Service {
             404,
           );
         context += `\n\nUploaded file context ${JSON.stringify({ name: attachment.name })}:\n${content}`;
+        continue;
+      }
+      if (attachment.kind === 'file-reference') {
+        await this.fileManagement.verifyReference(projectId, attachment);
+        context += `\n\nUser-selected project file reference (read from the project directory as needed): ${JSON.stringify({ path: attachment.path })}`;
         continue;
       }
       const file = await this.file(projectId, attachment.path, attachment.showHidden);
