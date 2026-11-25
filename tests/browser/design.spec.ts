@@ -125,6 +125,10 @@ test('composer commands retain focus and permissions without dispatching a task'
   });
   const input = page.getByLabel('Message Codex');
   const modelButton = page.getByRole('button', { name: 'Model and reasoning', exact: true });
+  // Native configuration loads after login. The focus check needs an enabled control.
+  await expect(
+    page.getByRole('combobox', { name: 'Model', exact: true, includeHidden: true }),
+  ).toBeEnabled();
   await input.fill('/model');
   // Dismiss the picker before the browser reports the native disclosure toggle.
   await input.evaluate((element) => {
