@@ -28,7 +28,7 @@ test('English is the default and Simplified Chinese persists without changing dr
     'aria-pressed',
     'true',
   );
-  await expect(page.getByRole('button', { name: '会话默认值', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Codex 配置', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: '主题', exact: true })).toHaveValue('light');
   await page.getByRole('button', { name: '网络与访问', exact: true }).click();
   await expect(page.getByRole('combobox', { name: '监听地址', exact: true })).toBeVisible();
@@ -54,8 +54,9 @@ test('English is the default and Simplified Chinese persists without changing dr
   await expect(page.getByTestId('message-user')).toContainText('Original English prompt');
   await page.getByRole('button', { name: 'Codex 权限', exact: true }).click();
   const permissions = page.getByRole('dialog', { name: 'Codex 权限', exact: true });
-  await expect(permissions.getByRole('button', { pressed: true })).toHaveAccessibleName('只读');
-  await expect(permissions.getByText('服务器文件和网络不限，无需审批。')).toBeInViewport();
+  await expect(
+    permissions.getByRole('button', { name: '编辑 Codex 配置', exact: true }),
+  ).toBeInViewport();
   await page.keyboard.press('Escape');
   const openNavigation = page.getByRole('button', { name: '打开侧栏', exact: true });
   await openNavigation.click();

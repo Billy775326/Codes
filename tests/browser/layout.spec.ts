@@ -21,17 +21,18 @@ test('workspace defaults to persistent navigation, retains drafts through histor
   await expect(page.getByRole('button', { name: 'Close navigation', exact: true })).toBeFocused();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Unsent panel draft');
   const menu = page.getByRole('button', { name: 'Model and reasoning', exact: true });
+  const editConfiguration = page.getByRole('button', { name: 'Edit Codex configuration' });
   await menu.click();
-  await expect(page.getByLabel('Model', { exact: true })).toBeVisible();
-  await page.getByLabel('Reasoning effort').focus();
+  await expect(editConfiguration).toBeVisible();
+  await page.getByLabel('Task mode', { exact: true }).focus();
   await page.keyboard.press('Escape');
   await expect(menu).toBeFocused();
-  await expect(page.getByLabel('Model', { exact: true })).toBeHidden();
+  await expect(editConfiguration).toBeHidden();
   await page.getByLabel('Message Codex').fill('/model');
   await page.getByLabel('Message Codex').press('Enter');
-  await expect(page.getByLabel('Model', { exact: true })).toBeFocused();
+  await expect(editConfiguration).toBeFocused();
   await page.getByRole('heading', { name: 'New conversation' }).click();
-  await expect(page.getByLabel('Model', { exact: true })).toBeHidden();
+  await expect(editConfiguration).toBeHidden();
 });
 
 test('desktop sidebars resize independently and keep their widths through reloads and drawers', async ({
@@ -259,10 +260,12 @@ for (const width of [1440, 820, 390, 320]) {
     expect(popup!.x).toBeGreaterThanOrEqual(0);
     expect(popup!.x + popup!.width).toBeLessThanOrEqual(width);
     // Geometric visibility alone misses clipping by the composer's overflow.
-    for (const label of ['Model', 'Reasoning effort']) {
-      const select = page.getByLabel(label, { exact: true });
+    for (const control of [
+      page.getByRole('combobox', { name: 'Task mode', exact: true }),
+      page.getByRole('button', { name: 'Edit Codex configuration', exact: true }),
+    ]) {
       expect(
-        await select.evaluate((element) => {
+        await control.evaluate((element) => {
           const bounds = element.getBoundingClientRect();
           const hit = document.elementFromPoint(
             bounds.x + bounds.width / 2,
