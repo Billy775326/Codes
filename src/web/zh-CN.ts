@@ -413,6 +413,8 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Edited {count} file': '编辑了 {count} 个文件',
   'Edited {count} files': '编辑了 {count} 个文件',
   'Editing and shortcuts': '编辑与快捷键',
+  'Use Up and Down to recall sent messages in the current conversation.':
+    '在输入框按上键和下键，可找回当前会话已发送的消息。',
   enabled: '已启用',
   Enter: 'Enter',
   'Enter an absolute path on the server.': '请输入服务器上的绝对路径。',

@@ -413,6 +413,7 @@ export function PreferencesDialog({
         </label>
         <details className="preferences-help">
           <summary>{t('Editing and shortcuts')}</summary>
+          <p>{t('Use Up and Down to recall sent messages in the current conversation.')}</p>
           <p>
             {t(
               'Shift+Enter adds a line. On phones, Enter adds a line. Ctrl/Cmd+Shift+Enter switches delivery for one follow-up.',

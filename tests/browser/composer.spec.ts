@@ -234,3 +234,68 @@ for (const viewport of [
     );
   });
 }
+
+test('Up and Down recall conversation messages without replacing the stored draft', async ({
+  page,
+}) => {
+  await login(page);
+  const draft = page.getByLabel('Message Codex');
+  const send = page.getByRole('button', { name: 'Send message', exact: true });
+  const older = 'Recall the selected function';
+  const newer = 'A follow-up\nwith a second line';
+  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await page.getByRole('button', { name: 'example.ts', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'File lines', exact: true })
+    .getByRole('button')
+    .first()
+    .click();
+  await page.getByRole('button', { name: /^Attach lines/ }).click();
+  await page.getByRole('button', { name: 'Close panel', exact: true }).click();
+  await draft.fill(older);
+  await send.click();
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('message-user')).toContainText('File context');
+  await draft.fill(newer);
+  await send.click();
+  await expect(page.getByTestId('message-user')).toHaveCount(2);
+  await expect(send).toBeVisible();
+
+  const scratch = 'Keep this unsent draft';
+  await draft.fill(scratch);
+  await draft.press('ArrowUp');
+  await expect(draft).toHaveValue(newer);
+  await draft.press('ArrowUp');
+  await expect(draft).toHaveValue(older);
+  await draft.press('ArrowUp');
+  await expect(draft).toHaveValue(older);
+  await draft.press('ArrowDown');
+  await expect(draft).toHaveValue(newer);
+  await draft.press('ArrowDown');
+  await expect(draft).toHaveValue(scratch);
+  await expect(page.getByTestId('message-user')).toHaveCount(2);
+
+  for (const text of ['First line\nSecond line', 'A soft wrapped draft '.repeat(80)]) {
+    await draft.fill(text);
+    await draft.press('ArrowUp');
+    await expect(draft).toHaveValue(text);
+    expect(
+      await draft.evaluate((element: HTMLTextAreaElement) => element.selectionStart),
+    ).toBeLessThan(text.length);
+  }
+  await draft.fill(scratch);
+  await draft.dispatchEvent('keydown', { key: 'ArrowUp', isComposing: true, bubbles: true });
+  await expect(draft).toHaveValue(scratch);
+  await draft.press('Shift+ArrowUp');
+  await expect(draft).toHaveValue(scratch);
+  await draft.press('End');
+  await draft.press('ArrowUp');
+  await expect(draft).toHaveValue(newer);
+  await page.reload();
+  await expect(draft).toHaveValue(scratch);
+
+  await draft.press('Control+n');
+  await expect(draft).toHaveValue('');
+  await draft.press('ArrowUp');
+  await expect(draft).toHaveValue('');
+});

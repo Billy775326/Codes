@@ -66,6 +66,7 @@ import { isTurnOutcome } from './TurnResult';
 import { historyLimit, liveRevision } from './history';
 import { useConversationTimeline } from './useConversationTimeline';
 import { useComposerTextareaHeight } from './useComposerTextareaHeight';
+import { recallComposerMessage, type ComposerHistory } from './composer-history';
 import { ConversationViewCache } from './conversation-view-cache';
 import { applyConversationEvent } from './conversation-events';
 import { useWebBuild } from './useWebBuild';
@@ -269,6 +270,7 @@ function App() {
   const [draft, setDraft] = useState('');
   const [queueEditing, setQueueEditing] = useState(false);
   const draftRevision = useRef(0);
+  const composerHistory = useRef<ComposerHistory>(undefined);
   const draftValue = useRef(draft);
   draftValue.current = draft;
   const [queueRequest, setQueueRequest] = useState<{
@@ -766,6 +768,7 @@ function App() {
       save(key, restored);
       if (saved(key) === restored) save('codes.draft.new', '');
     }
+    composerHistory.current = undefined;
     draftValue.current = restored.slice(0, 50_000);
     setDraft(draftValue.current);
     setReceipt(threadId ? saved(`codes.operation.${threadId}`) : '');
@@ -954,11 +957,14 @@ function App() {
   }, [auth, connection, receipt, threadId, thread?.id, thread?.pending?.id, thread?.state]);
   useComposerTextareaHeight(composer, draft, auth === 'ready' && !queueEditing);
   const changeDraft = useCallback(
-    (value: string) => {
+    (value: string, recalling = false) => {
       draftRevision.current++;
       draftValue.current = value;
       setDraft(value);
-      save(draftKey(projectId, threadId), value.slice(0, 50_000));
+      if (!recalling) {
+        composerHistory.current = undefined;
+        save(draftKey(projectId, threadId), value.slice(0, 50_000));
+      }
     },
     [projectId, threadId],
   );
@@ -997,6 +1003,7 @@ function App() {
     save('codes.draft.' + id, '');
     if (!origin) save(draftKey(projectId, ''), '');
     if (threadRef.current === id || threadRef.current === origin) {
+      composerHistory.current = undefined;
       draftValue.current = '';
       setDraft('');
       setAttachments([]);
@@ -2572,7 +2579,7 @@ function App() {
               onPaste={localAttachments.paste}
               aria-label={t('Message Codex')}
               aria-describedby="message-delivery-help"
-              aria-keyshortcuts={keyShortcut}
+              aria-keyshortcuts={threadId ? keyShortcut + ' ArrowUp ArrowDown' : keyShortcut}
               ref={composer}
               value={draft}
               readOnly={!!thread?.archived || !!thread?.managementPending}
@@ -2590,6 +2597,19 @@ function App() {
               }
               maxLength={50_000}
               onKeyDown={(e) => {
+                const recall = recallComposerMessage(e, composerHistory.current, () =>
+                  thread?.id === threadId && thread.projectId === projectId
+                    ? reviewMessages
+                    : (preview?.messages ?? []),
+                );
+                if (recall) {
+                  e.preventDefault();
+                  composerHistory.current = recall.history;
+                  const input = e.currentTarget;
+                  input.setSelectionRange(input.value.length, input.value.length);
+                  if (recall.text !== input.value) changeDraft(recall.text, true);
+                  return;
+                }
                 if (e.key === 'Escape' && draft.startsWith('/')) {
                   e.preventDefault();
                   changeDraft('');

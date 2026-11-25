@@ -12,6 +12,8 @@
 
 ### Added
 
+- Use Up and Down in the composer to recall sent messages from the current conversation and return to the unsent draft.
+
 - Show recently opened conversation text immediately when switching back while Codes reconnects and refreshes the selected conversation.
 
 - Keep a prompt summary at the top of the conversation while reading a long turn. Expand it to read the full message and see available attachments. Use the adjacent jump button to go to the original message.
