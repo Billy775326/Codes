@@ -112,7 +112,6 @@ export function ComposerControls({
   const profileSandbox = {
     ':read-only': 'read-only',
     ':workspace': 'workspace-write',
-    ':danger-full-access': 'danger-full-access',
   };
   const sandbox = configuration?.permissionProfile
     ? profileSandbox[configuration.permissionProfile as keyof typeof profileSandbox]
@@ -120,8 +119,8 @@ export function ComposerControls({
   const selectedPermission = permissions.find(
     (option) =>
       option.sandbox === sandbox &&
-      option.reviewer === (configuration?.approvalsReviewer ?? 'user') &&
-      option.policy === (configuration?.approvalPolicy ?? 'on-request'),
+      option.reviewer === configuration?.approvalsReviewer &&
+      option.policy === configuration?.approvalPolicy,
   );
   const permissionLabel = selectedPermission
     ? t(selectedPermission.label)
