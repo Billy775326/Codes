@@ -629,6 +629,9 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Question expired · Check result': '问题已过期 · 检查结果',
   Queue: '排队',
   'Queue for next turn': '排队到下一轮',
+  'Tab queues this draft for the next turn.': '按 Tab 将草稿排到下一轮。',
+  'When adding to the running task is selected, Tab queues a draft during a task.':
+    '选择「加入当前任务」时，任务运行中按 Tab 可将草稿排到下一轮。',
   'Queue message': '将消息加入队列',
   Queued: '已排队',
   'Queued message editor': '排队消息编辑器',

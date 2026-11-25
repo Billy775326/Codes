@@ -27,7 +27,7 @@ export interface Preferences {
 }
 
 export const defaultBrowserPreferences: Preferences = {
-  followUp: 'queue',
+  followUp: 'steer',
   enter: 'enter',
   review: 'inline',
   theme: 'dark',
@@ -42,7 +42,7 @@ export function readBrowserPreferences(raw: string): Preferences {
   try {
     const value = JSON.parse(raw || '{}');
     return {
-      followUp: ['steer', 'interrupt'].includes(value.followUp) ? 'steer' : 'queue',
+      followUp: value.followUp === 'queue' ? 'queue' : defaultBrowserPreferences.followUp,
       enter: ['enter', 'cmdIfMultiline', 'cmdAlways'].includes(value.enter) ? value.enter : 'enter',
       review: value.review === 'detached' ? 'detached' : 'inline',
       theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',

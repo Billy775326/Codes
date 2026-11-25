@@ -14,6 +14,10 @@ async function send(page: Page, text: string) {
 for (const width of [1440, 320])
   test(`delivery icons distinguish next turn from current task at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('codes.preferences'))
+        localStorage.setItem('codes.preferences', '{"followUp":"queue"}');
+    });
     await login(page);
     await expect(page.locator('#message-delivery-help')).toContainText('Starts a new turn');
     await send(page, '[slow] Explicit delivery fixture');
@@ -66,7 +70,7 @@ for (const width of [1440, 320])
     );
     const queueInstead = page.getByRole('button', { name: 'Queue message', exact: true });
     await queueInstead.hover();
-    await expect(hint).toHaveText('Queue for next turn · Ctrl/Cmd+Shift+Enter');
+    await expect(hint).toHaveText('Queue for next turn · Tab');
     await queueInstead.click();
     const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
     await expect(queue).toContainText('Do this in the next turn');
@@ -111,6 +115,55 @@ for (const width of [1440, 320])
     await page.getByRole('button', { name: 'Stop task', exact: true }).click();
     await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
   });
+
+test('Enter adds to the current turn by default and Tab queues only while a draft is ready', async ({
+  page,
+}) => {
+  await login(page);
+  const input = page.getByLabel('Message Codex');
+  const attachment = page.getByRole('button', { name: 'Attach files', exact: true });
+  await input.press('Tab');
+  await expect(attachment).toBeFocused();
+  await send(page, '[hold] Default follow-up delivery');
+  const initial = page.getByTestId('message-user').first();
+  await expect(initial).toHaveAttribute('data-turn-id', /.+/);
+  await input.fill('Append to this turn');
+  const add = page.getByRole('button', { name: 'Add to current task', exact: true });
+  await expect(add).toHaveClass(/\bdelivery-primary\b/);
+  await expect(add).toBeEnabled();
+  await input.press('Enter');
+  const appended = page.getByTestId('message-user').filter({ hasText: 'Append to this turn' });
+  await expect(appended).toHaveAttribute(
+    'data-turn-id',
+    (await initial.getAttribute('data-turn-id'))!,
+  );
+  await input.fill('Keep this for the next turn');
+  await input.press('Shift+Tab');
+  await expect(input).not.toBeFocused();
+  await expect(input).toHaveValue('Keep this for the next turn');
+  await input.press('Tab');
+  const queue = page.getByRole('region', { name: 'Queued messages', exact: true });
+  await expect(queue).toContainText('Keep this for the next turn');
+  await expect(page.getByTestId('message-user')).toHaveCount(2);
+  await expect(input).toHaveValue('');
+  await input.press('Tab');
+  await expect(attachment).toBeFocused();
+
+  await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
+  const delivery = page.getByRole('combobox', { name: 'Follow-up delivery', exact: true });
+  await expect(delivery).toHaveValue('steer');
+  await delivery.selectOption('queue');
+  await page.keyboard.press('Escape');
+  await page.reload();
+  await input.fill('Queue with the saved preference');
+  await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled();
+  await input.press('Enter');
+  await expect(queue).toContainText('Queue with the saved preference');
+  await expect(page.getByTestId('message-user')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Stop task', exact: true }).click();
+  await expect(page.locator('.turn-status').getByText('Stopped', { exact: true })).toBeVisible();
+});
+
 test('a queue edit locks at dispatch and remains recoverable if the entry leaves the queue', async ({
   page,
 }) => {

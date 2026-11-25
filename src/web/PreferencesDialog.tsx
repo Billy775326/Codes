@@ -361,8 +361,8 @@ export function PreferencesDialog({
               change({ ...value, followUp: event.target.value as Preferences['followUp'] })
             }
           >
-            <option value="queue">{t('Queue for next turn')}</option>
             <option value="steer">{t('Add to running task')}</option>
+            <option value="queue">{t('Queue for next turn')}</option>
           </select>
         </label>
         <label className="preference-row">
@@ -405,6 +405,9 @@ export function PreferencesDialog({
         <details className="preferences-help">
           <summary>{t('Editing and shortcuts')}</summary>
           <p>{t('Use Up and Down to recall sent messages in the current conversation.')}</p>
+          <p>
+            {t('When adding to the running task is selected, Tab queues a draft during a task.')}
+          </p>
           <p>
             {t(
               'Shift+Enter adds a line. On phones, Enter adds a line. Ctrl/Cmd+Shift+Enter switches delivery for one follow-up.',

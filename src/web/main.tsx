@@ -1527,6 +1527,7 @@ function App() {
   const deliveryBlocked = !!deliveryReason;
   const queueBlocked = !!queueReason;
   const addBlocked = !!addNowReason;
+  const tabQueues = deliveryMode === 'steer' && !queueBlocked && !draft.trimStart().startsWith('/');
   const stopReason = busy
     ? 'Wait for the current request.'
     : !thread?.turnId || !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
@@ -1543,7 +1544,9 @@ function App() {
   const deliveryHelp = hasFollowUps
     ? deliveryMode === 'queue'
       ? queueDescription
-      : addNowDescription
+      : [addNowDescription, tabQueues && t('Tab queues this draft for the next turn.')]
+          .filter(Boolean)
+          .join(' ')
     : t('Starts a new turn.');
   const shortcut =
     phoneLayout ||
@@ -2555,7 +2558,9 @@ function App() {
               onPaste={localAttachments.paste}
               aria-label={t('Message Codex')}
               aria-describedby="message-delivery-help"
-              aria-keyshortcuts={threadId ? keyShortcut + ' ArrowUp ArrowDown' : keyShortcut}
+              aria-keyshortcuts={
+                keyShortcut + (threadId ? ' ArrowUp ArrowDown' : '') + (tabQueues ? ' Tab' : '')
+              }
               ref={composer}
               value={draft}
               readOnly={!!thread?.archived || !!thread?.managementPending}
@@ -2591,8 +2596,14 @@ function App() {
                   changeDraft('');
                   return;
                 }
-                if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.altKey) return;
+                if (e.nativeEvent.isComposing || e.altKey) return;
                 const modifier = e.ctrlKey || e.metaKey;
+                if (e.key === 'Tab' && tabQueues && !modifier && !e.shiftKey && !e.repeat) {
+                  e.preventDefault();
+                  followUp('queue');
+                  return;
+                }
+                if (e.key !== 'Enter') return;
                 if (modifier && e.shiftKey && active) {
                   e.preventDefault();
                   if (!busy && !steerReceipt && !queueRequest) followUp(alternateDelivery);
@@ -2672,13 +2683,15 @@ function App() {
                         ? undefined
                         : deliveryMode === 'queue'
                           ? keyShortcut
-                          : alternateKeyShortcut
+                          : tabQueues
+                            ? 'Tab ' + alternateKeyShortcut
+                            : alternateKeyShortcut
                     }
                     aria-description={queueDescription}
                     hint={
                       t('Queue for next turn') +
                       ' · ' +
-                      (deliveryMode === 'queue' ? shortcut : alternateShortcut)
+                      (deliveryMode === 'queue' ? shortcut : tabQueues ? 'Tab' : alternateShortcut)
                     }
                     unavailable={queueReason ? t(queueReason) : undefined}
                     onClick={() => followUp('queue')}

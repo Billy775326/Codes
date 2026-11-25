@@ -57,7 +57,7 @@ test('a reply to a running task stays with its original question and outside ord
   const receipt = page.getByRole('region', { name: 'Immediate follow-ups' });
   await expect(receipt).toHaveCount(0);
   await page.getByLabel('Message Codex').fill('An ordinary follow-up');
-  await page.getByLabel('Message Codex').press('Control+Shift+Enter');
+  await page.getByLabel('Message Codex').press('Enter');
   const accepted = 'Added to current task · An ordinary follow-up';
   await expect(receipt).toContainText(accepted);
   await expect(receipt).not.toContainText(

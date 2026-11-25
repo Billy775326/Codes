@@ -56,6 +56,8 @@ Immediate steering, queue Add now, Plan/Code, reasoning effort, native reviews, 
 
 ## Understand delivery buttons
 
+For a running task that accepts additions, Enter adds the draft to the current turn by default. Tab queues the draft for the next turn. Tab moves focus when the composer is empty, and Shift+Tab moves focus backward. On phones, use the delivery buttons. In **Settings → General → Interaction → Follow-up delivery**, select **Queue for next turn** to make the send shortcut queue the draft. Codes keeps existing saved choices.
+
 - **Send** starts a new native turn. The composer draft is editable until submission; accepted history is not edited in place.
 - **Queue** waits for a later turn, preserving FIFO order. Waiting text can be edited or removed; once dispatch starts it is locked.
 - **Add now** on a queued card applies that waiting message to the current turn, using the existing atomic queue-to-steer operation. It removes the message from the queue after acceptance.

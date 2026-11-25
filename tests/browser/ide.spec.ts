@@ -41,6 +41,11 @@ test('Ctrl+Shift+Enter steers once, queue Send now joins the same turn, and draf
   page,
 }) => {
   await login(page);
+  await page.getByRole('button', { name: 'Interaction settings' }).click();
+  await page
+    .getByRole('combobox', { name: 'Follow-up delivery', exact: true })
+    .selectOption('queue');
+  await page.keyboard.press('Escape');
   // Keep this task active until native interruption, independent of host/browser speed.
   try {
     await send(page, '[slow] [hold] Immediate follow-up fixture ' + Date.now());
@@ -232,7 +237,7 @@ for (const phase of ['create', 'send', 'queue', 'steer'] as const) {
         await page.getByLabel('Message Codex').fill(text);
         if (phase === 'queue')
           await page.getByRole('button', { name: 'Queue message', exact: true }).click();
-        else await page.getByLabel('Message Codex').press('Control+Shift+Enter');
+        else await page.getByLabel('Message Codex').press('Enter');
       }
       await processed;
       await page.getByLabel('Message Codex').fill('Keep the next draft after ' + phase);
