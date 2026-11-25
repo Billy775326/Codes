@@ -302,6 +302,18 @@ export class Service {
     const { saved } = await this.conversationOwner(id);
     return this.files(saved.projectId, path, showHidden);
   }
+  browseDirectory(projectId: string | undefined, path: string, showHidden: boolean) {
+    return this.projectFiles.browseDirectory(projectId, path, showHidden);
+  }
+  browseLocation(projectId: string | undefined, path: string, showHidden: boolean) {
+    return this.projectFiles.browseLocation(projectId, path, showHidden);
+  }
+  browseFile(projectId: string | undefined, path: string, showHidden: boolean) {
+    return this.projectFiles.browseFile(projectId, path, showHidden);
+  }
+  browseImage(projectId: string | undefined, path: string, showHidden: boolean) {
+    return this.projectFiles.browseImage(projectId, path, showHidden);
+  }
   async addProject(path: string, name?: string) {
     try {
       const canonical = await realpath(path);

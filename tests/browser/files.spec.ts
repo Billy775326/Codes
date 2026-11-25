@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { writeFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 
 async function openFiles(page: Page) {
   await page.goto('/');
@@ -247,4 +249,29 @@ test.describe('touch range selection', () => {
       page.getByRole('button', { name: 'Remove example.ts', exact: true }),
     ).toBeVisible();
   });
+});
+
+test('opens a server path with a scope toast and keeps the file read-only', async ({ page }) => {
+  await openFiles(page);
+  const projects = await (await page.request.get('/api/projects')).json();
+  const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
+  const path = join(project.path, '..', 'codex-home', 'scope-preview.txt');
+  await writeFile(path, 'External file fixture');
+  try {
+    await page.getByRole('button', { name: 'Open server path', exact: true }).click();
+    const input = page.getByRole('textbox', { name: 'Server file or directory path', exact: true });
+    await input.fill(path);
+    await input.press('Enter');
+    const toast = page
+      .getByRole('status')
+      .filter({ hasText: 'Viewing a path outside the usual file scope.' });
+    await expect(toast).toHaveCount(1);
+    const preview = page.getByRole('region', { name: 'File preview', exact: true });
+    await expect(preview).toContainText('External file fixture');
+    await expect(preview.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+    await expect(preview.getByRole('button', { name: 'Attach file', exact: true })).toHaveCount(0);
+    await expect(toast).toHaveCount(0, { timeout: 6500 });
+  } finally {
+    await rm(path);
+  }
 });

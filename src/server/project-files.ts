@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
-import { mkdir, realpath, readFile, readdir, stat } from 'node:fs/promises';
+import { constants, existsSync, realpathSync } from 'node:fs';
+import { mkdir, open, opendir, realpath, readFile, stat } from 'node:fs/promises';
 import { resolve, relative, basename, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { AppError, record } from '../shared/errors.js';
@@ -11,7 +11,12 @@ import {
   type UploadedFileAttachment,
 } from '../shared/types.js';
 import { projectImageType } from '../shared/images.js';
-import { hasHiddenPathSegment } from '../shared/project-files.js';
+import {
+  hasHiddenPathSegment,
+  type FileBrowserResult,
+  type FileEntry,
+  type FileLocation,
+} from '../shared/project-files.js';
 import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
 import { openImagePreview } from './images.js';
 import {
@@ -34,6 +39,18 @@ function decodeFileText(bytes: Buffer) {
 function isWithinDirectory(directory: string, path: string) {
   const rel = relative(directory, path);
   return rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel);
+}
+
+function browseError(error: unknown): never {
+  if (record(error) && ['ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code))
+    throw new AppError(
+      'FILE_NOT_FOUND',
+      'The selected file or directory no longer exists. Refresh Files.',
+      404,
+    );
+  if (record(error) && ['EACCES', 'EPERM'].includes(error.code))
+    throw new AppError('FILE_ACCESS', 'The selected file or directory cannot be accessed.', 403);
+  throw error;
 }
 
 export class ProjectFiles {
@@ -168,6 +185,106 @@ export class ProjectFiles {
       throw error;
     }
   }
+  async browseDirectory(
+    projectId: string | undefined,
+    path: string,
+    showHidden: boolean,
+  ): Promise<FileBrowserResult<FileEntry[]>> {
+    const target = await this.browsePath(projectId, path, showHidden);
+    return {
+      outsideScope: target.outsideScope,
+      value: await this.listEntries(target.absolute, path, showHidden).catch(browseError),
+    };
+  }
+  async browseLocation(
+    projectId: string | undefined,
+    path: string,
+    showHidden: boolean,
+  ): Promise<FileBrowserResult<FileLocation>> {
+    const target = await this.browsePath(projectId, path, showHidden);
+    const info = await stat(target.absolute).catch(browseError);
+    if (!info.isFile() && !info.isDirectory())
+      throw new AppError('FILE_TYPE', 'Choose a regular file or directory.', 415);
+    return {
+      value: { path: target.requested, directory: info.isDirectory() },
+      outsideScope: target.outsideScope,
+    };
+  }
+  async browseFile(
+    projectId: string | undefined,
+    path: string,
+    showHidden: boolean,
+  ): Promise<FileBrowserResult<FileContent>> {
+    const target = await this.browsePath(projectId, path, showHidden);
+    const info = await stat(target.absolute).catch(browseError);
+    if (!info.isFile() || info.size > limits.file)
+      throw new AppError('FILE_LIMIT', 'Choose a text file smaller than 256 KB.');
+    const file = await open(
+      target.absolute,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    ).catch(browseError);
+    try {
+      // Bound the read even if the file is replaced or grows after its first stat.
+      const opened = await file.stat();
+      if ((await realpath(`/proc/self/fd/${file.fd}`)) !== target.absolute)
+        throw new AppError('FILE_CHANGED', 'The selected file changed. Open it again.', 409);
+      if (!opened.isFile() || opened.size > limits.file)
+        throw new AppError('FILE_LIMIT', 'Choose a text file smaller than 256 KB.');
+      const buffer = Buffer.alloc(limits.file + 1);
+      let size = 0;
+      while (size < buffer.length) {
+        const { bytesRead } = await file.read(buffer, size, buffer.length - size);
+        if (!bytesRead) break;
+        size += bytesRead;
+      }
+      if (size > limits.file)
+        throw new AppError('FILE_LIMIT', 'Choose a text file smaller than 256 KB.');
+      const bytes = buffer.subarray(0, size);
+      const text = decodeFileText(bytes);
+      return {
+        outsideScope: target.outsideScope,
+        value: {
+          path:
+            target.projectPath && !target.outsideScope
+              ? relative(target.projectPath, target.requested)
+              : path,
+          text,
+          sha: createHash('sha256').update(bytes).digest('hex'),
+          lines: text.split('\n').length,
+        },
+      };
+    } catch (error) {
+      return browseError(error);
+    } finally {
+      await file.close();
+    }
+  }
+  async browseImage(projectId: string | undefined, path: string, showHidden: boolean) {
+    const contentType = projectImageType(path);
+    if (!contentType) throw new AppError('IMAGE_FORMAT', 'Choose a PNG, JPEG, or WebP image.', 415);
+    const target = await this.browsePath(projectId, path, showHidden);
+    return openImagePreview(target.absolute, contentType, (opened) => {
+      if (opened !== target.absolute)
+        throw new AppError('FILE_CHANGED', 'The selected file changed. Open it again.', 409);
+    }).catch(browseError);
+  }
+  private async browsePath(projectId: string | undefined, path: string, showHidden: boolean) {
+    if (path.length > 4096 || /[\\\x00-\x1f\x7f]/.test(path) || (!projectId && !isAbsolute(path)))
+      throw new AppError('FILE_PATH', 'Choose a valid server path.');
+    const project = projectId ? this.project(projectId) : undefined;
+    const requested = resolve(project?.path ?? '/', path);
+    const absolute = await realpath(requested).catch(browseError);
+    const outsideScope =
+      !project ||
+      !isWithinDirectory(project.path, requested) ||
+      !isWithinDirectory(project.path, absolute) ||
+      this.isPrivateBrowserPath(project.path, absolute) ||
+      path.split('/').includes('..') ||
+      (!showHidden &&
+        (hasHiddenPathSegment(relative(project.path, requested)) ||
+          hasHiddenPathSegment(relative(project.path, absolute))));
+    return { requested, absolute, outsideScope, projectPath: project?.path };
+  }
   async files(projectId: string, path = '', showHidden = false) {
     const absolute = await this.safePath(projectId, path, showHidden);
     const privateEntries = new Set(
@@ -175,22 +292,30 @@ export class ProjectFiles {
         .filter((root) => dirname(root) === absolute)
         .map((root) => basename(root)),
     );
-    return (
-      await readdir(absolute, { withFileTypes: true }).catch((error) =>
-        this.fileError(projectId, error),
-      )
-    )
-      .filter(
-        (entry) =>
-          (showHidden || !hasHiddenPathSegment(entry.name)) && !privateEntries.has(entry.name),
-      )
-      .slice(0, 200)
-      .map((x) => ({
-        name: x.name,
-        path: path ? `${path}/${x.name}` : x.name,
-        directory: x.isDirectory(),
-      }))
-      .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+    return this.listEntries(absolute, path, showHidden, privateEntries).catch((error) =>
+      this.fileError(projectId, error),
+    );
+  }
+  private async listEntries(
+    absolute: string,
+    path: string,
+    showHidden: boolean,
+    excluded = new Set<string>(),
+  ) {
+    const entries: FileEntry[] = [];
+    for await (const entry of await opendir(absolute)) {
+      if ((!showHidden && hasHiddenPathSegment(entry.name)) || excluded.has(entry.name)) continue;
+      entries.push({
+        name: entry.name,
+        path: path ? `${path.replace(/\/$/, '')}/${entry.name}` : entry.name,
+        directory: entry.isDirectory(),
+        ...(entry.isSymbolicLink() ? { symbolicLink: true } : {}),
+      });
+      if (entries.length >= 200) break;
+    }
+    return entries.sort(
+      (a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name),
+    );
   }
   private async fileError(projectId: string, error: unknown): Promise<never> {
     await this.requireProject(projectId);

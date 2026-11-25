@@ -208,6 +208,60 @@ it('edits only the authenticated project instructions and rejects stale revision
   expect((await save({ revision: null, text: 'Replace symlink' })).status).toBe(403);
   expect(await readFile(outside, 'utf8')).toBe('Keep this file');
 });
+it('allows authenticated browsing of protected and external server paths with a scope warning', async () => {
+  const home = join(directory, 'codex-home');
+  await mkdir(home);
+  const protectedPath = join(home, 'protected.txt');
+  await writeFile(protectedPath, 'Protected preview fixture');
+  const parent = await service.addProject(directory);
+  const nested = join(directory, 'project');
+  await mkdir(nested);
+  const otherProject = await service.addProject(nested);
+  const browse = (kind: string, path: string, projectId: string) =>
+    origin +
+    '/api/file-browser?' +
+    new URLSearchParams({ kind, path, projectId, showHidden: 'true' });
+  const protectedUrl = browse('file', 'codex-home/protected.txt', parent.id);
+  const headers = { cookie };
+  expect((await fetch(protectedUrl)).status).toBe(401);
+  const oldFile =
+    origin + '/api/projects/' + parent.id + '/file?path=codex-home/protected.txt&showHidden=true';
+  expect((await fetch(oldFile, { headers })).status).toBe(403);
+  expect(await (await fetch(protectedUrl, { headers })).json()).toMatchObject({
+    outsideScope: true,
+    value: { text: 'Protected preview fixture' },
+  });
+  expect(
+    await (await fetch(browse('file', protectedPath, otherProject.id), { headers })).json(),
+  ).toMatchObject({
+    outsideScope: true,
+    value: { text: 'Protected preview fixture' },
+  });
+  expect(
+    await (await fetch(browse('directory', home, otherProject.id), { headers })).json(),
+  ).toMatchObject({
+    outsideScope: true,
+    value: [{ name: 'protected.txt', path: protectedPath, directory: false }],
+  });
+  const alias = join(nested, 'linked-directory');
+  await symlink(home, alias);
+  expect(
+    await (await fetch(browse('location', alias, otherProject.id), { headers })).json(),
+  ).toEqual({
+    outsideScope: true,
+    value: { directory: true, path: alias },
+  });
+  const normal = join(nested, 'normal.txt');
+  await writeFile(normal, 'Project preview fixture');
+  expect(
+    await (await fetch(browse('file', normal, otherProject.id), { headers })).json(),
+  ).toMatchObject({
+    outsideScope: false,
+    value: { path: 'normal.txt', text: 'Project preview fixture' },
+  });
+  const v = '/api/projects/' + otherProject.id + '/file?path=' + encodeURIComponent(protectedPath);
+  expect((await fetch(origin + v, { headers })).status).toBe(403);
+});
 it('edits the active global instruction file in the server Codex home', async () => {
   const home = join(directory, 'codex-home');
   const url = origin + '/api/settings/codex-instructions';

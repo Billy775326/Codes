@@ -23,13 +23,14 @@ export function workspaceImagePath(url: string | undefined, projectPath: string 
 }
 
 export interface ProjectFileReference {
-  projectId: string;
+  projectId?: string;
   path: string;
 }
 
 export function resolveProjectFile(
   href: string | undefined,
   projects: readonly Project[],
+  includeServerPaths = false,
 ): ProjectFileReference | undefined {
   if (!href?.startsWith('/') || href.startsWith('//')) return;
   let path: string;
@@ -57,6 +58,7 @@ export function resolveProjectFile(
     }
   }
   if (owner) return { projectId: owner.id, path: path.slice(prefixLength) };
+  if (includeServerPaths) return { path };
 }
 
 /** Convert plain project-file anchors while keeping arbitrary HTML escaped. */

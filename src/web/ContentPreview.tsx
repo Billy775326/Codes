@@ -8,7 +8,10 @@ import {
   workspaceImagePath,
   type ProjectFileReference,
 } from './remarkProjectFileLinks';
-import { projectImageUrl, workspaceImageUrl } from '../shared/images';
+import { workspaceImageUrl } from '../shared/images';
+import type { FileBrowserResult, FileLocation } from '../shared/project-files';
+import { message, request } from './api';
+import { fileBrowserUrl } from './file-browser';
 import { limits } from '../shared/types';
 import { IconButton } from './primitives';
 import { InteractionDialog } from './InteractionDialog';
@@ -87,16 +90,44 @@ function PreviewImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export function ProjectImagePreview({
+export function BrowserImagePreview({
   projectId,
   path,
   showHidden,
+  onScopeWarning,
+  label = path,
 }: {
-  projectId: string;
+  projectId?: string;
   path: string;
-  showHidden?: boolean;
+  showHidden: boolean;
+  onScopeWarning: () => void;
+  label?: string;
 }) {
-  return <LinkedImagePreview src={projectImageUrl(projectId, path, showHidden)} path={path} />;
+  const { t } = useInterfaceLanguage();
+  const location = fileBrowserUrl('location', path, showHidden, projectId);
+  const [result, setResult] = useState<{ key: string; error?: string }>();
+  useEffect(() => {
+    const controller = new AbortController();
+    void request<FileBrowserResult<FileLocation>>(location, {}, controller.signal).then(
+      (value) => {
+        if (controller.signal.aborted) return;
+        setResult({ key: location });
+        if (value.outsideScope) onScopeWarning();
+      },
+      (error) => {
+        if (!controller.signal.aborted) setResult({ key: location, error: message(error) });
+      },
+    );
+    return () => controller.abort();
+  }, [location, onScopeWarning]);
+  if (result?.key !== location) return <p role="status">{t('Loading file…')}</p>;
+  if (result.error) return <p role="alert">{t(result.error)}</p>;
+  return (
+    <LinkedImagePreview
+      src={'/api' + fileBrowserUrl('image', path, showHidden, projectId)}
+      path={label}
+    />
+  );
 }
 
 function LinkedImagePreview({ src, path }: { src: string; path: string }) {
@@ -113,7 +144,19 @@ function LinkedImagePreview({ src, path }: { src: string; path: string }) {
   );
 }
 
-export function ImagePreviewDialog({ path, close }: { path: string; close: () => void }) {
+export function ImagePreviewDialog({
+  path,
+  projectId,
+  showHidden,
+  onScopeWarning,
+  close,
+}: {
+  path: string;
+  projectId?: string;
+  showHidden: boolean;
+  onScopeWarning: () => void;
+  close: () => void;
+}) {
   const { t } = useInterfaceLanguage();
   return (
     <InteractionDialog
@@ -122,7 +165,13 @@ export function ImagePreviewDialog({ path, close }: { path: string; close: () =>
       closeOnBackdrop
       className="workspace-image-dialog"
     >
-      <LinkedImagePreview src={workspaceImageUrl(path)} path={path.split('/').at(-1) ?? path} />
+      <BrowserImagePreview
+        path={path}
+        label={path.split('/').at(-1)}
+        projectId={projectId}
+        showHidden={showHidden}
+        onScopeWarning={onScopeWarning}
+      />
     </InteractionDialog>
   );
 }

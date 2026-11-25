@@ -272,6 +272,24 @@ export async function application(
       if (url.pathname.startsWith('/api/')) {
         if (!authenticated(request, access?.subject))
           throw new AppError('AUTH_REQUIRED', 'Sign in to your workspace.', 401);
+        if (url.pathname === '/api/file-browser' && method === 'GET') {
+          const projectId = url.searchParams.get('projectId') || undefined;
+          const path = url.searchParams.get('path') ?? '';
+          const showHidden = url.searchParams.get('showHidden') === 'true';
+          const kind = z
+            .enum(['directory', 'location', 'file', 'image'])
+            .parse(url.searchParams.get('kind'));
+          if (kind === 'image')
+            return await serveImagePreview(
+              response,
+              await service.browseImage(projectId, path, showHidden),
+            );
+          if (kind === 'directory')
+            return json(response, await service.browseDirectory(projectId, path, showHidden));
+          if (kind === 'location')
+            return json(response, await service.browseLocation(projectId, path, showHidden));
+          return json(response, await service.browseFile(projectId, path, showHidden));
+        }
         if (url.pathname === '/api/image-preview' && method === 'GET')
           return await serveImagePreview(
             response,

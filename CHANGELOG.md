@@ -12,6 +12,8 @@
 
 ### Added
 
+- Open readable server paths in Files or from conversation links. Paths outside the usual project file scope show a warning and open read-only.
+
 - Use Up and Down in the composer to recall sent messages from the current conversation and return to the unsent draft.
 
 - Show recently opened conversation text immediately when switching back while Codes reconnects and refreshes the selected conversation.

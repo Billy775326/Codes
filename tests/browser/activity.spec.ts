@@ -184,6 +184,8 @@ test('reply links and Changes preview project files without navigating or showin
   const drafts = join(root, '_drafts');
   await mkdir(drafts, { recursive: true });
   await writeFile(join(drafts, 'draft notes.md'), '# Saved draft\nRead through the preview.\n');
+  const externalFile = join(dirname(root), 'server-preview-fixture.md');
+  await writeFile(externalFile, '# External report\nServer preview fixture.\n');
   const path = '.local/linked-worktree/report.md';
   const absolute = join(root, path);
   await mkdir(dirname(absolute), { recursive: true });
@@ -195,6 +197,7 @@ test('reply links and Changes preview project files without navigating or showin
     `<a href="${root}/_drafts/draft%20notes.md">初稿已完成</a>，可以开始审阅。`,
     `[Open source](${root}/example.ts:2)`,
     `[Open worktree report](${absolute})`,
+    `[Open server report](${externalFile})`,
     `<a href="${root}/example.ts" title="Raw markup">Other raw HTML</a>`,
   ].join('\n\n');
   await reconnectUpdates(page);
@@ -217,6 +220,15 @@ test('reply links and Changes preview project files without navigating or showin
   await expect(dialog).toContainText('Project review notes.');
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Open server report', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: externalFile })).toContainText(
+    'Server preview fixture.',
+  );
+  await expect(page.locator('.file-scope-toast')).toHaveText(
+    'Viewing a path outside the usual file scope.',
+  );
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'View changes', exact: true }).click();
   const change = page.getByRole('region', { name: `Changes in ${absolute}`, exact: true });

@@ -136,7 +136,7 @@ function App() {
   const maintenanceExpiresAt = system?.maintenance?.expiresAt;
   const [projects, setProjects] = useState<Project[]>([]);
   const resolveFile = useCallback(
-    (href: string | undefined) => resolveProjectFile(href, projects),
+    (href: string | undefined) => resolveProjectFile(href, projects, true),
     [projects],
   );
   const projectMetadataRevision = useRef(0);
@@ -207,6 +207,13 @@ function App() {
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
   const [previewedImage, setPreviewedImage] = useState<string>();
   const [linkedFile, setLinkedFile] = useState<ProjectFileReference>();
+  const [fileScopeWarning, setFileScopeWarning] = useState(0);
+  const showFileScopeWarning = useCallback(() => setFileScopeWarning((value) => value + 1), []);
+  useEffect(() => {
+    if (!fileScopeWarning) return;
+    const timer = setTimeout(() => setFileScopeWarning(0), 4500);
+    return () => clearTimeout(timer);
+  }, [fileScopeWarning]);
   const [preferences, setPreferences] = useState(() =>
     readBrowserPreferences(saved('codes.preferences')),
   );
@@ -2779,13 +2786,23 @@ function App() {
         </div>
       </main>
       {previewedImage && (
-        <ImagePreviewDialog path={previewedImage} close={() => setPreviewedImage(undefined)} />
+        <ImagePreviewDialog
+          path={previewedImage}
+          projectId={
+            resolveProjectFile(previewedImage, projects)?.projectId ??
+            (contextProjectId || undefined)
+          }
+          showHidden={showHiddenFiles}
+          onScopeWarning={showFileScopeWarning}
+          close={() => setPreviewedImage(undefined)}
+        />
       )}
       {linkedFile && (
         <LinkedFilePreview
           key={linkedFile.projectId + ':' + linkedFile.path}
           file={linkedFile}
           showHidden={showHiddenFiles || hasHiddenPathSegment(linkedFile.path)}
+          onScopeWarning={showFileScopeWarning}
           close={() => setLinkedFile(undefined)}
         />
       )}
@@ -3011,11 +3028,17 @@ function App() {
               }
               onDirectory={browseDirectory}
               onFile={setFilePath}
+              onScopeWarning={showFileScopeWarning}
               onAttach={attachProjectFile}
               attachmentBlocked={attachmentBlocked}
             />
           )}
         </aside>
+      )}
+      {!!fileScopeWarning && (
+        <div className="file-scope-toast" role="status">
+          {t('Viewing a path outside the usual file scope.')}
+        </div>
       )}
       {adding && (
         <AddProjectDialog
