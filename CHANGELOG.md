@@ -200,6 +200,8 @@
 
 ### Fixed
 
+- Restore the composer permission choices and model, reasoning, and Fast controls. Changes save through Codex with a revision check and refresh the effective project values.
+
 - Prevent a blank workspace when a user message or streaming reply contains a code block, including when reopening an archived conversation or restoring it after a refresh.
 
 - Match the archive sidebar to the project cards, with collapsible lists, direct restore controls, and a filter for active and archived chats inside archived projects.

@@ -21,18 +21,18 @@ test('workspace defaults to persistent navigation, retains drafts through histor
   await expect(page.getByRole('button', { name: 'Close navigation', exact: true })).toBeFocused();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Unsent panel draft');
   const menu = page.getByRole('button', { name: 'Model and reasoning', exact: true });
-  const editConfiguration = page.getByRole('button', { name: 'Edit Codex configuration' });
+  const modelControl = page.getByRole('combobox', { name: 'Model', exact: true });
   await menu.click();
-  await expect(editConfiguration).toBeVisible();
-  await page.getByLabel('Task mode', { exact: true }).focus();
+  await expect(modelControl).toBeVisible();
+  await page.getByLabel('Reasoning effort', { exact: true }).focus();
   await page.keyboard.press('Escape');
   await expect(menu).toBeFocused();
-  await expect(editConfiguration).toBeHidden();
+  await expect(modelControl).toBeHidden();
   await page.getByLabel('Message Codex').fill('/model');
   await page.getByLabel('Message Codex').press('Enter');
-  await expect(editConfiguration).toBeFocused();
+  await expect(modelControl).toBeFocused();
   await page.getByRole('heading', { name: 'New conversation' }).click();
-  await expect(editConfiguration).toBeHidden();
+  await expect(modelControl).toBeHidden();
 });
 
 test('desktop sidebars resize independently and keep their widths through reloads and drawers', async ({

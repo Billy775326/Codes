@@ -1,4 +1,7 @@
-import type { NativeConfigurationSnapshot } from '../shared/native-configuration';
+import type {
+  NativeConfigurationEdits,
+  NativeConfigurationSnapshot,
+} from '../shared/native-configuration';
 import { PreferencesDialog } from './PreferencesDialog';
 import { taskActivity } from './conversation-status';
 import {
@@ -32,6 +35,7 @@ import type {
   Envelope,
   FileContent,
   Message,
+  Model,
   Operation,
   Project,
   ProjectContext,
@@ -194,6 +198,9 @@ function App() {
     views.current = rememberProject(views.current, owner, id);
     save('codes.project-views', JSON.stringify(views.current));
   };
+  const [models, setModels] = useState<Model[]>([]);
+  const [autoReviewReady, setAutoReviewReady] = useState(false);
+  const configurationWrite = useRef(false);
   const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
   const [previewedImage, setPreviewedImage] = useState<string>();
@@ -495,6 +502,31 @@ function App() {
   useEffect(() => {
     if (auth === 'ready') return onAuthenticationRequired(notice);
   }, [auth, notice]);
+  async function saveComposerConfiguration(changes: NativeConfigurationEdits['changes']) {
+    if (
+      !contextProjectId ||
+      !codexDefaults?.writable ||
+      !codexDefaults.userVersion ||
+      configurationWrite.current
+    )
+      return;
+    const owner = contextProjectId;
+    configurationWrite.current = true;
+    setBusy(true);
+    try {
+      const value = await request<NativeConfigurationSnapshot>(
+        '/projects/' + encodeURIComponent(owner) + '/codex-configuration',
+        { method: 'PUT', body: JSON.stringify({ version: codexDefaults.userVersion, changes }) },
+      );
+      setNativeDefaults({ projectId: owner, value });
+    } catch (error) {
+      notice(error);
+    } finally {
+      configurationWrite.current = false;
+      setConfigurationRevision((value) => value + 1);
+      setBusy(false);
+    }
+  }
   const init = async () => {
     try {
       const [system, projects] = await Promise.all([
@@ -519,9 +551,16 @@ function App() {
   useEffect(() => {
     if (auth !== 'ready') return;
     const controller = new AbortController();
-    void request<typeof modes>('/modes', {}, controller.signal)
-      .then(async (modes) => {
+    void Promise.all([
+      request<typeof modes>('/modes', {}, controller.signal),
+      request<Model[]>('/models', {}, controller.signal),
+      request<{ autoReview: boolean }>('/permissions', {}, controller.signal),
+    ])
+      .then(async ([modes, models, permissions]) => {
+        if (controller.signal.aborted) return;
         setModes(modes);
+        setModels(models);
+        setAutoReviewReady(permissions.autoReview);
         setSystem(await request<System>('/system', {}, controller.signal));
       })
       .catch((error) => {
@@ -2607,6 +2646,9 @@ function App() {
                   mode={mode}
                   changeMode={setMode}
                   configuration={codexDefaults}
+                  models={models}
+                  autoReviewReady={autoReviewReady}
+                  saveConfiguration={saveComposerConfiguration}
                   openConfiguration={() => {
                     setOpenConfigurationFirst(true);
                     setDialog('preferences');

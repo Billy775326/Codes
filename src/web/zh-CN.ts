@@ -21,6 +21,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Plan reasoning effort': '计划模式推理强度',
   'Save Codex configuration': '保存 Codex 配置',
   'Edit Codex configuration': '编辑 Codex 配置',
+  'Codex user configuration': 'Codex 用户配置',
   'Codex configuration': 'Codex 配置',
   'Access token': '访问令牌',
   'This server uses CODES_ACCESS_TOKEN. Change it in the server environment and restart Codes.':
