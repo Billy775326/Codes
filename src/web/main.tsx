@@ -16,7 +16,8 @@ import {
   rememberProject,
   type ProjectSidebarPreference,
 } from './project-navigation';
-import { sameSettings } from '../shared/types';
+import { draftKey, save, saved } from './browser-storage';
+import { useMessageDelivery } from './useMessageDelivery';
 import { parseQuestionReplies, questionSourceItemId } from '../shared/question-replies';
 import { imageLimits } from '../shared/images';
 import { hasHiddenPathSegment } from '../shared/project-files';
@@ -36,7 +37,6 @@ import type {
   FileContent,
   Message,
   Model,
-  Operation,
   Project,
   ProjectContext,
   ProjectUpdate,
@@ -44,9 +44,6 @@ import type {
   Summary,
   System,
   Thread,
-  QueueState,
-  QueuePayload,
-  ReviewTarget,
   FileChange,
 } from '../shared/types';
 import { ApiError, message, post, request, onAuthenticationRequired } from './api';
@@ -91,37 +88,7 @@ const starters = [
   ['Review the code', 'Review the current code for potential bugs and explain your findings.'],
 ] as const;
 
-const saved = (key: string) => {
-  try {
-    return localStorage.getItem(key) ?? '';
-  } catch {
-    return '';
-  }
-};
-const save = (key: string, value: string) => {
-  try {
-    if (key.startsWith('codes.draft.') && value) {
-      const drafts = Object.keys(localStorage).filter(
-        (entry) => entry.startsWith('codes.draft.') && entry !== key,
-      );
-      while (drafts.length >= 20) localStorage.removeItem(drafts.shift()!);
-    }
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
-    return true;
-  } catch {
-    // Storage may be unavailable; preference callers surface the failed save.
-    return false;
-  }
-};
-const draftKey = (projectId: string, threadId: string) =>
-  'codes.draft.' + (threadId || 'new.' + projectId);
 const streamBatchMs = 96;
-const sameQueueDraft = (a: QueuePayload, b: QueuePayload) =>
-  a.text === b.text &&
-  sameSettings(a.settings, b.settings) &&
-  JSON.stringify(a.attachments) === JSON.stringify(b.attachments);
-
 function App() {
   const [auth, setAuth] = useState<'loading' | 'login' | 'ready'>('loading');
   const [token, setToken] = useState('');
@@ -230,11 +197,6 @@ function App() {
     const stored = save('codes.preferences', JSON.stringify(value));
     setPreferencesError(stored ? '' : 'Changes apply now, but this browser could not save them.');
   };
-  const [steerReceipt, setSteerReceipt] = useState<{
-    operationId: string;
-    text: string;
-    attachments?: Attachment[];
-  }>();
   const threadRef = useRef(threadId);
   threadRef.current = threadId;
   const composerControls = useRef<ComposerControlsHandle>(null);
@@ -255,10 +217,6 @@ function App() {
   const composerHistory = useRef<ComposerHistory>(undefined);
   const draftValue = useRef(draft);
   draftValue.current = draft;
-  const [queueRequest, setQueueRequest] = useState<{
-    operationId: string;
-    payload: QueuePayload;
-  }>();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [forking, setForking] = useState<Message>();
   const [recoveryFork, setRecoveryFork] = useState(false);
@@ -267,8 +225,6 @@ function App() {
   const forkOperations = useRef(new Map<string, string>());
   const [forkError, setForkError] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null);
-  const queueRevision = useRef(0);
-  const queueRevisionAtRender = queueRevision.current;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [connection, setConnection] = useState('Connecting');
@@ -364,7 +320,6 @@ function App() {
   const [directory, setDirectory] = useState('');
   const showHiddenFiles = preferences.showHiddenFiles;
   const [filePath, setFilePath] = useState<string>();
-  const [receipt, setReceipt] = useState('');
   const feed = useRef<Feed | undefined>(undefined);
   const projectRef = useRef(projectId);
   projectRef.current = projectId;
@@ -752,9 +707,75 @@ function App() {
     },
     [auth, conversationViews, returnToLatest],
   );
+  const loadingConversation = !!threadId && (!thread || thread.id !== threadId);
+  const clearAcceptedDraft = (id: string, version: number, origin = id) => {
+    // A network acknowledgement belongs to the captured draft, not whatever the
+    // user has typed since dispatch. Preserve the next draft and its attachments.
+    if (version !== draftRevision.current) return;
+    save('codes.draft.' + id, '');
+    if (!origin) save(draftKey(projectId, ''), '');
+    if (threadRef.current === id || threadRef.current === origin) {
+      composerHistory.current = undefined;
+      draftValue.current = '';
+      setDraft('');
+      setAttachments([]);
+    }
+  };
+  const {
+    receipt,
+    queueRequest,
+    steerReceipt,
+    restoreReceipts,
+    clearSendReceipt,
+    observeQueue,
+    applyQueue,
+    send: sendMessage,
+    enqueue,
+    steer,
+    checkQueueReceipt,
+    reconcile,
+    checkSteer,
+    checkFollowUpStatus,
+    startReview,
+    stop,
+  } = useMessageDelivery({
+    auth,
+    connection,
+    projectId,
+    threadId,
+    thread,
+    threadRef,
+    loadingConversation,
+    contextReady,
+    directoryBlocked,
+    uploadsPending: localAttachments.pending > 0,
+    busy,
+    setBusy,
+    setError,
+    setThread,
+    notice,
+    connectionFailure,
+    reconnect: () => feed.current?.connect(),
+    onCreated: (created) => {
+      conversationUpdated(created);
+      select(created.id);
+      setThread(created);
+    },
+    returnToLatest,
+    setFollowing,
+    composer: {
+      text: draft,
+      attachments,
+      settings,
+      hasInput,
+      revision: draftRevision,
+      latestText: draftValue,
+      clearAccepted: clearAcceptedDraft,
+      restoreAttachments: setAttachments,
+    },
+  });
   useEffect(() => {
     if (auth !== 'ready') return;
-    queueRevision.current++;
     if (
       save('codes.thread', threadId) &&
       linkedConversation(location.search) === threadId &&
@@ -774,20 +795,9 @@ function App() {
     composerHistory.current = undefined;
     draftValue.current = restored.slice(0, 50_000);
     setDraft(draftValue.current);
-    setReceipt(threadId ? saved(`codes.operation.${threadId}`) : '');
-    try {
-      const stored = saved('codes.queue-request.' + threadId);
-      setQueueRequest(stored ? JSON.parse(stored) : undefined);
-    } catch {
-      setQueueRequest(undefined);
-    }
+    restoreReceipts();
     setAttachments(branchContext.current?.id === threadId ? branchContext.current.attachments : []);
     branchContext.current = undefined;
-    try {
-      setSteerReceipt(JSON.parse(saved('codes.steer.' + threadId) || 'null') ?? undefined);
-    } catch {
-      setSteerReceipt(undefined);
-    }
   }, [threadId, projectId, auth]);
   useEffect(() => {
     if (auth !== 'ready') return;
@@ -852,14 +862,13 @@ function App() {
         return;
       }
       flush();
-      if (e.kind === 'queue') queueRevision.current++;
+      if (e.kind === 'queue') observeQueue();
       if (
         e.kind === 'state' &&
         Object.hasOwn(e.data as object, 'pending') &&
         !(e.data as Partial<Thread>).pending
       ) {
-        save(`codes.operation.${threadId}`, '');
-        setReceipt('');
+        clearSendReceipt();
       }
       setThread((thread) => applyConversationEvent(thread, e));
     };
@@ -891,7 +900,7 @@ function App() {
         }
         remember(snapshot.thread.projectId, snapshot.thread.id);
         deltas.clear();
-        queueRevision.current++;
+        observeQueue();
         setThread({ ...snapshot.thread, messages: snapshot.thread.messages.slice(-historyLimit) });
         // Project summaries may arrive while subscriptions switch. The selected
         // snapshot is also the authoritative summary for the navigation list.
@@ -922,38 +931,6 @@ function App() {
       window.removeEventListener('online', focus);
     };
   }, [threadId, projectId, retry, auth, notifyInBackground, notifications]);
-  useEffect(() => {
-    if (
-      auth !== 'ready' ||
-      connection !== 'Connected' ||
-      !receipt ||
-      !thread ||
-      thread.id !== threadId ||
-      thread.pending
-    )
-      return;
-    const controller = new AbortController();
-    const id = threadId,
-      operationId = receipt;
-    void request<Operation>('/operations/' + operationId, {}, controller.signal)
-      .then((operation) => {
-        if (
-          controller.signal.aborted ||
-          threadRef.current !== id ||
-          operation.threadId !== id ||
-          !['completed', 'failed'].includes(operation.state)
-        )
-          return;
-        if (saved('codes.operation.' + id) === operationId) save('codes.operation.' + id, '');
-        setReceipt((current) => (current === operationId ? '' : current));
-      })
-      .catch((error) => {
-        if (controller.signal.aborted || (error instanceof ApiError && error.code === 'NOT_FOUND'))
-          return;
-        connectionFailure(error);
-      });
-    return () => controller.abort();
-  }, [auth, connection, receipt, threadId, thread?.id, thread?.pending?.id, thread?.state]);
   useComposerTextareaHeight(composer, draft, auth === 'ready' && !queueEditing);
   const changeDraft = useCallback(
     (value: string, recalling = false) => {
@@ -995,97 +972,6 @@ function App() {
     },
     [changeDraft],
   );
-  const clearAcceptedDraft = (id: string, version: number, origin = id) => {
-    // A network acknowledgement belongs to the captured draft, not whatever the
-    // user has typed since dispatch. Preserve the next draft and its attachments.
-    if (version !== draftRevision.current) return;
-    save('codes.draft.' + id, '');
-    if (!origin) save(draftKey(projectId, ''), '');
-    if (threadRef.current === id || threadRef.current === origin) {
-      composerHistory.current = undefined;
-      draftValue.current = '';
-      setDraft('');
-      setAttachments([]);
-    }
-  };
-  const enqueue = async () => {
-    if (
-      !threadId ||
-      busy ||
-      localAttachments.pending ||
-      !!thread?.writerConflict ||
-      !hasInput ||
-      thread?.archived ||
-      thread?.managementPending
-    )
-      return;
-    setBusy(true);
-    setError('');
-    const version = draftRevision.current;
-    const key = 'codes.queue-request.' + threadId;
-    let payload = { text: draft, settings, attachments };
-    let operationId = crypto.randomUUID();
-    try {
-      const previous = queueRequest ?? (saved(key) ? JSON.parse(saved(key)) : undefined);
-      if (previous) {
-        const record = previous;
-        if (!sameQueueDraft(record.payload, payload))
-          throw new Error('Check the pending queue receipt before changing this draft.');
-        operationId = record.operationId;
-        payload = record.payload;
-      }
-      save(key, JSON.stringify({ operationId, payload }));
-      setQueueRequest({ operationId, payload });
-      const before = queueRevision.current;
-      const queue = await post<QueueState>('/threads/' + threadId + '/queue', {
-        operationId,
-        ...payload,
-      });
-      setThread((current) =>
-        current?.id === threadId && before === queueRevision.current
-          ? { ...current, queue }
-          : current,
-      );
-      save(key, '');
-      setQueueRequest(undefined);
-      clearAcceptedDraft(threadId, version);
-    } catch (error) {
-      notice(error);
-      if (error instanceof ApiError && !error.uncertain) {
-        save(key, '');
-        setQueueRequest(undefined);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-  const checkQueueReceipt = async () => {
-    if (!queueRequest || !threadId || loadingConversation || busy) return;
-    const version = draftRevision.current;
-    const acceptedDraft = sameQueueDraft(
-      { text: draft, settings, attachments },
-      queueRequest.payload,
-    );
-    setBusy(true);
-    setError('');
-    try {
-      await request('/threads/' + threadId + '/queue/' + queueRequest.operationId);
-      const before = queueRevision.current;
-      const queue = await request<QueueState>('/threads/' + threadId + '/queue');
-      if (acceptedDraft) clearAcceptedDraft(threadId, version);
-      save('codes.queue-request.' + threadId, '');
-      setQueueRequest(undefined);
-      setThread((current) =>
-        current?.id === threadId && before === queueRevision.current
-          ? { ...current, queue }
-          : current,
-      );
-    } catch (error) {
-      notice(error);
-    } finally {
-      setBusy(false);
-    }
-  };
   const fork = async () => {
     if (!forking || !threadId || forkBusy) return;
     setForkBusy(true);
@@ -1168,120 +1054,10 @@ function App() {
     },
     [projectId, select, threadId, verifiedProject],
   );
-  const send = async () => {
-    if (draft.trimStart().startsWith('/')) {
-      runCommand(draft.trim());
-      return;
-    }
-    if (
-      busy ||
-      localAttachments.pending ||
-      !!thread?.writerConflict ||
-      queueRequest ||
-      !hasInput ||
-      !contextReady ||
-      directoryBlocked ||
-      loadingConversation ||
-      connection !== 'Connected' ||
-      thread?.archived ||
-      thread?.managementPending
-    )
-      return;
-    returnToLatest();
-    setBusy(true);
-    setError('');
-    let id = threadId;
-    const origin = threadId;
-    const version = draftRevision.current;
-    let operationId = '';
-    try {
-      if (!id) {
-        const created = await post<Thread>(`/projects/${projectId}/threads`, settings);
-        id = created.id;
-        save(`codes.draft.${id}`, threadRef.current === origin ? draftValue.current : draft);
-        conversationUpdated(created);
-        select(id);
-        setThread(created);
-      }
-      operationId = crypto.randomUUID();
-      save(`codes.operation.${id}`, operationId);
-      setReceipt(operationId);
-      const operation = await post<Operation>(`/threads/${id}/send`, {
-        operationId,
-        text: draft,
-        settings,
-        attachments,
-      });
-      if (operation.state === 'failed')
-        throw new ApiError(operation.error ?? 'The operation failed.', 'OPERATION_FAILED');
-      clearAcceptedDraft(id, version, origin);
-      setFollowing(true);
-      if (operation.state === 'completed') {
-        save(`codes.operation.${id}`, '');
-        setReceipt('');
-      }
-      if (feed.current && threadId === id) void feed.current.connect();
-    } catch (e) {
-      notice(e);
-      if (
-        version === draftRevision.current &&
-        (threadRef.current === id || threadRef.current === origin)
-      )
-        setAttachments(attachments);
-      if (id && e instanceof ApiError && !e.uncertain) {
-        save(`codes.operation.${id}`, '');
-        setReceipt('');
-      }
-    } finally {
-      setBusy(false);
-    }
+  const send = () => {
+    if (draft.trimStart().startsWith('/')) runCommand(draft.trim());
+    else void sendMessage();
   };
-  const reconcile = async () => {
-    const id = threadId;
-    const operationId = receipt;
-    if (!id) return;
-    setBusy(true);
-    try {
-      if (operationId) {
-        try {
-          await request<Operation>(`/operations/${operationId}`);
-        } catch (error) {
-          if (error instanceof ApiError && error.code === 'NOT_FOUND') {
-            if (saved(`codes.operation.${id}`) === operationId) save(`codes.operation.${id}`, '');
-            if (threadRef.current === id) {
-              setReceipt((current) => (current === operationId ? '' : current));
-              setError('This request was not recorded. Your draft is safe; you may send it again.');
-              void feed.current?.connect();
-            }
-            return;
-          }
-          throw error;
-        }
-      }
-      const updated = await post<Thread>(`/threads/${id}/reconcile`);
-      if (updated.id !== id)
-        throw new ApiError(
-          'The service returned a result for a different conversation.',
-          'INVALID_RESPONSE',
-        );
-      if (!updated.pending && saved(`codes.operation.${id}`) === operationId)
-        save(`codes.operation.${id}`, '');
-      // A slow check belongs to its original conversation, not a newer selection.
-      if (threadRef.current !== id) return;
-      setThread(updated);
-      void feed.current?.connect();
-      if (!updated.pending) setReceipt((current) => (current === operationId ? '' : current));
-      else
-        setError(
-          'The CLI has not confirmed a terminal result. This conversation remains locked against duplicate sends.',
-        );
-    } catch (error) {
-      if (threadRef.current === id) notice(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const submitAction = async (
     action: Action,
     resolution: { decision?: string; answers?: Record<string, string> },
@@ -1317,7 +1093,6 @@ function App() {
     },
     [attachmentBlocked, narrow, showHiddenFiles],
   );
-  const loadingConversation = !!threadId && (!thread || thread.id !== threadId);
   const active =
     !!thread?.pending ||
     !!thread?.steering?.length ||
@@ -1619,118 +1394,6 @@ function App() {
       notice(error);
     }
   };
-  const steer = async () => {
-    if (addBlocked || !hasInput || steerReceipt || queueRequest) return;
-    if (draft.trimStart().startsWith('/')) {
-      runCommand(draft.trim());
-      return;
-    }
-    const id = threadId;
-    const text = draft;
-    const version = draftRevision.current;
-    const record = { operationId: crypto.randomUUID(), text, attachments };
-    setBusy(true);
-    setError('');
-    save('codes.steer.' + id, JSON.stringify(record));
-    setSteerReceipt(record);
-    try {
-      const result = await post<Operation>('/threads/' + id + '/steer', {
-        operationId: record.operationId,
-        text,
-        expectedTurnId: thread!.turnId,
-        attachments,
-      });
-      if (result.state === 'unknown' || result.state === 'failed')
-        throw new Error(result.error || 'Check the follow-up result.');
-      save('codes.steer.' + id, '');
-      clearAcceptedDraft(id, version);
-      if (threadRef.current === id) setSteerReceipt(undefined);
-    } catch (error) {
-      notice(error);
-      if (error instanceof ApiError && !error.uncertain) {
-        save('codes.steer.' + id, '');
-        if (threadRef.current === id) setSteerReceipt(undefined);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-  const checkSteer = async () => {
-    if (!steerReceipt || busy) return;
-    const id = threadId;
-    const record = steerReceipt;
-    const key = 'codes.steer.' + id;
-    const version = draftRevision.current;
-    const readReceipt = async () => {
-      const result = await request<Operation>('/operations/' + record.operationId);
-      if (result.id !== record.operationId || result.threadId !== id || result.kind !== 'steer')
-        throw new ApiError(
-          'The service returned a result for a different conversation.',
-          'INVALID_RESPONSE',
-        );
-      return result;
-    };
-    let recorded = false;
-    setBusy(true);
-    setError('');
-    try {
-      let result = await readReceipt();
-      recorded = true;
-      if (result.state === 'unknown' || result.state === 'dispatching') {
-        await post<Thread>('/threads/' + id + '/reconcile');
-        result = await readReceipt();
-        if (result.state === 'unknown' || result.state === 'dispatching')
-          throw new Error('Follow-up acceptance is still unconfirmed. It will not be resent.');
-      }
-      save(key, '');
-      if (threadRef.current !== id) return;
-      if (
-        result.state !== 'failed' &&
-        draft === record.text &&
-        JSON.stringify(attachments) === JSON.stringify(record.attachments ?? [])
-      )
-        clearAcceptedDraft(id, version);
-      setSteerReceipt(undefined);
-      if (result.state === 'failed')
-        setError(result.error || 'The follow-up was rejected. Your draft is safe.');
-    } catch (error) {
-      if (!recorded && error instanceof ApiError && error.code === 'NOT_FOUND') {
-        save(key, '');
-        if (threadRef.current === id) {
-          setSteerReceipt(undefined);
-          setError('The follow-up was not recorded. Your draft is safe.');
-        }
-      } else if (threadRef.current === id) notice(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const checkFollowUpStatus = async () => {
-    if (!threadId || busy) return;
-    const id = threadId;
-    const previous = thread?.steering;
-    setBusy(true);
-    setError('');
-    try {
-      const updated = await post<Thread>('/threads/' + id + '/reconcile');
-      if (updated.id !== id)
-        throw new ApiError(
-          'The service returned a result for a different conversation.',
-          'INVALID_RESPONSE',
-        );
-      // A status check can finish after a newer event. Only refresh receipts it observed.
-      setThread((current) =>
-        current?.id === id && current.steering === previous
-          ? { ...current, steering: updated.steering }
-          : current,
-      );
-      if (threadRef.current === id && connection !== 'Connected') void feed.current?.connect();
-    } catch (error) {
-      if (threadRef.current === id) notice(error);
-    } finally {
-      setBusy(false);
-    }
-  };
   const followUp = (behavior: Preferences['followUp'] = deliveryMode) => {
     if (draft.trimStart().startsWith('/')) {
       runCommand(draft.trim());
@@ -1740,48 +1403,6 @@ function App() {
       if (!addBlocked) void steer();
     } else if (!queueBlocked) {
       void enqueue();
-    }
-  };
-  const startReview = async (target: ReviewTarget, delivery: Preferences['review']) => {
-    if (!projectId || busy) throw new Error('Choose a project and wait for the current request.');
-    let id = threadId;
-    setBusy(true);
-    try {
-      if (delivery === 'detached' || !id) {
-        const created = await post<Thread>(`/projects/${projectId}/threads`, {
-          mode: 'default',
-        });
-        id = created.id;
-        conversationUpdated(created);
-        select(id);
-        setThread(created);
-      }
-      const operationId = crypto.randomUUID();
-      save('codes.operation.' + id, operationId);
-      setReceipt(operationId);
-      try {
-        const operation = await post<Operation>('/threads/' + id + '/review', {
-          operationId,
-          target,
-          settings,
-        });
-        if (operation.state === 'failed')
-          throw new ApiError(operation.error || 'Review failed.', 'OPERATION_FAILED');
-        if (operation.state === 'completed') {
-          save('codes.operation.' + id, '');
-          setReceipt('');
-        }
-        if (threadId === id) void feed.current?.connect();
-      } catch (error) {
-        if (error instanceof ApiError && !error.uncertain) {
-          save('codes.operation.' + id, '');
-          setReceipt('');
-          throw error;
-        }
-        notice(error); // Keep the receipt and close the dialog after an uncertain result.
-      }
-    } finally {
-      setBusy(false);
     }
   };
   useEffect(() => {
@@ -2419,26 +2040,11 @@ function App() {
               key={threadId}
               threadId={threadId}
               state={thread.queue}
-              onChange={(queue) =>
-                setThread((current) =>
-                  current?.id === threadId && queueRevisionAtRender === queueRevision.current
-                    ? { ...current, queue }
-                    : current,
-                )
-              }
+              onChange={applyQueue}
               onCheck={reconcile}
               turnId={canSteer ? thread?.turnId : undefined}
               onEditingChange={setQueueEditing}
-              onStop={
-                active && thread?.turnId
-                  ? () => {
-                      setBusy(true);
-                      void post(`/threads/${threadId}/interrupt`)
-                        .catch(notice)
-                        .finally(() => setBusy(false));
-                    }
-                  : undefined
-              }
+              onStop={active && thread?.turnId ? stop : undefined}
             />
           )}
 
@@ -2741,12 +2347,7 @@ function App() {
                         'Stop the current task and pause queued work. Completed file changes remain.',
                       )}
                       unavailable={stopReason ? t(stopReason) : undefined}
-                      onClick={() => {
-                        setBusy(true);
-                        void post(`/threads/${threadId}/interrupt`)
-                          .catch(notice)
-                          .finally(() => setBusy(false));
-                      }}
+                      onClick={stop}
                     />
                   </>
                 )}

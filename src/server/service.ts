@@ -2,7 +2,6 @@ import { WorkspaceConfiguration } from './workspace-settings.js';
 import { directoryStatus, directoryError } from './project-context.js';
 import { nativeExecutionSettings } from './native-configuration.js';
 import { activeTurn, interactionActivity } from '../shared/conversation-activity.js';
-import { randomUUID } from 'node:crypto';
 import { realpath, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -17,6 +16,7 @@ import type { GlobalInstructions, ProjectInstructions } from '../shared/project-
 import { Images } from './images.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
+import { NativeInteractions, type ActionResolution } from './native-interactions.js';
 import { encodeQuestionReplies } from '../shared/question-replies.js';
 import { nativeMessage as item, nativeTurn } from './transcript.js';
 import { readConversationHistory } from './conversation-history.js';
@@ -30,7 +30,6 @@ import {
   type TurnInfo,
   type Settings,
   type Message,
-  type Action,
   type Attachment,
   type FileContent,
   type State,
@@ -59,10 +58,7 @@ export class Service {
   private terminals = new Map<string, State>();
   private metadataRevision = 0;
   private metadataRevisions = new Map<string, number>();
-  private actions = new Map<
-    string,
-    { action: Action; rpcId: string | number; epoch: string; permissions?: unknown }
-  >();
+  private readonly interactions: NativeInteractions;
   private readonly projectFiles: ProjectFiles;
   readonly workspaceSettings: WorkspaceConfiguration;
   constructor(
@@ -78,6 +74,14 @@ export class Service {
     );
     this.images = new Images(store.directory);
     this.asyncQuestions = new AsyncQuestions(store.db);
+    this.interactions = new NativeInteractions(store, driver, {
+      publish: (id) => {
+        this.publishSummary(this.store.thread(id)!);
+        this.emitActions(id);
+      },
+      emit: (id) => this.emitActions(id),
+      boundary: (thread) => this.boundary(thread),
+    });
     this.modelSettings = new ModelSettings(driver);
     this.queue = new MessageQueue(
       store.queue,
@@ -164,7 +168,9 @@ export class Service {
       () => !!this.maintenance,
     );
     driver.on('notification', (event) => this.notification(event));
-    driver.on('request', (event) => this.request(event));
+    driver.on('request', (event) =>
+      this.interactions.request(event, this.cache.get(event.params?.threadId)),
+    );
     driver.on('offline', () => {
       this.loaded.clear();
       store.queue.pauseAll('The runtime stopped. Review outcomes before resuming.');
@@ -172,7 +178,7 @@ export class Service {
       for (const thread of this.cache.values()) {
         this.clearCompaction(thread, 'unknown');
         for (const steer of store.steers(thread.id)) store.update(steer.id, 'unknown');
-        for (const action of thread.actions) action.status = 'expired';
+        this.interactions.expireThread(thread);
         if (thread.pending) {
           thread.pending.state = 'unknown';
           store.update(thread.pending.id, 'unknown');
@@ -181,7 +187,7 @@ export class Service {
         this.boundary(thread);
         this.queue.notify(thread.id);
       }
-      this.actions.clear();
+      this.interactions.clear();
       this.events.publish('runtime', this.system());
     });
   }
@@ -199,7 +205,7 @@ export class Service {
             ready:
               !this.sending.size &&
               !this.managing.size &&
-              !this.actions.size &&
+              !this.interactions.size &&
               !this.store.db
                 .prepare(
                   `SELECT 1 FROM operations
@@ -1696,92 +1702,11 @@ export class Service {
     }
     throw new AppError('INTERRUPT_UNCONFIRMED', 'Interruption was not acknowledged.', 409);
   }
-  async answer(
-    id: string,
-    operationId: string,
-    resolution: { decision?: string; answers?: Record<string, string> },
-  ) {
+  async answer(id: string, operationId: string, resolution: ActionResolution) {
     if (id.startsWith('async-')) return this.answerAsync(id, operationId, resolution);
-    const receipt = this.store.existing(operationId, undefined, 'answer', { id, resolution });
-    if (receipt) return receipt;
-    const entry = this.actions.get(id);
-    if (!entry || entry.epoch !== this.driver.epoch || entry.action.status !== 'pending') {
-      throw new AppError('STALE_ACTION', 'This request was already answered or has expired.', 409);
-    }
-    const action = entry.action;
-    let response: unknown;
-    if (action.kind === 'questions') {
-      if (resolution.decision === 'skip') {
-        if (action.blocking !== false || Object.keys(resolution.answers ?? {}).length)
-          throw new AppError('INVALID_ANSWER', 'Only an optional question can be skipped.');
-        response = { answers: {} };
-      } else {
-        if (resolution.decision)
-          throw new AppError(
-            'INVALID_ANSWER',
-            'Submit answers or explicitly skip an optional question.',
-          );
-        const answers: Record<string, { answers: string[] }> = {};
-        if (
-          Object.keys(resolution.answers ?? {}).some(
-            (id) => !action.questions?.some((question) => question.id === id),
-          )
-        )
-          throw new AppError('INVALID_ANSWER', 'The answer refers to a different question.');
-        for (const question of action.questions ?? []) {
-          const value = resolution.answers?.[question.id]?.trim();
-          if (!value)
-            throw new AppError('ANSWER_REQUIRED', 'Answer each question before submitting.');
-          if (
-            question.options?.length &&
-            !question.allowOther &&
-            !question.options.some((option) => option.label === value)
-          )
-            throw new AppError('INVALID_ANSWER', 'Choose one of the supplied options.');
-          answers[question.id] = { answers: [value] };
-        }
-        response = { answers };
-      }
-    } else {
-      if (!action.decisions.includes(resolution.decision ?? ''))
-        throw new AppError('INVALID_DECISION', 'Choose an available decision.');
-      response =
-        action.kind === 'permissions'
-          ? {
-              permissions: resolution.decision === 'accept' ? entry.permissions : {},
-              scope: 'turn',
-            }
-          : { decision: resolution.decision };
-    }
-    const { existing } = this.store.begin(operationId, action.threadId, 'answer', {
-      id,
-      resolution,
-    });
-    if (existing) return existing;
-    if (action.kind === 'questions')
-      action.submittedAnswers = Object.fromEntries(
-        (action.questions ?? []).flatMap((q) => {
-          const answer = resolution.answers?.[q.id];
-          return !q.secret && typeof answer === 'string' ? [[q.id, answer]] : [];
-        }),
-      );
-    action.status = 'responding';
-    this.publishSummary(this.store.thread(action.threadId)!);
-    this.emitActions(action.threadId);
-    try {
-      await this.driver.answer(entry.rpcId, response);
-      this.store.update(operationId, 'completed');
-      return this.store.operation(operationId)!;
-    } catch (error) {
-      this.store.update(operationId, 'unknown');
-      throw error;
-    }
+    return this.interactions.answer(id, operationId, resolution);
   }
-  private async answerAsync(
-    id: string,
-    operationId: string,
-    resolution: { decision?: string; answers?: Record<string, string> },
-  ) {
+  private async answerAsync(id: string, operationId: string, resolution: ActionResolution) {
     const action = this.asyncQuestions.action(id);
     if (!action || this.store.thread(action.threadId)?.archived)
       throw new AppError('STALE_ACTION', 'This question is unavailable.', 409);
@@ -1947,9 +1872,7 @@ export class Service {
         closed.pending.state = 'unknown';
         closed.state = 'unknown';
         this.store.queue.pauseForReview(closed.id, 'An execution result is unknown.');
-        for (const action of closed.actions) action.status = 'expired';
-        for (const [id, entry] of this.actions)
-          if (entry.action.threadId === closed.id) this.actions.delete(id);
+        this.interactions.expireThread(closed);
         this.boundary(closed);
       }
       return;
@@ -2084,33 +2007,7 @@ export class Service {
       return;
     }
     if (event.method === 'serverRequest/resolved') {
-      let questionResolved = false;
-      for (const entry of this.actions.values())
-        if (entry.action.threadId === thread.id && entry.rpcId === p.requestId) {
-          questionResolved ||= entry.action.kind === 'questions';
-          entry.action.status = 'answered';
-          this.actions.delete(entry.action.id);
-        }
-      if (
-        questionResolved &&
-        thread.pending &&
-        !thread.actions.some(
-          (a) => a.kind === 'questions' && (a.status === 'pending' || a.status === 'responding'),
-        )
-      )
-        this.store.markWaitingQuestion(thread.pending.id, false);
-      this.emitActions(thread.id);
-      if (['waitingInput', 'waitingApproval'].includes(thread.state)) {
-        const remaining = thread.actions.filter(
-          (a) => a.status === 'pending' || a.status === 'responding',
-        );
-        thread.state = remaining.some((a) => a.kind !== 'questions')
-          ? 'waitingApproval'
-          : remaining.length
-            ? 'waitingInput'
-            : 'running';
-        this.boundary(thread);
-      }
+      this.interactions.resolve(thread, p.requestId);
       return;
     }
     if (
@@ -2201,11 +2098,7 @@ export class Service {
           delete thread.pending;
         }
         if (terminal(p.turn.status)) this.store.finishSteers(thread.id, p.turn.id);
-        for (const entry of this.actions.values())
-          if (entry.action.turnId === p.turn.id) {
-            entry.action.status = 'expired';
-            this.actions.delete(entry.action.id);
-          }
+        this.interactions.expireTurn(p.turn.id);
       }
       if (terminal(p.turn.status) && thread.turnId === p.turn.id) {
         this.clearCompaction(
@@ -2311,126 +2204,6 @@ export class Service {
     this.events.publish('item', message, thread.id);
     if (lifecycle !== 'inProgress' && this.asyncQuestions.observe(thread.id, message))
       this.publishQuestions(thread.id);
-  }
-  private request(event: any) {
-    const p = event.params;
-    const kinds: Record<string, Action['kind']> = {
-      'item/commandExecution/requestApproval': 'command',
-      'item/fileChange/requestApproval': 'file',
-      'item/tool/requestUserInput': 'questions',
-      'item/permissions/requestApproval': 'permissions',
-    };
-    const kind = kinds[event.method];
-    const thread = this.cache.get(p?.threadId);
-    if (
-      !kind ||
-      !thread ||
-      (kind === 'questions' && p.turnId !== thread.turnId) ||
-      this.actions.size >= 32 ||
-      !['string', 'number'].includes(typeof event.id)
-    ) {
-      void this.driver
-        .reject(event.id)
-        ?.catch(() => console.error('Unable to reject an unsupported CLI interaction.'));
-      return;
-    }
-    const action: Action = {
-      id: randomUUID(),
-      threadId: thread.id,
-      turnId: text(p.turnId),
-      kind,
-      title:
-        kind === 'questions'
-          ? 'Your input is needed'
-          : kind === 'permissions'
-            ? 'Additional permissions requested'
-            : kind === 'file'
-              ? 'File change approval'
-              : 'Command approval',
-      detail: text(
-        p.command || p.reason || p.cwd || 'Review this request before continuing.',
-        8192,
-      ),
-      decisions: kind === 'permissions' ? ['accept', 'decline'] : ['accept', 'decline', 'cancel'],
-      status: 'pending',
-      afterMessageId:
-        kind === 'questions'
-          ? thread.messages.findLast((item) => item.turnId === p.turnId)?.id
-          : undefined,
-      blocking: kind === 'questions' ? p.isBlocking !== false : undefined,
-      files: kind === 'file' ? thread.messages.find((m) => m.id === p.itemId)?.files : undefined,
-      truncated:
-        kind === 'file' ? thread.messages.find((m) => m.id === p.itemId)?.truncated : undefined,
-    };
-    action.detail =
-      [
-        p.command && `Command: ${text(p.command, 8192)}`,
-        p.cwd && `Directory: ${text(p.cwd, 2048)}`,
-        p.reason && `Reason: ${text(p.reason, 4096)}`,
-        kind === 'permissions' &&
-          `Requested permissions (this turn only):\n${JSON.stringify(p.permissions ?? {}, null, 2)}`,
-        kind === 'file' &&
-          (action.files?.length
-            ? 'Review the proposed patch below.'
-            : thread.messages.find((m) => m.id === p.itemId)?.text ||
-              'The CLI did not provide a patch for this approval. Inspect the workspace before approving.'),
-      ]
-        .filter(Boolean)
-        .join('\n\n')
-        .slice(0, 16384) || action.detail;
-    if (kind === 'questions')
-      action.questions = (Array.isArray(p.questions) ? p.questions : [])
-        .filter((q: any) => typeof q.id === 'string' && typeof q.question === 'string')
-        .map((q: any) => ({
-          id: q.id,
-          question: text(q.question, 4000),
-          secret: q.isSecret === true,
-          header: text(q.header, 80),
-          allowOther: q.isOther === true,
-          options: Array.isArray(q.options)
-            ? q.options
-                .filter((x: any) => typeof x.label === 'string')
-                .slice(0, 10)
-                .map((x: any) => ({
-                  label: text(x.label, 200),
-                  description: text(x.description, 1000),
-                }))
-            : undefined,
-        }));
-    if (
-      kind === 'questions' &&
-      (!action.questions?.length ||
-        action.questions.length > 8 ||
-        new Set(action.questions.map((q) => q.id)).size !== action.questions.length)
-    ) {
-      void this.driver
-        .reject(event.id)
-        ?.catch(() => console.error('Unable to reject invalid CLI questions.'));
-      return;
-    }
-    this.actions.set(action.id, {
-      action,
-      rpcId: event.id,
-      epoch: this.driver.epoch,
-      permissions: p.permissions,
-    });
-    thread.actions = thread.actions.filter(
-      (a) =>
-        a.status === 'pending' ||
-        a.status === 'responding' ||
-        (a.kind === 'questions' && a.turnId === thread.turnId),
-    );
-    const settled = thread.actions.filter((a) => a.status === 'answered' || a.status === 'expired');
-    if (settled.length >= 32) thread.actions = thread.actions.filter((a) => a !== settled[0]);
-    if (kind === 'questions' && thread.pending)
-      this.store.markWaitingQuestion(thread.pending.id, true);
-    thread.actions.push(action);
-    thread.state = thread.actions.some(
-      (a) => a.kind !== 'questions' && ['pending', 'responding'].includes(a.status),
-    )
-      ? 'waitingApproval'
-      : 'waitingInput';
-    this.boundary(thread);
   }
   uploadFile(projectId: string, bytes: Buffer, name: string) {
     return this.projectFiles.uploadFile(projectId, bytes, name);

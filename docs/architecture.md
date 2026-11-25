@@ -16,8 +16,10 @@ flowchart LR
     B[Browser: React] -->|Same-origin HTTP| H[Node HTTP service]
     H -->|Bounded SSE replay| B
     H --> O[SQLite: projects and operation receipts]
-    H --> S[Service: thread lifecycle and approvals]
-    S --> R[Deadline-bound JSONL transport]
+    H --> S[Service: thread lifecycle and execution]
+    S --> I[Native interaction lifecycle]
+    I --> R[Deadline-bound JSONL transport]
+    S --> R
     R <-->|stdio| C[Codex CLI App Server]
     C --> N[Native Codex history and tools]
     S --> F[Read-only file context]
@@ -26,15 +28,17 @@ flowchart LR
 ## Responsibilities
 
 - `src/codex/rpc.ts`: framing, UTF-8 boundaries, response correlation, write limits, and acknowledgement deadlines.
-- `src/codex/driver.ts`: exact CLI version check, initialization, one child process, shutdown, and runtime epoch.
-- `src/server/service.ts`: project ownership, bounded native reads, execution leases, approvals, and reconciliation.
+- `src/codex/driver.ts`: CLI capability discovery, initialization, one child process, shutdown, and runtime epoch.
+- `src/server/service.ts`: project ownership, bounded native reads, execution leases, reconciliation, and coordinated state publication.
+- `src/server/native-interactions.ts`: native approval and blocking question registration, replies, and expiry for each runtime connection. Durable asynchronous questions remain in `src/server/async-questions.ts`.
 - `src/server/store.ts`: SQLite metadata and durable operation receipts. Native conversation text remains in Codex history; a pending prompt is temporarily retained for recovery.
 - `src/server/project-context.ts`: asynchronous registered-directory health checks, separate from native history and permissions.
 - `src/web/project-navigation.ts`: bounded browser project-view memory; execution/settings remain server-owned.
 - `src/server/events.ts`: bounded replay ring and slow-client disconnection.
 - `src/server/http.ts`: authenticated same-origin API, SSE, and static assets.
 - `src/web/feed.ts`: snapshot/replay handshake, finite reconnect backoff, and stale-navigation cancellation.
-- `src/web/main.tsx`: UI, stable message identities, coalesced deltas, and local draft handling.
+- `src/web/main.tsx`: workspace composition, navigation, coalesced deltas, and local draft handling.
+- `src/web/useMessageDelivery.ts`: send, queue, immediate follow-up, review dispatch, stop, and browser receipt recovery. It uses the workspace selection and draft revision to apply results to the right conversation and draft.
 
 ## Execution and recovery
 
