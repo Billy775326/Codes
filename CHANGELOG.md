@@ -32,8 +32,6 @@
 
 ### Changed
 
-- Follow the Codex CLI resume picker with **Cwd** as the default when a working directory is known, **Repo** for linked worktrees, metadata search, and restore-and-resume from **Archived**.
-
 - Use native Codex configuration for effective execution settings. Schema 6 retains legacy metadata and holds affected queue entries for review. Startup makes a private backup before migrating a supported older schema.
 - Add follow-ups to the current turn from the desktop send shortcut by default when eligible. Use Tab to queue or change the default in **Settings → General → Interaction**.
 - Keep workspace controls compact with named icons, keyboard and hover cues, and direct archive, restore, sign-out, status, and review actions. Required choices, task states, and recovery actions remain explicit.

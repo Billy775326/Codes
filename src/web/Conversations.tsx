@@ -1,4 +1,3 @@
-import { matchesConversationText } from '../shared/conversation-search';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
@@ -17,8 +16,6 @@ import { formatMessageTime } from './MessageTime';
 import './conversations.css';
 
 const pageLimit = 30;
-const maximumSearchRequests = 12;
-type DirectoryScope = 'cwd' | 'repo' | 'all';
 const isWorking = (row: Summary) =>
   !!row.executionPending ||
   !!row.queueCount ||
@@ -32,8 +29,6 @@ interface Props {
   disabled: boolean;
   connection: string;
   supportsCreatedSort: boolean;
-  supportsRepositoryScope: boolean;
-  accountScoped: boolean;
   onNew: () => void;
   onSelect: (id: string, projectId: string) => void;
   onUpdated: (summary: Summary) => void;
@@ -44,41 +39,13 @@ export const Conversations = memo(function Conversations(props: Props) {
   const { t } = useInterfaceLanguage();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
-  const [chosenScope, setChosenScope] = useState<DirectoryScope>();
-  const [repository, setRepository] = useState<{ cwd: string; directories: string[] }>();
+  const [onlyCwd, setOnlyCwd] = useState(false);
   const [archived, setArchived] = useState(false);
   const [sort, setSort] = useState<ConversationSort>('updated_at');
   const [revision, setRevision] = useState(0);
   const archiveToggle = useRef<HTMLButtonElement>(null);
-  const repositoryDirectories = repository?.cwd === props.cwd ? repository?.directories : undefined;
-  const scope = !props.cwd
-    ? 'all'
-    : chosenScope === 'repo' && !repositoryDirectories?.length
-      ? 'cwd'
-      : (chosenScope ?? 'cwd');
-  const cwd = scope === 'all' ? undefined : props.cwd;
-  const repo = scope === 'repo';
+  const cwd = onlyCwd ? props.cwd : undefined;
   const effectiveSort = props.supportsCreatedSort ? sort : 'updated_at';
-
-  useEffect(() => {
-    if (!props.cwd || !props.supportsRepositoryScope) return;
-    const controller = new AbortController();
-    const workdir = props.cwd;
-    void request<{ directories: string[] }>(
-      '/conversations/repository?' + new URLSearchParams({ cwd: workdir }),
-      {},
-      controller.signal,
-    ).then(
-      ({ directories }) => {
-        if (!controller.signal.aborted) setRepository({ cwd: workdir, directories });
-      },
-      () => {
-        // Repo is available only when the runtime confirms linked worktrees.
-        if (!controller.signal.aborted) setRepository({ cwd: workdir, directories: [] });
-      },
-    );
-    return () => controller.abort();
-  }, [props.cwd, props.supportsRepositoryScope, revision]);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), 200);
@@ -136,25 +103,16 @@ export const Conversations = memo(function Conversations(props: Props) {
       </div>
       <div className="session-filters">
         <div role="group" aria-label={t('Directory filter')}>
+          <button aria-pressed={!cwd} onClick={() => setOnlyCwd(false)}>
+            {t('All')}
+          </button>
           <button
-            aria-pressed={scope === 'cwd'}
+            aria-pressed={!!cwd}
             disabled={!props.cwd}
             data-tooltip={props.cwd || t('Choose a working directory')}
-            onClick={() => setChosenScope('cwd')}
+            onClick={() => setOnlyCwd(true)}
           >
             {t('Cwd')}
-          </button>
-          {!!repositoryDirectories?.length && (
-            <button
-              aria-pressed={repo}
-              data-tooltip={t('Linked Git worktrees')}
-              onClick={() => setChosenScope('repo')}
-            >
-              {t('Repo')}
-            </button>
-          )}
-          <button aria-pressed={scope === 'all'} onClick={() => setChosenScope('all')}>
-            {t('All')}
           </button>
         </div>
         <div role="group" aria-label={t('Archive filter')}>
@@ -167,16 +125,14 @@ export const Conversations = memo(function Conversations(props: Props) {
         </div>
       </div>
       <ConversationList
-        key={JSON.stringify([scope, cwd, archived, effectiveSort, search])}
+        key={JSON.stringify([cwd, archived, effectiveSort, search])}
         {...props}
         cwd={cwd}
-        repositoryDirectories={repo ? repositoryDirectories : undefined}
         archived={archived}
         search={search}
         sort={effectiveSort}
         revision={revision}
         onArchive={() => archiveToggle.current?.focus()}
-        onResumeArchived={() => setArchived(false)}
       />
     </section>
   );
@@ -185,8 +141,6 @@ export const Conversations = memo(function Conversations(props: Props) {
 function ConversationList({
   projects,
   cwd,
-  repositoryDirectories,
-  accountScoped,
   archived,
   search,
   sort,
@@ -198,16 +152,13 @@ function ConversationList({
   onSelect,
   onUpdated,
   onArchive,
-  onResumeArchived,
   onModalChange,
 }: Props & {
   archived: boolean;
-  repositoryDirectories?: string[];
   search: string;
   sort: ConversationSort;
   revision: number;
   onArchive: () => void;
-  onResumeArchived: () => void;
 }) {
   const { t } = useInterfaceLanguage();
   const [cursor, setCursor] = useState<string>();
@@ -263,38 +214,15 @@ function ConversationList({
     return () => onModalChange(false);
   }, [dialogOpen, onModalChange]);
 
-  const repo = !!repositoryDirectories;
   useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams({ archived: String(archived), search, sort });
     if (cwd) params.set('cwd', cwd);
-    if (repo) params.set('repo', 'true');
     if (cursor) params.set('cursor', cursor);
     const known = new Map(latest.current.map((row) => [row.id, row]));
     setLoading(true);
     setError('');
-    const load = async () => {
-      let result = await request<NativeConversationPage>(
-        '/conversations?' + params,
-        {},
-        controller.signal,
-      );
-      for (
-        let i = 1;
-        search && !result.data.length && result.nextCursor && i < maximumSearchRequests;
-        i++
-      ) {
-        controller.signal.throwIfAborted();
-        params.set('cursor', result.nextCursor);
-        result = await request<NativeConversationPage>(
-          '/conversations?' + params,
-          {},
-          controller.signal,
-        );
-      }
-      return result;
-    };
-    void load()
+    void request<NativeConversationPage>('/conversations?' + params, {}, controller.signal)
       .then(
         (result) => {
           if (controller.signal.aborted) return;
@@ -310,18 +238,17 @@ function ConversationList({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [archived, cursor, cwd, repo, search, sort, revision, reload]);
+  }, [archived, cursor, cwd, search, sort, revision, reload]);
 
-  const { rows, findNewSessions } = useMemo(() => {
-    if (!page) return { rows: [], findNewSessions: false };
+  const rows = useMemo(() => {
+    if (!page) return [];
     const pendingUpdates = updates.filter((row) => baseline.current.get(row.id) !== row);
     const byId = new Map(pendingUpdates.map((row) => [row.id, row]));
     const paths = new Map(projects.map((project) => [project.id, project.path]));
     const matches = (row: NativeConversationSummary) =>
       !!row.archived === archived &&
-      (repositoryDirectories?.includes(row.cwd) ?? (!cwd || row.cwd === cwd)) &&
-      (row.matchesSearchContext ||
-        matchesConversationText(search, row.title, row.id, row.cwd, row.gitBranch));
+      (!cwd || row.cwd === cwd) &&
+      (!search || row.title.toLowerCase().includes(search.toLowerCase()));
     const present = new Set(page.data.map((row) => row.id));
     const visible = page.data.flatMap((row) => {
       const change = byId.get(row.id);
@@ -334,7 +261,7 @@ function ConversationList({
       };
       return matches(next) ? [next] : [];
     });
-    if (cursor || sort !== 'updated_at') return { rows: visible, findNewSessions: false };
+    if (cursor || sort !== 'updated_at') return visible;
     const oldest = page.data.at(-1)?.updatedAt ?? 0;
     const newRows = pendingUpdates.flatMap((row) => {
       const path = paths.get(row.projectId);
@@ -342,28 +269,8 @@ function ConversationList({
       const next = { ...row, cwd: path, createdAt: 0 };
       return matches(next) ? [next] : [];
     });
-    return {
-      rows: accountScoped ? visible : [...newRows, ...visible].slice(0, pageLimit),
-      findNewSessions: accountScoped && newRows.length > 0,
-    };
-  }, [
-    page,
-    updates,
-    projects,
-    archived,
-    cwd,
-    repositoryDirectories,
-    search,
-    cursor,
-    sort,
-    accountScoped,
-  ]);
-
-  useEffect(() => {
-    if (!findNewSessions || loading || error) return;
-    const timer = setTimeout(() => setReload((value) => value + 1), 180);
-    return () => clearTimeout(timer);
-  }, [findNewSessions, loading, error]);
+    return [...newRows, ...visible].slice(0, pageLimit);
+  }, [page, updates, projects, archived, cwd, search, cursor, sort]);
 
   const closeConfirmation = () => {
     onModalChange(false);
@@ -382,13 +289,8 @@ function ConversationList({
       onUpdated(result);
       onModalChange(false);
       setConfirmation(undefined);
-      if (!check && row.archived && !result.archived) {
-        onSelect(result.id, result.projectId);
-        onResumeArchived();
-      } else {
-        if (!!result.archived !== !!row.archived) requestAnimationFrame(onArchive);
-        setReload((value) => value + 1);
-      }
+      if (!!result.archived !== !!row.archived) requestAnimationFrame(onArchive);
+      setReload((value) => value + 1);
     } catch (cause) {
       setMutationError(message(cause));
     } finally {
@@ -413,16 +315,18 @@ function ConversationList({
           key={row.id}
           row={row}
           selected={row.id === selectedId}
-          showDirectory={!cwd || row.cwd !== cwd}
+          showDirectory={!cwd}
           sort={sort}
           disabled={disabled}
           pending={!!pending}
-          onSelect={() => (row.archived ? void mutate(row) : onSelect(row.id, row.projectId))}
-          onPreview={() => onSelect(row.id, row.projectId)}
+          onSelect={() => onSelect(row.id, row.projectId)}
           onArchive={(button) => {
-            archiveOpener.current = button;
-            setMutationError('');
-            setConfirmation(row);
+            if (row.archived) void mutate(row);
+            else {
+              archiveOpener.current = button;
+              setMutationError('');
+              setConfirmation(row);
+            }
           }}
           onCheck={() => void mutate(row, true)}
         />
@@ -522,7 +426,6 @@ function ConversationRow({
   disabled,
   pending,
   onSelect,
-  onPreview,
   onArchive,
   onCheck,
 }: {
@@ -533,7 +436,6 @@ function ConversationRow({
   disabled: boolean;
   pending: boolean;
   onSelect: () => void;
-  onPreview: () => void;
   onArchive: (button: HTMLButtonElement) => void;
   onCheck: () => void;
 }) {
@@ -544,24 +446,13 @@ function ConversationRow({
   const date = useMemo(() => {
     if (!moment) return;
     const full = formatMessageTime(moment, locale);
-    const elapsed = Math.max(0, Math.floor((Date.now() - moment) / 1000));
-    const [amount, unit] =
-      elapsed >= 86_400
-        ? ([Math.floor(elapsed / 86_400), 'day'] as const)
-        : elapsed >= 3600
-          ? ([Math.floor(elapsed / 3600), 'hour'] as const)
-          : elapsed >= 60
-            ? ([Math.floor(elapsed / 60), 'minute'] as const)
-            : ([elapsed, 'second'] as const);
-    return (
-      full && {
-        ...full,
-        label: new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' }).format(
-          -amount,
-          unit,
-        ),
-      }
-    );
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const options: Intl.DateTimeFormatOptions =
+      moment >= today.getTime()
+        ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+        : { month: 'short', day: 'numeric' };
+    return full && { ...full, label: new Intl.DateTimeFormat(locale, options).format(moment) };
   }, [moment, locale]);
   const timeLabel = date
     ? t(sort === 'created_at' ? 'Created: {time}' : 'Updated: {time}', { time: date.full })
@@ -576,11 +467,9 @@ function ConversationRow({
         <button
           className="thread-link"
           aria-current={selected ? 'page' : undefined}
-          disabled={disabled || (row.archived && (pending || !!row.managementPending))}
+          disabled={disabled}
           onClick={onSelect}
-          aria-label={
-            row.archived ? t('Restore and resume {title}', { title: row.title }) : row.title
-          }
+          aria-label={row.title}
           aria-describedby={
             'conversation-status-' + row.id + (date ? ' conversation-time-' + row.id : '')
           }
@@ -600,18 +489,9 @@ function ConversationRow({
             )}
           </span>
           <span
-            className={
-              'conversation-meta' +
-              (!showDirectory && !row.gitBranch && routine ? ' is-routine' : '')
-            }
+            className={'conversation-meta' + (!showDirectory && routine ? ' is-routine' : '')}
             id={'conversation-status-' + row.id}
           >
-            {row.gitBranch && (
-              <span className="session-branch" data-tooltip-overflow="">
-                <Icon name="branch" size={11} />
-                {row.gitBranch}
-              </span>
-            )}
             {showDirectory && (
               <span className="session-cwd" data-tooltip-overflow="">
                 {row.cwd}
@@ -649,25 +529,18 @@ function ConversationRow({
             disabled={pending}
             onClick={onCheck}
           />
-        ) : row.archived ? (
-          <IconButton
-            className="conversation-row-action"
-            icon="eye"
-            label={t('Preview {title}', { title: row.title })}
-            disabled={disabled || pending}
-            hint={t('Preview archived conversation')}
-            onClick={onPreview}
-          />
         ) : (
           <IconButton
             className="conversation-row-action"
-            icon="archive"
-            label={t('Archive {title}', { title: row.title })}
+            icon={row.archived ? 'unarchive' : 'archive'}
+            label={t(row.archived ? 'Restore {title}' : 'Archive {title}', { title: row.title })}
             disabled={pending || isWorking(row)}
             hint={t(
               isWorking(row)
                 ? 'Resolve active work and clear the queue first.'
-                : 'Archive conversation',
+                : row.archived
+                  ? 'Restore conversation'
+                  : 'Archive conversation',
             )}
             onClick={(event) => onArchive(event.currentTarget)}
           />

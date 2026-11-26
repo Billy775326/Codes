@@ -1,10 +1,10 @@
 # Conversation sidebar
 
-The sidebar lists native Codex conversations. The list starts with active sessions in **Cwd** when the working directory is known. **All** spans directories. **Repo** spans linked Git worktrees when available. [Conversation workflow](conversations.md)
+The sidebar lists native Codex conversations. The list starts with active sessions across all working directories. Use **Cwd** for the selected working directory or **Archived** for native archived conversations. [Conversation workflow](conversations.md)
 
-- Each row shows the title, relative time, and branch when known. **All** shows each working directory. **Repo** shows a path for sessions outside the current directory. Select **Updated** or **Created** when the installed CLI supports sorting.
-- Search matches native name, preview, thread ID, branch, and directory metadata. Reads are bounded and cancellable. Page cursors are tied to the current directory, archive, sort, and search filters.
-- Rename the selected conversation in the header. Archive from its sidebar row. Select an archived row to restore and resume it, or use its preview action to read the history. The new conversation button starts a draft in the current directory or prompts for one.
+- Each row shows a title and timestamp. The **All** view also shows the working directory. Select **Updated** or **Created** when the installed CLI supports sorting.
+- Search uses native title filtering where available. Older versions use bounded page scans. Page cursors are tied to the current directory, archive, sort, and search filters.
+- Rename the selected conversation in the header. Archive and restore from its sidebar row. The new conversation button starts a draft in the current directory or prompts for one.
 
 ## State sources and precedence
 
@@ -23,6 +23,6 @@ Browsing uses metadata pages without loading transcripts. A new search or filter
 
 ## Interaction and verification
 
-Active rows expose the title as the accessible name. Archived rows name the restore and preview actions. Time, execution, and queue details remain available to assistive technology. The selected item uses `aria-current`. Archive confirmations and keyboard focus remain available in both layouts.
+Conversation rows keep the title as the accessible name and expose time, execution, and queue details in their description. The selected item uses `aria-current`. Archive confirmations and keyboard focus remain available in both layouts.
 
 Test precedence, stale-list responses, working directory selection, search, archive behavior, and reconnect with both browser themes. [Interface design](interface-design.md) · [Acceptance](acceptance.md)

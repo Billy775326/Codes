@@ -209,9 +209,6 @@ export interface CodexCapabilities {
   conversationSearch?: boolean;
   conversationIdFilter?: boolean;
   conversationSort?: boolean;
-  conversationRepository?: boolean;
-  conversationAccountScope?: boolean;
-  conversationIndexedList?: boolean;
   itemHistory: boolean;
   branch: boolean;
   review: boolean;
@@ -258,8 +255,6 @@ export type ConversationSort = 'updated_at' | 'created_at';
 export interface NativeConversationSummary extends Summary {
   cwd: string;
   createdAt: number;
-  gitBranch?: string;
-  matchesSearchContext?: boolean;
 }
 
 export interface NativeConversationPage {

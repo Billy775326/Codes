@@ -13,7 +13,6 @@ export async function nativeConversationRoutes(
       .object({
         cwd: z.string().max(4096).optional(),
         search: z.string().max(120).optional(),
-        repo: z.literal('true').optional(),
         cursor: z.string().max(8192).optional(),
         archived: z.enum(['true', 'false']).optional(),
         sort: z.enum(['updated_at', 'created_at']).optional(),
@@ -29,7 +28,6 @@ export async function nativeConversationRoutes(
             {
               ...options,
               archived: options.archived === 'true',
-              repo: options.repo === 'true',
             },
             signal,
           );
@@ -37,10 +35,6 @@ export async function nativeConversationRoutes(
         }),
       () => diagnostics.verbose(),
     );
-  }
-  if (url.pathname === '/api/conversations/repository' && method === 'GET') {
-    const cwd = z.string().min(1).max(4096).parse(url.searchParams.get('cwd'));
-    return json(response, { directories: await service.nativeConversationRepository(cwd) });
   }
   if (url.pathname === '/api/conversations/directory' && method === 'POST') {
     const { path } = z

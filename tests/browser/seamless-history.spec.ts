@@ -6,8 +6,7 @@ async function fixture(page: Page) {
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   const title = await page.evaluate(async () => {
     const projects = await (await fetch('/api/projects')).json();
-    const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
-    const result = await fetch('/api/projects/' + project.id + '/seed', {
+    const result = await fetch('/api/projects/' + projects[0].id + '/seed', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}',

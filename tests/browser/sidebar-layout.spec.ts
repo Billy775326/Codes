@@ -23,7 +23,7 @@ for (const width of [1440, 390, 320]) {
         : sidebar;
     const directory = navigation.getByRole('group', { name: 'Directory filter' });
     const filter = navigation.getByRole('group', { name: 'Archive filter' });
-    await expect(directory.getByRole('button', { name: 'Cwd', exact: true })).toHaveAttribute(
+    await expect(directory.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

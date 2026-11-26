@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { chooseWorkingDirectory, conversationList } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile, rename, symlink } from 'node:fs/promises';
@@ -60,7 +59,7 @@ async function fixture(page: Page) {
   }
   const first = await conversation(a, 'Alpha context ' + randomUUID());
   const second = await conversation(b, 'Beta context ' + randomUUID());
-  return { a, b, first, second, path, conversation };
+  return { a, b, first, second, path };
 }
 test.afterEach(async ({ page }) => {
   for (const id of threads.splice(0))
@@ -76,13 +75,11 @@ test('native archive changes appear in another browser and restoration keeps the
   await login(page);
   const { second, path } = await fixture(page);
   await page.reload();
-  await page.getByRole('button', { name: 'All', exact: true }).click();
   await expect(row(page, second.id)).toContainText(path);
   const observerContext = await browser.newContext();
   try {
     const observer = await observerContext.newPage();
     await login(observer);
-    await observer.getByRole('button', { name: 'All', exact: true }).click();
     await expect(row(observer, second.id)).toBeVisible();
     await row(page, second.id)
       .getByRole('button', { name: 'Archive ' + second.title, exact: true })
@@ -96,12 +93,11 @@ test('native archive changes appear in another browser and restoration keeps the
     await observer.getByRole('button', { name: 'Archived', exact: true }).click();
     await expect(row(observer, second.id)).toContainText(path);
     await row(observer, second.id)
-      .getByRole('button', { name: 'Restore and resume ' + second.title, exact: true })
+      .getByRole('button', { name: 'Restore ' + second.title, exact: true })
       .click();
-    await expect(observer.getByRole('button', { name: 'Active', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expect(row(observer, second.id)).toHaveCount(0);
+    await observer.getByRole('button', { name: 'Active', exact: true }).click();
+    await row(observer, second.id).getByRole('button', { name: second.title, exact: true }).click();
     await expect(observer.getByRole('heading', { level: 1 })).toHaveText(second.title);
     await expect(observer.locator('.workspace-directory')).toHaveText(path);
   } finally {
@@ -128,7 +124,7 @@ for (const width of [1440, 390])
       await expect(
         row(page, second.id).getByRole('button', { name: second.title, exact: true }),
       ).toHaveAttribute('aria-current', 'page');
-      await expect(row(page, second.id).locator('.session-cwd')).toHaveCount(0);
+      await expect(row(page, second.id)).toContainText(path);
       if (width < 1100)
         await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
       await page.getByRole('button', { name: 'Browse files', exact: true }).click();
@@ -147,7 +143,6 @@ test('switching native conversations preserves drafts, running work, and the que
   await login(page);
   const { first, second, path } = await fixture(page);
   await page.reload();
-  await page.getByRole('button', { name: 'All', exact: true }).click();
   await row(page, first.id).getByRole('button', { name: first.title, exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(first.title);
   await page.getByLabel('Message Codex').fill('[hold] Native conversation task');
@@ -181,8 +176,7 @@ test('switching native conversations preserves drafts, running work, and the que
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
   const summary = conversationList(page).getByRole('button', { name: title, exact: true });
-  await expect(summary).toBeVisible();
-  await expect(page.locator('.workspace-directory')).toHaveText(path);
+  await expect(summary).toContainText(path);
 });
 test('missing directories preserve history and block execution until explicit retry after restoration', async ({
   page,
@@ -267,14 +261,6 @@ test('All discovers both directories, Cwd follows the current conversation, and 
   await login(page);
   const { a, first, second, path } = await fixture(page);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Cwd', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await expect(row(page, first.id)).toBeVisible();
-  await expect(row(page, first.id).locator('.session-cwd')).toHaveCount(0);
-  await expect(row(page, second.id)).toHaveCount(0);
-  await page.getByRole('button', { name: 'All', exact: true }).click();
   await expect(row(page, first.id)).toContainText(a.path);
   await expect(row(page, second.id)).toContainText(path);
   await row(page, second.id).getByRole('button', { name: second.title, exact: true }).click();
@@ -365,40 +351,4 @@ test('an installation without a selected directory can browse and choose one for
   await expect(page.getByRole('button', { name: 'Change working directory' })).toHaveText(
     join(initial.path, 'conversation-fixtures'),
   );
-});
-
-test('Repo includes linked worktrees and shows only the other worktree path', async ({ page }) => {
-  await login(page);
-  const { b, second, path, conversation } = await fixture(page);
-  const linked = path + '-linked';
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: path, stdio: 'ignore' });
-  git('init', '-q');
-  git(
-    '-c',
-    'user.name=Fixture',
-    '-c',
-    'user.email=fixture@example.invalid',
-    'commit',
-    '--allow-empty',
-    '-qm',
-    'Fixture',
-  );
-  git('worktree', 'add', '-qb', 'fixture-linked', linked);
-  const workspace = await (
-    await page.request.post('/api/conversations/directory', {
-      data: { path: linked },
-      headers: { Origin: origin },
-    })
-  ).json();
-  const linkedThread = await conversation(workspace, 'Linked conversation ' + randomUUID());
-  await page.goto('/?conversation=' + second.id);
-  await expect(page.locator('.workspace-directory')).toHaveText(path);
-  await expect(row(page, linkedThread.id)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Repo', exact: true }).click();
-  await expect(row(page, second.id).locator('.session-cwd')).toHaveCount(0);
-  await expect(row(page, linkedThread.id).locator('.session-cwd')).toHaveText(linked);
-  const active = await page.request.get('/api/conversations?cwd=' + encodeURIComponent(path));
-  expect((await active.json()).data).toEqual([
-    expect.objectContaining({ id: second.id, projectId: b.id }),
-  ]);
 });

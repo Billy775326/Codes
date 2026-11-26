@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -1739,58 +1738,4 @@ it('loads a native deep link before listing and keeps history with a missing wor
     project: { path: cwd },
     directory: { available: false, code: 'DIRECTORY_UNAVAILABLE' },
   });
-});
-
-it('matches the CLI picker search fields and limits Repo to linked worktrees', async () => {
-  const { service, directory, thread } = await fixture();
-  const linked = join(directory, 'linked-checkout');
-  const unrelated = join(directory, 'unrelated');
-  await mkdir(unrelated);
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, stdio: 'ignore' });
-  git('init', '-q');
-  git(
-    '-c',
-    'user.name=Fixture',
-    '-c',
-    'user.email=fixture@example.invalid',
-    'commit',
-    '--allow-empty',
-    '-qm',
-    'Fixture',
-  );
-  git('worktree', 'add', '-qb', 'fixture-worktree', linked);
-  const external = await service.driver.call('test/seed', { cwd: linked, count: 2 });
-  await service.driver.call('test/seed', { cwd: unrelated, count: 2 });
-  const nativeCall = service.driver.call.bind(service.driver);
-  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
-    const result = await nativeCall(method, params, timeout);
-    if (method === 'thread/list') {
-      const row = result.data.find((entry: { id: string }) => entry.id === external.thread.id);
-      if (row) row.gitInfo = { branch: 'fixture-worktree' };
-    }
-    return result;
-  });
-  expect(await service.nativeConversationRepository(directory)).toEqual([directory, linked].sort());
-  const repository = await service.nativeConversations({ cwd: directory, repo: true });
-  expect(repository.data.map((row) => row.id).sort()).toEqual(
-    [thread.id, external.thread.id].sort(),
-  );
-  for (const search of [
-    'FIXTURE-WORKTREE',
-    'Synthetic history',
-    'linked-checkout',
-    external.thread.id.slice(0, 12),
-  ]) {
-    const result = await service.nativeConversations({ cwd: directory, repo: true, search });
-    expect(result.data).toEqual([
-      expect.objectContaining({
-        id: external.thread.id,
-        cwd: linked,
-        gitBranch: 'fixture-worktree',
-      }),
-    ]);
-  }
-  expect((await service.nativeConversations({ cwd: directory })).data.map((row) => row.id)).toEqual(
-    [thread.id],
-  );
 });

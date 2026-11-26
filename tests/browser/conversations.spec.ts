@@ -79,16 +79,12 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   const archives = page.getByRole('button', { name: 'Archived', exact: true });
   await archives.click();
-  await page.getByRole('button', { name: 'Preview ' + renamed, exact: true }).click();
-  await expect(page.getByLabel('Message Codex')).toHaveAttribute('readonly', '');
+  await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
-  await page.getByRole('button', { name: 'Restore and resume ' + renamed, exact: true }).click();
+  await page.getByRole('button', { name: 'Restore ' + renamed, exact: true }).click();
   await expect(page.getByLabel('Message Codex')).not.toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Active', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await page.getByRole('button', { name: 'Active', exact: true }).click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   expect(errors).toEqual([]);
@@ -103,12 +99,11 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
   await login(page);
   const fixture = await page.evaluate(async () => {
     const projects = await (await fetch('/api/projects')).json();
-    const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
     const response = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        path: project.path + '/conversation-fixtures',
+        path: projects[0].path + '/conversation-fixtures',
         name: 'zz Conversation fixtures',
       }),
     });

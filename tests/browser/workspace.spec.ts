@@ -221,20 +221,16 @@ test('bounded long history remains usable while typing and switching conversatio
   page,
 }) => {
   await login(page);
-  const id = await page.evaluate(async () => {
+  await page.evaluate(async () => {
     const projects = await (await fetch('/api/projects')).json();
-    const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
-    const seeded = await fetch(`/api/projects/${project.id}/seed`, {
+    await fetch(`/api/projects/${projects[0].id}/seed`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}',
     });
-    const rows = await seeded.json();
-    return rows.find((row: { title: string }) => row.title === 'Rendering reference').id as string;
   });
   await page.reload();
-  const conversation = page.locator(`[data-conversation-id="${id}"] .thread-link`);
-  await conversation.click();
+  await page.locator('.thread-link').filter({ hasText: 'Rendering reference' }).click();
   await expect(page.getByTestId('message-assistant')).toHaveCount(12);
   const timings = await page.evaluate(async () => {
     const tasks: number[] = [];
@@ -261,11 +257,13 @@ test('bounded long history remains usable while typing and switching conversatio
     body: JSON.stringify({ ...result, measuredAt: timings }),
     contentType: 'application/json',
   });
-  expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).toBe(id);
+  const id = await page.evaluate(() => localStorage.getItem('codes.thread'));
+  expect(id).toBeTruthy();
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'New conversation' })).toBeVisible();
   await page.screenshot({ path: 'test-results/desktop-after-history.png' });
 
+  const conversation = page.locator('.thread-link').filter({ hasText: 'Rendering reference' });
   let release!: () => void;
   const delayed = new Promise<void>((resolve) => (release = resolve));
   const snapshot = '**/api/threads/' + id + '/snapshot';

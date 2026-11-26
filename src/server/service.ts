@@ -496,9 +496,6 @@ export class Service {
     const page = await this.nativeDirectory.list({ ...options, cwd: path, projectId });
     return { ...page, latestConversationAt: this.store.latestConversationAt(projectId) };
   }
-  nativeConversationRepository(cwd: string) {
-    return this.nativeDirectory.repository(cwd);
-  }
   nativeConversations(options: ConversationFilters, signal?: AbortSignal) {
     return this.reads.run('list:' + JSON.stringify(options), 'history', signal, (readSignal) =>
       this.nativeDirectory.list(options, readSignal),
