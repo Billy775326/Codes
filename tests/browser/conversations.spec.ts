@@ -103,11 +103,12 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
   await login(page);
   const fixture = await page.evaluate(async () => {
     const projects = await (await fetch('/api/projects')).json();
+    const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
     const response = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        path: projects[0].path + '/conversation-fixtures',
+        path: project.path + '/conversation-fixtures',
         name: 'zz Conversation fixtures',
       }),
     });
