@@ -1,6 +1,6 @@
 # Codes documentation
 
-Start with the [English quick start](../README.md) or [简体中文快速开始](README.zh-CN.md). Codes runs on one Linux host for one workspace owner.
+Start with the [English quick start](../README.md#quick-start) or [简体中文快速开始](README.zh-CN.md#快速开始). Codes runs on one Linux host for one workspace owner.
 
 ## Use the workspace
 
@@ -27,3 +27,4 @@ Start with the [English quick start](../README.md) or [简体中文快速开始]
 - [Acceptance](acceptance.md) lists verification gates and recorded evidence. [IDE alignment](ide-parity.md) describes the historical client audit and the supported interaction surface.
 - [Roadmap](roadmap.md) and [open work](requirements.md) describe proposals and remaining verification.
 - [Changelog](../CHANGELOG.md) and [brand](brand.md) cover user-visible changes and identity assets.
+- [Third-party components and licenses](../LICENSES/THIRD-PARTY.md) credits the upstream projects Codes uses.

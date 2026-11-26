@@ -14,34 +14,43 @@ A self-hosted web UI for Codex CLI on Linux. Resume and manage Codex conversatio
 Codes is an independent, single-owner development preview. Codex App Server runs on your Linux host under your existing Codex account. The browser handles conversation navigation, file browsing, and review. Closing a tab leaves active work running on the host.
 
 <a id="requirements"></a>
+<a id="one-command-install"></a>
 
-## One-command install
+## Quick start
 
-This command installs the release on glibc-based Linux (x86-64 or ARM64).
+Use a glibc-based Linux host (x86-64 or ARM64). Install Codex CLI and sign in as the Linux user who will run Codes. [Codex CLI setup](https://learn.chatgpt.com/docs/codex/cli)
+
+### Install Codes
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.1.0/scripts/install.sh | bash
 ```
 
-The release includes Node.js. Install Codex CLI and sign in as the Linux account that will run Codes. Then run `~/.local/bin/codes start` and open [http://127.0.0.1:6670](http://127.0.0.1:6670). Initial startup prints the path to the workspace token. [Install, upgrade, and recover](docs/operations.md#install-or-upgrade-a-release)
+The release includes Node.js and installs the `codes` launcher in `~/.local/bin`. [Install and upgrade](docs/operations.md#install-or-upgrade-a-release)
 
-## Run locally
+### Start the workspace
 
-You need Linux, Node.js 24.19 or newer in the 24.x line, npm, and a current browser. Install Codex CLI and sign in as the Linux user who will run Codes. [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
+```bash
+~/.local/bin/codes start
+```
 
-Run these commands from the repository checkout.
+Open [http://127.0.0.1:6670](http://127.0.0.1:6670) and sign in with the workspace token. On first startup, Codes prints the path to the token file. Select a Codex conversation in the sidebar or choose a working directory for a new one.
+
+<a id="remote-access"></a>
+
+For access from another machine, use SSH forwarding or configure a dedicated HTTPS origin. [Network and access](docs/operations.md#network-and-access)
+
+<a id="run-locally"></a>
+
+## Run from source
+
+Use Node.js 24.19 or later in the 24.x line and npm. Run these commands from the repository checkout.
 
 ```bash
 npm ci
 npm run build
 npm start
 ```
-
-Open [http://127.0.0.1:6670](http://127.0.0.1:6670) and enter the workspace token from the path printed at initial startup. Existing native conversations appear automatically. Choose a working directory to start a new conversation. The Codes token signs in to the browser workspace. Codex authentication belongs to the Linux account.
-
-<a id="remote-access"></a>
-
-For access from another machine, use SSH forwarding or configure a dedicated HTTPS origin. [Network and access](docs/operations.md#network-and-access)
 
 ### Install the launcher
 
@@ -59,7 +68,7 @@ CODES_RUNTIME=mock CODES_DATA_DIR=.local/demo CODES_PROJECT_ROOT="$PWD" npm star
 
 Simulation marks the workspace and uses synthetic turns. Try `[approve]`, `[question]`, or `[hold]` to exercise approvals, questions, and Stop. Use a free listener port if another instance is running. [Development and checks](docs/development.md)
 
-## What is implemented
+## Features
 
 - Browse native Codex conversations across working directories. Search, rename, archive, restore, and resume conversations. [Conversations](docs/conversations.md)
 - Send or queue a message, add it to a running turn, answer native questions, and branch through a completed turn. [Working with Codex](docs/conversation-workflow.md)
@@ -85,4 +94,14 @@ Use the documented [development checks](docs/development.md) for format, types, 
 
 <a id="design-philosophy"></a>
 
-See [brand and attribution](docs/brand.md) for the identity assets and their font license. The application source has no selected software license.
+## Acknowledgments
+
+Thanks to the maintainers and contributors of the projects that shaped Codes.
+
+- **Codex CLI** provides native sessions and task execution through App Server. [openai/codex](https://github.com/openai/codex)
+- **Covro** served as a reference for the self-hosted Codex workspace and settings. [yuzheng14/covro](https://github.com/yuzheng14/covro)
+- **1Panel** served as a reference for settings organization and the quick-start installation flow. [1Panel-dev/1Panel](https://github.com/1Panel-dev/1Panel)
+
+[Third-party components and licenses](LICENSES/THIRD-PARTY.md) · [Brand and attribution](docs/brand.md)
+
+The application source has no selected software license.

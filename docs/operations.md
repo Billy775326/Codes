@@ -1,10 +1,10 @@
 # Operate and recover Codes
 
-Run Codes under the Linux account that owns the projects and is signed in to Codex. Use one service per data directory. See the [quick start](../README.md#run-locally) and [startup environment](configuration.md#startup-environment).
+Run Codes under the Linux account that owns the projects and is signed in to Codex. Use one service per data directory. See the [quick start](../README.md#quick-start) and [startup environment](configuration.md#startup-environment).
 
 ## Install or upgrade a release
 
-The [release installer](../README.md#one-command-install) needs Bash, curl, GNU tar and coreutils, and `flock` from util-linux. The Linux x64 and ARM64 bundles include the Node.js runtime and JavaScript dependencies. Codex CLI and its login come from the host account.
+The [release installer](../README.md#install-codes) needs Bash, curl, GNU tar and coreutils, and `flock` from util-linux. The Linux x64 and ARM64 bundles include the Node.js runtime and JavaScript dependencies. Codex CLI and its login come from the host account.
 
 Install runs as your user and places releases in `$XDG_DATA_HOME/codes-app` or `~/.local/share/codes-app`, with a launcher in `~/.local/bin`. Configure these locations with `CODES_APP_DIR` and `CODES_BIN_DIR` respectively. The launcher directs commands to the installed version. The workspace database and token use the usual data directory.
 
