@@ -5,12 +5,11 @@ export TEST_RELEASE_ASSETS
 TEST_RELEASE_ASSETS=$(realpath "${1:?Specify a release asset directory}")
 stage=$(mktemp -d)
 original_path=$PATH
-export HOME=$stage/home XDG_DATA_HOME=$stage/data
 export CODES_APP_DIR="$stage/installed app" CODES_BIN_DIR="$stage/installed bin"
 export CODES_RUNTIME=mock CODES_PORT=19180 CODES_HOST=127.0.0.1
 export CODES_DATA_DIR=$stage/workspace
 trap 'if [[ -e $CODES_DATA_DIR/server.lock ]]; then "$CODES_BIN_DIR/codes" stop; fi; rm -rf -- "$stage"' EXIT
-mkdir -p "$HOME" "$stage/downloads"
+mkdir -p "$stage/downloads"
 cat >"$stage/downloads/curl" <<'EOF'
 #!/usr/bin/env bash
 set -eu
