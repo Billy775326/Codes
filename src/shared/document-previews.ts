@@ -5,4 +5,5 @@ export function documentPreviewFormat(path: string) {
 }
 
 export type DocumentPreview =
-  { format: 'word'; text: string; truncated: boolean } | { format: 'pdf' };
+  { format: 'word'; text: string; truncated: boolean; version?: string } | { format: 'pdf' };
+export type DocumentPreviewRead = DocumentPreview | { format: 'unchanged'; version: string };

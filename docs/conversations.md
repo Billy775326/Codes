@@ -4,8 +4,8 @@ Codes lists conversations through the running Codex App Server. Use the same Lin
 
 ## Browse and continue work
 
-1. Open **All** for sessions across directories or **Cwd** to filter to the current working directory.
-2. Choose **Active** or **Archived**. Search by title or use the native pagination controls.
+1. Choose **Active** or **Archived** to browse conversations across all working directories.
+2. Search by title, sort by update or creation time, or use the native pagination controls.
 3. Select a conversation to open its history. A new conversation starts as a draft and receives a native thread ID on first send.
 
 Switching conversations restores unsent text and leaves live work running. See the [sidebar design](conversation-sidebar.md) for summary and status behavior.

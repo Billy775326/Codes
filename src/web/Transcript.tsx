@@ -2,7 +2,13 @@ import { useInterfaceLanguage } from './interface-language';
 import { Fragment, useEffect, useMemo, useState, type ReactNode, type RefObject } from 'react';
 import type { Message, Thread, TurnInfo } from '../shared/types';
 import { parseQuestionReplies } from '../shared/question-replies';
-import { groupTurns, commandCounts, workDuration, type TurnActivity } from './activity';
+import {
+  groupTurns,
+  commandCounts,
+  isToolActivity,
+  workDuration,
+  type TurnActivity,
+} from './activity';
 import { Icon } from './primitives';
 import { MessageTime } from './MessageTime';
 import { isTurnOutcome, TurnResult, type TurnOutcome } from './TurnResult';
@@ -15,7 +21,6 @@ type RenderMessage = (
   timestamp?: number,
   completion?: ReactNode,
 ) => ReactNode;
-const isActivity = (item: Message) => item.kind === 'command' || item.kind === 'tool';
 
 function ActivityGroup({ items, render }: { items: Message[]; render: RenderMessage }) {
   const { t } = useInterfaceLanguage();
@@ -71,11 +76,11 @@ function WorkItems({ items, render }: { items: Message[]; render: RenderMessage 
   const runs: Message[][] = [];
   for (const item of items) {
     const previous = runs.at(-1);
-    if (isActivity(item) && previous && isActivity(previous[0]!)) previous.push(item);
+    if (isToolActivity(item) && previous && isToolActivity(previous[0]!)) previous.push(item);
     else runs.push([item]);
   }
   return runs.map((run) =>
-    isActivity(run[0]!) ? (
+    isToolActivity(run[0]!) ? (
       <ActivityGroup key={run[0]!.id} items={run} render={render} />
     ) : (
       <Fragment key={run[0]!.id}>{render(run[0]!, false)}</Fragment>
@@ -121,7 +126,7 @@ function Turn({
   }
   const disclosure = (items: Message[], index: number) => {
     const open = choices[index] ?? turn.active;
-    const tools = items.filter(isActivity);
+    const tools = items.filter(isToolActivity);
     const counts = commandCounts(tools);
     return (
       <section className="work-history" key={index}>

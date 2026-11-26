@@ -238,6 +238,7 @@ export const DiffView = memo(function DiffView({
   focusPath,
   layout: selectedLayout,
   onLayoutChange,
+  allowSplit = true,
 }: {
   patch?: string;
   files?: FileChange[];
@@ -247,10 +248,11 @@ export const DiffView = memo(function DiffView({
   focusPath?: string;
   layout?: DiffLayout;
   onLayoutChange?: (layout: DiffLayout) => void;
+  allowSplit?: boolean;
 }) {
   const { t } = useInterfaceLanguage();
   const [localLayout, setLocalLayout] = useState<DiffLayout>('unified');
-  const layout = selectedLayout ?? localLayout;
+  const layout = allowSplit ? (selectedLayout ?? localLayout) : 'unified';
   const setLayout = onLayoutChange ?? setLocalLayout;
   const entries = useMemo(
     () => (files?.length ? parseFileDiffs(files) : parseUnifiedDiff(patch ?? '')),
@@ -274,20 +276,22 @@ export const DiffView = memo(function DiffView({
         </strong>
         <span className="diff-additions">+{totals.add}</span>
         <span className="diff-deletions">−{totals.del}</span>
-        <div role="group" aria-label={t('Diff layout')}>
-          <IconButton
-            icon="diff-unified"
-            label={t('Unified')}
-            aria-pressed={layout === 'unified'}
-            onClick={() => setLayout('unified')}
-          />
-          <IconButton
-            icon="diff-split"
-            label={t('Side by side')}
-            aria-pressed={layout === 'split'}
-            onClick={() => setLayout('split')}
-          />
-        </div>
+        {allowSplit && (
+          <div role="group" aria-label={t('Diff layout')}>
+            <IconButton
+              icon="diff-unified"
+              label={t('Unified')}
+              aria-pressed={layout === 'unified'}
+              onClick={() => setLayout('unified')}
+            />
+            <IconButton
+              icon="diff-split"
+              label={t('Side by side')}
+              aria-pressed={layout === 'split'}
+              onClick={() => setLayout('split')}
+            />
+          </div>
+        )}
       </div>
       {(truncated || entries.some((file) => file.truncated)) && (
         <p className="diff-truncated" role="status">

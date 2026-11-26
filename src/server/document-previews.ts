@@ -2,8 +2,9 @@ import { constants } from 'node:fs';
 import { open, realpath, type FileHandle } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
 import { Worker } from 'node:worker_threads';
-import type { DocumentPreview } from '../shared/document-previews.js';
+import type { DocumentPreview, DocumentPreviewRead } from '../shared/document-previews.js';
 import { AppError } from '../shared/errors.js';
+import { fileVersion } from './file-version.js';
 
 const maxWordBytes = 8 * 1024 * 1024;
 const maxPdfBytes = 32 * 1024 * 1024;
@@ -85,17 +86,21 @@ export async function previewDocument(
   path: string,
   format: DocumentPreview['format'],
   signal: AbortSignal,
-): Promise<DocumentPreview> {
+  knownVersion?: string,
+): Promise<DocumentPreviewRead> {
   if (format === 'pdf') return readPdf(path, async () => ({ format: 'pdf' }));
-  if (wordPreviewActive)
-    throw new AppError('DOCUMENT_BUSY', 'Word preview is busy. Try again shortly.', 429);
-  wordPreviewActive = true;
-  try {
-    return await withFile(
-      path,
-      maxWordBytes,
-      'Word previews are limited to 8 MiB.',
-      async (file, size) => {
+  return withFile<DocumentPreviewRead>(
+    path,
+    maxWordBytes,
+    'Word previews are limited to 8 MiB.',
+    async (file, size) => {
+      signal.throwIfAborted();
+      const version = fileVersion(await file.stat({ bigint: true }));
+      if (knownVersion === version) return { format: 'unchanged', version };
+      if (wordPreviewActive)
+        throw new AppError('DOCUMENT_BUSY', 'Word preview is busy. Try again shortly.', 429);
+      wordPreviewActive = true;
+      try {
         const bytes = new Uint8Array(size + 1);
         let length = 0;
         while (length < bytes.length) {
@@ -104,12 +109,13 @@ export async function previewDocument(
           if (!bytesRead) break;
           length += bytesRead;
         }
-        if (length !== size)
+        if (length !== size || fileVersion(await file.stat({ bigint: true })) !== version)
           throw new AppError('FILE_CHANGED', 'The selected file changed. Open it again.', 409);
-        return extractWord(bytes.subarray(0, length), signal);
-      },
-    );
-  } finally {
-    wordPreviewActive = false;
-  }
+        const preview = await extractWord(bytes.subarray(0, length), signal);
+        return { ...preview, version };
+      } finally {
+        wordPreviewActive = false;
+      }
+    },
+  );
 }

@@ -15,7 +15,19 @@ Codes targets one workspace owner on a Linux host. This guide distinguishes simu
 
 ## Local evidence
 
-Run the commands in [Development](development.md#checks) for the current checkout. Historical counts below belong to their individual runs. Simulator tests use temporary data and exercise the browser and server without using a real model account.
+Run the commands in [Development](development.md#checks) for the current checkout. Use the [regression test cases](test-cases.md) to select scenarios and verify feature coverage. Historical counts below belong to their individual runs. Simulator tests use temporary data and exercise the browser and server without using a real model account.
+
+### 2026-11-26 workspace acceptance
+
+The working tree based on `569082f` built with Node.js 24.22.3. TypeScript and formatting checks passed for project files. The broad formatter was stopped after scanning locally excluded migrated projects and reporting existing formatting in the local `AGENTS.md`.
+
+- **Unit and integration** passed 262 tests in 27 files on the complete rerun. The first run reported three CLI initialization timeouts.
+- **Simulator browser** covered 214 tests with Chromium 151. The initial run passed 209. Two conversation-load timeouts and three launcher cases missing copied fixtures passed in a separate rerun of the five failures.
+- **Native metadata** passed for Codex CLI 0.166.0, 0.167.0, 0.168.0, and 0.172.0. Checks exercised configuration layering and conflicts, capabilities, native working directories, history, and archive and restore.
+- **Local preview** at port 6670 served the same web entry as the candidate and reported CLI 0.172.0. An isolated browser verified sign-in, desktop settings, all three backup sections, browser preference export, a 320 px layout, and the working-directory chooser.
+- **Web update** passed an isolated install, retained-asset check, rollback, and rejection of mismatched backend output.
+
+Real model execution, physical-phone and external-proxy behavior, representative scale measurement, and coordinated restoration of Codes and native data remain separate acceptance gates.
 
 The document preview change at `dc327e4` passed CI, focused HTTP and browser checks, a legacy DOC sample, and a Chrome PDF rendering check. The existing 6670 preview also passed a browser check after its update with CLI 0.172.0 and schema 6. Those checks are about preview and runtime readiness. [CI run](https://github.com/Billy775326/Codes/actions/runs/45742529992)
 

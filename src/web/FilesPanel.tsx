@@ -1,7 +1,19 @@
 import { useInterfaceLanguage } from './interface-language';
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { projectImageType } from '../shared/images';
-import { documentPreviewFormat, type DocumentPreview } from '../shared/document-previews';
+import {
+  documentPreviewFormat,
+  type DocumentPreview,
+  type DocumentPreviewRead,
+} from '../shared/document-previews';
 import {
   hasHiddenPathSegment,
   type FileBrowserResult,
@@ -18,17 +30,41 @@ import { BrowserImagePreview, HtmlPreview } from './ContentPreview';
 import { InteractionDialog } from './InteractionDialog';
 import { Icon, IconButton } from './primitives';
 import type { ProjectFileReference } from './remarkProjectFileLinks';
+import type { FileCacheKind, FilesReadCache } from './files-read-cache';
 import './files-panel.css';
 
 type ReadResult<T> =
   { url: string; value: T; outsideScope?: boolean } | { url: string; error: string; code?: string };
 
-function useRead<T>(url: string | undefined, browserUrl?: string, onScopeWarning?: () => void) {
-  const [result, setResult] = useState<ReadResult<T>>();
+type FileCacheScope = { cache: FilesReadCache; projectId: string };
+const noSubscription = () => () => {};
+const noRevision = () => 0;
+
+function useRead<T>(
+  url: string | undefined,
+  browserUrl?: string,
+  onScopeWarning?: () => void,
+  scope?: FileCacheScope,
+  kind: FileCacheKind = 'directory',
+  readBrowser?: (url: string, signal: AbortSignal, previous?: T) => Promise<FileBrowserResult<T>>,
+) {
+  const [result, setResult] = useState<{
+    value: ReadResult<T>;
+    identity: string;
+    revision: number;
+  }>();
   const [attempt, setAttempt] = useState(0);
   const key = url ?? browserUrl;
+  const { cache, projectId } = scope ?? {};
+  const revision = useSyncExternalStore(
+    cache?.subscribe ?? noSubscription,
+    cache?.revision ?? noRevision,
+  );
+  const identity = JSON.stringify([projectId, kind, url, browserUrl]);
+  const cacheKey = cache && key ? identity : undefined;
   useEffect(() => {
     if (!key) return;
+    if (cacheKey) cache?.touch(cacheKey);
     const controller = new AbortController();
     const load = async () => {
       if (url) {
@@ -39,31 +75,62 @@ function useRead<T>(url: string | undefined, browserUrl?: string, onScopeWarning
             throw error;
         }
       }
-      return request<FileBrowserResult<T>>(browserUrl!, {}, controller.signal);
+      return readBrowser
+        ? readBrowser(
+            browserUrl!,
+            controller.signal,
+            cacheKey ? cache?.peek<T>(cacheKey)?.value : undefined,
+          )
+        : request<FileBrowserResult<T>>(browserUrl!, {}, controller.signal);
     };
     void load().then(
       (value) => {
-        if (!controller.signal.aborted) {
-          setResult({ url: key, ...value });
+        if (!controller.signal.aborted && (!cache || cache.revision() === revision)) {
+          if (cache && cacheKey && projectId) cache.remember(cacheKey, projectId, kind, value);
+          setResult({ value: { url: key, ...value }, identity, revision });
           if (value.outsideScope) onScopeWarning?.();
         }
       },
       (error) => {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted && (!cache || cache.revision() === revision)) {
+          if (cacheKey) cache?.forget(cacheKey);
           setResult({
-            url: key,
-            error: message(error),
-            code: error instanceof ApiError ? error.code : undefined,
+            value: {
+              url: key,
+              error: message(error),
+              code: error instanceof ApiError ? error.code : undefined,
+            },
+            identity,
+            revision,
           });
+        }
       },
     );
     return () => controller.abort();
-  }, [key, url, browserUrl, attempt, onScopeWarning]);
+  }, [
+    key,
+    url,
+    browserUrl,
+    attempt,
+    onScopeWarning,
+    cache,
+    cacheKey,
+    projectId,
+    kind,
+    revision,
+    identity,
+    readBrowser,
+  ]);
+  const current =
+    result?.identity === identity && result.revision === revision ? result.value : undefined;
+  const cached = !current && cacheKey ? cache?.peek<T>(cacheKey) : undefined;
   return {
-    result: result?.url === key ? result : undefined,
+    result: current ?? (cached && key ? { url: key, ...cached } : undefined),
+    fromCache: !!cached,
     reload() {
       setResult(undefined);
-      setAttempt((value) => value + 1);
+      if (cache && projectId) cache.invalidate(projectId);
+      else setAttempt((value) => value + 1);
     },
   };
 }
@@ -251,12 +318,15 @@ function FileTextContents({
   showHidden,
   onScopeWarning,
   attachment,
+  cacheScope,
 }: FileContentsProps) {
   const { t } = useInterfaceLanguage();
-  const { result, reload } = useRead<FileContent>(
+  const { result, reload, fromCache } = useRead<FileContent>(
     apiBase && !path.startsWith('/') ? fileReadUrl(apiBase, 'file', path, showHidden) : undefined,
     fileBrowserUrl('file', path, showHidden, projectId),
     onScopeWarning,
+    cacheScope,
+    'preview',
   );
   if (!result)
     return (
@@ -274,7 +344,16 @@ function FileTextContents({
     return <ReadError error={result.error} retry={reload} />;
   }
   return (
-    <TextPreview file={result.value} attachment={result.outsideScope ? undefined : attachment} />
+    <TextPreview
+      file={result.value}
+      attachment={
+        result.outsideScope || !attachment
+          ? undefined
+          : fromCache
+            ? { ...attachment, attachmentBlocked: true }
+            : attachment
+      }
+    />
   );
 }
 
@@ -285,14 +364,37 @@ interface FileContentsProps {
   showHidden: boolean;
   onScopeWarning: () => void;
   attachment?: AttachmentControls;
+  cacheScope?: FileCacheScope;
 }
 
-function DocumentContents({ projectId, path, showHidden, onScopeWarning }: FileContentsProps) {
+async function readDocument(url: string, signal: AbortSignal, previous?: DocumentPreview) {
+  const known = previous?.format === 'word' ? previous.version : undefined;
+  const response = await request<FileBrowserResult<DocumentPreviewRead>>(
+    known ? url + '&version=' + encodeURIComponent(known) : url,
+    {},
+    signal,
+  );
+  if (response.value.format !== 'unchanged') return { ...response, value: response.value };
+  if (!previous || response.outsideScope || !known || known !== response.value.version)
+    throw new ApiError('The requested preview version could not be verified.', 'INVALID_RESPONSE');
+  return { value: previous, outsideScope: false };
+}
+
+function DocumentContents({
+  projectId,
+  path,
+  showHidden,
+  onScopeWarning,
+  cacheScope,
+}: FileContentsProps) {
   const { t } = useInterfaceLanguage();
   const { result, reload } = useRead<DocumentPreview>(
     undefined,
     fileBrowserUrl('document', path, showHidden, projectId),
     onScopeWarning,
+    documentPreviewFormat(path) === 'word' ? cacheScope : undefined,
+    'preview',
+    readDocument,
   );
   if (!result)
     return (
@@ -333,11 +435,13 @@ function FileContents(props: FileContentsProps) {
 
 export function LinkedFilePreview({
   file,
+  fileCache,
   showHidden,
   onScopeWarning,
   close,
 }: {
   file: ProjectFileReference;
+  fileCache: FilesReadCache;
   showHidden: boolean;
   onScopeWarning: () => void;
   close: () => void;
@@ -352,6 +456,11 @@ export function LinkedFilePreview({
     >
       <section className="file-preview" aria-label={t('File preview')}>
         <FileContents
+          cacheScope={
+            file.projectId && !file.path.startsWith('/')
+              ? { cache: fileCache, projectId: file.projectId }
+              : undefined
+          }
           apiBase={file.projectId ? '/projects/' + file.projectId : undefined}
           projectId={file.projectId}
           onScopeWarning={onScopeWarning}
@@ -369,6 +478,7 @@ function FilePreview({
   path,
   narrow,
   showHidden,
+  cacheScope,
   onScopeWarning,
   close,
   onReference,
@@ -382,6 +492,7 @@ function FilePreview({
   onScopeWarning: () => void;
   close: () => void;
   onReference?: () => void;
+  cacheScope?: FileCacheScope;
 }) {
   const { t } = useInterfaceLanguage();
   const image = projectImageType(path);
@@ -395,12 +506,12 @@ function FilePreview({
         {narrow && (
           <button
             ref={back}
-            className="icon-button file-preview-back"
+            className="file-preview-back"
             aria-label={t('Back to files')}
-            data-tooltip=""
             onClick={close}
           >
             <Icon name="chevron" size={16} />
+            {t('Back to files')}
           </button>
         )}
         <Icon name={image ? 'image' : 'file'} size={15} />
@@ -420,6 +531,7 @@ function FilePreview({
         )}
       </div>
       <FileContents
+        cacheScope={cacheScope}
         apiBase={apiBase}
         projectId={projectId}
         onScopeWarning={onScopeWarning}
@@ -440,6 +552,7 @@ function FilePreview({
 }
 
 interface Props extends AttachmentControls {
+  fileCache: FilesReadCache;
   apiBase?: string;
   directoryIssue?: string;
   projectId: string;
@@ -466,6 +579,7 @@ function fileReadUrl(
 }
 
 export const FilesPanel = memo(function FilesPanel({
+  fileCache,
   apiBase,
   directoryIssue,
   projectId,
@@ -485,11 +599,23 @@ export const FilesPanel = memo(function FilesPanel({
   const { t } = useInterfaceLanguage();
   const absolute = directory.startsWith('/');
   const scopeProject = projectId || undefined;
+  const cacheScope = apiBase && projectId ? { cache: fileCache, projectId } : undefined;
+  useEffect(() => {
+    if (!apiBase || !projectId) return;
+    let last = Date.now();
+    const refresh = () => {
+      if (Date.now() - last < 15_000) return;
+      last = Date.now();
+      fileCache.invalidate(projectId);
+    };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [apiBase, projectId, fileCache]);
   const managementUrl =
     apiBase && projectId && !absolute
       ? projectFileUrl(projectId, directory, showHidden)
       : undefined;
-  const managed = useRead<ProjectFilePage>(managementUrl);
+  const managed = useRead<ProjectFilePage>(managementUrl, undefined, undefined, cacheScope);
   const fallback =
     !managementUrl ||
     (managed.result &&
@@ -503,6 +629,7 @@ export const FilesPanel = memo(function FilesPanel({
       ? fileBrowserUrl('directory', directory, showHidden, scopeProject)
       : undefined,
     onScopeWarning,
+    absolute ? undefined : cacheScope,
   );
   const firstPage = managed.result && 'value' in managed.result ? managed.result.value : undefined;
   const [pages, setPages] = useState<{
@@ -511,7 +638,7 @@ export const FilesPanel = memo(function FilesPanel({
     next?: ProjectFilePage['next'];
   }>();
   const loaded = pages?.first === firstPage ? pages : undefined;
-  const next = loaded ? loaded.next : firstPage?.next;
+  const next = managed.fromCache ? undefined : loaded ? loaded.next : firstPage?.next;
   const pageRequest = useRef<AbortController | null>(null);
   const referenceRequest = useRef<AbortController | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -882,6 +1009,7 @@ export const FilesPanel = memo(function FilesPanel({
         <FilePreview
           key={preview}
           apiBase={apiBase}
+          cacheScope={preview.startsWith('/') ? undefined : cacheScope}
           projectId={scopeProject}
           onScopeWarning={onScopeWarning}
           path={preview}

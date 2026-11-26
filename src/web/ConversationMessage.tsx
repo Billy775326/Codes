@@ -7,6 +7,7 @@ import { MessageMarkdown } from './ContentPreview';
 import { ChangeSummary } from './ChangeSummary';
 import { MessageTime } from './MessageTime';
 import { Icon, IconButton } from './primitives';
+import { isFailedActivity, isToolActivity } from './activity';
 
 export const MessageView = memo(function MessageView({
   projectId,
@@ -46,17 +47,18 @@ export const MessageView = memo(function MessageView({
   const [copied, setCopied] = useState('');
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(copyTimer.current), []);
-  if (item.kind === 'change' && item.files?.length)
+  const failed = isFailedActivity(item);
+  if (item.kind === 'change' && item.files?.length && !failed)
     return (
       <ChangeSummary item={item} review={onReview ? (path) => onReview(item, path) : undefined} />
     );
-  if (item.kind === 'command' || item.kind === 'change' || item.kind === 'tool') {
+  if (isToolActivity(item)) {
     const firstLine = item.text
       .slice(0, item.text.indexOf('\n') < 0 ? 120 : item.text.indexOf('\n'))
       .slice(0, 100);
     return (
       <details
-        className="tool"
+        className={failed ? 'tool tool-failed' : 'tool'}
         open={expanded}
         onToggle={(event) => setExpanded(event.currentTarget.open)}
       >

@@ -34,6 +34,7 @@
 .turn-prompt-toggle strong {
   color: var(--status-response);
   font-weight: 650;
+  white-space: nowrap;
 }
 .turn-prompt-toggle span {
   overflow: hidden;

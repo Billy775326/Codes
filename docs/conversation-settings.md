@@ -15,7 +15,7 @@ A write targets the Codex user configuration through App Server. The editor rere
 
 Codex resolves permissions and managed constraints. In Code mode, native questions depend on the installed CLI and effective feature configuration. Codex reads these features when loading a thread. Start a new conversation to use a changed question setting immediately.
 
-Use **Settings → Projects** for global Codex instructions. See the [configuration reference](configuration.md#settings-by-scope) for browser and Codes server settings.
+Use **Settings → Instructions** for global Codex instructions. See the [configuration reference](configuration.md#settings-by-function) for browser and Codes server settings.
 
 ## Upgrading
 

@@ -35,11 +35,13 @@ export function useCodexConfiguration({
   const configurationWrite = useRef(false);
   const [modes, setModes] = useState<{ mode?: 'default' | 'plan'; name: string }[]>([]);
   const [configurationRevision, setConfigurationRevision] = useState(0);
+  const [catalogRevision, setCatalogRevision] = useState(0);
 
   const refreshConfiguration = useCallback(
     () => setConfigurationRevision((value) => value + 1),
     [],
   );
+  const refreshCatalog = useCallback(() => setCatalogRevision((value) => value + 1), []);
   useEffect(() => {
     if (auth !== 'ready') return;
     window.addEventListener('focus', refreshConfiguration);
@@ -66,7 +68,12 @@ export function useCodexConfiguration({
     return () => controller.abort();
   }, [auth, contextProjectId, connection, configurationRevision]);
   useEffect(() => {
-    if (auth !== 'ready') return;
+    if (auth !== 'ready') {
+      setModels([]);
+      setModes([]);
+      setAutoReviewReady(false);
+      return;
+    }
     const controller = new AbortController();
     void Promise.all([
       request<typeof modes>('/modes', {}, controller.signal),
@@ -84,7 +91,7 @@ export function useCodexConfiguration({
         if (!controller.signal.aborted) notice(error);
       });
     return () => controller.abort();
-  }, [auth]);
+  }, [auth, catalogRevision]);
   async function saveComposerConfiguration(changes: NativeConfigurationEdits['changes']) {
     if (
       !contextProjectId ||
@@ -117,6 +124,7 @@ export function useCodexConfiguration({
     planReady: modes.some((entry) => entry.mode === 'plan'),
     autoReviewReady,
     refreshConfiguration,
+    refreshCatalog,
     saveComposerConfiguration,
   };
 }

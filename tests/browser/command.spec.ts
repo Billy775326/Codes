@@ -2,7 +2,9 @@ import { test, expect } from '@playwright/test';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import {
+  appendFile,
   copyFile,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -42,7 +44,7 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
       await mkdir(join(checkout, 'bin'), { recursive: true });
       await mkdir(join(checkout, 'scripts'));
       await mkdir(caller);
-      await copyFile('bin/codes.mjs', join(checkout, 'bin/codes.mjs'));
+      await cp('bin', join(checkout, 'bin'), { recursive: true });
       await copyFile('scripts/install-command.mjs', join(checkout, 'scripts/install-command.mjs'));
       await symlink(resolve('dist'), join(checkout, 'dist'));
       const xdgData = join(directory, 'xdg');
@@ -66,6 +68,17 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
       });
       expect(help.status).toBe(0);
       expect(help.stdout).toContain('6670');
+      for (const alias of ['-h', 'help']) {
+        const result = spawnSync(command, [alias], {
+          cwd: caller,
+          env: environment,
+          encoding: 'utf8',
+        });
+        expect(result.status).toBe(0);
+        expect(result.stdout).toBe(help.stdout);
+      }
+      expect(help.stdout).toContain('logs [-f]');
+      expect(help.stdout).toContain('doctor');
       expect(spawnSync(command, ['--unknown'], { encoding: 'utf8' }).status).toBe(1);
 
       const listener = createServer();
@@ -96,6 +109,13 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
           ? join(checkout, '.local')
           : join(xdgData, 'codes');
       const tokenFile = join(data, 'access-token');
+      const run = (args: string[], overrides = {}, cwd = caller) =>
+        spawnSync(command, args, {
+          cwd,
+          env: { ...env, ...overrides },
+          encoding: 'utf8',
+          timeout: 20000,
+        });
       const start = async () => {
         let output = '';
         const process = spawn(command, [], { cwd: caller, env });
@@ -123,6 +143,14 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
         const projects = await (await client.get('/api/projects')).json();
         expect(projects).toEqual([expect.objectContaining({ path: caller })]);
         expect(await readFile(join(data, 'server.lock'), 'utf8')).toBe(String(first.process.pid));
+        const status = run(['status']);
+        expect(status.status, status.stderr).toBe(0);
+        expect(status.stdout).toContain('PID ' + first.process.pid);
+        const doctor = run(['doctor'], { CODES_RUNTIME: 'invalid', CODES_PORT: '0' });
+        expect(doctor.status, doctor.stderr || doctor.stdout).toBe(0);
+        expect(doctor.stdout).toContain('Codex CLI: simulator mode');
+        expect(doctor.stdout).toContain('Service: running (PID ' + first.process.pid);
+        expect(doctor.stdout).toContain('Configured listener: 127.0.0.1:' + port + ' (reachable)');
         const duplicate = spawnSync(command, [], { cwd: caller, env, encoding: 'utf8' });
         expect(duplicate.status).toBe(1);
         expect(duplicate.stderr).toContain('already in use');
@@ -131,19 +159,95 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
         expect(duplicate.stderr).not.toContain('file://');
         expect(duplicate.stderr).not.toContain('at ModuleJob');
         expect((await client.get('/api/system')).status()).toBe(200);
-        await stop(first.process);
-        expect(first.process.exitCode).toBe(0);
+        if (relativeData) {
+          try {
+            const restart = run(
+              ['restart'],
+              {
+                CODES_DATA_DIR: data,
+                CODES_PROJECT_ROOT: 'wrong-project',
+                CODES_RUNTIME: 'invalid',
+                CODES_PORT: '0',
+              },
+              checkout,
+            );
+            expect(restart.status, restart.stderr).toBe(0);
+            expect(restart.stdout).toContain('codes is ready at ' + origin);
+            expect(Number(await readFile(join(data, 'server.lock'), 'utf8'))).not.toBe(
+              first.process.pid,
+            );
+            expect(
+              (
+                await client.post('/api/login', { data: { token }, headers: { Origin: origin } })
+              ).status(),
+            ).toBe(200);
+            expect(await (await client.get('/api/projects')).json()).toEqual([
+              expect.objectContaining({ path: caller }),
+            ]);
+          } finally {
+            const stopped = run(['stop']);
+            expect(stopped.status, stopped.stderr).toBe(0);
+          }
+        } else {
+          await stop(first.process);
+        }
+        await expect.poll(() => first.process.exitCode).toBe(0);
+        expect(run(['status']).status).toBe(1);
+        expect(run(['stop']).status).toBe(0);
         const restarted = await start();
         expect(restarted.output).not.toContain(tokenFile);
         await stop(restarted.process);
         expect(restarted.process.exitCode).toBe(0);
         await expect(readFile(join(data, 'server.lock'))).rejects.toMatchObject({ code: 'ENOENT' });
+        const background = run(['start']);
+        try {
+          expect(background.status, background.stderr).toBe(0);
+          expect(background.stdout).toContain('codes is ready at ' + origin);
+          const pid = await readFile(join(data, 'server.lock'), 'utf8');
+          expect(run(['start']).stdout).toContain('PID ' + pid);
+          expect(run(['ststus']).status).toBe(0);
+          const logs = run(['logs']);
+          expect(logs.status, logs.stderr).toBe(0);
+          expect(logs.stdout).toContain('codes is ready at ' + origin);
+          if (relativeData) {
+            const logFile = join(data, 'server.log');
+            await appendFile(
+              logFile,
+              Array.from({ length: 55 }, (_, index) => `fixture-log-${index}\n`).join(''),
+            );
+            const recent = run(['logs']).stdout;
+            expect(recent).not.toContain('fixture-log-4\n');
+            expect(recent).toContain('fixture-log-5\n');
+            const follower = spawn(command, ['logs', '-f'], { cwd: caller, env });
+            let output = '';
+            follower.stdout.on('data', (chunk) => (output += chunk));
+            try {
+              await expect.poll(() => output).toContain('fixture-log-54');
+              await appendFile(logFile, 'fixture-follow-up\n');
+              await expect.poll(() => output).toContain('fixture-follow-up');
+            } finally {
+              await stop(follower);
+            }
+            expect(run(['status']).status).toBe(0);
+          }
+        } finally {
+          const stopped = run(['stop']);
+          expect(stopped.status, stopped.stderr).toBe(0);
+        }
         // A lock held by another live process must also remain protected.
         await writeFile(join(data, 'server.lock'), String(process.pid));
         const occupied = spawnSync(command, [], { cwd: caller, env, encoding: 'utf8' });
         expect(occupied.status).toBe(1);
         expect(occupied.stderr).toContain('Lock owner PID: ' + process.pid);
         expect(await readFile(join(data, 'server.lock'), 'utf8')).toBe(String(process.pid));
+        const protectedStop = run(['stop']);
+        expect(protectedStop.status).toBe(1);
+        expect(protectedStop.stderr).toContain('Cannot verify PID');
+        if (relativeData) {
+          const diagnosis = run(['doctor']);
+          expect(diagnosis.status).toBe(1);
+          expect(diagnosis.stdout).toContain('FAIL  Service: Cannot verify PID');
+        }
       } finally {
         await client.dispose();
       }

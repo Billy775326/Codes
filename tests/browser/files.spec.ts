@@ -1,3 +1,4 @@
+import { openContextTab } from './sidebar-helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -7,12 +8,55 @@ async function openFiles(page: Page) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await openContextTab(page, 'Files');
 }
 
-for (const width of [1440, 320]) {
-  test(`Files gives the list and preview usable space at ${width}px`, async ({ page }) => {
-    const narrow = width === 320;
+test('reopening a small preview shows cached text while fresh file access is checked', async ({
+  page,
+}) => {
+  let reads = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/projects/*/file?path=example.ts', async (route) => {
+    const read = ++reads;
+    if (read > 1) await gate;
+    await route.fulfill({
+      json: {
+        path: 'example.ts',
+        text: read === 1 ? 'Cached preview version' : 'Fresh preview version',
+        sha: String(read),
+        lines: 1,
+      },
+    });
+  });
+  await openFiles(page);
+  const entry = page.locator('.file-list').getByRole('button', { name: 'example.ts', exact: true });
+  const preview = page.getByRole('region', { name: 'File preview' });
+  try {
+    await entry.click();
+    await expect(preview).toContainText('Cached preview version');
+    await preview.getByRole('button', { name: 'Close file preview' }).click();
+    await entry.click();
+    await expect.poll(() => reads).toBe(2);
+    await expect(preview).toContainText('Cached preview version');
+    await expect(preview.getByRole('button', { name: 'Attach file', exact: true })).toBeDisabled();
+  } finally {
+    release();
+  }
+  await expect(preview).toContainText('Fresh preview version');
+  await expect(preview.getByRole('button', { name: 'Attach file', exact: true })).toBeEnabled();
+});
+
+for (const { width, narrow, resize } of [
+  { width: 1440, narrow: false, resize: false },
+  { width: 1440, narrow: true, resize: true },
+  { width: 320, narrow: true, resize: false },
+]) {
+  test(`Files gives the list and preview usable space at ${width}px${resize ? ' with a narrow panel' : ''}`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: narrow ? 570 : 850 });
     await page.emulateMedia({ colorScheme: narrow ? 'light' : 'dark' });
     const extraFiles = Array.from({ length: 40 }, (_, index) => {
@@ -27,6 +71,7 @@ for (const width of [1440, 320]) {
       });
     });
     await openFiles(page);
+    if (resize) await page.getByRole('separator', { name: 'Resize project panel' }).press('Home');
     const panel = page.locator('.context-panel');
     const list = panel.locator('.file-list');
     const entry = list.getByRole('button', { name: 'example.ts', exact: true });
@@ -43,6 +88,7 @@ for (const width of [1440, 320]) {
     });
     if (narrow) {
       await expect(list).toBeHidden();
+      await expect(close).toHaveText('Back to files');
       await expect(close).toBeFocused();
     } else {
       expect((await list.boundingBox())!.height).toBeLessThan(

@@ -2,20 +2,32 @@
 
 Configure the browser experience in Codes and agent execution in Codex. Use **Settings** in the sidebar to find each section. The dialog can search by English or Chinese terms.
 
-## Settings by scope
+Browser preferences save as you change them. Execution, instructions, network, sign-in validity, and CLI settings use the footer to save and report unsaved edits, saved changes, and any required restart. Ctrl/Cmd+S saves the form you are editing. The network section shows separate save buttons when both the listener or browser access settings and the sign-in validity have drafts. Access-token rotation uses its own confirmation form.
 
-| Section              | What it controls                                                                                                      | Where it applies                                       |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **General**          | Theme, language, chat and code size, Enter behavior, follow-up delivery, review delivery, scrolling, and hidden files | This browser                                           |
-| **Notifications**    | Which task, approval, and question events produce browser notifications                                               | This browser                                           |
-| **Instructions**     | Edit Codex global instructions                                                                                        | Active Codex home                                      |
-| **Execution**        | Effective project model, reasoning, speed, approvals, sandbox, and supported native features                          | Codex configuration layers for the execution directory |
-| **Network & access** | Listener, allowed origins, authentication mode, sign-in lifetime, and file-backed token rotation                      | Codes server                                           |
-| **Codex CLI**        | Native request deadline and display of the configured executable and data directory                                   | Codes server                                           |
-| **Maintenance**      | Task admission, connection diagnostics, and session status                                                            | Running Codes server                                   |
-| **Backup & restore** | SQLite snapshot download and staging of an offline restore                                                            | Codes data directory                                   |
+The dialog marks sections with drafts and lets you review them before closing. If instructions or CLI settings change outside the dialog, reload the latest version to keep your draft and save again. For instructions, the saved text appears alongside the draft for comparison.
+
+<a id="settings-by-scope"></a>
+
+## Settings by function
+
+| Section              | What it controls                                                                                                                     | Where it applies                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| **General**          | Appearance, keyboard, follow-up delivery, new conversation directory selection, review delivery, scrolling, hidden files, and layout | This browser                                           |
+| **Notifications**    | Which task, approval, and question events produce browser notifications                                                              | This browser                                           |
+| **Instructions**     | Edit Codex global instructions                                                                                                       | Active Codex home                                      |
+| **Execution**        | Effective project model, reasoning, speed, approvals, sandbox, and supported native features                                         | Codex configuration layers for the execution directory |
+| **Network & access** | Listener, allowed origins, authentication mode, sign-in lifetime, and file-backed token rotation                                     | Codes server                                           |
+| **Codex CLI**        | Native request deadline                                                                                                              | Codes server                                           |
+| **Maintenance**      | Task admission and connection diagnostics. Expand **Runtime paths** for the CLI version, launcher, and Codes data directory.         | Running Codes server                                   |
+| **Backup & restore** | SQLite backup and offline restore preparation, network configuration files, and browser preference files                             | Workspace data, server configuration, or this browser  |
 
 English and dark theme are defaults. Chat and code text default to 14 px. **General → Appearance** also offers Simplified Chinese, Light, and System. Native conversation content retains the language of the conversation. [Interface design](interface-design.md)
+
+In **General → Interaction**, choose whether a new conversation uses the current directory or asks each time. **General → Keyboard** contains the send shortcut, the **Tab to queue** switch, and a shortcut reference. Opening an archived conversation still uses its directory from Codex. [Delivery controls](conversation-workflow.md#understand-delivery-buttons)
+
+Use **General → Layout** to restore both sidebar widths. Use **General → Defaults** to reset browser settings.
+
+Use **Data → Backup & restore** for all settings imports and exports and for database backup and restore. **Workspace database** downloads a SQLite snapshot or prepares an offline restore. **Network configuration** exports the saved listener and access settings, or opens an imported JSON file as a draft for review in **Network & access**. **Browser preferences** exports appearance, interaction, notification, file visibility, and sidebar widths as versioned JSON. Choose a browser preferences file of up to 16 KiB and review its changes before applying it. Sign-in credentials and drafts use their own storage. [Persistent state](operations.md#persistent-state)
 
 ## Startup environment
 
@@ -41,6 +53,6 @@ New conversations use the selected working directory. Existing conversations use
 
 ## Launcher
 
-Use `npm run install:command` with a supported Node version to create `~/.local/bin/codes`. Set `CODES_BIN_DIR` at installation to choose another directory. Keep the checkout and the Node executable used at installation in place. The launcher starts in the foreground and uses the checkout's build. New installs use `$XDG_DATA_HOME/codes` or `~/.local/share/codes`. An existing checkout database under `.local` is used when `CODES_DATA_DIR` is unset. Explicit relative data, project, and executable paths are resolved from the calling directory.
+Use `npm run install:command` with a supported Node version to create `~/.local/bin/codes`. Set `CODES_BIN_DIR` at installation to choose another directory. Keep the checkout and the Node executable used at installation in place. `codes` runs the checkout's build in the foreground. `codes start` runs it in the background. New installs use `$XDG_DATA_HOME/codes` or `~/.local/share/codes`. An existing checkout database under `.local` is used when `CODES_DATA_DIR` is unset. Explicit relative data, project, and executable paths are resolved from the calling directory.
 
-Use `codes --help` for usage. An occupied data directory lock reports the owner and exits. [Process lifecycle](operations.md#process-lifecycle)
+Use `codes help`, `codes -h`, or `codes --help` for usage. Set `CODES_DATA_DIR` when managing, diagnosing, or viewing logs for a particular instance. Use the same directory as at startup. [Process lifecycle](operations.md#process-lifecycle)

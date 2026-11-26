@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Driver } from '../codex/driver.js';
-import type { CodexDefaults, Settings } from '../shared/types.js';
+import type { CodexDefaults, Model, Settings } from '../shared/types.js';
 import { AppError } from '../shared/errors.js';
 import { NativeConfiguration } from './native-configuration.js';
 
@@ -41,9 +41,46 @@ const modesSchema = z
   )
   .max(20);
 
+const catalogLifetime = 60_000;
+const catalogTextLimit = 128 * 1024;
+
+class Catalog<T> {
+  private entry?: { epoch: string; expires: number; result: Promise<T> };
+
+  read(epoch: string, load: () => Promise<T>) {
+    if (this.entry?.epoch === epoch && this.entry.expires > performance.now())
+      return this.entry.result;
+    const entry = {
+      epoch,
+      expires: Infinity,
+      result: load().then(
+        (value) => {
+          if (this.entry === entry) {
+            if (JSON.stringify(value).length > catalogTextLimit) this.clear();
+            else entry.expires = performance.now() + catalogLifetime;
+          }
+          return value;
+        },
+        (error) => {
+          if (this.entry === entry) this.clear();
+          throw error;
+        },
+      ),
+    };
+    this.entry = entry;
+    return entry.result;
+  }
+
+  clear() {
+    this.entry = undefined;
+  }
+}
+
 /** Public metadata only; config/read and authentication documents never reach the browser. */
 export class ModelSettings {
   readonly configuration: NativeConfiguration;
+  private readonly modelCatalog = new Catalog<Model[]>();
+  private readonly modeCatalog = new Catalog<z.infer<typeof modesSchema>>();
   constructor(private driver: Driver) {
     this.configuration = new NativeConfiguration(driver);
   }
@@ -81,6 +118,10 @@ export class ModelSettings {
     };
   }
   async models() {
+    await this.driver.start();
+    return this.modelCatalog.read(this.driver.epoch, () => this.readModels());
+  }
+  private async readModels() {
     const response = await this.driver.call('model/list', { limit: 100 });
     const parsed = z.array(modelSchema).max(100).safeParse(response?.data);
     if (!parsed.success)
@@ -96,11 +137,19 @@ export class ModelSettings {
     }));
   }
   async modes() {
+    await this.driver.start();
+    return this.modeCatalog.read(this.driver.epoch, () => this.readModes());
+  }
+  private async readModes() {
     const response = await this.driver.call('collaborationMode/list', {});
     const parsed = modesSchema.safeParse(response?.data);
     if (!parsed.success)
       throw new AppError('PROTOCOL_ERROR', 'The CLI returned invalid mode metadata.', 502);
     return parsed.data;
+  }
+  invalidateCatalogs() {
+    this.modelCatalog.clear();
+    this.modeCatalog.clear();
   }
   async checkImages(model?: string) {
     if (

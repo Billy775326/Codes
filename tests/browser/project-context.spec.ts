@@ -1,4 +1,4 @@
-import { chooseWorkingDirectory, conversationList } from './sidebar-helpers';
+import { chooseWorkingDirectory, conversationList, openContextTab } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { mkdir, writeFile, rename, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -127,7 +127,7 @@ for (const width of [1440, 390])
       await expect(row(page, second.id)).toContainText(path);
       if (width < 1100)
         await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
-      await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+      await openContextTab(page, 'Files');
       await page.getByRole('button', { name: 'example.ts', exact: true }).click();
       await expect(page.locator('.file-preview')).toContainText('BETA_SOURCE');
       await expect(page.locator('.file-preview')).not.toContainText('export function hello');
@@ -197,7 +197,9 @@ test('missing directories preserve history and block execution until explicit re
     await expect(page.locator('.directory-unavailable')).toContainText('directory is unavailable');
     await page.getByLabel('Message Codex').fill('Keep this draft while the folder is missing');
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Browse files', exact: true })).toBeDisabled();
+    const files = await openContextTab(page, 'Files');
+    await expect(files).toContainText('directory is unavailable');
+    await files.getByRole('button', { name: 'Close panel', exact: true }).click();
     const response = await page.request.post('/api/threads/' + second.id + '/send', {
       data: {
         operationId: randomUUID(),
@@ -218,7 +220,7 @@ test('missing directories preserve history and block execution until explicit re
     'Keep this draft while the folder is missing',
   );
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await openContextTab(page, 'Files');
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
   await expect(page.locator('.file-preview')).toContainText('BETA_SOURCE');
   await page.getByRole('button', { name: 'Close panel', exact: true }).click();
@@ -255,31 +257,49 @@ test('missing directories preserve history and block execution until explicit re
     await rename(path + '-moved', path);
   }
 });
-test('All discovers both directories, Cwd follows the current conversation, and sort/search use native pages', async ({
+test('the sidebar lists both directories across selection, sorting, and search', async ({
   page,
 }) => {
   await login(page);
   const { a, first, second, path } = await fixture(page);
   await page.reload();
-  await expect(row(page, first.id)).toContainText(a.path);
-  await expect(row(page, second.id)).toContainText(path);
+  const firstButton = row(page, first.id).getByRole('button', {
+    name: first.title,
+    exact: true,
+  });
+  await firstButton.click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(first.title);
+  await expect(row(page, first.id).locator('.session-cwd')).toHaveCount(0);
+  await expect(row(page, second.id).locator('.session-cwd')).toHaveText(path);
+  await firstButton.hover();
+  await expect(page.locator('.control-tooltip')).toContainText(a.path);
+  await firstButton.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(firstButton).toBeFocused();
+  await expect(page.locator('.control-tooltip')).toContainText(a.path);
   await row(page, second.id).getByRole('button', { name: second.title, exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
-  await page.getByRole('button', { name: 'Cwd', exact: true }).click();
-  await expect(row(page, first.id)).toHaveCount(0);
+  await expect(row(page, first.id).locator('.session-cwd')).toHaveText(a.path);
+  await expect(row(page, second.id).locator('.session-cwd')).toHaveCount(0);
+  await expect(row(page, first.id)).toBeVisible();
   await expect(row(page, second.id)).toBeVisible();
-  const directoryPage = page.waitForRequest((request) => {
+  const sortedPage = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
       url.pathname === '/api/conversations' &&
-      url.searchParams.get('cwd') === path &&
+      !url.searchParams.has('cwd') &&
       url.searchParams.get('sort') === 'created_at'
     );
   });
-  await page.getByRole('combobox', { name: 'Sort conversations' }).selectOption('created_at');
-  await directoryPage;
+  const sort = page.getByRole('button', { name: 'Sort conversations', exact: true });
+  await sort.click();
+  await page
+    .getByRole('dialog', { name: 'Sort conversations', exact: true })
+    .getByRole('button', { name: 'Date created', exact: true })
+    .click();
+  await sortedPage;
   await expect(row(page, second.id).locator('time')).toHaveAttribute('title', /^Created:/);
-  await page.getByRole('button', { name: 'All', exact: true }).click();
+  await expect(row(page, first.id)).toBeVisible();
   const search = page.getByLabel('Search conversations');
   await search.fill(first.title.toUpperCase());
   await expect(row(page, second.id)).toHaveCount(0);
@@ -289,6 +309,8 @@ test('All discovers both directories, Cwd follows the current conversation, and 
   await page.goto('/?conversation=' + second.id);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(second.title);
   await expect(page.locator('.workspace-directory')).toHaveText(path);
+  await expect(sort).toHaveText('Date created');
+  await expect(row(page, second.id).locator('time')).toHaveAttribute('title', /^Created:/);
 });
 
 test('working-directory choice validates the path and reuses a canonical directory', async ({
@@ -340,7 +362,9 @@ test('an installation without a selected directory can browse and choose one for
     localStorage.removeItem('codes.thread');
   });
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Cwd', exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Choose a working directory', exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'Choose a working directory' });
   await expect(picker).toBeVisible();

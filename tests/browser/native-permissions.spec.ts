@@ -1,3 +1,4 @@
+import { openContextTab } from './sidebar-helpers';
 import { chooseSettingsSection } from './settings-helpers';
 import { expect, test } from '@playwright/test';
 
@@ -24,7 +25,7 @@ test('native permissions, approval callbacks and Files / Changes remain availabl
   await expect(page.getByRole('button', { name: 'Approve once', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Approve once', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await openContextTab(page, 'Files');
   const panel = page.getByRole('complementary', { name: 'Project context', exact: true });
   await expect(panel.getByRole('button', { name: 'Files', exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Changes', exact: true })).toBeVisible();

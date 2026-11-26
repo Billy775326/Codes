@@ -60,6 +60,12 @@ The browser coalesces streaming updates and renders completed messages as Markdo
 
 The read scheduler shares identical requests and stops fetching subsequent native pages after the last reader disconnects. A recognizable oversized history response can fail its request without closing the connection. An invalid or unidentifiable frame tears down the shared connection and leaves unfinished work protected. Legacy history uses bounded full-item turn pages. Paginated history reads turn metadata and hydrates items separately. Evicted browser pages remain accessible through native cursors.
 
+Directory listings and small text previews share an estimated 2 MiB per signed-in tab, with up to eight entries of each kind and a 30-second freshness window. Codes refreshes cached reads in the background and requires current file data before attaching it. A matching Word file version lets the server skip document extraction. Images and PDF data load on demand through their existing preview paths.
+
+The session sidebar retains one first page each for Active and Archived for 30 seconds. Search results and additional pages are fetched on demand. Codex model and mode catalogs are shared across tabs for up to 60 seconds per runtime. Account and runtime changes invalidate those catalogs. Effective execution configuration still comes directly from Codex.
+
+A tab remembers up to 100 conversation reading anchors using a turn ID and scroll offset. An anchor on an older page can fetch that page again through its native cursor. A missing anchor falls back to the latest messages.
+
 Other budgets are documented where they apply. [Files and previews](conversation-details.md#preview-documents-images-and-html) · [Attachments](image-attachments.md#supported-inputs-and-limits) · [Browser recovery](operations.md#when-the-page-disconnects)
 
 ## Native sessions and working directories

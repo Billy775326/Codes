@@ -209,6 +209,21 @@
   font-weight: 500;
   white-space: nowrap;
 }
+.file-preview-back {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 3px;
+  align-items: center;
+  min-height: var(--control-size);
+  padding-inline: 4px;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.file-preview-back:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
 .file-preview-back svg,
 .file-pages button:first-child svg {
   transform: rotate(180deg);

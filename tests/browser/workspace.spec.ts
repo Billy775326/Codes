@@ -1,3 +1,4 @@
+import { openContextTab } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 const token = 'test-only-browser-token-not-a-real-secret';
 async function login(page: Page) {
@@ -83,7 +84,7 @@ test('desktop layout, streamed response, reload, and file selection context', as
   await login(page);
   await expect(page.getByRole('heading', { name: 'New conversation' })).toBeVisible();
   await page.screenshot({ path: 'test-results/desktop-workspace.png', fullPage: true });
-  await page.getByRole('button', { name: 'Browse files' }).click();
+  await openContextTab(page, 'Files');
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
   await page
     .getByRole('group', { name: 'File lines', exact: true })
@@ -157,7 +158,7 @@ test('reload from the workspace header restores the draft and keeps a running tu
   await page.setViewportSize({ width: 320, height: 740 });
   await expect(reload).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await openContextTab(page, 'Files');
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
   await page.getByRole('button', { name: 'Attach file', exact: true }).click();
   const confirm = page.waitForEvent('dialog').then(async (dialog) => {

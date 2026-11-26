@@ -16,7 +16,7 @@ export async function readConversationHistory(
   cwd: string,
   continuation: string | undefined,
   signal: AbortSignal,
-  imageReference: (path: string) => ReturnType<Images['reference']>,
+  imageReference: (path: string) => ReturnType<Images['transcriptReference']>,
   native?: unknown,
 ) {
   const deadline = Date.now() + 25_000;

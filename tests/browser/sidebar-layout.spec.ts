@@ -21,12 +21,9 @@ for (const width of [1440, 390, 320]) {
       width < 700
         ? page.getByRole('dialog', { name: 'Workspace navigation', exact: true })
         : sidebar;
-    const directory = navigation.getByRole('group', { name: 'Directory filter' });
     const filter = navigation.getByRole('group', { name: 'Archive filter' });
-    await expect(directory.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expect(navigation.getByRole('group', { name: 'Directory filter' })).toHaveCount(0);
+    await expect(filter.getByRole('button')).toHaveCount(2);
     await expect(filter.getByRole('button', { name: 'Active', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -42,10 +39,43 @@ for (const width of [1440, 390, 320]) {
       exact: true,
     });
     await expect(newConversation).toBeVisible();
-    await expect(newConversation).toHaveText('');
-    await expect(navigation.getByRole('combobox', { name: 'Sort conversations' })).toHaveValue(
-      'updated_at',
-    );
+    await expect(newConversation).toHaveText(width < 700 ? 'New' : 'New conversation');
+    const brand = navigation.getByRole('img', { name: 'Codes', exact: true });
+    const close = navigation.getByRole('button', { name: 'Close navigation' });
+    const newBounds = (await newConversation.boundingBox())!;
+    const closeBounds = (await close.boundingBox())!;
+    const brandBounds = (await brand.boundingBox())!;
+    if (width < 700) {
+      expect(newBounds.x).toBeGreaterThanOrEqual(brandBounds.x + brandBounds.width);
+      expect(newBounds.x + newBounds.width).toBeLessThanOrEqual(closeBounds.x);
+      expect(newBounds.height).toBeGreaterThanOrEqual(44);
+    } else {
+      expect(newBounds.y).toBeGreaterThanOrEqual(brandBounds.y + brandBounds.height);
+    }
+    await expect(navigation.getByRole('button', { name: 'Refresh conversations' })).toHaveCount(0);
+    const sort = navigation.getByRole('button', { name: 'Sort conversations', exact: true });
+    await expect(sort).toHaveText('Last updated');
+    await expect(sort).toBeInViewport({ ratio: 1 });
+    await sort.press('ArrowDown');
+    const sortMenu = navigation.getByRole('dialog', { name: 'Sort conversations' });
+    const lastUpdated = sortMenu.getByRole('button', { name: 'Last updated' });
+    const dateCreated = sortMenu.getByRole('button', { name: 'Date created' });
+    await expect(sortMenu).toBeInViewport({ ratio: 1 });
+    await expect(lastUpdated).toBeFocused();
+    await expect(lastUpdated).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('ArrowDown');
+    await expect(dateCreated).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(sort).toHaveText('Date created');
+    await expect(sort).toBeFocused();
+    await sort.click();
+    await expect(dateCreated).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(sortMenu).toHaveCount(0);
+    await expect(sort).toBeFocused();
+    await sort.click();
+    await navigation.getByRole('textbox', { name: 'Search conversations' }).click();
+    await expect(sortMenu).toHaveCount(0);
     const signOut = navigation.getByRole('button', { name: 'Sign out', exact: true });
     await expect(signOut).toBeInViewport({ ratio: 1 });
     await expect(signOut).toHaveText('');
@@ -56,7 +86,6 @@ for (const width of [1440, 390, 320]) {
       await navigation.getByRole('button', { name: 'Interaction settings', exact: true }).click();
       await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
       await page.keyboard.press('Escape');
-      const brand = navigation.getByRole('img', { name: 'Codes', exact: true });
       const visible = brand.locator('img');
       await expect(visible).toBeVisible();
       expect(

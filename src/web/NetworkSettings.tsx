@@ -1,5 +1,6 @@
 import { useInterfaceLanguage } from './interface-language';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   loopbackHosts,
   networkSettingsTransferSchema,
@@ -7,9 +8,11 @@ import {
   type NetworkSettings,
 } from '../shared/network-settings';
 import { ApiError, message, request } from './api';
-import { IconButton } from './primitives';
+import { Icon } from './primitives';
+import type { SettingsFormState } from './settings-form';
 
 const path = '/settings/network';
+export const networkForm = 'settings-network-form';
 
 function listenerAddress(listener: Pick<NetworkSettings, 'host' | 'port'>) {
   const host = listener.host === '::1' ? '[::1]' : listener.host;
@@ -38,8 +41,12 @@ function allowedAddresses(settings: NetworkSettingsSnapshot['settings'], port: s
 
 export function NetworkSettings({
   onDraft,
+  transferTarget,
+  onImported,
 }: {
-  onDraft: (value: { changed: boolean; busy: boolean }) => void;
+  onDraft: (value: SettingsFormState) => void;
+  transferTarget: HTMLElement | null;
+  onImported: () => void;
 }) {
   const { t } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<NetworkSettingsSnapshot>();
@@ -56,6 +63,7 @@ export function NetworkSettings({
   const [saved, setSaved] = useState(false);
   const [imported, setImported] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [transferError, setTransferError] = useState('');
   const importInput = useRef<HTMLInputElement>(null);
 
   function setFields(settings: NetworkSettings, addresses?: string) {
@@ -83,6 +91,7 @@ export function NetworkSettings({
   function loadAgain() {
     setSnapshot(undefined);
     setError('');
+    setTransferError('');
     setSaved(false);
     setReloadRequired(false);
     setReload((value) => value + 1);
@@ -98,29 +107,16 @@ export function NetworkSettings({
       authMode !== settings.authMode ||
       (settings.authMode === 'cloudflare-access' &&
         (issuer !== settings.issuer || audience !== settings.audience)));
+  const busy = saving || importing;
+  const canSave = changed && !busy && !reloadRequired;
+  const restartRequired = snapshot?.restartRequired;
   useEffect(() => {
-    onDraft({ changed, busy: saving || importing });
-  }, [changed, saving, importing, onDraft]);
-
-  if (!snapshot)
-    return (
-      <div>
-        {error ? (
-          <>
-            <p role="alert">{t(error)}</p>
-            <button type="button" onClick={loadAgain}>
-              {t('Retry loading')}
-            </button>
-          </>
-        ) : (
-          <p role="status">{t('Loading network settings…')}</p>
-        )}
-      </div>
-    );
+    onDraft({ changed, busy, canSave, saved, restartRequired });
+  }, [changed, busy, canSave, saved, restartRequired, onDraft]);
 
   async function importConfiguration(file: File) {
-    if (saving || importing || reloadRequired) return;
-    setError('');
+    if (!snapshot || busy || reloadRequired) return;
+    setTransferError('');
     setImporting(true);
     try {
       if (file.size > 64 * 1024)
@@ -136,10 +132,12 @@ export function NetworkSettings({
         throw new Error('Invalid network configuration. Choose a file exported from Codes.');
       const { settings } = result.data;
       setFields(settings, settings.origins.join('\n'));
+      setError('');
       setSaved(false);
       setImported(true);
+      onImported();
     } catch (failure) {
-      setError(message(failure));
+      setTransferError(message(failure));
     } finally {
       setImporting(false);
     }
@@ -164,7 +162,7 @@ export function NetworkSettings({
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async function save() {
-    if (!snapshot || saving || importing || !changed || reloadRequired) return;
+    if (!snapshot || !canSave) return;
     setSaving(true);
     setError('');
     setSaved(false);
@@ -196,190 +194,226 @@ export function NetworkSettings({
     }
   }
 
+  const loadingState = error ? (
+    <div className="settings-action-row">
+      <p role="alert">{t(error)}</p>
+      <button type="button" className="settings-action" onClick={loadAgain}>
+        {t('Retry loading')}
+      </button>
+    </div>
+  ) : (
+    <p role="status">{t('Loading network settings…')}</p>
+  );
+  const transfer = transferTarget
+    ? createPortal(
+        snapshot ? (
+          <>
+            <p className="preference-help">
+              {t(
+                'JSON for the listener, allowed origins, and authentication mode. Import opens a draft for review.',
+              )}
+            </p>
+            <div className="settings-transfer-actions">
+              <button
+                className="settings-action"
+                type="button"
+                aria-label={t('Export saved network configuration')}
+                disabled={saving}
+                onClick={exportConfiguration}
+              >
+                <Icon name="download" size={16} />
+                {t('Export saved')}
+              </button>
+              <button
+                className="settings-action"
+                type="button"
+                aria-label={t('Import network configuration')}
+                disabled={busy || reloadRequired}
+                onClick={() => importInput.current?.click()}
+              >
+                <Icon name="upload" size={16} />
+                {t('Import')}
+              </button>
+              <input
+                ref={importInput}
+                aria-label={t('Import network settings file')}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (file) void importConfiguration(file);
+                }}
+              />
+            </div>
+            {reloadRequired && (
+              <button className="settings-action" type="button" onClick={loadAgain}>
+                {t('Reload settings')}
+              </button>
+            )}
+            {transferError && <p role="alert">{t(transferError)}</p>}
+          </>
+        ) : (
+          loadingState
+        ),
+        transferTarget,
+      )
+    : null;
+
+  if (!snapshot)
+    return (
+      <>
+        {loadingState}
+        {transfer}
+      </>
+    );
   return (
-    <form
-      className="network-settings"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <section className="preferences-section" aria-labelledby="network-listener-heading">
-        <h3 id="network-listener-heading">{t('Listener')}</h3>
-        <div className="network-listener">
-          <label>
-            {t('Listen address')}
-            <select
-              value={host}
-              onChange={(event) => setHost(event.target.value as typeof host)}
-              disabled={saving}
-            >
-              {loopbackHosts.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t('Listen port')}
-            <input
-              type="number"
-              min="1"
-              max="65535"
-              step="1"
-              required
-              value={port}
-              onChange={(event) => setPort(event.target.value)}
-              aria-describedby="network-listener-help"
-              disabled={saving}
-            />
-          </label>
-        </div>
-        <p className="preference-help" id="network-listener-help">
-          {t('Save and restart Codes to apply a new listener address or port.')}
-        </p>
-        <dl className="listener-readout">
-          <div>
-            <dt>{t('Active listener')}</dt>
-            <dd>
-              <code>{listenerAddress(snapshot.active)}</code>
-            </dd>
-          </div>
-          {listenerAddress(snapshot.active) !== listenerAddress(snapshot.settings) && (
-            <div>
-              <dt>{t('Listener after restart')}</dt>
-              <dd>
-                <code>{listenerAddress(snapshot.settings)}</code>
-              </dd>
-            </div>
-          )}
-        </dl>
-      </section>
-      <section className="preferences-section" aria-labelledby="network-access-heading">
-        <h3 id="network-access-heading">{t('Browser access')}</h3>
-        <div className="network-access-fields">
-          <label className="preference-row">
-            <span className="preference-description">
-              {t('Authentication mode')}
-              <span className="preference-help" id="network-auth-help">
-                {authMode === 'cloudflare-access'
-                  ? t('Sign in with Access, then your Codes token.')
-                  : t('Use Cloudflare Access for public hostnames.')}
-              </span>
-            </span>
-            <select
-              aria-label={t('Authentication mode')}
-              value={authMode}
-              onChange={(event) => setAuthMode(event.target.value as NetworkSettings['authMode'])}
-              aria-describedby="network-auth-help"
-              disabled={saving}
-            >
-              <option value="local">{t('Local / Tailscale (local)')}</option>
-              <option value="cloudflare-access">Cloudflare Access</option>
-            </select>
-          </label>
-          {authMode === 'cloudflare-access' && (
-            <div className="network-access-credentials">
-              <label>
-                {t('Cloudflare team URL')}
-                <input
-                  type="url"
-                  placeholder="https://your-team.cloudflareaccess.com"
-                  value={issuer}
-                  maxLength={128}
-                  onChange={(event) => setIssuer(event.target.value)}
-                  required
-                  disabled={saving}
-                />
-              </label>
-              <label>
-                {t('Application Audience (AUD)')}
-                <input
-                  value={audience}
-                  maxLength={64}
-                  spellCheck={false}
-                  onChange={(event) => setAudience(event.target.value)}
-                  required
-                  disabled={saving}
-                />
-              </label>
-            </div>
-          )}
-          <div>
+    <>
+      <form
+        id={networkForm}
+        className="network-settings"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        <section className="preferences-section" aria-labelledby="network-listener-heading">
+          <h3 id="network-listener-heading">{t('Listener')}</h3>
+          <div className="network-listener">
             <label>
-              {t('Allowed addresses')}
-              <textarea
-                rows={4}
-                value={addresses}
-                onChange={(event) => setOrigins(event.target.value)}
-                aria-describedby="network-address-help"
-                spellCheck={false}
+              {t('Listen address')}
+              <select
+                value={host}
+                onChange={(event) => setHost(event.target.value as typeof host)}
+                disabled={saving}
+              >
+                {loopbackHosts.map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t('Listen port')}
+              <input
+                type="number"
+                min="1"
+                max="65535"
+                step="1"
                 required
+                value={port}
+                onChange={(event) => setPort(event.target.value)}
+                aria-describedby="network-listener-help"
                 disabled={saving}
               />
             </label>
-            <p className="preference-help" id="network-address-help">
-              {authMode === 'cloudflare-access'
-                ? t('One HTTPS origin per line.')
-                : t('One HTTP(S) origin per line.')}
-            </p>
           </div>
-        </div>
-      </section>
-      {imported && (
-        <p role="status">
-          {changed
-            ? t('Imported. Review before saving.')
-            : t('Imported configuration matches the saved settings.')}
-        </p>
-      )}
-      {snapshot.restartRequired ? (
-        <p role="status">{t('Saved. Restart Codes to apply.')}</p>
-      ) : saved && !changed ? (
-        <p role="status">{t('Network settings saved.')}</p>
-      ) : null}
-      {error && <p role="alert">{t(error)}</p>}
-      <div className="network-actions">
-        <input
-          ref={importInput}
-          aria-label={t('Import network settings file')}
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0];
-            event.currentTarget.value = '';
-            if (file) void importConfiguration(file);
-          }}
-        />
-        <div className="network-transfer" role="group" aria-label={t('Network configuration file')}>
-          <IconButton
-            icon="upload"
-            label={t('Import configuration')}
-            hint={t('Import for review')}
-            onClick={() => importInput.current?.click()}
-            disabled={saving || importing || reloadRequired}
-          />
-          <IconButton
-            icon="download"
-            label={t('Export saved')}
-            onClick={exportConfiguration}
-            disabled={saving}
-          />
-        </div>
+          <p className="preference-help" id="network-listener-help">
+            {t('Save and restart Codes to apply a new listener address or port.')}
+          </p>
+          <dl className="listener-readout">
+            <div>
+              <dt>{t('Active listener')}</dt>
+              <dd>
+                <code>{listenerAddress(snapshot.active)}</code>
+              </dd>
+            </div>
+            {listenerAddress(snapshot.active) !== listenerAddress(snapshot.settings) && (
+              <div>
+                <dt>{t('Listener after restart')}</dt>
+                <dd>
+                  <code>{listenerAddress(snapshot.settings)}</code>
+                </dd>
+              </div>
+            )}
+          </dl>
+        </section>
+        <section className="preferences-section" aria-labelledby="network-access-heading">
+          <h3 id="network-access-heading">{t('Browser access')}</h3>
+          <div className="network-access-fields">
+            <label className="preference-row">
+              <span className="preference-description">
+                {t('Authentication mode')}
+                <span className="preference-help" id="network-auth-help">
+                  {authMode === 'cloudflare-access'
+                    ? t('Sign in with Access, then your Codes token.')
+                    : t('Use Cloudflare Access for public hostnames.')}
+                </span>
+              </span>
+              <select
+                aria-label={t('Authentication mode')}
+                value={authMode}
+                onChange={(event) => setAuthMode(event.target.value as NetworkSettings['authMode'])}
+                aria-describedby="network-auth-help"
+                disabled={saving}
+              >
+                <option value="local">{t('Local / Tailscale (local)')}</option>
+                <option value="cloudflare-access">Cloudflare Access</option>
+              </select>
+            </label>
+            {authMode === 'cloudflare-access' && (
+              <div className="network-access-credentials">
+                <label>
+                  {t('Cloudflare team URL')}
+                  <input
+                    type="url"
+                    placeholder="https://your-team.cloudflareaccess.com"
+                    value={issuer}
+                    maxLength={128}
+                    onChange={(event) => setIssuer(event.target.value)}
+                    required
+                    disabled={saving}
+                  />
+                </label>
+                <label>
+                  {t('Application Audience (AUD)')}
+                  <input
+                    value={audience}
+                    maxLength={64}
+                    spellCheck={false}
+                    onChange={(event) => setAudience(event.target.value)}
+                    required
+                    disabled={saving}
+                  />
+                </label>
+              </div>
+            )}
+            <div>
+              <label>
+                {t('Allowed addresses')}
+                <textarea
+                  rows={4}
+                  value={addresses}
+                  onChange={(event) => setOrigins(event.target.value)}
+                  aria-describedby="network-address-help"
+                  spellCheck={false}
+                  required
+                  disabled={saving}
+                />
+              </label>
+              <p className="preference-help" id="network-address-help">
+                {authMode === 'cloudflare-access'
+                  ? t('One HTTPS origin per line.')
+                  : t('One HTTP(S) origin per line.')}
+              </p>
+            </div>
+          </div>
+        </section>
+        {imported && (
+          <p role="status">
+            {changed
+              ? t('Imported. Review before saving.')
+              : t('Imported configuration matches the saved settings.')}
+          </p>
+        )}
+        {error && <p role="alert">{t(error)}</p>}
         {reloadRequired && (
-          <button type="button" onClick={loadAgain}>
+          <button className="settings-action" type="button" onClick={loadAgain}>
             {t('Reload settings')}
           </button>
         )}
-        <button
-          className="preferences-done"
-          type="submit"
-          aria-label={saving ? t('Saving…') : t('Save network settings')}
-          disabled={!changed || saving || importing || reloadRequired}
-        >
-          {saving ? t('Saving…') : t('Save')}
-        </button>
-      </div>
-    </form>
+      </form>
+      {transfer}
+    </>
   );
 }

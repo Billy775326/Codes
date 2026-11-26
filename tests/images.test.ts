@@ -33,8 +33,20 @@ it('deduplicates private images, preserves them across restart, and scopes reads
   await expect(images.read(project, '../secret')).rejects.toMatchObject({
     code: 'IMAGE_NOT_FOUND',
   });
-  expect(images.reference(project, result.path)).toMatchObject({ id: first.id });
-  expect(images.reference(randomUUID(), result.path)).toBeUndefined();
+  expect(images.transcriptReference(project, result.path)).toEqual({
+    kind: 'image',
+    id: first.id,
+    name: 'Attached image',
+  });
+  const newProject = randomUUID();
+  expect(images.transcriptReference(newProject, result.path)).toMatchObject({
+    id: first.id,
+    projectId: project,
+  });
+  expect(
+    images.transcriptReference(newProject, join(directory, project, first.id)),
+  ).toBeUndefined();
+  expect(images.transcriptReference(newProject, join('images', project, first.id))).toBeUndefined();
 });
 it('rejects unsupported, mismatched, oversized and excessive-dimension images', async () => {
   const { images, project } = await fixture();

@@ -21,7 +21,7 @@ export function MaintenanceSettings({
   const maintenance = system?.maintenance;
   return (
     <section className="preferences-section" aria-labelledby="settings-maintenance-heading">
-      <h3 id="settings-maintenance-heading">{t('Maintenance')}</h3>
+      <h3 id="settings-maintenance-heading">{t('Task scheduling')}</h3>
       <dl className="session-status">
         <dt>{t('Task admission')}</dt>
         <dd role="status">
@@ -35,8 +35,6 @@ export function MaintenanceSettings({
                   : 'Waiting for active work',
           )}
         </dd>
-        <dt>{t('CLI version')}</dt>
-        <dd>{system?.version || t('Unknown')}</dd>
       </dl>
       <div className="settings-action-row">
         <p className="preference-help">

@@ -41,7 +41,9 @@ export function groupTurns(
         (item === legacy && !item.phase),
     );
     const replyIds = new Set(replies.map((item) => item.id));
-    const changes = items.filter((item) => item.kind === 'change' && item.files?.length);
+    const changes = items.filter(
+      (item) => item.kind === 'change' && item.files?.length && !isFailedActivity(item),
+    );
     const files = changes.flatMap((item) => item.files ?? []);
     return {
       id,
@@ -67,11 +69,23 @@ export function groupTurns(
   });
 }
 
+function failedStatus(status?: string) {
+  return status === 'failed' || status === 'declined';
+}
+
+export function isFailedActivity(item: Message) {
+  return isToolActivity(item) && failedStatus(item.status);
+}
+
+export function isToolActivity(item: Message) {
+  return item.kind === 'command' || item.kind === 'tool' || item.kind === 'change';
+}
+
 export function commandCounts(items: readonly Message[]) {
   const counts = { running: 0, failed: 0, stopped: 0, completed: 0, unknown: 0 };
   for (const item of items) {
     if (['inProgress', 'running', 'pending'].includes(item.status ?? '')) counts.running++;
-    else if (['failed', 'declined'].includes(item.status ?? '')) counts.failed++;
+    else if (failedStatus(item.status)) counts.failed++;
     else if (['interrupted', 'cancelled'].includes(item.status ?? '')) counts.stopped++;
     else if (item.status === 'completed') counts.completed++;
     else counts.unknown++;

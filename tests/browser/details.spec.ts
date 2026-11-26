@@ -1,3 +1,4 @@
+import { openContextTab } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot } from '../../src/shared/types';
 async function login(page: Page) {
@@ -81,10 +82,11 @@ test('a phone can explicitly skip an optional question without sending another t
 test('file previews show per-file counts, line numbers, layouts and safe literal patch text', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
   await login(page);
   await send(page, '[changes] Detailed patch fixture ' + Date.now());
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await openContextTab(page, 'Changes');
   const panel = page.locator('.context-panel');
   await expect(panel.locator('.diff-overview')).toContainText('2 files');
   const first = panel.getByRole('region', { name: 'Changes in example.ts', exact: true });
@@ -95,6 +97,9 @@ test('file previews show per-file counts, line numbers, layouts and safe literal
   await viewed.click();
   await expect(viewed).toHaveAttribute('aria-pressed', 'true');
   const split = panel.getByRole('button', { name: 'Side by side', exact: true });
+  await expect(split).toHaveCount(0);
+  await expect(first.locator('.diff-table-scroll')).toHaveClass(/unified/);
+  await page.getByRole('separator', { name: 'Resize project panel' }).press('End');
   await expect(split).toHaveText('');
   await split.hover();
   await expect(page.locator('.control-tooltip')).toHaveText('Side by side');
@@ -114,7 +119,7 @@ test('file previews show per-file counts, line numbers, layouts and safe literal
   await panel.getByRole('button', { name: 'Changes', exact: true }).click();
   await expect(split).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
-  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await openContextTab(page, 'Changes');
   await expect(split).toHaveAttribute('aria-pressed', 'true');
 });
 test('earlier turn changes remain inspectable after a later turn and reload', async ({ page }) => {
@@ -125,7 +130,7 @@ test('earlier turn changes remain inspectable after a later turn and reload', as
   await expect(page.getByTestId('message-assistant')).toHaveCount(2);
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await openContextTab(page, 'Changes');
   const panel = page.locator('.context-panel');
   await expect(panel).toContainText('No changes to review');
   await panel.getByLabel('Change scope').selectOption({ index: 1 });
@@ -135,9 +140,7 @@ test('earlier turn changes remain inspectable after a later turn and reload', as
   await edits.last().locator('.diff-file-toggle').click();
   await expect(edits.last()).toContainText('Greetings');
 });
-test('long patch text wraps in Unified and Side by side on desktop and phones', async ({
-  page,
-}) => {
+test('long patch text wraps in both layouts, with unified changes on phones', async ({ page }) => {
   const removed = `    const previous = "${'previous'.repeat(48)}";`;
   const added = `    const current = "${'current'.repeat(48)}";`;
   const hunk = `@@ -123456 +654321 @@ ${'Long hunk description '.repeat(15)}`;
@@ -158,42 +161,52 @@ test('long patch text wraps in Unified and Side by side on desktop and phones', 
     await route.fulfill({ json: base });
   });
   await page.reload();
-  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await openContextTab(page, 'Changes');
   const panel = page.locator('.context-panel');
   const file = panel.getByRole('region', { name: 'Changes in example.ts', exact: true });
   const patch = file.getByLabel('Patch for example.ts', { exact: true });
   await expect(patch).toBeVisible();
-  for (const width of [1440, 320]) {
-    await page.setViewportSize({ width, height: 800 });
-    for (const layout of ['Unified', 'Side by side']) {
+  await page.setViewportSize({ width: 1600, height: 800 });
+  await page.getByRole('separator', { name: 'Resize project panel' }).press('End');
+  for (const layout of ['Unified', 'Side by side', 'Phone']) {
+    if (layout === 'Phone') {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await expect(panel.getByRole('button', { name: 'Side by side', exact: true })).toHaveCount(0);
+      await expect(file.locator('.diff-table-scroll')).toHaveClass(/unified/);
+    } else {
       await panel.getByRole('button', { name: layout, exact: true }).click();
-      const shape = await patch.evaluate((element) => {
-        const wrappedRows = Array.from(element.querySelectorAll('code'), (code) => {
-          const range = document.createRange();
-          range.selectNodeContents(code.lastChild!);
-          return new Set(Array.from(range.getClientRects(), (rect) => rect.top)).size;
-        });
-        return { overflow: element.scrollWidth - element.clientWidth, wrappedRows };
-      });
-      expect(shape.overflow).toBe(0);
-      expect(shape.wrappedRows.every((rows) => rows > 1)).toBe(true);
-      await expect(patch.locator('.line-number').filter({ hasText: /^123456$/ })).toBeVisible();
-      await expect(patch.locator('.line-number').filter({ hasText: /^654321$/ })).toBeVisible();
-      await expect(patch.locator('code').filter({ hasText: /const previous/ })).toContainText(
-        removed.trim(),
-      );
-      await expect(patch.locator('code').filter({ hasText: /const current/ })).toContainText(
-        added.trim(),
-      );
     }
+    const shape = await patch.evaluate((element) => {
+      const wrappedRows = Array.from(element.querySelectorAll('code'), (code) => {
+        const range = document.createRange();
+        range.selectNodeContents(code.lastChild!);
+        return new Set(Array.from(range.getClientRects(), (rect) => rect.top)).size;
+      });
+      return { overflow: element.scrollWidth - element.clientWidth, wrappedRows };
+    });
+    expect(shape.overflow).toBe(0);
+    expect(shape.wrappedRows.every((rows) => rows > 1)).toBe(true);
+    await expect(patch.locator('.line-number').filter({ hasText: /^123456$/ })).toBeVisible();
+    await expect(patch.locator('.line-number').filter({ hasText: /^654321$/ })).toBeVisible();
+    await expect(patch.locator('code').filter({ hasText: /const previous/ })).toContainText(
+      removed.trim(),
+    );
+    await expect(patch.locator('code').filter({ hasText: /const current/ })).toContainText(
+      added.trim(),
+    );
   }
+  await page.setViewportSize({ width: 1600, height: 800 });
+  await expect(panel.getByRole('button', { name: 'Side by side', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });
 test('long patches use bounded line windows and fit phone screens', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await send(page, '[changes] [large-patch] Window fixture ' + Date.now());
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await openContextTab(page, 'Changes');
   const panel = page.locator('.context-panel');
   const added = panel.getByRole('region', { name: 'Changes in new-file.txt', exact: true });
   await added.locator('.diff-file-toggle').click();
@@ -211,7 +224,7 @@ test('oversized patches disclose truncation and proposed file patches can be dec
   await login(page);
   await send(page, '[changes] [truncated-patch] Truncated fixture ' + Date.now());
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await openContextTab(page, 'Changes');
   await expect(page.locator('.context-panel')).toContainText('This change preview is incomplete');
   await page.getByRole('button', { name: 'Close panel', exact: true }).click();
   await send(page, '[file-approve] Proposed patch ' + Date.now());

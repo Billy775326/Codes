@@ -41,6 +41,8 @@ export function usePanelFocus(
     return () => {
       document.removeEventListener('keydown', key);
       queueMicrotask(() => {
+        const panel = ref.current;
+        if (panel?.contains(document.activeElement) && !panel.closest('[inert]')) return;
         if (previous?.isConnected && previous !== document.body && !previous.closest('[inert]'))
           previous.focus();
         else document.querySelector<HTMLElement>(fallback)?.focus();

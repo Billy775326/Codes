@@ -14,19 +14,20 @@ export function ImageAttachmentView({
 }) {
   const { t } = useInterfaceLanguage();
   const [failed, setFailed] = useState(false);
+  const url = imageUrl(image.projectId ?? projectId, image.id);
   return (
     <span className="image-attachment">
       {failed ? (
         <span className="image-unavailable">{t('Image unavailable')}</span>
       ) : (
         <a
-          href={imageUrl(projectId, image.id)}
+          href={url}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={t('Open image: {name}', { name: image.name })}
         >
           <img
-            src={imageUrl(projectId, image.id)}
+            src={url}
             alt={image.name}
             loading="lazy"
             width="80"

@@ -20,3 +20,15 @@ export async function chooseWorkingDirectory(page: Page, path: string) {
   await picker.getByRole('button', { name: 'Use directory', exact: true }).click();
   await expect(picker).toHaveCount(0);
 }
+
+export function contextTrigger(page: Page) {
+  return page.getByRole('button', { name: 'Files and changes', exact: true });
+}
+
+export async function openContextTab(page: Page, tab: 'Files' | 'Changes') {
+  const panel = page.locator('#sidebar-context');
+  if (!(await panel.isVisible())) await contextTrigger(page).click();
+  const button = panel.getByRole('button', { name: tab, exact: true });
+  if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+  return panel;
+}

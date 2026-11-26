@@ -46,11 +46,17 @@ export async function workspaceFileRoutes(
         response,
         await service.browseImage(projectId, path, showHidden),
       );
-    if (kind === 'document')
+    if (kind === 'document') {
+      const version = z
+        .string()
+        .regex(/^[0-9a-f]{64}$/)
+        .optional()
+        .parse(url.searchParams.get('version') ?? undefined);
       return untilClosed(response, async (signal) => {
-        const document = await service.browseDocument(projectId, path, showHidden, signal);
+        const document = await service.browseDocument(projectId, path, showHidden, signal, version);
         if (!signal.aborted) return json(response, document);
       });
+    }
     if (kind === 'pdf')
       return service.browsePdf(projectId, path, showHidden, async (stream, size) => {
         response.writeHead(200, {

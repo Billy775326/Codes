@@ -1,3 +1,4 @@
+import { openContextTab } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 async function login(page: Page) {
   await page.goto('/');
@@ -43,7 +44,7 @@ test('desktop sidebars resize independently and keep their widths through reload
   const navigation = page.getByRole('complementary', { name: 'Workspace navigation' });
   const context = page.locator('.context-panel');
   const closeNavigation = page.getByRole('button', { name: 'Close navigation', exact: true });
-  const files = page.getByRole('button', { name: 'Browse files', exact: true });
+  const files = page.getByRole('button', { name: 'Files and changes', exact: true });
   const left = page.getByRole('separator', { name: 'Resize navigation' });
   const right = page.getByRole('separator', { name: 'Resize project panel' });
   const input = page.getByLabel('Message Codex');
@@ -96,8 +97,10 @@ test('desktop sidebars resize independently and keep their widths through reload
   await right.press('ArrowLeft');
   await expect(right).toHaveAttribute('aria-valuenow', '596');
   await page.setViewportSize({ width: 1100, height: 900 });
-  await expect(right).toHaveAttribute('aria-valuenow', '320');
-  expect((await page.locator('.main').boundingBox())!.width).toBeGreaterThanOrEqual(460);
+  await expect(right).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Project context' })).toBeVisible();
+  await expect.poll(() => width(page.locator('.sidebar'))).toBe(340);
+  expect((await page.locator('.main').boundingBox())!.width).toBeGreaterThanOrEqual(560);
   await page.setViewportSize({ width: 1500, height: 900 });
   await expect(right).toHaveAttribute('aria-valuenow', '596');
   await expect(left).toHaveAttribute('aria-valuenow', '340');
@@ -109,7 +112,7 @@ test('desktop sidebars resize independently and keep their widths through reload
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.reload();
   await expect(left).toHaveAttribute('aria-valuenow', '340');
-  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await openContextTab(page, 'Changes');
   await expect(right).toHaveAttribute('aria-valuenow', '596');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(left).toHaveCount(0);
@@ -121,6 +124,11 @@ test('desktop sidebars resize independently and keep their widths through reload
   await page.setViewportSize({ width: 1500, height: 900 });
   await files.click();
   await expect(right).toHaveAttribute('aria-valuenow', '596');
+  await expect(context.getByRole('button', { name: 'Changes', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await openContextTab(page, 'Files');
   await right.dblclick();
   await expect(right).toHaveAttribute('aria-valuenow', '460');
   await expect(input).toHaveValue('Keep this draft while resizing');
@@ -189,6 +197,14 @@ test('the toolbar switches theme, shares the settings choice, and fits at 320px'
   await login(page);
   const themeButton = (mode: 'light' | 'dark') =>
     page.getByRole('button', { name: `Switch to ${mode} mode`, exact: true });
+  const directory = page.locator('.topbar .workspace-directory');
+  const status = page.getByRole('button', { name: 'Session status', exact: true });
+  const center = async (element: typeof directory) => {
+    const box = (await element.boundingBox())!;
+    return box.y + box.height / 2;
+  };
+  expect(await center(directory)).toBeCloseTo(await center(themeButton('light')), 0);
+  expect(await center(status)).toBeCloseTo(await center(themeButton('light')), 0);
   const workspace = page.locator('.app');
   await page.getByLabel('Message Codex').fill('Keep the current draft');
   await themeButton('light').hover();
@@ -212,6 +228,7 @@ test('the toolbar switches theme, shares the settings choice, and fits at 320px'
   await page.reload();
   const light = themeButton('light');
   await expect(light).toBeVisible();
+  expect(await center(directory)).toBeCloseTo(await center(status), 0);
   const box = (await light.boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(320);

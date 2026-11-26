@@ -1,4 +1,4 @@
-import { reconnectUpdates } from './sidebar-helpers';
+import { reconnectUpdates, openContextTab } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot, Message } from '../../src/shared/types';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -231,7 +231,7 @@ test('reply links and Changes preview project files without navigating or showin
   );
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: 'View changes', exact: true }).click();
+  await openContextTab(page, 'Changes');
   const change = page.getByRole('region', { name: `Changes in ${absolute}`, exact: true });
   await change.getByRole('button', { name: 'Open file', exact: true }).click();
   await expect(dialog).toContainText('Project review notes.');
@@ -364,7 +364,7 @@ test('answers and project files preview raster images and isolated static HTML',
   ).toBeNull();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await openContextTab(page, 'Files');
   const files = page.locator('.context-panel');
   await files.getByRole('button', { name: imageName, exact: true }).click();
   await expectImage(imageName);
@@ -387,7 +387,7 @@ test('HTML preview explains an empty JavaScript app shell and keeps its source v
     '<!doctype html><html><head><title>Example app</title></head><body><div id="root"></div>' +
       '<script type="module" src="/src/main.tsx"></script></body></html>',
   );
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await openContextTab(page, 'Files');
   await page.getByRole('button', { name: 'app-entry.html', exact: true }).click();
   const preview = page.getByRole('region', { name: 'File preview', exact: true });
   await expect(preview.getByRole('status')).toContainText('This page needs JavaScript to render.');
@@ -492,13 +492,14 @@ test('work sections around a question expand independently with commands collaps
   const disclosures = page.locator('.work-history-toggle');
   await expect(disclosures).toHaveCount(2);
   await expect(disclosures.first()).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('message-question')).toContainText('Already answered');
   await disclosures.last().click();
   await expect(disclosures.first()).toHaveAttribute('aria-expanded', 'false');
   await expect(disclosures.last()).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.activity-group[open]')).toHaveCount(0);
 });
 
-test('the whole work history defaults collapsed with final answer, edits and one footer outside', async ({
+test('successful and failed tools collapse while the final answer and edits are visible', async ({
   page,
 }) => {
   await fixture(page, 31);
@@ -511,7 +512,11 @@ test('the whole work history defaults collapsed with final answer, edits and one
   await expect(
     group.getByRole('button', { name: /Worked for|Working|Work history/ }),
   ).toContainText('1 failed');
-  await expect(page.locator('.tool')).toHaveCount(0);
+  const failure = page.locator('.tool-failed');
+  const otherTools = page.locator('.tool:not(.tool-failed)');
+  await expect(otherTools).toHaveCount(0);
+  await expect(failure).toHaveCount(0);
+  await expect(page.getByText('Final response stays visible.', { exact: true })).toBeVisible();
   await expect(page.getByText('Inspecting the workspace.', { exact: true })).toHaveCount(0);
   await expect(group.locator('.work-history-toggle')).toContainText('Worked for 2m 5s');
   await expect(page.getByRole('region', { name: 'Edited files', exact: true })).toBeVisible();
@@ -520,24 +525,32 @@ test('the whole work history defaults collapsed with final answer, edits and one
   await page.keyboard.press('Enter');
   await expect(group.locator('.work-history-toggle')).toHaveAttribute('aria-expanded', 'true');
   const activities = group.locator('.activity-group');
+  await expect(activities).toHaveCount(1);
   await expect(activities).not.toHaveAttribute('open', '');
   await expect(activities.locator('summary')).toContainText('31 activities');
+  await expect(activities.locator('summary')).toContainText('1 failed');
   await expect(page.getByText('Inspecting the workspace.', { exact: true })).toBeVisible();
-  await expect(page.locator('.tool')).toHaveCount(0);
+  await expect(otherTools).toHaveCount(0);
   await activities.locator('summary').focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('.tool')).toHaveCount(31);
-  await expect(page.locator('.tool pre')).toHaveCount(0);
-  await page.locator('.tool > summary').first().click();
-  await expect(page.locator('.tool pre')).toHaveText(
+  await expect(otherTools).toHaveCount(30);
+  await expect(otherTools.locator('pre')).toHaveCount(0);
+  await expect(failure.locator('summary')).toContainText('failed');
+  await expect(failure.locator('pre')).toHaveCount(0);
+  await failure.locator('summary').click();
+  await expect(failure.locator('pre')).toHaveText('printf command-7\n\nSynthetic command output 7');
+  await otherTools.first().locator('summary').click();
+  await expect(otherTools.locator('pre')).toHaveText(
     'printf command-0\n\nSynthetic command output 0',
   );
   await group.getByRole('button', { name: /Worked for|Working|Work history/ }).click();
-  await expect(page.locator('.tool')).toHaveCount(0);
+  await expect(otherTools).toHaveCount(0);
+  await expect(failure).toHaveCount(0);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the next draft');
   await page.screenshot({ path: 'test-results/activity-collapsed-desktop.png', fullPage: true });
   await page.reload();
   await expect(page.locator('.work-history-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await expect(failure).toHaveCount(0);
 });
 test('one action row belongs to the last reply and intermediate prose does not reserve toolbar space', async ({
   page,
@@ -611,6 +624,8 @@ test('command status and appended entries update without opening a collapsed run
   await expect(
     group.getByRole('button', { name: /Worked for|Working|Work history/ }),
   ).toContainText('1 failed');
+  await group.locator('.work-history-toggle').click();
+  await expect(page.locator('.tool')).toHaveCount(0);
 });
 test('running work opens, completion collapses untouched history, and manual choices survive updates', async ({
   page,

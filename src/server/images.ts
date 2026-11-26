@@ -11,7 +11,7 @@ import {
   realpath,
 } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
-import { resolve, join, basename } from 'node:path';
+import { resolve, join, basename, dirname } from 'node:path';
 import { imageSize } from 'image-size';
 import { AppError } from '../shared/errors.js';
 import { imageId, imageLimits } from '../shared/images.js';
@@ -189,9 +189,20 @@ export class Images {
       throw new AppError('IMAGE_CHANGED', 'The attached image changed. Attach it again.', 409);
     return { path, bytes, contentType: formats[kind] };
   }
-  reference(projectId: string, path: string): ImageAttachment | undefined {
+  transcriptReference(currentProjectId: string, path: string): ImageAttachment | undefined {
     const id = basename(path);
-    if (!imageId.test(id) || resolve(path) !== this.path(projectId, id)) return;
-    return { kind: 'image', id, name: 'Attached image' };
+    const projectId = basename(dirname(path));
+    if (
+      !imageId.test(id) ||
+      !/^[a-f0-9-]{36}$/.test(projectId) ||
+      path !== this.path(projectId, id)
+    )
+      return;
+    return {
+      kind: 'image',
+      id,
+      name: 'Attached image',
+      ...(projectId === currentProjectId ? {} : { projectId }),
+    };
   }
 }

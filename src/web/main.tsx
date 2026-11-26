@@ -7,9 +7,13 @@ import {
   useInterfaceLanguage,
 } from './interface-language';
 import { linkedConversation, projectViews } from './project-navigation';
-import { draftKey, save, saved } from './browser-storage';
+import { browserPreferencesKey, draftKey, save, saved, saveSettings } from './browser-storage';
 import { useMessageDelivery } from './useMessageDelivery';
-import { parseQuestionReplies, questionSourceItemId } from '../shared/question-replies';
+import {
+  isQuestionSummary,
+  parseQuestionReplies,
+  questionSourceItemId,
+} from '../shared/question-replies';
 import { imageLimits } from '../shared/images';
 import { hasHiddenPathSegment, type ProjectFileReferenceAttachment } from '../shared/project-files';
 import { ImageAttachmentView } from './ImageAttachments';
@@ -17,6 +21,11 @@ import { ImagePreviewDialog } from './ContentPreview';
 import { MessageView } from './ConversationMessage';
 import { useLocalAttachments } from './useLocalAttachments';
 import { readBrowserPreferences, type Preferences } from './browser-preferences';
+import {
+  defaultSidebarWidths,
+  sidebarWidthSettings,
+  type BrowserPreferencesFile,
+} from './browser-preferences-file';
 import { defaultTextSize } from './font-sizes';
 import { ConversationNotifications, notificationAccess } from './browser-notifications';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -55,6 +64,7 @@ import { useConversationTimeline } from './useConversationTimeline';
 import { useComposerTextareaHeight } from './useComposerTextareaHeight';
 import { recallComposerMessage, type ComposerHistory } from './composer-history';
 import { ConversationViewCache } from './conversation-view-cache';
+import { FilesReadCache } from './files-read-cache';
 import { applyConversationEvent } from './conversation-events';
 import { reloadStaleWebBuildAfterSignIn, useWebBuild } from './useWebBuild';
 import { InteractionDialog, ReviewDialog, StatusDialog } from './InteractionDialog';
@@ -125,6 +135,7 @@ function App() {
   const [context, setContext] = useState<ProjectContext>();
   const [thread, setThread] = useState<Thread>();
   const conversationViews = useMemo(() => new ConversationViewCache(), []);
+  const fileCache = useMemo(() => new FilesReadCache(), [auth]);
   const liveThread = useRef(thread);
   liveThread.current = thread;
   const preview =
@@ -147,7 +158,7 @@ function App() {
     return () => clearTimeout(timer);
   }, [fileScopeWarning]);
   const [preferences, setPreferences] = useState(() =>
-    readBrowserPreferences(saved('codes.preferences')),
+    readBrowserPreferences(saved(browserPreferencesKey)),
   );
   const interfaceLanguage = interfaceLanguages[preferences.language];
   const { t } = interfaceLanguage;
@@ -158,10 +169,13 @@ function App() {
     preferences.notifications &&
     preferences.notificationEvents.length > 0 &&
     notificationAccess() === 'granted';
-  const changePreferences = (value: Preferences) => {
+  const applyBrowserPreferences = (value: Preferences) => {
     latestPreferences.current = value;
     setPreferences(value);
-    const stored = save('codes.preferences', JSON.stringify(value));
+  };
+  const changePreferences = (value: Preferences) => {
+    applyBrowserPreferences(value);
+    const stored = save(browserPreferencesKey, JSON.stringify(value));
     setPreferencesError(stored ? '' : 'Changes apply now, but this browser could not save them.');
   };
   const threadRef = useRef(threadId);
@@ -211,6 +225,9 @@ function App() {
     panel,
     setPanel,
     narrow,
+    contextDrawer,
+    compactFiles,
+    allowSplitDiff,
     phoneLayout,
     workspaceElement,
     navigationElement,
@@ -221,9 +238,30 @@ function App() {
     closeNavigation,
     closeContext,
     dismissContext,
+    toggleContext,
     changeNavigationWidth,
     changeContextWidth,
-  } = useWorkspaceLayout();
+    sidebarWidths,
+    applySidebarWidths,
+  } = useWorkspaceLayout(auth === 'ready');
+  const restoreSidebarWidths = () => {
+    if (!saveSettings(sidebarWidthSettings(defaultSidebarWidths))) return false;
+    applySidebarWidths(defaultSidebarWidths);
+    return true;
+  };
+  const importBrowserPreferences = ({ preferences, sidebarWidths }: BrowserPreferencesFile) => {
+    if (
+      !saveSettings([
+        ...sidebarWidthSettings(sidebarWidths),
+        [browserPreferencesKey, JSON.stringify(preferences)],
+      ])
+    )
+      return false;
+    applyBrowserPreferences(preferences);
+    applySidebarWidths(sidebarWidths);
+    setPreferencesError('');
+    return true;
+  };
   const [diffTurn, setDiffTurn] = useState('');
   const [diffLayout, setDiffLayout] = useState<DiffLayout>(() =>
     saved('codes.diff-layout') === 'split' ? 'split' : 'unified',
@@ -299,6 +337,7 @@ function App() {
     reviewMessages,
     setFollowing,
     returnToLatest,
+    switchConversation,
     loadHistory,
     loadingHistory,
     historyError,
@@ -354,6 +393,7 @@ function App() {
     planReady,
     autoReviewReady,
     refreshConfiguration,
+    refreshCatalog,
     saveComposerConfiguration,
   } = useCodexConfiguration({ auth, connection, contextProjectId, setBusy, setSystem, notice });
   useEffect(() => {
@@ -500,7 +540,10 @@ function App() {
           projectUpdated({ id, name });
         } else if (event.kind === 'project-archive') projectUpdated(event.data as ProjectUpdate);
         else if (event.kind === 'codex-configuration') refreshConfiguration();
-        else if (event.kind === 'runtime') setSystem(event.data as System);
+        else if (event.kind === 'codex-catalog') {
+          refreshCatalog();
+          refreshConfiguration();
+        } else if (event.kind === 'runtime') setSystem(event.data as System);
       },
       connectionStatus,
       'conversations',
@@ -518,11 +561,20 @@ function App() {
       document.removeEventListener('visibilitychange', focus);
       window.removeEventListener('online', focus);
     };
-  }, [threadId, auth, retry, notifyInBackground, notifications]);
+  }, [
+    threadId,
+    auth,
+    retry,
+    notifyInBackground,
+    notifications,
+    refreshCatalog,
+    refreshConfiguration,
+  ]);
   const select = useCallback(
     (id: string, owner = projectRef.current) => {
       const changed = id !== threadRef.current || owner !== projectRef.current;
       if (changed) {
+        switchConversation(id, owner);
         conversationViews.refreshRecency(id, owner);
         const leaving = liveThread.current;
         if (
@@ -545,14 +597,12 @@ function App() {
         setAttachments([]);
       }
       setConnectionError('');
-      returnToLatest();
       setDiffTurn('');
       setDiffPath('');
       if (changed) setPanel(null);
       if (window.innerWidth <= 1099) setSidebar(false);
-      setFollowing(true);
     },
-    [auth, conversationViews, returnToLatest],
+    [auth, conversationViews, switchConversation],
   );
   const loadingConversation = !!threadId && (!thread || thread.id !== threadId);
   const clearAcceptedDraft = (id: string, version: number, origin = id) => {
@@ -672,6 +722,11 @@ function App() {
         refreshConfiguration();
         return;
       }
+      if (e.kind === 'codex-catalog') {
+        refreshCatalog();
+        refreshConfiguration();
+        return;
+      }
       if (e.kind === 'runtime') {
         setSystem(e.data as System);
         return;
@@ -698,6 +753,8 @@ function App() {
         return;
       }
       if (e.threadId !== threadId) return;
+      if (projectId && e.kind === 'item' && (e.data as Message).kind === 'change')
+        fileCache.invalidate(projectId);
       if (e.kind === 'text') {
         const d = e.data as { id: string; delta: string };
         deltas.set(d.id, (deltas.get(d.id) ?? '') + d.delta);
@@ -724,15 +781,20 @@ function App() {
             'The service returned a result for a different conversation.',
             'INVALID_RESPONSE',
           );
-        if (snapshot.thread.projectId !== projectId)
+        if (snapshot.thread.projectId !== projectId) {
+          fileCache.invalidate(projectId);
           setSelection({ projectId: snapshot.thread.projectId, threadId });
+        }
         if (snapshot.context) {
           const workspace = snapshot.context.project;
           setProjects((list) =>
             list.some((entry) => entry.id === workspace.id) ? list : [...list, workspace],
           );
           setContext(snapshot.context);
-          if (!snapshot.context.directory.available) setFilePath(undefined);
+          if (!snapshot.context.directory.available) {
+            fileCache.invalidate(workspace.id);
+            setFilePath(undefined);
+          }
         }
         deltas.clear();
         observeQueue();
@@ -765,7 +827,17 @@ function App() {
       document.removeEventListener('visibilitychange', focus);
       window.removeEventListener('online', focus);
     };
-  }, [threadId, projectId, retry, auth, notifyInBackground, notifications]);
+  }, [
+    threadId,
+    projectId,
+    retry,
+    auth,
+    notifyInBackground,
+    notifications,
+    fileCache,
+    refreshCatalog,
+    refreshConfiguration,
+  ]);
   useComposerTextareaHeight(composer, draft, auth === 'ready' && !queueEditing);
   const changeDraft = useCallback(
     (value: string, recalling = false) => {
@@ -879,9 +951,16 @@ function App() {
     [select],
   );
   const newThread = useCallback(() => {
-    if (projectId && !directoryBlocked) newThreadIn(projectId);
+    if (preferences.newConversationDirectory === 'current' && projectId && !directoryBlocked)
+      newThreadIn(projectId);
     else openDirectoryPicker();
-  }, [projectId, directoryBlocked, newThreadIn, openDirectoryPicker]);
+  }, [
+    preferences.newConversationDirectory,
+    projectId,
+    directoryBlocked,
+    newThreadIn,
+    openDirectoryPicker,
+  ]);
   const send = () => {
     if (draft.trimStart().startsWith('/')) runCommand(draft.trim());
     else void sendMessage();
@@ -922,10 +1001,10 @@ function App() {
           ...(showHiddenFiles ? { showHidden: true as const } : {}),
         },
       ]);
-      if (narrow) setPanel(null);
+      if (contextDrawer) closeContext();
       requestAnimationFrame(() => composer.current?.focus());
     },
-    [attachmentBlocked, narrow, showHiddenFiles],
+    [attachmentBlocked, closeContext, contextDrawer, showHiddenFiles],
   );
   const attachProjectReference = useCallback(
     (reference: ProjectFileReferenceAttachment) => {
@@ -935,10 +1014,10 @@ function App() {
         ...list.filter((entry) => !('path' in entry) || entry.path !== reference.path),
         reference,
       ]);
-      if (narrow) setPanel(null);
+      if (contextDrawer) closeContext();
       requestAnimationFrame(() => composer.current?.focus());
     },
-    [attachmentBlocked, narrow],
+    [attachmentBlocked, closeContext, contextDrawer],
   );
   const active =
     !!thread?.pending ||
@@ -1088,6 +1167,12 @@ function App() {
       text: '',
     });
   }
+  const renderedMessages = transcriptMessages.filter(
+    (item) =>
+      !item.asyncQuestions ||
+      questionsByItem.get(item.id)?.turnId !== item.turnId ||
+      !isQuestionSummary(item.text, item.asyncQuestions),
+  );
   const openProjectFile = useCallback(
     (path: string) => {
       if (!contextReady || directoryBlocked) return;
@@ -1153,7 +1238,11 @@ function App() {
   const deliveryBlocked = !!deliveryReason;
   const queueBlocked = !!queueReason;
   const addBlocked = !!addNowReason;
-  const tabQueues = deliveryMode === 'steer' && !queueBlocked && !draft.trimStart().startsWith('/');
+  const tabQueues =
+    preferences.tabToQueue &&
+    deliveryMode === 'steer' &&
+    !queueBlocked &&
+    !draft.trimStart().startsWith('/');
   const stopReason = busy
     ? 'Wait for the current request.'
     : !thread?.turnId || !['running', 'waitingApproval', 'waitingInput'].includes(thread.state)
@@ -1256,6 +1345,8 @@ function App() {
     if (auth !== 'ready') return;
     const shortcut = (event: KeyboardEvent) => {
       if (
+        !event.defaultPrevented &&
+        !event.isComposing &&
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === 'n' &&
         !event.shiftKey &&
@@ -1272,7 +1363,7 @@ function App() {
     };
     document.addEventListener('keydown', shortcut);
     return () => document.removeEventListener('keydown', shortcut);
-  }, [auth, busy, settings]);
+  }, [auth, busy, newThread]);
   const modalOpen =
     choosingDirectory ||
     !!dialog ||
@@ -1280,6 +1371,7 @@ function App() {
     !!linkedFile ||
     !!forking ||
     conversationModalOpen;
+  const contextOverlay = contextDrawer && !(narrow && sidebar);
   const conversationLoadError =
     connectionError ||
     (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
@@ -1333,7 +1425,7 @@ function App() {
           '--code-font-size': `${preferences.codeFontSize ?? defaultTextSize}px`,
         } as React.CSSProperties
       }
-      className={`app ${panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
+      className={`app ${contextDrawer ? 'context-drawer' : panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
     >
       {sidebar && <div className="scrim" onClick={closeNavigation} />}
       <aside
@@ -1341,7 +1433,7 @@ function App() {
         id="sidebar-navigation"
         className={`sidebar ${sidebar ? 'open' : ''}`}
         aria-label={t('Workspace navigation')}
-        inert={modalOpen || undefined}
+        inert={modalOpen || contextOverlay || undefined}
         role={narrow && sidebar && !modalOpen ? 'dialog' : undefined}
         aria-modal={narrow && sidebar && !modalOpen ? true : undefined}
       >
@@ -1355,16 +1447,27 @@ function App() {
             size={18}
             onClick={closeNavigation}
           />
+          <button
+            className="navigation-new"
+            type="button"
+            aria-label={t('New conversation')}
+            disabled={busy}
+            onClick={newThread}
+          >
+            <Icon name="newchat" size={16} />
+            {phoneLayout ? t('New') : t('New conversation')}
+          </button>
         </div>
         <Conversations
           projects={projects}
-          cwd={project?.path}
+          currentDirectory={project?.path}
           selectedId={threadId}
           updates={sidebarUpdates}
           connection={connection}
           disabled={busy}
-          supportsCreatedSort={system?.capabilities?.conversationSort !== false}
-          onNew={newThread}
+          supportsCreatedSort={
+            system?.runtime === 'mock' || system?.capabilities?.conversationSort === true
+          }
           onSelect={select}
           onUpdated={conversationUpdated}
           onModalChange={setConversationModalOpen}
@@ -1391,11 +1494,12 @@ function App() {
                   })
                   .catch(notice)
               }
+              className="workspace-sign-out"
             />
           </div>
         </div>
       </aside>
-      {sidebar && !narrow && !modalOpen && (
+      {sidebar && !narrow && !modalOpen && !contextOverlay && (
         <SidebarResize
           side="navigation"
           range={sidebarLayout.navigation}
@@ -1406,7 +1510,7 @@ function App() {
       <main
         className="main"
         aria-label={t('Conversation workspace')}
-        inert={modalOpen || (narrow && (sidebar || !!panel)) || undefined}
+        inert={modalOpen || (narrow && sidebar) || contextOverlay || undefined}
       >
         <WorkspaceHeader
           title={
@@ -1420,9 +1524,9 @@ function App() {
           sidebarOpen={sidebar}
           connection={connection}
           theme={theme}
-          panel={panel}
+          contextOpen={!!panel}
           busy={busy}
-          hasProject={contextReady && !directoryBlocked}
+          hasContext={contextReady}
           onNavigation={openNavigation}
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
@@ -1432,12 +1536,8 @@ function App() {
           onToggleTheme={() =>
             changePreferences({ ...preferences, theme: theme === 'dark' ? 'light' : 'dark' })
           }
-          onReview={canReview ? () => setDialog('review') : undefined}
           onStatus={() => setDialog('status')}
-          onPanel={(kind) => {
-            if (kind === 'diff' || (contextReady && !directoryBlocked))
-              setPanel(panel === kind ? null : kind);
-          }}
+          onToggleContext={toggleContext}
           onRename={async (id, name) => {
             const result = await post<Summary>('/threads/' + encodeURIComponent(id) + '/rename', {
               operationId: crypto.randomUUID(),
@@ -1599,7 +1699,7 @@ function App() {
                 {(thread || preview) && (
                   <Transcript
                     key={threadId}
-                    messages={transcriptMessages}
+                    messages={renderedMessages}
                     turns={visibleTurns}
                     activeIds={activeTurnIds}
                     result={taskResult}
@@ -2220,6 +2320,7 @@ function App() {
       )}
       {linkedFile && (
         <LinkedFilePreview
+          fileCache={fileCache}
           key={linkedFile.projectId + ':' + linkedFile.path}
           file={linkedFile}
           showHidden={showHiddenFiles || hasHiddenPathSegment(linkedFile.path)}
@@ -2241,6 +2342,9 @@ function App() {
             setAuth('login');
           }}
           value={preferences}
+          sidebarWidths={sidebarWidths}
+          restoreSidebarWidths={restoreSidebarWidths}
+          importBrowserPreferences={importBrowserPreferences}
           configurationProject={contextProjectId}
           models={models}
           autoReviewReady={autoReviewReady}
@@ -2326,10 +2430,10 @@ function App() {
           </form>
         </InteractionDialog>
       )}
-      {panel && narrow && !sidebar && !modalOpen && (
+      {contextOverlay && !modalOpen && (
         <div className="context-scrim" aria-hidden="true" onClick={closeContext} />
       )}
-      {panel && !narrow && !modalOpen && (
+      {panel && !contextDrawer && !modalOpen && (
         <SidebarResize
           side="context"
           range={sidebarLayout.context}
@@ -2344,8 +2448,8 @@ function App() {
           inert={modalOpen || (narrow && sidebar) || undefined}
           className="context-panel"
           aria-label={t('Project context')}
-          role={narrow && !sidebar && !modalOpen ? 'dialog' : undefined}
-          aria-modal={narrow && !sidebar && !modalOpen ? true : undefined}
+          role={contextOverlay && !modalOpen ? 'dialog' : undefined}
+          aria-modal={contextOverlay && !modalOpen ? true : undefined}
         >
           <div className="panel-heading">
             <div className="panel-tabs" role="group" aria-label={t('Project views')}>
@@ -2377,52 +2481,69 @@ function App() {
           </div>
           {panel === 'diff' ? (
             <div className="diff-panel">
-              <label className="diff-scope">
-                {t('Change scope')}
-                <select
-                  aria-label={t('Change scope')}
-                  value={diffTurn}
-                  onChange={(event) => {
-                    setDiffTurn(event.target.value);
-                    setDiffPath('');
-                  }}
-                >
-                  <option value="">{t('Last turn')}</option>
-                  {changeTurns
-                    .filter((id) => id !== thread?.turnId)
-                    .map((id, i) => (
-                      <option key={id} value={id}>
-                        {t('Earlier turn {number} · {id}', { number: i + 1, id: id.slice(0, 8) })}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              {diffPatch || changeFiles.size ? (
-                <DiffView
-                  key={threadId + ':' + selectedDiffTurn}
-                  patch={diffPatch || undefined}
-                  files={diffPatch ? undefined : [...changeFiles.values()]}
-                  truncated={
-                    !!changeTruncated ||
-                    (selectedDiffTurn === thread?.turnId && thread?.diffTruncated)
-                  }
-                  openFile={openProjectFile}
-                  focusPath={diffPath}
-                  layout={diffLayout}
-                  onLayoutChange={(layout) => {
-                    setDiffLayout(layout);
-                    save('codes.diff-layout', layout);
-                  }}
-                />
-              ) : (
-                <div className="panel-empty">
-                  <Icon name="diff" size={30} />
-                  <h3>{t('No changes to review')}</h3>
-                </div>
-              )}
+              <div className="diff-toolbar">
+                <label className="diff-scope">
+                  {t('Change scope')}
+                  <select
+                    aria-label={t('Change scope')}
+                    value={diffTurn}
+                    onChange={(event) => {
+                      setDiffTurn(event.target.value);
+                      setDiffPath('');
+                    }}
+                  >
+                    <option value="">{t('Last turn')}</option>
+                    {changeTurns
+                      .filter((id) => id !== thread?.turnId)
+                      .map((id, i) => (
+                        <option key={id} value={id}>
+                          {t('Earlier turn {number} · {id}', { number: i + 1, id: id.slice(0, 8) })}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                {canReview && (
+                  <button
+                    type="button"
+                    className="context-review"
+                    disabled={busy || !contextReady || directoryBlocked}
+                    onClick={() => setDialog('review')}
+                  >
+                    <Icon name="review" size={16} />
+                    {t('Review code')}
+                  </button>
+                )}
+              </div>
+              <div className="diff-panel-body">
+                {diffPatch || changeFiles.size ? (
+                  <DiffView
+                    key={threadId + ':' + selectedDiffTurn}
+                    patch={diffPatch || undefined}
+                    files={diffPatch ? undefined : [...changeFiles.values()]}
+                    truncated={
+                      !!changeTruncated ||
+                      (selectedDiffTurn === thread?.turnId && thread?.diffTruncated)
+                    }
+                    openFile={openProjectFile}
+                    focusPath={diffPath}
+                    layout={diffLayout}
+                    allowSplit={allowSplitDiff}
+                    onLayoutChange={(layout) => {
+                      setDiffLayout(layout);
+                      save('codes.diff-layout', layout);
+                    }}
+                  />
+                ) : (
+                  <div className="panel-empty">
+                    <Icon name="diff" size={30} />
+                    <h3>{t('No changes to review')}</h3>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <FilesPanel
+              fileCache={fileCache}
               key={contextBase}
               apiBase={contextReady && !directoryBlocked ? contextBase : undefined}
               directoryIssue={directoryBlocked ? context.directory.message : undefined}
@@ -2431,7 +2552,7 @@ function App() {
               projectArchived={project?.archived}
               directory={directory}
               filePath={filePath}
-              narrow={narrow}
+              narrow={compactFiles}
               showHidden={showHiddenFiles}
               onShowHiddenChange={(showHiddenFiles) =>
                 changePreferences({ ...latestPreferences.current, showHiddenFiles })

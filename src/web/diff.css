@@ -148,16 +148,40 @@
 .diff-panel .diff-view {
   padding: 0 12px 12px;
 }
+.diff-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 12px;
+}
 .diff-scope {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
   gap: 8px;
-  justify-content: space-between;
-  padding: 12px;
   color: var(--muted);
   font-size: 11px;
 }
 .diff-scope select {
-  max-width: 70%;
+  min-width: 0;
+  max-width: 65%;
+}
+.context-review {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-size);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.context-review:hover:not(:disabled) {
+  background: var(--hover);
 }
 .tool .diff-view {
   margin: 0;

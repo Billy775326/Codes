@@ -1,5 +1,5 @@
 import { record } from './errors.js';
-import { limits, type Message } from './types.js';
+import { limits, type Message, type Question } from './types.js';
 
 const opening = '<send_user_message_question_reply>';
 const closing = '</send_user_message_question_reply>';
@@ -52,4 +52,13 @@ export function questionSourceItemId(id: string) {
   } catch {
     return undefined;
   }
+}
+
+export function isQuestionSummary(text: string, questions: Question[]) {
+  const summary = questions
+    .map(({ question, options }) =>
+      [question, ...(options ?? []).map(({ label }) => '- ' + label)].join('\n'),
+    )
+    .join('\n\n');
+  return text.replace(/\r\n/g, '\n').trim() === summary.trim();
 }

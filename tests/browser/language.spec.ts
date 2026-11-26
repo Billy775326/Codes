@@ -37,7 +37,7 @@ test('English is the default and Simplified Chinese persists without changing dr
   await page.getByRole('button', { name: '关闭弹窗', exact: true }).click();
   await expect(page.getByLabel('给 Codex 发送消息')).toHaveValue(draft);
   await expect(page.getByLabel('搜索会话')).toBeVisible();
-  await page.getByRole('button', { name: '浏览文件', exact: true }).click();
+  await page.getByRole('button', { name: '文件与变更', exact: true }).click();
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
   await expect(page.getByRole('button', { name: '添加选中行', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭面板', exact: true }).click();

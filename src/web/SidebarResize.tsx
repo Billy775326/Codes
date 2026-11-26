@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { useInterfaceLanguage } from './interface-language';
 
@@ -6,47 +6,49 @@ type Sidebar = 'navigation' | 'context';
 type Panel = 'files' | 'diff';
 type Range = { width: number; min: number; max: number };
 
-const chatMinimum = 460;
-const navigationMinimum = 220;
-const contextMinimum = 320;
+const chatMinimum = 560;
+export const sidebarWidthLimits = {
+  navigation: { min: 220, max: 440 },
+  context: { min: 320, max: 760 },
+} as const;
+export type SidebarWidths = Record<Sidebar, number | null>;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-export function readSidebarWidth(saved: string) {
+export function readSidebarWidth(saved: string, side: Sidebar) {
   const width = Number(saved);
-  return Number.isFinite(width) && width > 0 ? Math.round(width) : undefined;
+  const { min, max } = sidebarWidthLimits[side];
+  return Number.isFinite(width) && width > 0 ? clamp(Math.round(width), min, max) : undefined;
 }
 
 export function useSidebarLayout(
+  workspace: RefObject<HTMLDivElement | null>,
+  ready: boolean,
+  narrow: boolean,
   navigationOpen: boolean,
   panel: Panel | null,
   navigationPreference?: number,
   contextPreference?: number,
 ) {
   const [viewport, setViewport] = useState(window.innerWidth);
-  useEffect(() => {
-    let frame = 0;
-    const resize = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setViewport(window.innerWidth));
-    };
-    window.addEventListener('resize', resize);
-    return () => {
-      window.removeEventListener('resize', resize);
-      cancelAnimationFrame(frame);
-    };
-  }, []);
+  useLayoutEffect(() => {
+    const element = workspace.current;
+    if (!ready || !element) return;
+    const resize = () => setViewport(element.clientWidth);
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [workspace, ready]);
 
   const available = viewport - chatMinimum;
+  const { navigation, context } = sidebarWidthLimits;
   const navigationMax = (contextWidth: number) =>
-    Math.max(navigationMinimum, Math.min(440, available - contextWidth));
-  const left = navigationOpen
-    ? clamp(
-        navigationPreference ?? 260,
-        navigationMinimum,
-        navigationMax(panel ? contextMinimum : 0),
-      )
-    : 0;
-  const contextMax = Math.max(contextMinimum, Math.min(760, available - left));
+    Math.max(navigation.min, Math.min(navigation.max, available - contextWidth));
+  const left =
+    navigationOpen && !narrow
+      ? clamp(navigationPreference ?? 260, navigation.min, navigationMax(0))
+      : 0;
+  const contextMax = Math.max(context.min, Math.min(context.max, available - left));
   const defaultContext =
     panel === 'files'
       ? Math.min(viewport * 0.32, 460)
@@ -54,11 +56,18 @@ export function useSidebarLayout(
         ? Math.min(viewport * 0.38, 560)
         : Math.min(viewport * 0.44, 640);
   const right = panel
-    ? clamp(contextPreference ?? Math.round(defaultContext), contextMinimum, contextMax)
+    ? clamp(contextPreference ?? Math.round(defaultContext), context.min, context.max)
     : 0;
+  // Predict the docked width from both rails so moving the panel cannot change the threshold.
+  const contextDrawer = !!panel && (narrow || available - left < right);
   return {
-    navigation: { width: left, min: navigationMinimum, max: navigationMax(right) },
-    context: { width: right, min: contextMinimum, max: contextMax },
+    contextDrawer,
+    navigation: {
+      width: left,
+      min: navigation.min,
+      max: navigationMax(contextDrawer ? 0 : right),
+    },
+    context: { width: right, min: context.min, max: contextMax },
   };
 }
 

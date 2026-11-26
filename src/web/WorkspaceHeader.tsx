@@ -1,10 +1,9 @@
 import { useInterfaceLanguage } from './interface-language';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { message } from './api';
 import { ConnectionStatus } from './ConnectionStatus';
 import { Icon, IconButton } from './primitives';
 
-type Panel = 'files' | 'diff';
 interface Props {
   title: string;
   conversationId?: string;
@@ -14,9 +13,9 @@ interface Props {
   sidebarOpen: boolean;
   connection: string;
   theme: 'dark' | 'light';
-  panel: Panel | null;
+  contextOpen: boolean;
   busy: boolean;
-  hasProject: boolean;
+  hasContext: boolean;
   onNavigation: () => void;
   onNewConversation: () => void;
   onSettings: () => void;
@@ -24,11 +23,13 @@ interface Props {
   onReload: () => void;
   onReconnect?: () => void;
   updateAvailable: boolean;
-  onReview?: () => void;
   onStatus: () => void;
-  onPanel: (panel: Panel) => void;
+  onToggleContext: () => void;
   onRename: (id: string, title: string) => Promise<void>;
 }
+
+const minimumTitleEditorWidth = 250;
+
 function ConversationHeading({
   title,
   conversationId,
@@ -39,84 +40,110 @@ function ConversationHeading({
   const [name, setName] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [titleFitsEditor, setTitleFitsEditor] = useState(false);
+  const heading = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const restoreFocus = useRef(false);
+  const editorId = useId();
+  const editing = name !== undefined;
   useLayoutEffect(() => {
-    if (name === undefined && restoreFocus.current) {
+    if (!editing && restoreFocus.current) {
       restoreFocus.current = false;
       trigger.current?.focus();
     }
-  }, [name]);
+  }, [editing]);
+  useLayoutEffect(() => {
+    const slot = heading.current;
+    if (!editing || !slot) return;
+    const measure = () => setTitleFitsEditor(slot.clientWidth >= minimumTitleEditorWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(slot);
+    return () => observer.disconnect();
+  }, [editing]);
   const close = () => {
     restoreFocus.current = true;
     setName(undefined);
     setError('');
   };
-  if (name === undefined)
-    return (
-      <div className="conversation-heading">
-        <h1 data-tooltip-overflow="">{title}</h1>
-        {conversationId && (
-          <IconButton
-            ref={trigger}
-            className="rename-conversation"
-            icon="edit"
-            label={t('Rename conversation')}
-            size={14}
-            disabled={renameDisabled}
-            onClick={() => setName(title)}
-          />
-        )}
-      </div>
-    );
   const canSave =
-    !!conversationId && !!name.trim() && name.trim() !== title && !saving && !renameDisabled;
+    !!conversationId && !!name?.trim() && name.trim() !== title && !saving && !renameDisabled;
   return (
-    <div className="conversation-title-editor">
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (!canSave) return;
-          setSaving(true);
-          setError('');
-          try {
-            await onRename(conversationId, name.trim());
-            close();
-          } catch (error) {
-            setError(message(error));
-          } finally {
-            setSaving(false);
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape' && !saving) {
-            event.preventDefault();
-            close();
-          }
-        }}
-      >
-        <input
-          aria-label={t('Conversation title')}
-          value={name}
-          maxLength={80}
-          disabled={saving}
-          autoFocus
-          onFocus={(event) => event.currentTarget.select()}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <IconButton icon="close" label={t('Cancel')} size={14} disabled={saving} onClick={close} />
+    <div
+      ref={heading}
+      className="conversation-heading"
+      data-rename-layout={editing ? (titleFitsEditor ? 'title' : 'row') : undefined}
+    >
+      <h1 data-tooltip-overflow="">{title}</h1>
+      {conversationId && (
         <IconButton
-          icon="check"
-          label={t('Save name')}
+          ref={trigger}
+          className="rename-conversation"
+          icon="edit"
+          label={t('Rename conversation')}
           size={14}
-          type="submit"
-          disabled={!canSave}
+          disabled={renameDisabled || saving}
+          aria-expanded={editing}
+          aria-controls={editing ? editorId : undefined}
+          onClick={() => setName(title)}
         />
-      </form>
-      {error && (
-        <p className="conversation-title-error" role="alert">
-          {t(error)}
-        </p>
+      )}
+      {editing && (
+        <form
+          className="conversation-title-editor"
+          id={editorId}
+          aria-label={t('Rename conversation')}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (!canSave) return;
+            setSaving(true);
+            setError('');
+            try {
+              await onRename(conversationId, name.trim());
+              close();
+            } catch (error) {
+              setError(message(error));
+            } finally {
+              setSaving(false);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || saving) return;
+            event.stopPropagation();
+            close();
+          }}
+        >
+          <div className="conversation-title-controls">
+            <input
+              aria-label={t('Conversation title')}
+              value={name}
+              maxLength={80}
+              disabled={saving}
+              autoFocus
+              onFocus={(event) => event.currentTarget.select()}
+              onChange={(event) => setName(event.target.value)}
+            />
+            <IconButton
+              icon="close"
+              label={t('Cancel')}
+              size={14}
+              disabled={saving}
+              onClick={close}
+            />
+            <IconButton
+              icon="check"
+              label={t('Save name')}
+              size={14}
+              type="submit"
+              disabled={!canSave}
+            />
+          </div>
+          {error && (
+            <p className="conversation-title-error" role="alert">
+              {t(error)}
+            </p>
+          )}
+        </form>
       )}
     </div>
   );
@@ -186,36 +213,17 @@ export function WorkspaceHeader(props: Props) {
         />
       )}
       <div className="top-actions">
-        <div className="top-action-group" role="group" aria-label={t('Project views')}>
-          <button
-            data-browse-files=""
-            data-project-view="files"
-            aria-label={t('Browse files')}
-            disabled={!props.hasProject || props.busy}
-            aria-pressed={props.panel === 'files'}
-            data-tooltip=""
-            className={'icon-button ' + (props.panel === 'files' ? 'selected' : '')}
-            onClick={() => props.onPanel('files')}
-          >
-            <Icon name="folder" size={17} />
-          </button>
-          <button
-            data-project-view="diff"
-            aria-label={t('View changes')}
-            aria-pressed={props.panel === 'diff'}
-            data-tooltip=""
-            className={'icon-button ' + (props.panel === 'diff' ? 'selected' : '')}
-            onClick={() => props.onPanel('diff')}
-          >
-            <Icon name="diff" size={17} />
-          </button>
-          <IconButton
-            icon="review"
-            label={t('Review code')}
-            disabled={!props.onReview || !props.hasProject || props.busy}
-            onClick={props.onReview}
-          />
-        </div>
+        <IconButton
+          icon="folder"
+          label={t('Files and changes')}
+          size={17}
+          data-open-context=""
+          aria-controls="sidebar-context"
+          aria-expanded={props.contextOpen}
+          className={props.contextOpen ? 'selected' : undefined}
+          disabled={!props.contextOpen && (!props.hasContext || props.busy)}
+          onClick={props.onToggleContext}
+        />
         <div className="top-action-group" role="group" aria-label={t('Workspace tools')}>
           <IconButton
             className={'page-reload' + (props.updateAvailable ? ' web-update-available' : '')}

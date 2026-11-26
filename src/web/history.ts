@@ -8,6 +8,8 @@ export interface HistoryPage {
   olderCursor: string | null;
   newerCursor?: string | null;
   hasNewer?: boolean;
+  /** The opaque cursor used to load this page, kept only in the current tab. */
+  sourceCursor?: string;
 }
 export interface HistoryWindow extends HistoryPage {
   threadId: string;

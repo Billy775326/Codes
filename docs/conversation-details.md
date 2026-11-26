@@ -1,6 +1,6 @@
 # Files, history, and changes
 
-Use **Files** to see the current project or an explicit server path. Use **Changes** to inspect patches recorded by Codex in a conversation turn.
+Open **Files and changes** in the toolbar. The browser remembers the last tab. Use **Files** to see the current project or an explicit server path. Use **Changes** to inspect patches recorded by Codex in a conversation turn.
 
 ## Manage project files
 
@@ -12,6 +12,8 @@ A file reference attaches its relative path and version. Add a message when send
 
 ## Preview documents, images and HTML
 
+In a narrow panel, select a file to open its preview and choose **Back to files** to return to the list. The preview scrolls within the panel.
+
 | Format               | Preview                                                                     |
 | -------------------- | --------------------------------------------------------------------------- |
 | UTF-8 source or text | Line-numbered, selectable source up to 256 KiB                              |
@@ -22,6 +24,8 @@ A file reference attaches its relative path and version. Add a message when send
 
 Word parsing starts on demand, runs one at a time, and has a five-second parser timeout. Use the original file for layout, tables, or content outside the text preview. Files that exceed the preview limits can still be downloaded or referenced where file management is available.
 
+Recent folders and small text previews can appear while Codes checks for changes. The shared 2 MiB cache budget applies to those reads. Images and PDFs load on demand, and decoded image memory depends on pixel dimensions.
+
 Absolute Markdown file links and simple HTML anchors in Codex replies open local previews. Relative document and HTML links use the conversation's project. Current project files open in Files. A linked file outside that context opens a read-only dialog and leaves the draft in place. External web links open in a new tab.
 
 For an explicit host path, use **Open server path**. Paths outside the usual project scope show a warning and are read-only. Opening files requires a signed-in browser and filesystem access under the service account. The embedded raster media endpoint restricts access to its preview scope.
@@ -30,13 +34,13 @@ HTML files and local visualization links open directly in the HTML preview. Use 
 
 ## Read a turn's work history
 
-Completed turns group commentary and tool activity in a work-history disclosure. A question card stays in its native turn and remains available when adjacent work segments are collapsed. The final reply and edited-files card stay directly accessible.
+Completed turns group commentary and tool activity in a work-history disclosure. Successful and failed tool activity stays collapsed by default. The summary shows failure counts. Questions, pending approvals, final replies, and edited-files cards stay directly accessible.
 
-The reply action row can show completion state, time, native token totals, and average output tokens per second when usage is available. That average uses elapsed time, including tools and waiting. Expand the pinned **Turn message** while reading a long turn or jump to the original prompt.
+The reply action row can show completion state, time, native token totals, and average output tokens per second when usage is available. That average uses elapsed time, including tools and waiting. The pinned **Turn message** fits on one line. Expand it to read the prompt below the bar, or jump to the original message using the adjacent button.
 
 ## Scroll through conversation history
 
-Scroll up to load earlier history and down to return to newer pages. Use **Back to latest** to jump to the live end. The reading position stays anchored as pages change, and recent replies continue to arrive while you read older turns.
+Scroll up to load earlier history and down to return to newer pages. Use **Back to latest** to jump to the live end. The reading position stays anchored as pages change, and recent replies continue to arrive while you read older turns. Returning to a conversation in the same tab restores the last reading position when its turn is still available.
 
 Codes keeps a bounded history window. Evicted sections are accessible using native cursors. Closing a preview or switching conversations cancels stale reads. Retry a failed history page explicitly when the interface offers it. [Resource budgets](architecture.md#rendering-and-resource-limits)
 
@@ -50,9 +54,9 @@ Answer the card in its original turn. Code-mode availability follows effective n
 
 ## Inspect a patch
 
-Open **Changes** with **View changes** or use **Review** on an **Edited files** card. The viewer can show proposed file changes for native approvals when a patch is available.
+Choose **Changes** or use **View changes** on an **Edited files** card to inspect a patch. The viewer can also show proposed changes for native approvals. To start a new Codex review, choose **Review code** in the **Changes** tab.
 
-- Choose **Unified** or **Side by side** and expand a changed file. Each page shows up to 200 rows, with before and after line numbers.
+- Changes use a **Unified** layout by default. When the panel has room, choose **Side by side**. Expand a changed file to see up to 200 rows per page, with before and after line numbers.
 - Choose among change-bearing turns in the loaded history. The current turn can use its native aggregate diff. Historical repeated edits retain their native order.
 - Use **Mark viewed** for the displayed revision. A changed patch resets the marker.
 - Use **Open file** to see the current file contents. The patch records the edit at the time of the turn.

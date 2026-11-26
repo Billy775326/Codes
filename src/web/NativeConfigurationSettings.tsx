@@ -6,8 +6,11 @@ import {
 import type { Model } from '../shared/types';
 import { message, request } from './api';
 import { useInterfaceLanguage } from './interface-language';
+import { emptyFormDraft, type SettingsFormState } from './settings-form';
 
-const fields = [
+export const executionForm = 'settings-execution-form';
+
+const modelFields = [
   { key: 'model', value: 'model', label: 'Model', options: undefined },
   { key: 'model_reasoning_effort', value: 'effort', label: 'Reasoning effort', options: undefined },
   {
@@ -17,6 +20,8 @@ const fields = [
     options: undefined,
   },
   { key: 'service_tier', value: 'serviceTier', label: 'Service tier', options: undefined },
+] as const;
+const permissionFields = [
   {
     key: 'default_permissions',
     value: 'permissionProfile',
@@ -41,12 +46,19 @@ const fields = [
     label: 'Approval reviewer',
     options: ['user', 'auto_review'],
   },
+] as const;
+const featureFields = [
   {
     key: 'features.default_mode_request_user_input',
     value: 'codeQuestions',
     label: 'Code mode questions',
     options: ['true', 'false'],
   },
+] as const;
+const fieldGroups = [
+  { id: 'model', label: 'Model and reasoning', fields: modelFields },
+  { id: 'permissions', label: 'Permissions and approvals', fields: permissionFields },
+  { id: 'features', label: 'Features', fields: featureFields },
 ] as const;
 
 export function NativeConfigurationSettings({
@@ -60,7 +72,7 @@ export function NativeConfigurationSettings({
   models: Model[];
   autoReviewReady: boolean;
   changed: () => void;
-  onDraft: (state: { changed: boolean; busy: boolean }) => void;
+  onDraft: (state: SettingsFormState) => void;
 }) {
   const { t } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<NativeConfigurationSnapshot>();
@@ -71,10 +83,11 @@ export function NativeConfigurationSettings({
   const [saved, setSaved] = useState(false);
   const path = projectId && '/projects/' + encodeURIComponent(projectId) + '/codex-configuration';
   const dirty = Object.keys(draft).length > 0;
+  const canSave = !!(path && snapshot?.writable && snapshot.userVersion && !busy && dirty);
   useEffect(() => {
-    onDraft({ changed: dirty, busy });
-    return () => onDraft({ changed: false, busy: false });
-  }, [dirty, busy, onDraft]);
+    onDraft({ changed: dirty, busy, canSave, saved });
+  }, [dirty, busy, canSave, saved, onDraft]);
+  useEffect(() => () => onDraft(emptyFormDraft), [onDraft]);
   useEffect(() => {
     if (!path) return;
     const abort = new AbortController();
@@ -100,9 +113,10 @@ export function NativeConfigurationSettings({
     ) ?? (!(draft.model ?? snapshot?.model) ? models.find((model) => model.isDefault) : undefined);
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!path || !snapshot?.userVersion || busy || !dirty) return;
+    if (!path || !snapshot?.userVersion || !canSave) return;
     setBusy(true);
     setError('');
+    setSaved(false);
     try {
       const changes = Object.fromEntries(
         Object.entries(draft).map(([key, value]) => [
@@ -132,123 +146,117 @@ export function NativeConfigurationSettings({
       {!path && <p>{t('Choose a project to read its effective configuration.')}</p>}
       {path && !snapshot && !error && <p role="status">{t('Loading…')}</p>}
       {snapshot && (
-        <form onSubmit={(event) => void save(event)}>
+        <form id={executionForm} onSubmit={(event) => void save(event)}>
           {snapshot.writable && <p className="preference-help">{t('Codex user configuration')}</p>}
           {!snapshot.writable && (
             <p className="preference-help">{t('Edit this configuration using Codex CLI.')}</p>
           )}
-          {fields.map((field) => {
-            const effective =
-              field.value === 'serviceTier' && snapshot.serviceTier === 'priority'
-                ? 'fast'
-                : String(snapshot[field.value] ?? '');
-            const choices =
-              field.options ??
-              (field.value === 'model'
-                ? models.map((model) => model.model)
-                : field.value === 'serviceTier'
-                  ? ['default', 'fast']
-                  : field.value === 'permissionProfile'
-                    ? [':read-only', ':workspace']
-                    : (selectedModel?.supportedReasoningEfforts.map(
-                        (entry) => entry.reasoningEffort,
-                      ) ?? []));
-            const optionLabel = (option: string) => {
-              if (field.value === 'model')
+          {fieldGroups.map(({ id, label, fields }) => (
+            <section className="preferences-section" key={id} aria-labelledby={`execution-${id}`}>
+              <h3 id={`execution-${id}`}>{t(label)}</h3>
+              {fields.map((field) => {
+                const effective =
+                  field.value === 'serviceTier' && snapshot.serviceTier === 'priority'
+                    ? 'fast'
+                    : String(snapshot[field.value] ?? '');
+                const choices =
+                  field.options ??
+                  (field.value === 'model'
+                    ? models.map((model) => model.model)
+                    : field.value === 'serviceTier'
+                      ? ['default', 'fast']
+                      : field.value === 'permissionProfile'
+                        ? [':read-only', ':workspace']
+                        : (selectedModel?.supportedReasoningEfforts.map(
+                            (entry) => entry.reasoningEffort,
+                          ) ?? []));
+                const optionLabel = (option: string) => {
+                  if (field.value === 'model')
+                    return (
+                      models.find((model) => model.model === option || model.id === option)
+                        ?.displayName ?? option
+                    );
+                  return (
+                    (
+                      {
+                        ':read-only': 'Read only',
+                        ':workspace': 'Ask for approval',
+                        'read-only': 'Read only',
+                        'workspace-write': 'Ask for approval',
+                        'danger-full-access': 'Full access',
+                        default: 'Standard',
+                        fast: 'Fast',
+                        'on-request': 'Ask for approval',
+                        untrusted: 'Untrusted commands',
+                        never: 'Never',
+                        user: 'User',
+                        auto_review: 'Approve for me',
+                        true: 'Enabled',
+                        false: 'Disabled',
+                      } as Record<string, string>
+                    )[option] ?? option
+                  );
+                };
+                const value = draft[field.key] ?? effective;
+                const source = snapshot.sources[field.key];
+                const update = (next: string) => {
+                  setSaved(false);
+                  setDraft((previous) => {
+                    const updated = { ...previous };
+                    if (next === effective) delete updated[field.key];
+                    else updated[field.key] = next;
+                    if (field.value === 'permissionProfile' && next) updated.sandbox_mode = '';
+                    if (field.value === 'sandbox' && next) updated.default_permissions = '';
+                    return updated;
+                  });
+                };
+                const props = {
+                  value,
+                  disabled: busy || !snapshot.writable,
+                  'aria-label': t(field.label),
+                };
                 return (
-                  models.find((model) => model.model === option || model.id === option)
-                    ?.displayName ?? option
+                  <label className="preference-row" key={field.key}>
+                    <span className="preference-description">
+                      {t(field.label)}
+                      {source && source !== 'user' && (
+                        <small className="preference-help">{t(source)}</small>
+                      )}
+                      {field.value === 'codeQuestions' && (
+                        <small className="preference-help">
+                          {t('Applies when Codex loads a conversation.')}
+                        </small>
+                      )}
+                    </span>
+                    <select {...props} onChange={(event) => update(event.target.value)}>
+                      <option value="">{t('Codex default')}</option>
+                      {value && !choices.some((option) => option === value) && (
+                        <option value={value}>{t(optionLabel(value))}</option>
+                      )}
+                      {choices.map((option) => (
+                        <option
+                          key={option}
+                          value={option}
+                          disabled={
+                            (field.value === 'approvalsReviewer' &&
+                              option === 'auto_review' &&
+                              !autoReviewReady) ||
+                            (field.value === 'serviceTier' &&
+                              option === 'fast' &&
+                              (!selectedModel?.supportsFast || !snapshot.fastAvailable))
+                          }
+                        >
+                          {t(optionLabel(option))}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 );
-              return (
-                (
-                  {
-                    ':read-only': 'Read only',
-                    ':workspace': 'Ask for approval',
-                    'read-only': 'Read only',
-                    'workspace-write': 'Ask for approval',
-                    'danger-full-access': 'Full access',
-                    default: 'Standard',
-                    fast: 'Fast',
-                    'on-request': 'Ask for approval',
-                    untrusted: 'Untrusted commands',
-                    never: 'Never',
-                    user: 'User',
-                    auto_review: 'Approve for me',
-                    true: 'Enabled',
-                    false: 'Disabled',
-                  } as Record<string, string>
-                )[option] ?? option
-              );
-            };
-            const value = draft[field.key] ?? effective;
-            const source = snapshot.sources[field.key];
-            const update = (next: string) => {
-              setSaved(false);
-              setDraft((previous) => {
-                const updated = { ...previous };
-                if (next === effective) delete updated[field.key];
-                else updated[field.key] = next;
-                if (field.value === 'permissionProfile' && next) updated.sandbox_mode = '';
-                if (field.value === 'sandbox' && next) updated.default_permissions = '';
-                return updated;
-              });
-            };
-            const props = {
-              value,
-              disabled: busy || !snapshot.writable,
-              'aria-label': t(field.label),
-            };
-            return (
-              <label className="preference-row" key={field.key}>
-                <span className="preference-description">
-                  {t(field.label)}
-                  {source && source !== 'user' && (
-                    <small className="preference-help">{t(source)}</small>
-                  )}
-                  {field.value === 'codeQuestions' && (
-                    <small className="preference-help">
-                      {t('Applies when Codex loads a conversation.')}
-                    </small>
-                  )}
-                </span>
-                <select {...props} onChange={(event) => update(event.target.value)}>
-                  <option value="">{t('Codex default')}</option>
-                  {value && !choices.some((option) => option === value) && (
-                    <option value={value}>{t(optionLabel(value))}</option>
-                  )}
-                  {choices.map((option) => (
-                    <option
-                      key={option}
-                      value={option}
-                      disabled={
-                        (field.value === 'approvalsReviewer' &&
-                          option === 'auto_review' &&
-                          !autoReviewReady) ||
-                        (field.value === 'serviceTier' &&
-                          option === 'fast' &&
-                          (!selectedModel?.supportsFast || !snapshot.fastAvailable))
-                      }
-                    >
-                      {t(optionLabel(option))}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            );
-          })}
-          {snapshot.writable && (
-            <button
-              type="submit"
-              className="primary"
-              aria-label={t('Save execution settings')}
-              disabled={busy || !dirty}
-            >
-              {t('Save')}
-            </button>
-          )}
+              })}
+            </section>
+          ))}
         </form>
       )}
-      {saved && <p role="status">{t('Saved')}</p>}
       {error && (
         <p role="alert">
           {t(error)}{' '}

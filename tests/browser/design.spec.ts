@@ -10,11 +10,10 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
   page,
 }) => {
   await login(page);
-  const files = page.getByRole('button', { name: 'Browse files', exact: true });
-  const changes = page.getByRole('button', { name: 'View changes', exact: true });
+  const files = page.getByRole('button', { name: 'Files and changes', exact: true });
   const settings = page.getByRole('button', { name: 'Interaction settings', exact: true });
   const send = page.getByRole('button', { name: 'Send message', exact: true });
-  for (const control of [files, changes, settings, send]) {
+  for (const control of [files, settings, send]) {
     await expect(control).toBeVisible();
     await expect(control).toHaveText('');
   }
@@ -22,7 +21,7 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
   await expect(permissions).toContainText('Codex default');
   const tooltip = page.locator('.control-tooltip');
   await files.hover();
-  await expect(tooltip).toHaveText('Browse files');
+  await expect(tooltip).toHaveText('Files and changes');
   await expect(tooltip).toBeVisible();
   const hintBounds = (await tooltip.boundingBox())!;
   await page.mouse.move(hintBounds.x + hintBounds.width / 2, hintBounds.y + hintBounds.height / 2);
@@ -30,14 +29,22 @@ test('compact tools retain precise names and show hints on hover and keyboard fo
   await page.keyboard.press('Escape');
   await expect(tooltip).toBeHidden();
 
-  await files.focus();
-  await page.keyboard.press('Tab');
-  await expect(changes).toBeFocused();
-  await expect(tooltip).toHaveText('View changes');
+  await files.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(files).toBeFocused();
+  await expect(tooltip).toHaveText('Files and changes');
   await expect(tooltip).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(changes).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('complementary', { name: 'Project context' })).toBeVisible();
+  await expect(files).toHaveAttribute('aria-expanded', 'true');
+  const panel = page.getByRole('complementary', { name: 'Project context' });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Files', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('.topbar').getByRole('button', { name: 'Review code' })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Changes', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Review code', exact: true })).toBeVisible();
 
   await permissions.hover();
   await expect(tooltip).toHaveText('Permissions for future tasks');
@@ -230,11 +237,74 @@ for (const width of [320, 390]) {
 test('dismissing the tablet context drawer returns focus to its launcher', async ({ page }) => {
   await page.setViewportSize({ width: 850, height: 800 });
   await login(page);
-  const changes = page.getByRole('button', { name: 'View changes', exact: true });
-  await changes.click();
+  const context = page.getByRole('button', { name: 'Files and changes', exact: true });
+  await context.click();
   const panel = page.getByRole('dialog', { name: 'Project context', exact: true });
   await expect(panel).toBeVisible();
   await page.locator('.context-scrim').click({ position: { x: 20, y: 430 } });
   await expect(panel).toHaveCount(0);
-  await expect(changes).toBeFocused();
+  await expect(context).toBeFocused();
 });
+
+for (const width of [1600, 1440, 320]) {
+  test('renaming edits the title in its original row at ' + width + 'px', async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    if (width === 1440) {
+      await page.addInitScript(() => {
+        localStorage.setItem('codes.navigation-width', '340');
+        localStorage.setItem('codes.context-width', '540');
+      });
+    }
+    await login(page);
+    const title =
+      width === 1600 ? 'codes' : 'A long conversation title to edit in the workspace header';
+    await page.getByLabel('Message Codex').fill(title);
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect(
+      page.locator('.turn-status').getByText('Completed', { exact: true }),
+    ).toBeVisible();
+    const header = page.locator('.topbar');
+    if (width === 1440) {
+      await header.getByRole('button', { name: 'Files and changes', exact: true }).click();
+      await expect(page.getByRole('separator', { name: 'Resize project panel' })).toBeVisible();
+    }
+    const cwd = header.locator('.workspace-directory');
+    await expect(cwd).toBeVisible();
+    const rename = header.getByRole('button', { name: 'Rename conversation', exact: true });
+    const renameBox = (await rename.boundingBox())!;
+    const headingBox = (await header.getByRole('heading').boundingBox())!;
+    const fixed = [header, header.locator('.top-actions')];
+    const metadata = [cwd, header.getByRole('button', { name: 'Session status' })];
+    const positions = await Promise.all(fixed.map((element) => element.boundingBox()));
+    const metadataPositions = await Promise.all(metadata.map((element) => element.boundingBox()));
+    await rename.click();
+    const input = header.getByRole('textbox', { name: 'Conversation title' });
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(title);
+    const inputBox = (await input.boundingBox())!;
+    expect(inputBox.width).toBeGreaterThanOrEqual(170);
+    expect(inputBox.x).toBeCloseTo(headingBox.x, 0);
+    expect(inputBox.y + inputBox.height / 2).toBeCloseTo(renameBox.y + renameBox.height / 2, 0);
+    await expect(input).toHaveCSS('outline-offset', '-1px');
+    await expect(header.getByRole('heading')).toHaveCount(0);
+    expect(await Promise.all(fixed.map((element) => element.boundingBox()))).toEqual(positions);
+    const editor = header.getByRole('form', { name: 'Rename conversation' });
+    await expect(editor).toBeInViewport({ ratio: 1 });
+    expect((await editor.boundingBox())!.width).toBeLessThanOrEqual(312);
+    if (width === 1600) {
+      expect(await Promise.all(metadata.map((element) => element.boundingBox()))).toEqual(
+        metadataPositions,
+      );
+    } else {
+      await expect(cwd).toBeHidden();
+      await expect(metadata[1]!).toHaveCount(0);
+    }
+    await input.fill('Unsaved rename');
+    await input.press('Escape');
+    await expect(rename).toBeFocused();
+    await expect(header.getByRole('heading')).toHaveText(title);
+    expect(await Promise.all(metadata.map((element) => element.boundingBox()))).toEqual(
+      metadataPositions,
+    );
+  });
+}

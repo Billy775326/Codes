@@ -1,4 +1,4 @@
-import { conversationList, chooseWorkingDirectory, reconnectUpdates } from './sidebar-helpers';
+import { conversationList, reconnectUpdates } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 const token = 'test-only-browser-token-not-a-real-secret';
 async function login(page: Page) {
@@ -31,6 +31,55 @@ async function rename(page: Page, old: string, title: string) {
   await expect(heading).toHaveText(title);
   await expect(trigger).toBeFocused();
 }
+test('the archived first page is shown from memory while it refreshes', async ({ page }) => {
+  let reads = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/conversations?*', async (route) => {
+    if (new URL(route.request().url()).searchParams.get('archived') !== 'true')
+      return route.continue();
+    const read = ++reads;
+    if (read > 1) await gate;
+    await route.fulfill({
+      json: {
+        data: [
+          {
+            id: 'archive-cache-fixture',
+            projectId: 'archive-cache-project',
+            cwd: '/archive-cache',
+            title: read === 1 ? 'Cached archived conversation' : 'Updated archived conversation',
+            state: 'completed',
+            archived: true,
+            updatedAt: 1,
+            createdAt: 1,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+  });
+  await login(page);
+  const archived = page.getByRole('button', { name: 'Archived', exact: true });
+  const active = page.getByRole('button', { name: 'Active', exact: true });
+  const row = page.getByRole('button', { name: 'Cached archived conversation', exact: true });
+  try {
+    await archived.click();
+    await expect(row).toBeVisible();
+    await active.click();
+    await expect(row).toHaveCount(0);
+    await archived.click();
+    await expect.poll(() => reads).toBe(2);
+    await expect(row).toBeVisible();
+  } finally {
+    release();
+  }
+  await expect(
+    page.getByRole('button', { name: 'Updated archived conversation', exact: true }),
+  ).toBeVisible();
+});
+
 test('rename, search, draft preservation, archive, reload, and restoration keep native history', async ({
   page,
 }) => {
@@ -45,7 +94,16 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   await page.getByLabel('Message Codex').fill('Keep this unsent draft');
   await create(page, 'Second fixture ' + Date.now());
-  await page.getByRole('button', { name: first, exact: true }).click();
+  const firstConversation = page.getByRole('button', { name: first, exact: true });
+  const firstArchive = page.getByRole('button', { name: 'Archive ' + first, exact: true });
+  await expect(firstArchive).toHaveCSS('opacity', '0');
+  await firstConversation.hover();
+  await expect(firstArchive).toHaveCSS('opacity', '1');
+  await page.getByLabel('Message Codex').hover();
+  await firstConversation.press('Tab');
+  await expect(firstArchive).toBeFocused();
+  await expect(firstArchive).toHaveCSS('opacity', '1');
+  await firstConversation.click();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
   await rename(page, first, renamed);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
@@ -97,7 +155,7 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
   page,
 }) => {
   await login(page);
-  const fixture = await page.evaluate(async () => {
+  await page.evaluate(async () => {
     const projects = await (await fetch('/api/projects')).json();
     const response = await fetch('/api/projects', {
       method: 'POST',
@@ -113,12 +171,19 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ count: 250 }),
     });
-    return fixture;
   });
   await page.reload();
-  await chooseWorkingDirectory(page, fixture.path);
-  await page.getByRole('button', { name: 'Cwd', exact: true }).click();
+  const filtered = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === '/api/conversations' &&
+      url.searchParams.get('search') === 'Fixture conversation'
+    );
+  });
+  await page.getByLabel('Search conversations', { exact: true }).fill('Fixture conversation');
+  expect((await filtered).ok()).toBe(true);
   const list = conversationList(page);
+  await expect(list).toHaveAttribute('aria-busy', 'false');
   await expect(list.locator('.thread-link')).toHaveCount(30);
   await expect(
     list.getByRole('button', { name: 'Fixture conversation 249', exact: true }),
@@ -204,7 +269,7 @@ test.describe('touch sidebar controls', () => {
     await page.getByRole('button', { name: 'Open navigation' }).click();
     const archive = page.getByRole('button', { name: 'Archive ' + title, exact: true });
     await expect(archive).toBeVisible();
-    expect((await archive.boundingBox())?.height).toBeGreaterThanOrEqual(40);
+    expect((await archive.boundingBox())?.height).toBeGreaterThanOrEqual(44);
     await archive.tap();
     await expect(
       page.getByRole('dialog', { name: 'Archive this conversation?', exact: true }),
@@ -256,7 +321,7 @@ test('a delayed list response cannot undo a title already received through live 
     },
     { times: 1 },
   );
-  await page.getByRole('button', { name: 'Refresh conversations' }).click();
+  await reconnectUpdates(page);
   await ready;
   const renamed = 'Live event wins ' + Date.now();
   try {

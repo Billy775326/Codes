@@ -2,21 +2,20 @@ import { useInterfaceLanguage } from './interface-language';
 import { useEffect, useState } from 'react';
 import { runtimeRequestTimeout, type RuntimeSettingsSnapshot } from '../shared/runtime-settings';
 import { ApiError, message, request } from './api';
+import type { SettingsFormState } from './settings-form';
 
 const path = '/settings/runtime';
+export const runtimeForm = 'settings-runtime-form';
 
-export function RuntimeSettings({
-  onDraft,
-}: {
-  onDraft: (value: { changed: boolean; busy: boolean }) => void;
-}) {
+export function RuntimeSettings({ onDraft }: { onDraft: (value: SettingsFormState) => void }) {
   const { t, locale } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<RuntimeSettingsSnapshot>();
   const [timeout, setTimeout] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [reload, setReload] = useState(0);
+  const [reload, setReload] = useState({ keepDraft: false });
+  const [loading, setLoading] = useState(true);
   const [needsReload, setNeedsReload] = useState(false);
 
   function populate(next: RuntimeSettingsSnapshot) {
@@ -26,25 +25,38 @@ export function RuntimeSettings({
 
   useEffect(() => {
     const controller = new AbortController();
-    void request<RuntimeSettingsSnapshot>(path, {}, controller.signal).then(populate, (failure) => {
-      if (!controller.signal.aborted) setError(message(failure));
-    });
+    void request<RuntimeSettingsSnapshot>(path, {}, controller.signal).then(
+      (value) => {
+        if (controller.signal.aborted) return;
+        if (reload.keepDraft) setSnapshot(value);
+        else populate(value);
+        setNeedsReload(false);
+        setLoading(false);
+      },
+      (failure) => {
+        if (controller.signal.aborted) return;
+        setError(message(failure));
+        setLoading(false);
+      },
+    );
     return () => controller.abort();
   }, [reload]);
 
-  function loadAgain() {
+  function loadAgain(keepDraft: boolean) {
     setError('');
-    setSnapshot(undefined);
     setSaved(false);
-    setNeedsReload(false);
-    setReload((value) => value + 1);
+    setLoading(true);
+    setReload({ keepDraft });
   }
 
   const settings = snapshot?.settings;
   const changed = !!settings && timeout !== String(settings.requestTimeoutMs);
+  const busy = saving || (loading && changed);
+  const canSave = changed && !loading && !saving && !needsReload;
+  const restartRequired = snapshot?.restartRequired;
   useEffect(() => {
-    onDraft({ changed, busy: saving });
-  }, [changed, saving, onDraft]);
+    onDraft({ changed, busy, canSave, saved, restartRequired });
+  }, [changed, busy, canSave, saved, restartRequired, onDraft]);
 
   if (!snapshot)
     return (
@@ -52,7 +64,7 @@ export function RuntimeSettings({
         {error ? (
           <>
             <p role="alert">{t(error)}</p>
-            <button type="button" onClick={loadAgain}>
+            <button type="button" onClick={() => loadAgain(false)}>
               {t('Retry loading')}
             </button>
           </>
@@ -63,7 +75,7 @@ export function RuntimeSettings({
     );
 
   async function saveSettings() {
-    if (!snapshot || !changed || saving || needsReload) return;
+    if (!snapshot || !canSave) return;
     setSaving(true);
     setSaved(false);
     setError('');
@@ -91,6 +103,7 @@ export function RuntimeSettings({
 
   return (
     <form
+      id={runtimeForm}
       className="preferences-content network-settings"
       onSubmit={(event) => {
         event.preventDefault();
@@ -116,48 +129,29 @@ export function RuntimeSettings({
             required
             value={timeout}
             onChange={(event) => setTimeout(event.target.value)}
-            disabled={saving}
+            disabled={saving || loading}
           />
         </label>
       </section>
-      <section className="preferences-section" aria-labelledby="runtime-paths-heading">
-        <h3 id="runtime-paths-heading">{t('Runtime paths')}</h3>
-        <dl className="runtime-paths">
-          <dt>{t('Codex executable')}</dt>
-          <dd>
-            <code>{snapshot.executable}</code>
-          </dd>
-          <dt>{t('Data directory')}</dt>
-          <dd>
-            <code>{snapshot.dataDirectory}</code>
-          </dd>
-        </dl>
-      </section>
       {snapshot.restartRequired ? (
-        <p role="status">
-          {t('Saved. Restart Codes to apply. Active timeout {timeout} ms.', {
-            timeout: snapshot.active.requestTimeoutMs.toLocaleString(locale),
+        <p className="preference-help">
+          {t('Saved {saved} ms. Currently {active} ms.', {
+            saved: snapshot.settings.requestTimeoutMs.toLocaleString(locale),
+            active: snapshot.active.requestTimeoutMs.toLocaleString(locale),
           })}
         </p>
-      ) : saved && !changed ? (
-        <p role="status">{t('Runtime settings saved.')}</p>
       ) : null}
       {error && <p role="alert">{t(error)}</p>}
-      <div className="network-actions">
-        {needsReload && (
-          <button type="button" onClick={loadAgain}>
-            {t('Reload settings')}
-          </button>
-        )}
+      {needsReload && (
         <button
-          type="submit"
-          className="preferences-done"
-          aria-label={saving ? t('Saving…') : t('Save runtime settings')}
-          disabled={!changed || saving || needsReload}
+          className="settings-action"
+          type="button"
+          disabled={loading}
+          onClick={() => loadAgain(true)}
         >
-          {saving ? t('Saving…') : t('Save')}
+          {t('Load latest and keep draft')}
         </button>
-      </div>
+      )}
     </form>
   );
 }

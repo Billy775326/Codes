@@ -858,9 +858,11 @@ it('serves authenticated Word and PDF previews without treating the originals as
   await truncate(oversizedWord, 8 * 1024 * 1024 + 1);
   await truncate(oversizedPdf, 32 * 1024 * 1024 + 1);
   const project = await service.addProject(workspace);
-  const read = (kind: 'document' | 'pdf', path: string, session = cookie) =>
+  const read = (kind: 'document' | 'pdf', path: string, session = cookie, version?: string) =>
     fetch(
-      origin + '/api/file-browser?' + new URLSearchParams({ kind, projectId: project.id, path }),
+      origin +
+        '/api/file-browser?' +
+        new URLSearchParams({ kind, projectId: project.id, path, ...(version ? { version } : {}) }),
       {
         headers: { cookie: session },
       },
@@ -868,14 +870,24 @@ it('serves authenticated Word and PDF previews without treating the originals as
   expect((await read('document', 'plan.docx', '')).status).toBe(401);
   const word = await read('document', 'plan.docx');
   expect(word.status).toBe(200);
-  expect(await word.json()).toEqual({
+  const document = await word.json();
+  expect(document).toEqual({
     value: {
       format: 'word',
       text: expect.stringContaining('Quarterly plan preview'),
       truncated: false,
+      version: expect.stringMatching(/^[0-9a-f]{64}$/),
     },
     outsideScope: false,
   });
+  await expect(
+    (await read('document', 'plan.docx', cookie, document.value.version)).json(),
+  ).resolves.toEqual({
+    value: { format: 'unchanged', version: document.value.version },
+    outsideScope: false,
+  });
+  await writeFile(join(workspace, 'plan.docx'), 'changed to a malformed document');
+  expect((await read('document', 'plan.docx', cookie, document.value.version)).status).toBe(422);
   expect((await read('document', 'invalid.doc')).status).toBe(422);
   expect((await read('document', 'oversized.docx')).status).toBe(413);
   expect((await read('pdf', 'oversized.pdf')).status).toBe(413);

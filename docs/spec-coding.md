@@ -36,3 +36,7 @@ For changes to this contract, test a trusted project override, stale user-layer 
 - Codex owns the session list, native thread IDs, archive state, and conversation working directories. The web sidebar must support the same working-directory and archive filters as the CLI.
 - A directory choice applies to the new draft and becomes the cwd passed to native thread creation. Existing conversation history, files, and execution use the cwd returned for that thread.
 - Codes keeps local metadata only for web delivery, files, preferences, and compatibility with existing receipts and queues. Derive workspace keys from native cwd without requiring project registration. An unresolved directory change must not replay queued paths in a new directory.
+
+## Launcher lifecycle
+
+Keep foreground launch available. Background start waits for the initial listener and writes private logs. Lifecycle commands select the same data directory as startup and verify the current lock owner and database before stopping a process. Restart captures the original startup environment before shutdown and keeps it in memory. The launcher uses the server's graceful shutdown and lets the server release its own lock.

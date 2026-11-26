@@ -1,11 +1,72 @@
 import { useEffect, useState } from 'react';
 import { diagnosticMinutes, type DiagnosticsStatus } from '../shared/workspace-settings';
+import type { RuntimeSettingsSnapshot } from '../shared/runtime-settings';
 import { message, post, request } from './api';
 import { useInterfaceLanguage } from './interface-language';
 
 const path = '/settings/diagnostics';
 
-export function DiagnosticsSettings() {
+function RuntimePaths({ version }: { version?: string }) {
+  const { t } = useInterfaceLanguage();
+  const [expanded, setExpanded] = useState(false);
+  const [paths, setPaths] =
+    useState<Pick<RuntimeSettingsSnapshot, 'executable' | 'dataDirectory'>>();
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!expanded || paths) return;
+    const controller = new AbortController();
+    setError('');
+    void request<RuntimeSettingsSnapshot>('/settings/runtime', {}, controller.signal).then(
+      ({ executable, dataDirectory }) => {
+        if (!controller.signal.aborted) setPaths({ executable, dataDirectory });
+      },
+      (failure) => {
+        if (!controller.signal.aborted) setError(message(failure));
+      },
+    );
+    return () => controller.abort();
+  }, [expanded, paths, attempt]);
+
+  return (
+    <details
+      className="runtime-details"
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
+      <summary>{t('Runtime paths')}</summary>
+      {paths ? (
+        <dl className="runtime-paths">
+          <dt>{t('CLI version')}</dt>
+          <dd>{version || t('Unknown')}</dd>
+          <dt>{t('Codex launcher')}</dt>
+          <dd>
+            <code>{paths.executable}</code>
+          </dd>
+          <dt>{t('Codes data directory')}</dt>
+          <dd>
+            <code>{paths.dataDirectory}</code>
+          </dd>
+        </dl>
+      ) : error ? (
+        <div className="settings-action-row">
+          <p role="alert">{t(error)}</p>
+          <button
+            className="settings-action"
+            type="button"
+            onClick={() => setAttempt((value) => value + 1)}
+          >
+            {t('Retry loading')}
+          </button>
+        </div>
+      ) : expanded ? (
+        <p role="status">{t('Loading runtime paths…')}</p>
+      ) : null}
+    </details>
+  );
+}
+
+export function DiagnosticsSettings({ version }: { version?: string }) {
   const { t, locale } = useInterfaceLanguage();
   const [status, setStatus] = useState<DiagnosticsStatus>();
   const [duration, setDuration] = useState<(typeof diagnosticMinutes)[number]>(5);
@@ -105,6 +166,7 @@ export function DiagnosticsSettings() {
           {t('Retry loading')}
         </button>
       )}
+      <RuntimePaths version={version} />
     </section>
   );
 }

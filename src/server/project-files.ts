@@ -266,13 +266,19 @@ export class ProjectFiles {
     path: string,
     showHidden: boolean,
     signal: AbortSignal,
+    knownVersion?: string,
   ) {
     const format = documentPreviewFormat(path);
     if (!format)
       throw new AppError('DOCUMENT_FORMAT', 'Preview is unavailable for this file type.', 415);
     const target = await this.browsePath(projectId, path, showHidden);
     return {
-      value: await previewDocument(target.absolute, format, signal).catch(browseError),
+      value: await previewDocument(
+        target.absolute,
+        format,
+        signal,
+        target.outsideScope ? undefined : knownVersion,
+      ).catch(browseError),
       outsideScope: target.outsideScope,
     };
   }

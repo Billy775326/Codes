@@ -199,11 +199,21 @@ export class Service {
       steer: (id, operationId, turnId, prompt, attachments) =>
         this.steer(id, operationId, turnId, prompt, attachments),
     });
-    driver.on('notification', (event) => this.notification(event));
+    const catalogChanged = () => {
+      this.modelSettings.invalidateCatalogs();
+      this.events.publish('codex-catalog', {});
+    };
+    driver.on('ready', catalogChanged);
+    driver.on('notification', (event) => {
+      if (event.method === 'account/updated' || event.method === 'account/login/completed')
+        catalogChanged();
+      this.notification(event);
+    });
     driver.on('request', (event) =>
       this.interactions.request(event, this.cache.get(event.params?.threadId)),
     );
     driver.on('offline', () => {
+      this.modelSettings.invalidateCatalogs();
       this.loaded.clear();
       store.queue.pauseAll('The runtime stopped. Review outcomes before resuming.');
       for (const id of store.queue.pendingThreads()) this.queue.notify(id);
@@ -356,8 +366,9 @@ export class Service {
     path: string,
     showHidden: boolean,
     signal: AbortSignal,
+    knownVersion?: string,
   ) {
-    return this.projectFiles.browseDocument(projectId, path, showHidden, signal);
+    return this.projectFiles.browseDocument(projectId, path, showHidden, signal, knownVersion);
   }
   browsePdf(
     projectId: string | undefined,
@@ -852,7 +863,7 @@ export class Service {
       project.path,
       continuation,
       signal,
-      (path) => this.images.reference(saved.projectId, path),
+      (path) => this.images.transcriptReference(saved.projectId, path),
       native,
     );
     signal.throwIfAborted();
@@ -2014,7 +2025,7 @@ export class Service {
     const message = item(
       raw,
       turnId,
-      (path) => this.images.reference(thread.projectId, path),
+      (path) => this.images.transcriptReference(thread.projectId, path),
       lifecycle,
     );
     if (!message) return;

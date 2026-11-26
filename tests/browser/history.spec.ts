@@ -33,6 +33,48 @@ async function fixture(page: Page, actions: Omit<Action, 'threadId'>[] = []) {
   return base;
 }
 
+test('switching back restores the reading anchor on an older native page', async ({ page }) => {
+  const base = await fixture(page);
+  let olderReads = 0;
+  await page.route('**/api/threads/*/history?cursor=older-1', (route) => {
+    olderReads++;
+    return route.fulfill({
+      json: {
+        messages: messages(-44, -1),
+        olderCursor: null,
+        newerCursor: 'newer-1',
+        hasNewer: true,
+        turns: [],
+      },
+    });
+  });
+  await page.getByRole('button', { name: 'Load earlier messages', exact: true }).click();
+  const anchor = page.locator('.turn[data-turn-id="history-turn--16"]');
+  await expect(anchor).toBeAttached();
+  const offset = () =>
+    anchor.evaluate(
+      (turn) =>
+        turn.getBoundingClientRect().top -
+        turn.closest('.conversation')!.getBoundingClientRect().top,
+    );
+  await anchor.evaluate((turn) => {
+    const timeline = turn.closest('.conversation')!;
+    timeline.scrollTop +=
+      turn.getBoundingClientRect().top - timeline.getBoundingClientRect().top + 12;
+  });
+  await expect.poll(offset).toBeCloseTo(-12, 0);
+  await expect(
+    page.getByRole('button', { name: 'Back to latest messages', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'New conversation', exact: true }).click();
+  await expect(anchor).toHaveCount(0);
+  await page.locator(`[data-conversation-id="${base.thread.id}"] .thread-link`).click();
+  await expect.poll(() => olderReads).toBe(2);
+  await expect.poll(offset).toBeCloseTo(-12, 0);
+  await page.getByRole('button', { name: 'Back to latest messages', exact: true }).click();
+  await expect(page.getByText('Recent answer 239', { exact: true })).toBeInViewport();
+});
+
 test('a long active turn keeps the original prompt in history without recreating it at the bottom', async ({
   page,
 }) => {
@@ -43,7 +85,7 @@ test('a long active turn keeps the original prompt in history without recreating
     clientId: 'long-prompt-operation',
     turnId,
     kind: 'user',
-    text: 'Review this long task',
+    text: 'Review this long task and explain each change with the path, reasoning and expected behavior.',
   };
   const work: Message[] = Array.from({ length: 245 }, (_, index) => ({
     id: 'long-task-command-' + index,
@@ -128,6 +170,18 @@ test('a long active turn keeps the original prompt in history without recreating
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeVisible();
+  await scrollToEnd();
+  await expect(bar).toBeInViewport({ ratio: 1 });
+  await expect(jump).toBeInViewport({ ratio: 1 });
+  const collapsedHeight = (await timeline.locator('.turn-prompt-heading').boundingBox())!.height;
+  expect(collapsedHeight).toBeLessThanOrEqual(42);
+  await bar.click();
+  await expect(detail).toBeVisible();
+  expect((await timeline.locator('.turn-prompt-heading').boundingBox())!.height).toBe(
+    collapsedHeight,
+  );
+  await expect(jump).toBeInViewport({ ratio: 1 });
+  await page.keyboard.press('Escape');
   base.thread.messages = [prompt, ...work, commentary];
   await reconnectUpdates(page);
   await scrollToEnd();
@@ -252,11 +306,25 @@ test('the pinned message follows confirmed same-turn input and jumps to that mes
 });
 
 test('an answered question appears only when its original turn is loaded', async ({ page }) => {
+  const choices = [
+    {
+      id: 'mode',
+      question: 'Which mode should I use?',
+      options: [{ label: 'Use local mode' }, { label: 'Use remote mode' }],
+    },
+  ];
+  const originalQuestion: Message = {
+    id: 'native-question',
+    turnId: 'history-turn--1',
+    kind: 'assistant',
+    text: 'Which mode should I use?\n- Use local mode\n- Use remote mode',
+    asyncQuestions: choices,
+  };
   await fixture(page, [
     {
       id: 'old-answered-question',
       turnId: 'history-turn--1',
-      afterMessageId: 'history-item--2',
+      afterMessageId: originalQuestion.id,
       kind: 'questions',
       title: 'Codex question',
       detail: '',
@@ -264,21 +332,40 @@ test('an answered question appears only when its original turn is loaded', async
       async: true,
       blocking: false,
       status: 'answered',
-      questions: [{ id: 'mode', question: 'Which mode should I use?' }],
+      questions: choices,
       submittedAnswers: { mode: 'Use local mode' },
     },
   ]);
   await page.route('**/api/threads/*/history?cursor=*', (route) =>
-    route.fulfill({ json: { messages: messages(-24, -1), olderCursor: null, turns: [] } }),
+    route.fulfill({
+      json: {
+        messages: [
+          ...messages(-24, -1),
+          originalQuestion,
+          {
+            id: 'ordinary-progress',
+            turnId: originalQuestion.turnId,
+            kind: 'assistant',
+            text: 'Configuration still needs verification.',
+          },
+        ],
+        olderCursor: null,
+        turns: [],
+      },
+    }),
   );
   const question = page.getByRole('region', { name: 'Codex question', exact: true });
   await expect(question).toHaveCount(0);
   await page.getByRole('button', { name: 'Load earlier messages', exact: true }).click();
-  const originalTurn = page.locator('.turn').filter({ hasText: 'Recent answer -1' });
+  const originalTurn = page.locator(`[data-turn-id="${originalQuestion.turnId}"]`);
   await expect(originalTurn.getByRole('region', { name: 'Codex question' })).toContainText(
     'Answer: Use local mode',
   );
   await expect(question).toHaveCount(1);
+  await originalTurn.getByRole('button', { name: 'Work history', exact: true }).first().click();
+  await expect(originalTurn.getByText('Which mode should I use?', { exact: true })).toHaveCount(1);
+  await expect(originalTurn.getByText('Use remote mode', { exact: true })).toHaveCount(0);
+  await expect(originalTurn.getByText('Configuration still needs verification.')).toBeVisible();
   await page.getByRole('button', { name: 'Back to latest messages', exact: true }).click();
   await expect(question).toHaveCount(0);
 });

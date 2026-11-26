@@ -20,6 +20,7 @@ Start with the [English quick start](../README.md) or [简体中文快速开始]
 ## Develop and verify
 
 - [Development](development.md) lists build commands, test fixtures, and the CLI compatibility checks.
+- [Regression test cases](test-cases.md) lists fixtures, actions, and expected results by feature.
 - [Architecture](architecture.md) explains process boundaries, task coordination, and resource limits.
 - [Spec Coding](spec-coding.md) records execution ownership and invariants for changes.
 - [Interface design](interface-design.md), [native conversation navigation](conversations.md), and [sidebar state](conversation-sidebar.md) document interaction and implementation contracts.

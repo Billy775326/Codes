@@ -20,7 +20,9 @@ test('settings edit global Codex instructions without a selected project', async
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Cwd', exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Choose a working directory', exact: true }),
+  ).toBeVisible();
   const projects = await (await page.request.get('/api/projects')).json();
   const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
   const projectInstructions = join(project.path, 'AGENTS.md');
@@ -39,13 +41,15 @@ test('settings edit global Codex instructions without a selected project', async
     await expect(editor).toHaveCSS('background-color', 'rgb(42, 46, 52)');
     await expect(editor).toHaveCSS('color', 'rgb(225, 228, 232)');
     await editor.fill('# Saved through settings\n');
+    await expect(tab).toHaveAccessibleDescription('Unsaved changes');
     await page.getByRole('button', { name: 'General', exact: true }).click();
     await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('light');
     await tab.click();
     await expect(editor).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await expect(editor).toHaveCSS('color', 'rgb(37, 37, 38)');
-    await page.getByRole('button', { name: 'Save global instructions', exact: true }).click();
+    await editor.press('Control+s');
     await expect(page.getByText('Global instructions saved.', { exact: true })).toBeVisible();
+    await expect(tab).not.toHaveAttribute('aria-description');
     expect(await readFile(path, 'utf8')).toBe('# Saved through settings\n');
     expect(await readFile(projectInstructions, 'utf8')).toBe('# Project only\n');
     await editor.fill('# My unsaved change');
@@ -57,10 +61,16 @@ test('settings edit global Codex instructions without a selected project', async
     await expect(editor).toHaveValue('# My unsaved change');
     await expect(editor).toBeFocused();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('group', { name: 'Discard unsaved settings?' })).toBeVisible();
-    await page.getByRole('button', { name: 'Keep editing' }).click();
-    await page.getByRole('button', { name: 'Discard draft and reload file' }).click();
-    await expect(editor).toHaveValue('# External change');
+    const discard = page.getByRole('group', { name: 'Discard unsaved settings?' });
+    await expect(discard).toBeVisible();
+    await discard.getByRole('button', { name: 'Instructions', exact: true }).click();
+    await page.getByRole('button', { name: 'Load latest and keep draft' }).click();
+    await expect(editor).toHaveValue('# My unsaved change');
+    await expect(page.locator('.instructions-saved-version')).toContainText('# External change');
+    expect(await readFile(path, 'utf8')).toBe('# External change');
+    await page.getByRole('button', { name: 'Save global instructions', exact: true }).click();
+    await expect(page.getByText('Global instructions saved.', { exact: true })).toBeVisible();
+    expect(await readFile(path, 'utf8')).toBe('# My unsaved change');
   } finally {
     await Promise.all([rm(path), rm(projectInstructions)]);
   }
@@ -90,14 +100,21 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
     await expect(listenPort).toHaveValue(String(initial.active.port));
     const mode = dialog.getByLabel('Authentication mode');
     await expect(mode).toHaveValue('local');
-    await expect(save).toBeDisabled();
+    await expect(save).toHaveCount(0);
     await listenPort.fill('8787');
     await expect(addresses).toHaveValue('http://127.0.0.1:8787');
-    await expect(dialog.getByLabel('Import network settings file')).toBeHidden();
-    const exportSaved = dialog.getByRole('button', { name: 'Export saved', exact: true });
-    await expect(exportSaved).toHaveText('');
-    await exportSaved.hover();
-    await expect(page.locator('.control-tooltip')).toHaveText('Export saved');
+    const exportSaved = dialog.getByRole('button', {
+      name: 'Export saved network configuration',
+      exact: true,
+    });
+    await expect(exportSaved).toHaveCount(0);
+    await chooseSettingsSection(dialog, 'Backup & restore');
+    const networkBackup = dialog.getByRole('region', {
+      name: 'Network configuration',
+      exact: true,
+    });
+    await expect(networkBackup.getByLabel('Import network settings file')).toBeHidden();
+    await expect(exportSaved).toHaveText('Export saved');
     const downloaded = page.waitForEvent('download');
     await exportSaved.click();
     const exported = JSON.parse(await readFile((await (await downloaded).path())!, 'utf8'));
@@ -106,7 +123,7 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
       version: 1,
       settings: initial.settings,
     });
-    const upload = dialog.getByLabel('Import network settings file');
+    const upload = networkBackup.getByLabel('Import network settings file');
     const load = (value: object) =>
       upload.setInputFiles({
         name: 'network.json',
@@ -120,7 +137,12 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
       settings: { ...initial.settings, port: 8788, origins: ['http://127.0.0.1:8788'] },
     });
     await expect(listenPort).toHaveValue('8788');
-    await expect(dialog.getByRole('status')).toContainText('Review before saving');
+    await expect(dialog.getByRole('button', { name: 'Settings categories' })).toHaveText(
+      'Network & access',
+    );
+    await expect(
+      dialog.getByText('Imported. Review before saving.', { exact: true }),
+    ).toBeVisible();
     expect((await read()).revision).toBe(initial.revision);
     await listenPort.fill('8787');
     await addresses.fill('https://codes.example.test/path');
@@ -146,7 +168,7 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
     await expect(dialog.getByRole('alert')).toContainText('All allowed addresses must use HTTPS');
     await addresses.fill('https://codes.example.test');
     await save.click();
-    await expect(save).toBeDisabled();
+    await expect(save).toHaveCount(0);
     expect(await read()).toMatchObject({
       restartRequired: true,
       active: { authMode: 'local' },
@@ -193,9 +215,22 @@ test('runtime settings save independently of the active configuration and surviv
     await expect(timeout).toHaveAccessibleDescription(await help.innerText());
     const [fieldBox, helpBox] = await Promise.all([timeout.boundingBox(), help.boundingBox()]);
     expect(fieldBox!.x).toBeGreaterThan(helpBox!.x + helpBox!.width);
-    await expect(dialog.getByText('Data directory', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Runtime paths', { exact: true })).toHaveCount(0);
     await timeout.fill('45000');
-    await dialog.getByRole('button', { name: 'Save runtime settings' }).click();
+    const save = dialog.getByRole('button', { name: 'Save runtime settings' });
+    const external = await page.request.put(path, {
+      headers: { origin: baseURL! },
+      data: {
+        revision: initial.revision,
+        settings: { ...initial.settings, requestTimeoutMs: 42000 },
+      },
+    });
+    expect(external.ok()).toBe(true);
+    await save.click();
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Load latest and keep draft' }).click();
+    await expect(timeout).toHaveValue('45000');
+    await save.click();
     await expect(dialog.getByRole('status')).toContainText('Restart Codes to apply');
     expect(await get()).toMatchObject({
       active: initial.active,
@@ -295,13 +330,19 @@ for (const width of [1440, 320]) {
     const trigger = page.getByRole('button', { name: 'Interaction settings', exact: true });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
-    await expect(dialog.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
+    const detail = dialog.getByRole('group', { name: 'General', exact: true });
+    await expect(detail.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
     if (width === 1440) {
+      await expect(detail.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
       const desktopDialog = (await dialog.boundingBox())!;
       expect(desktopDialog.width).toBe(780);
       expect(desktopDialog.height).toBe(680);
+    } else {
+      const categories = dialog.getByRole('button', { name: 'Settings categories', exact: true });
+      await expect(categories).toHaveText('General');
+      await expect(detail.getByRole('heading', { name: 'General', exact: true })).toBeHidden();
     }
-    await expect(dialog.locator('details')).not.toHaveAttribute('open');
+    await expect(dialog.locator('details[open]')).toHaveCount(0);
     await expect(page.getByLabel('Display size')).toHaveCount(0);
     const close = dialog.getByRole('button', { name: 'Close dialog', exact: true });
     const done = dialog.getByRole('button', { name: 'Done', exact: true });
@@ -322,7 +363,7 @@ for (const width of [1440, 320]) {
         .getByRole('combobox', { name: 'Review location', exact: true })
         .selectOption('detached');
       await dialog.getByText('Editing and shortcuts', { exact: true }).click();
-      await expect(dialog).toContainText('Use Up and Down to recall sent messages');
+      await expect(dialog).toContainText('Recall sent messages in the composer');
       const box = await dialog.boundingBox();
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.y).toBeGreaterThanOrEqual(0);
@@ -375,6 +416,7 @@ test('font previews and chat typography persist alongside legacy interaction pre
   await expect(page.getByRole('combobox', { name: 'Review location', exact: true })).toHaveValue(
     'detached',
   );
+  await page.getByText('Text preview', { exact: true }).click();
   const preview = page.getByRole('region', { name: 'Text preview', exact: true });
   await expect(preview.locator('.prose')).toHaveCSS('font-size', '14px');
   await expect(preview.locator('code')).toHaveCSS('font-size', '14px');
@@ -579,6 +621,7 @@ for (const width of [1440, 320]) {
     ]) {
       await chat.selectOption(String(chatSize));
       await code.selectOption(String(codeSize));
+      await page.getByText('Text preview', { exact: true }).click();
       const preview = page.getByRole('region', { name: 'Text preview', exact: true });
       expect(
         await preview.locator('.prose').evaluate((element) => getComputedStyle(element).fontSize),
@@ -638,15 +681,20 @@ test('searches settings in both languages and downloads a database backup on a n
   const searchBox = (await search.boundingBox())!;
   const categoryBox = (await categories.boundingBox())!;
   expect(searchBox.y).toBeGreaterThanOrEqual(categoryBox.y + categoryBox.height);
-  await search.fill('backup');
   const settings = dialog.getByRole('group', { name: 'Settings sections' });
-  await expect(settings.getByRole('button')).toHaveCount(1);
+  for (const query of ['backup', 'export', '导入']) {
+    await search.fill(query);
+    await expect(settings.getByRole('button')).toHaveText('Backup & restore');
+  }
   await search.fill('数据库');
   await search.press('Enter');
   await expect(search).toHaveValue('');
   await expect(categories).toHaveText('Backup & restore');
   await expect(categories).toHaveAttribute('aria-expanded', 'false');
   await expect(categories).toBeFocused();
+  await expect(dialog.getByRole('heading', { name: 'Workspace database' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Network configuration' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Browser preferences' })).toBeVisible();
   const downloaded = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download database backup' }).click();
   const download = await downloaded;
@@ -665,7 +713,24 @@ test('searches settings in both languages and downloads a database backup on a n
   } finally {
     await dialog.getByRole('button', { name: 'Remove prepared backup' }).click();
   }
-  await chooseSettingsSection(dialog, 'Maintenance');
+  let runtimeReads = 0;
+  await page.route('**/api/settings/runtime', async (route) => {
+    runtimeReads++;
+    await route.continue();
+  });
+  await search.fill('运行路径');
+  await expect(settings.getByRole('button')).toHaveCount(1);
+  await search.press('Enter');
+  await expect(categories).toHaveText('Maintenance');
+  const details = dialog.getByText('Runtime paths', { exact: true });
+  await expect(details).toBeVisible();
+  expect(runtimeReads).toBe(0);
+  await details.click();
+  await expect(dialog.getByText('Codex launcher', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Codes data directory', { exact: true })).toBeVisible();
+  expect(runtimeReads).toBe(1);
+  await details.click();
+  await expect(dialog.getByText('Codes data directory', { exact: true })).toBeHidden();
   await dialog.getByRole('combobox', { name: 'Duration', exact: true }).selectOption('15');
   await dialog.getByRole('button', { name: 'Start diagnostics' }).click();
   try {
@@ -710,10 +775,27 @@ test('saves sign-in settings and remembers hidden-file visibility independently'
   await expect(dialog.getByLabel('Default project directory')).toHaveCount(0);
   await chooseSettingsSection(dialog, 'Network & access');
   await expect(validity).toHaveValue(duration);
-  await dialog.getByRole('button', { name: 'Save login validity' }).click();
+  const port = dialog.getByLabel('Listen port');
+  const savedPort = await port.inputValue();
+  const newPort = savedPort === '28787' ? '28788' : '28787';
+  await port.fill(newPort);
+  const footer = dialog.locator('.preferences-footer');
+  const signInSave = footer.getByRole('button', { name: 'Save login validity', exact: true });
+  const networkSave = footer.getByRole('button', { name: 'Save network settings', exact: true });
+  await expect(signInSave).toHaveText('Save sign-in');
+  await expect(networkSave).toHaveText('Save network');
+  await validity.press('Control+s');
   await expect(
-    dialog.getByRole('status').filter({ hasText: 'Workspace settings saved.' }),
+    footer.getByRole('status').filter({ hasText: 'Workspace settings saved.' }),
   ).toBeVisible();
+  await expect(footer.getByRole('status')).toContainText('Unsaved changes');
+  await expect(networkSave).toHaveText('Save');
+  const network: NetworkSettingsSnapshot = await (
+    await page.request.get('/api/settings/network')
+  ).json();
+  expect(String(network.settings.port)).toBe(savedPort);
+  await expect(port).toHaveValue(newPort);
+  await port.fill(savedPort);
   try {
     await dialog.getByRole('button', { name: 'Done' }).click();
     await page.reload();

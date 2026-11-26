@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { sessionHours, type WorkspaceSettingsSnapshot } from '../shared/workspace-settings';
 import { ApiError, message, request } from './api';
 import { useInterfaceLanguage } from './interface-language';
+import type { SettingsFormState } from './settings-form';
 
 const path = '/settings/workspace';
-type Draft = { changed: boolean; busy: boolean };
+export const loginValidityForm = 'settings-login-validity-form';
 
-export function WorkspaceSettings({ onDraft }: { onDraft: (draft: Draft) => void }) {
+export function WorkspaceSettings({ onDraft }: { onDraft: (draft: SettingsFormState) => void }) {
   const { t } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<WorkspaceSettingsSnapshot>();
   const [value, setValue] = useState('');
@@ -16,6 +17,7 @@ export function WorkspaceSettings({ onDraft }: { onDraft: (draft: Draft) => void
   const [error, setError] = useState('');
   const [reload, setReload] = useState(false);
   const changed = !!snapshot && value !== String(snapshot.settings.sessionHours);
+  const canSave = changed && !busy && !reload;
 
   function load() {
     setError('');
@@ -39,9 +41,12 @@ export function WorkspaceSettings({ onDraft }: { onDraft: (draft: Draft) => void
     return () => controller.abort();
   }, [attempt]);
 
-  useEffect(() => onDraft({ changed, busy }), [busy, changed, onDraft]);
+  useEffect(
+    () => onDraft({ changed, busy, canSave, saved }),
+    [busy, changed, canSave, saved, onDraft],
+  );
   async function save() {
-    if (!snapshot || !changed || busy || reload) return;
+    if (!snapshot || !canSave) return;
     setBusy(true);
     setSaved(false);
     setError('');
@@ -69,6 +74,7 @@ export function WorkspaceSettings({ onDraft }: { onDraft: (draft: Draft) => void
     <section className="preferences-section" aria-labelledby="settings-heading-sessionHours">
       <h3 id="settings-heading-sessionHours">{t('Sign-in session')}</h3>
       <form
+        id={loginValidityForm}
         className="network-settings"
         onSubmit={(event) => {
           event.preventDefault();
@@ -105,24 +111,11 @@ export function WorkspaceSettings({ onDraft }: { onDraft: (draft: Draft) => void
         )}
         {!snapshot && !error && <p role="status">{t('Loading workspace settings…')}</p>}
         {error && <p role="alert">{t(error)}</p>}
-        {saved && <p role="status">{t('Workspace settings saved.')}</p>}
-        <div className="network-actions">
-          {(reload || (!snapshot && error)) && (
-            <button type="button" className="settings-action" onClick={load}>
-              {t('Reload settings')}
-            </button>
-          )}
-          {snapshot && (
-            <button
-              type="submit"
-              className="settings-action"
-              aria-label={t('Save login validity')}
-              disabled={!changed || busy || reload}
-            >
-              {busy ? t('Saving…') : t('Save')}
-            </button>
-          )}
-        </div>
+        {(reload || (!snapshot && error)) && (
+          <button type="button" className="settings-action" onClick={load}>
+            {t('Reload settings')}
+          </button>
+        )}
       </form>
     </section>
   );

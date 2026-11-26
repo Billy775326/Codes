@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { fileVersion } from './file-version.js';
 import { constants, type BigIntStats } from 'node:fs';
 import {
   link,
@@ -73,12 +74,6 @@ function pathParts(path: string) {
   )
     throw denied();
   return parts;
-}
-
-function version(stats: BigIntStats) {
-  return createHash('sha256')
-    .update([stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs].join(':'))
-    .digest('hex');
 }
 
 /** Project writes use directory descriptors and reject symbolic-link components. */
@@ -180,7 +175,7 @@ export class ProjectFileManagement {
       path,
       showHidden,
       async (handle, project, roots): Promise<ProjectFilePage> => {
-        const current = version(await handle.stat({ bigint: true }));
+        const current = fileVersion(await handle.stat({ bigint: true }));
         const changed = () =>
           new AppError(
             'FILE_LIST_CHANGED',
@@ -210,7 +205,7 @@ export class ProjectFileManagement {
             ...(entry.isSymbolicLink() ? { symbolicLink: true } : {}),
           });
         }
-        if (current !== version(await handle.stat({ bigint: true }))) throw changed();
+        if (current !== fileVersion(await handle.stat({ bigint: true }))) throw changed();
         entries.sort(
           (a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name),
         );
@@ -333,7 +328,7 @@ export class ProjectFileManagement {
               await unlink(staged);
             }
             // Removing the staging link updates ctime. Capture the version after that change.
-            return { path, size, version: version(await file.stat({ bigint: true })) };
+            return { path, size, version: fileVersion(await file.stat({ bigint: true })) };
           } finally {
             await file.close();
           }
@@ -376,7 +371,7 @@ export class ProjectFileManagement {
       async (_file, stats): Promise<ProjectFileReferenceAttachment> => ({
         kind: 'file-reference',
         path,
-        version: version(stats),
+        version: fileVersion(stats),
         ...(showHidden ? { showHidden: true } : {}),
       }),
     );

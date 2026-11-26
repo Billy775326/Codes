@@ -15,6 +15,8 @@ export type NotificationPreferences = Pick<Preferences, 'notifications' | 'notif
 export interface Preferences {
   followUp: 'queue' | 'steer';
   enter: 'enter' | 'cmdIfMultiline' | 'cmdAlways';
+  tabToQueue: boolean;
+  newConversationDirectory: 'current' | 'choose';
   review: 'inline' | 'detached';
   theme: 'dark' | 'light' | 'system';
   language: InterfaceLanguage;
@@ -29,6 +31,8 @@ export interface Preferences {
 export const defaultBrowserPreferences: Preferences = {
   followUp: 'steer',
   enter: 'enter',
+  tabToQueue: true,
+  newConversationDirectory: 'current',
   review: 'inline',
   theme: 'dark',
   language: 'en',
@@ -44,6 +48,8 @@ export function readBrowserPreferences(raw: string): Preferences {
     return {
       followUp: value.followUp === 'queue' ? 'queue' : defaultBrowserPreferences.followUp,
       enter: ['enter', 'cmdIfMultiline', 'cmdAlways'].includes(value.enter) ? value.enter : 'enter',
+      tabToQueue: value.tabToQueue !== false,
+      newConversationDirectory: value.newConversationDirectory === 'choose' ? 'choose' : 'current',
       review: value.review === 'detached' ? 'detached' : 'inline',
       theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
       language: value.language === 'zh-CN' ? 'zh-CN' : 'en',

@@ -9,27 +9,37 @@ import type {
 } from '../shared/types';
 import { message, post, request } from './api';
 import { Icon, IconButton } from './primitives';
+import { ConversationSortMenu } from './ConversationSortMenu';
 import { InteractionDialog } from './InteractionDialog';
 import { conversationStatus } from './conversation-status';
 import { useInterfaceLanguage } from './interface-language';
 import { formatMessageTime } from './MessageTime';
+import { save, saved } from './browser-storage';
 import './conversations.css';
 
 const pageLimit = 30;
+const firstPageLifetime = 30_000;
+const sortPreference = 'codes.conversations.sort';
 const isWorking = (row: Summary) =>
   !!row.executionPending ||
   !!row.queueCount ||
   ['running', 'waitingApproval', 'waitingInput'].includes(row.state);
 
+interface CachedFirstPage {
+  page: NativeConversationPage;
+  sort: ConversationSort;
+  baseline: Map<string, Summary>;
+  loadedAt: number;
+}
+
 interface Props {
   projects: Project[];
-  cwd?: string;
+  currentDirectory?: string;
   selectedId: string;
   updates: Summary[];
   disabled: boolean;
   connection: string;
   supportsCreatedSort: boolean;
-  onNew: () => void;
   onSelect: (id: string, projectId: string) => void;
   onUpdated: (summary: Summary) => void;
   onModalChange: (open: boolean) => void;
@@ -39,12 +49,12 @@ export const Conversations = memo(function Conversations(props: Props) {
   const { t } = useInterfaceLanguage();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
-  const [onlyCwd, setOnlyCwd] = useState(false);
   const [archived, setArchived] = useState(false);
-  const [sort, setSort] = useState<ConversationSort>('updated_at');
-  const [revision, setRevision] = useState(0);
+  const firstPages = useRef(new Map<boolean, CachedFirstPage>()).current;
+  const [sort, setSort] = useState<ConversationSort>(() =>
+    saved(sortPreference) === 'created_at' ? 'created_at' : 'updated_at',
+  );
   const archiveToggle = useRef<HTMLButtonElement>(null);
-  const cwd = onlyCwd ? props.cwd : undefined;
   const effectiveSort = props.supportsCreatedSort ? sort : 'updated_at';
 
   useEffect(() => {
@@ -58,32 +68,6 @@ export const Conversations = memo(function Conversations(props: Props) {
       aria-label={t('Conversation management')}
       data-live={props.connection === 'Connected'}
     >
-      <div className="conversation-controls">
-        <div className="conversation-tools" role="group" aria-label={t('Session actions')}>
-          <IconButton
-            icon="newchat"
-            label={t('New conversation')}
-            disabled={props.disabled}
-            onClick={props.onNew}
-          />
-          <IconButton
-            icon="refresh"
-            label={t('Refresh conversations')}
-            onClick={() => setRevision((value) => value + 1)}
-          />
-        </div>
-        {props.supportsCreatedSort && (
-          <select
-            className="session-sort"
-            aria-label={t('Sort conversations')}
-            value={effectiveSort}
-            onChange={(event) => setSort(event.currentTarget.value as ConversationSort)}
-          >
-            <option value="updated_at">{t('Updated')}</option>
-            <option value="created_at">{t('Created')}</option>
-          </select>
-        )}
-      </div>
       <div className="conversation-search-row">
         <div className="conversation-search">
           <Icon name="search" size={14} />
@@ -102,20 +86,7 @@ export const Conversations = memo(function Conversations(props: Props) {
         </div>
       </div>
       <div className="session-filters">
-        <div role="group" aria-label={t('Directory filter')}>
-          <button aria-pressed={!cwd} onClick={() => setOnlyCwd(false)}>
-            {t('All')}
-          </button>
-          <button
-            aria-pressed={!!cwd}
-            disabled={!props.cwd}
-            data-tooltip={props.cwd || t('Choose a working directory')}
-            onClick={() => setOnlyCwd(true)}
-          >
-            {t('Cwd')}
-          </button>
-        </div>
-        <div role="group" aria-label={t('Archive filter')}>
+        <div className="session-archive-filter" role="group" aria-label={t('Archive filter')}>
           <button aria-pressed={!archived} onClick={() => setArchived(false)}>
             {t('Active')}
           </button>
@@ -123,15 +94,23 @@ export const Conversations = memo(function Conversations(props: Props) {
             {t('Archived')}
           </button>
         </div>
+        {props.supportsCreatedSort && (
+          <ConversationSortMenu
+            value={effectiveSort}
+            onChange={(next) => {
+              setSort(next);
+              save(sortPreference, next);
+            }}
+          />
+        )}
       </div>
       <ConversationList
-        key={JSON.stringify([cwd, archived, effectiveSort, search])}
+        key={JSON.stringify([archived, effectiveSort, search])}
         {...props}
-        cwd={cwd}
         archived={archived}
         search={search}
         sort={effectiveSort}
-        revision={revision}
+        firstPages={firstPages}
         onArchive={() => archiveToggle.current?.focus()}
       />
     </section>
@@ -140,11 +119,10 @@ export const Conversations = memo(function Conversations(props: Props) {
 
 function ConversationList({
   projects,
-  cwd,
+  currentDirectory,
   archived,
   search,
   sort,
-  revision,
   selectedId,
   updates,
   disabled,
@@ -153,17 +131,23 @@ function ConversationList({
   onUpdated,
   onArchive,
   onModalChange,
+  firstPages,
 }: Props & {
   archived: boolean;
   search: string;
   sort: ConversationSort;
-  revision: number;
   onArchive: () => void;
+  firstPages: Map<boolean, CachedFirstPage>;
 }) {
   const { t } = useInterfaceLanguage();
   const [cursor, setCursor] = useState<string>();
   const [previous, setPrevious] = useState<(string | undefined)[]>([]);
-  const [page, setPage] = useState<NativeConversationPage>();
+  const cached = firstPages.get(archived);
+  const initial =
+    !search && cached?.sort === sort && Date.now() - cached.loadedAt < firstPageLifetime
+      ? cached
+      : undefined;
+  const [page, setPage] = useState<NativeConversationPage | undefined>(() => initial?.page);
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -174,8 +158,8 @@ function ConversationList({
   const refreshOnConnect = useRef(false);
   const latest = useRef(updates);
   latest.current = updates;
-  const baseline = useRef(new Map(updates.map((row) => [row.id, row])));
-  const loadedAt = useRef(0);
+  const baseline = useRef(initial?.baseline ?? new Map(updates.map((row) => [row.id, row])));
+  const loadedAt = useRef(initial?.loadedAt ?? 0);
   const lastConnection = useRef(connection);
   useEffect(() => {
     const wasOffline = ['Reconnecting', 'Disconnected', 'Unavailable'].includes(
@@ -217,7 +201,6 @@ function ConversationList({
   useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams({ archived: String(archived), search, sort });
-    if (cwd) params.set('cwd', cwd);
     if (cursor) params.set('cursor', cursor);
     const known = new Map(latest.current.map((row) => [row.id, row]));
     setLoading(true);
@@ -228,17 +211,28 @@ function ConversationList({
           if (controller.signal.aborted) return;
           baseline.current = known;
           loadedAt.current = Date.now();
+          if (!cursor && !search)
+            firstPages.set(archived, {
+              page: result,
+              sort,
+              baseline: known,
+              loadedAt: loadedAt.current,
+            });
           setPage(result);
         },
         (cause) => {
-          if (!controller.signal.aborted) setError(message(cause));
+          if (!controller.signal.aborted) {
+            if (!cursor && !search) firstPages.delete(archived);
+            setPage(undefined);
+            setError(message(cause));
+          }
         },
       )
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [archived, cursor, cwd, search, sort, revision, reload]);
+  }, [archived, cursor, search, sort, reload, firstPages]);
 
   const rows = useMemo(() => {
     if (!page) return [];
@@ -247,7 +241,6 @@ function ConversationList({
     const paths = new Map(projects.map((project) => [project.id, project.path]));
     const matches = (row: NativeConversationSummary) =>
       !!row.archived === archived &&
-      (!cwd || row.cwd === cwd) &&
       (!search || row.title.toLowerCase().includes(search.toLowerCase()));
     const present = new Set(page.data.map((row) => row.id));
     const visible = page.data.flatMap((row) => {
@@ -270,7 +263,7 @@ function ConversationList({
       return matches(next) ? [next] : [];
     });
     return [...newRows, ...visible].slice(0, pageLimit);
-  }, [page, updates, projects, archived, cwd, search, cursor, sort]);
+  }, [page, updates, projects, archived, search, cursor, sort]);
 
   const closeConfirmation = () => {
     onModalChange(false);
@@ -287,6 +280,7 @@ function ConversationList({
         check ? {} : { operationId: crypto.randomUUID(), archived: !row.archived },
       );
       onUpdated(result);
+      if (!!result.archived !== !!row.archived) firstPages.clear();
       onModalChange(false);
       setConfirmation(undefined);
       if (!!result.archived !== !!row.archived) requestAnimationFrame(onArchive);
@@ -314,8 +308,8 @@ function ConversationList({
         <ConversationRow
           key={row.id}
           row={row}
+          currentDirectory={currentDirectory}
           selected={row.id === selectedId}
-          showDirectory={!cwd}
           sort={sort}
           disabled={disabled}
           pending={!!pending}
@@ -420,8 +414,8 @@ function ConversationList({
 
 function ConversationRow({
   row,
+  currentDirectory,
   selected,
-  showDirectory,
   sort,
   disabled,
   pending,
@@ -430,8 +424,8 @@ function ConversationRow({
   onCheck,
 }: {
   row: NativeConversationSummary;
+  currentDirectory?: string;
   selected: boolean;
-  showDirectory: boolean;
   sort: ConversationSort;
   disabled: boolean;
   pending: boolean;
@@ -442,6 +436,7 @@ function ConversationRow({
   const { t, locale } = useInterfaceLanguage();
   const status = conversationStatus(row, t);
   const routine = status.tone === 'neutral' && !status.queue;
+  const showDirectory = !!currentDirectory && !!row.cwd && row.cwd !== currentDirectory;
   const moment = sort === 'created_at' ? row.createdAt : row.updatedAt;
   const date = useMemo(() => {
     if (!moment) return;
@@ -470,12 +465,13 @@ function ConversationRow({
           disabled={disabled}
           onClick={onSelect}
           aria-label={row.title}
+          data-tooltip={row.cwd ? row.title + ' · ' + row.cwd : row.title}
           aria-describedby={
             'conversation-status-' + row.id + (date ? ' conversation-time-' + row.id : '')
           }
         >
           <span className="conversation-title">
-            <span data-tooltip-overflow="">{row.title}</span>
+            <span>{row.title}</span>
             {row.forkedFromId && <Icon name="branch" size={12} />}
             {date && (
               <time
@@ -492,11 +488,7 @@ function ConversationRow({
             className={'conversation-meta' + (!showDirectory && routine ? ' is-routine' : '')}
             id={'conversation-status-' + row.id}
           >
-            {showDirectory && (
-              <span className="session-cwd" data-tooltip-overflow="">
-                {row.cwd}
-              </span>
-            )}
+            <span className={showDirectory ? 'session-cwd' : 'visually-hidden'}>{row.cwd}</span>
             <span
               data-indicator={status.indicator}
               className={
@@ -531,7 +523,9 @@ function ConversationRow({
           />
         ) : (
           <IconButton
-            className="conversation-row-action"
+            className={
+              'conversation-row-action' + (row.archived ? '' : ' conversation-archive-action')
+            }
             icon={row.archived ? 'unarchive' : 'archive'}
             label={t(row.archived ? 'Restore {title}' : 'Archive {title}', { title: row.title })}
             disabled={pending || isWorking(row)}

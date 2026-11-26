@@ -80,32 +80,30 @@ export function BackupRestoreSettings() {
   }
 
   return (
-    <>
-      <section className="preferences-section" aria-labelledby="settings-backup-heading">
-        <h3 id="settings-backup-heading">{t('Database backup')}</h3>
-        <div className="settings-action-row">
-          <p className="preference-help">
-            {t(
-              'Includes Codes project and conversation records, queues, and saved defaults. Back up Codex history, workspace files, uploads, and server configuration separately.',
-            )}
-          </p>
-          <button
-            className="settings-action"
-            type="button"
-            disabled={downloading}
-            onClick={() => void download()}
-          >
-            <Icon name="download" size={16} />
-            {t(downloading ? 'Preparing backup…' : 'Download database backup')}
-          </button>
-        </div>
-        {downloadError && <p role="alert">{t(downloadError)}</p>}
-      </section>
-      <section className="preferences-section" aria-labelledby="settings-restore-heading">
-        <h3 id="settings-restore-heading">{t('Restore database')}</h3>
+    <section className="preferences-section" aria-labelledby="settings-backup-heading">
+      <h3 id="settings-backup-heading">{t('Workspace database')}</h3>
+      <div className="settings-action-row">
         <p className="preference-help">
           {t(
-            'Prepare a Codes backup from the same database schema. Applying it replaces the database and saves a copy of the current one.',
+            'SQLite snapshot of Codes records, receipts, and queues. Back up Codex history, project files, and uploads separately.',
+          )}
+        </p>
+        <button
+          className="settings-action"
+          type="button"
+          disabled={downloading}
+          onClick={() => void download()}
+        >
+          <Icon name="download" size={16} />
+          {t(downloading ? 'Preparing backup…' : 'Download database backup')}
+        </button>
+      </div>
+      {downloadError && <p role="alert">{t(downloadError)}</p>}
+      <div className="settings-restore" role="group" aria-labelledby="settings-restore-heading">
+        <h4 id="settings-restore-heading">{t('Restore database')}</h4>
+        <p className="preference-help">
+          {t(
+            'Prepare a same-schema backup for offline restore. Applying it saves a copy of the current database before replacing it.',
           )}
         </p>
         {status?.pending ? (
@@ -135,50 +133,50 @@ export function BackupRestoreSettings() {
               {t('Remove prepared backup')}
             </button>
           </>
-        ) : (
-          status && (
-            <>
-              <input
-                ref={upload}
-                hidden
-                type="file"
-                aria-label={t('Database backup file')}
-                accept=".sqlite,application/vnd.sqlite3"
-                onChange={(event) => {
-                  const selected = event.currentTarget.files?.[0];
-                  event.currentTarget.value = '';
-                  setRestoreError('');
-                  if (!selected) return;
-                  if (!selected.size || selected.size > databaseBackupLimitBytes) {
-                    setFile(undefined);
-                    setRestoreError('Choose a SQLite backup up to 64 MiB.');
-                  } else setFile(selected);
-                }}
-              />
-              <div className="settings-action-row">
+        ) : status ? (
+          <>
+            <input
+              ref={upload}
+              hidden
+              type="file"
+              aria-label={t('Database backup file')}
+              accept=".sqlite,application/vnd.sqlite3"
+              onChange={(event) => {
+                const selected = event.currentTarget.files?.[0];
+                event.currentTarget.value = '';
+                setRestoreError('');
+                if (!selected) return;
+                if (!selected.size || selected.size > databaseBackupLimitBytes) {
+                  setFile(undefined);
+                  setRestoreError('Choose a SQLite backup up to 64 MiB.');
+                } else setFile(selected);
+              }}
+            />
+            <div className="settings-transfer-actions">
+              <button
+                className="settings-action"
+                type="button"
+                disabled={busy}
+                onClick={() => upload.current?.click()}
+              >
+                <Icon name="upload" size={16} />
+                {t('Choose backup')}
+              </button>
+              {file && <span className="restore-filename">{file.name}</span>}
+              {file && (
                 <button
                   className="settings-action"
                   type="button"
                   disabled={busy}
-                  onClick={() => upload.current?.click()}
+                  onClick={() => void updatePending('POST')}
                 >
-                  <Icon name="upload" size={16} />
-                  {t('Choose backup')}
+                  {t(busy ? 'Validating backup…' : 'Prepare restore')}
                 </button>
-                {file && <span className="restore-filename">{file.name}</span>}
-                {file && (
-                  <button
-                    className="settings-action"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void updatePending('POST')}
-                  >
-                    {t(busy ? 'Validating backup…' : 'Prepare restore')}
-                  </button>
-                )}
-              </div>
-            </>
-          )
+              )}
+            </div>
+          </>
+        ) : restoreError ? null : (
+          <p role="status">{t('Loading restore status…')}</p>
         )}
         {restoreError && (
           <>
@@ -195,7 +193,7 @@ export function BackupRestoreSettings() {
             </button>
           </>
         )}
-      </section>
-    </>
+      </div>
+    </section>
   );
 }

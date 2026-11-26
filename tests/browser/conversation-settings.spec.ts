@@ -35,7 +35,7 @@ test('native settings save without dispatch, refresh across clients and reject s
     for (const client of [page, second]) {
       await client.getByRole('button', { name: 'Interaction settings', exact: true }).click();
       await chooseSettingsSection(client.getByRole('dialog', { name: 'Settings' }), 'Execution');
-      await expect(client.getByRole('button', { name: 'Save execution settings' })).toBeDisabled();
+      await expect(client.getByRole('button', { name: 'Save execution settings' })).toHaveCount(0);
     }
     await page
       .getByRole('dialog', { name: 'Settings', exact: true })
@@ -234,8 +234,9 @@ test('native dropdown presets preserve custom values and save compatible permiss
   await section
     .getByRole('combobox', { name: 'Permission profile', exact: true })
     .selectOption(':workspace');
-  await section.getByRole('button', { name: 'Save execution settings', exact: true }).click();
-  await expect(section.getByRole('status')).toBeVisible();
+  const footer = dialog.locator('.preferences-footer');
+  await footer.getByRole('button', { name: 'Save execution settings', exact: true }).click();
+  await expect(footer.getByRole('status')).toHaveText('Saved');
   expect(saved).toEqual({
     version: 'preset-version',
     changes: {

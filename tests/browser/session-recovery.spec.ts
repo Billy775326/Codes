@@ -76,13 +76,29 @@ test('an expired sidebar request also returns to sign-in', async ({ page }) => {
   await page.getByLabel('Message Codex').fill('A new project draft');
   await page.route(
     '**/api/conversations?**',
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: {
+          error: { code: 'UNAVAILABLE', message: 'Conversation list temporarily unavailable.' },
+        },
+      }),
+    { times: 1 },
+  );
+  await page.getByRole('button', { name: 'Archived', exact: true }).click();
+  const retry = page
+    .getByRole('navigation', { name: 'Conversations' })
+    .getByRole('button', { name: 'Retry', exact: true });
+  await expect(retry).toBeVisible();
+  await page.route(
+    '**/api/conversations?**',
     async (route) => {
       await expire(page);
       await route.continue();
     },
     { times: 1 },
   );
-  await page.getByRole('button', { name: 'Refresh conversations', exact: true }).click();
+  await retry.click();
   await expect(page.getByLabel('Workspace access token')).toBeEnabled();
   await signin(page);
   await expect(page.getByLabel('Message Codex')).toHaveValue('A new project draft');

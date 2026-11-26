@@ -1,3 +1,4 @@
+import { openContextTab } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 async function login(page: Page) {
   await page.goto('/');
@@ -239,7 +240,7 @@ test('Up and Down recall conversation messages without replacing the stored draf
   const send = page.getByRole('button', { name: 'Send message', exact: true });
   const older = 'Recall the selected function';
   const newer = 'A follow-up\nwith a second line';
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await openContextTab(page, 'Files');
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
   await page
     .getByRole('group', { name: 'File lines', exact: true })

@@ -108,6 +108,7 @@ export class Driver extends EventEmitter {
         );
       await rpc.notify('initialized');
       this.state = 'ready';
+      this.emit('ready');
     } catch (error) {
       child.kill('SIGTERM');
       this.state = 'unavailable';

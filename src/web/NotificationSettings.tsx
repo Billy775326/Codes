@@ -42,71 +42,79 @@ export function NotificationSettings({
     }
   }
   return (
-    <section className="preferences-section" aria-labelledby="preferences-notifications">
-      <h3 id="preferences-notifications">{t('Notifications')}</h3>
-      <label className="preference-row">
-        <span>{t('Browser notifications')}</span>
-        <input
-          className="preference-checkbox"
-          type="checkbox"
-          role="switch"
-          checked={enabled}
-          disabled={requesting || (unavailable && !enabled)}
-          onChange={(event) => void toggleNotifications(event.target.checked)}
-        />
-      </label>
-      {unavailable && (
-        <p className="preference-help">
-          {access === 'denied'
-            ? t('Allow notifications in your browser settings.')
-            : access === 'insecure'
-              ? t('Notifications require HTTPS or localhost.')
-              : t('This browser does not support notifications.')}
-        </p>
-      )}
-      <fieldset className="settings-options" disabled={!enabled || access !== 'granted'}>
-        <legend>{t('Notification events')}</legend>
-        {allNotificationEvents.map((event) => (
-          <label className="settings-option" key={event}>
-            <input
-              className="preference-checkbox"
-              type="checkbox"
-              checked={value.notificationEvents.includes(event)}
-              onChange={(changeEvent) =>
-                change({
-                  notificationEvents: changeEvent.target.checked
-                    ? [...value.notificationEvents, event]
-                    : value.notificationEvents.filter((configured) => configured !== event),
-                })
-              }
-            />
-            {t(notificationEventLabels[event])}
-          </label>
-        ))}
-      </fieldset>
-      {enabled && access === 'granted' && (
-        <div className="settings-action-row">
-          <p className="preference-help">{t('Keep this tab open for notifications.')}</p>
-          <button
-            type="button"
-            className="settings-action"
-            onClick={() => {
-              setError('');
-              setTested(false);
-              try {
-                showNotification(t('Codes test notification'), 'codes-test');
-                setTested(true);
-              } catch {
-                setError('This browser could not display a notification.');
-              }
-            }}
-          >
-            {t('Send test notification')}
-          </button>
-        </div>
-      )}
-      {tested && <p role="status">{t('Test notification requested.')}</p>}
-      {error && <p role="alert">{t(error)}</p>}
-    </section>
+    <>
+      <section className="preferences-section" aria-labelledby="preferences-notifications">
+        <h3 id="preferences-notifications">{t('Browser delivery')}</h3>
+        <label className="preference-row">
+          <span>{t('Browser notifications')}</span>
+          <input
+            className="preference-checkbox"
+            type="checkbox"
+            role="switch"
+            checked={enabled}
+            disabled={requesting || (unavailable && !enabled)}
+            onChange={(event) => void toggleNotifications(event.target.checked)}
+          />
+        </label>
+        {unavailable && (
+          <p className="preference-help">
+            {access === 'denied'
+              ? t('Allow notifications in your browser settings.')
+              : access === 'insecure'
+                ? t('Notifications require HTTPS or localhost.')
+                : t('This browser does not support notifications.')}
+          </p>
+        )}
+        {enabled && access === 'granted' && (
+          <div className="settings-action-row">
+            <p className="preference-help">{t('Keep this tab open for notifications.')}</p>
+            <button
+              type="button"
+              className="settings-action"
+              onClick={() => {
+                setError('');
+                setTested(false);
+                try {
+                  showNotification(t('Codes test notification'), 'codes-test');
+                  setTested(true);
+                } catch {
+                  setError('This browser could not display a notification.');
+                }
+              }}
+            >
+              {t('Send test notification')}
+            </button>
+          </div>
+        )}
+        {tested && <p role="status">{t('Test notification requested.')}</p>}
+        {error && <p role="alert">{t(error)}</p>}
+      </section>
+      <section className="preferences-section">
+        <h3 id="notification-events-heading">{t('Notification events')}</h3>
+        <fieldset
+          className="settings-options"
+          aria-labelledby="notification-events-heading"
+          disabled={!enabled || access !== 'granted'}
+        >
+          {allNotificationEvents.map((event) => (
+            <label className="settings-option" key={event}>
+              <input
+                className="preference-checkbox"
+                type="checkbox"
+                checked={value.notificationEvents.includes(event)}
+                onChange={(changeEvent) =>
+                  change({
+                    notificationEvents: changeEvent.target.checked
+                      ? [...value.notificationEvents, event]
+                      : value.notificationEvents.filter((configured) => configured !== event),
+                  })
+                }
+              />
+              {t(notificationEventLabels[event])}
+            </label>
+          ))}
+        </fieldset>
+      </section>
+    </>
   );
 }

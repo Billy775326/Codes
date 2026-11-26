@@ -1,4 +1,4 @@
-import { chooseWorkingDirectory } from './sidebar-helpers';
+import { chooseWorkingDirectory, openContextTab } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 async function login(page: Page) {
   await page.goto('/');
@@ -33,7 +33,7 @@ test('new drafts and attachments remain in their project when navigating without
   await page.reload();
   await chooseWorkingDirectory(page, original.path);
   await page.getByLabel('Message Codex').fill('Draft for the original project');
-  await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+  await openContextTab(page, 'Files');
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
   await page
     .getByRole('group', { name: 'File lines', exact: true })
@@ -116,12 +116,12 @@ test('switching projects aborts a delayed file preview and cannot attach its old
     { times: 1 },
   );
   try {
-    await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+    await openContextTab(page, 'Files');
     await page.getByRole('button', { name: 'example.ts', exact: true }).click();
     await processed;
     await chooseWorkingDirectory(page, added.path);
     release();
-    await page.getByRole('button', { name: 'Browse files', exact: true }).click();
+    await openContextTab(page, 'Files');
     await expect(page.locator('.file-preview')).toHaveCount(0);
     await expect(page.locator('.file-breadcrumb')).toContainText(added.name);
     await expect(page.getByRole('button', { name: 'Attach lines', exact: true })).toHaveCount(0);
@@ -153,7 +153,7 @@ test('phone drawers own focus and attaching context returns to the running conve
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
   await page.getByLabel('Message Codex').fill('Keep the running follow-up');
-  const files = page.getByRole('button', { name: 'Browse files', exact: true });
+  const files = page.getByRole('button', { name: 'Files and changes', exact: true });
   await files.click();
   await expect(page.getByRole('dialog', { name: 'Project context', exact: true })).toBeVisible();
   const closePanel = page.getByRole('button', { name: 'Close panel', exact: true });

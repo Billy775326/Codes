@@ -187,6 +187,8 @@ export interface ImageAttachment {
   kind: 'image';
   id: string;
   name: string;
+  /** Storage scope recorded in the native transcript. */
+  projectId?: string;
 }
 export interface UploadedFileAttachment {
   kind: 'uploaded-file';

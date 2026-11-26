@@ -145,9 +145,11 @@ test('changes a file-backed access token and keeps the draft through sign-in', a
     await expect(dialog.getByRole('button', { name: 'Save new token' })).toBeDisabled();
     await confirmation.fill(replacement);
     await dialog.getByRole('button', { name: 'Save new token' }).click();
-    await expect(page.getByRole('status')).toHaveText(
-      'Access token changed. Sign in with your new token.',
-    );
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'Access token changed. Sign in with your new token.' }),
+    ).toBeVisible();
     expect((await observer.request.get('/api/system')).status()).toBe(401);
     await expect(tokenInput).toHaveValue('');
     await tokenInput.fill(replacement);

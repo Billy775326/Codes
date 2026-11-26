@@ -7,18 +7,23 @@ import {
   type NotificationPreferences,
   type Preferences,
 } from './browser-preferences';
-import { NativeConfigurationSettings } from './NativeConfigurationSettings';
+import { NativeConfigurationSettings, executionForm } from './NativeConfigurationSettings';
 import { InteractionDialog } from './InteractionDialog';
-import { NetworkSettings } from './NetworkSettings';
-import { RuntimeSettings } from './RuntimeSettings';
-import { GlobalInstructionsSettings } from './GlobalInstructionsSettings';
+import { NetworkSettings, networkForm } from './NetworkSettings';
+import { RuntimeSettings, runtimeForm } from './RuntimeSettings';
+import { GlobalInstructionsSettings, instructionsForm } from './GlobalInstructionsSettings';
 import { Icon, IconButton } from './primitives';
 import { NotificationSettings } from './NotificationSettings';
 import { MaintenanceSettings } from './MaintenanceSettings';
-import { WorkspaceSettings } from './WorkspaceSettings';
+import { WorkspaceSettings, loginValidityForm } from './WorkspaceSettings';
 import { DiagnosticsSettings } from './DiagnosticsSettings';
 import { BackupRestoreSettings } from './BackupRestoreSettings';
 import { AccessTokenSettings } from './AccessTokenSettings';
+import { emptyFormDraft } from './settings-form';
+import { KeyboardSettings } from './KeyboardSettings';
+import { BrowserPreferencesTransfer } from './BrowserPreferencesTransfer';
+import type { BrowserPreferencesFile } from './browser-preferences-file';
+import type { SidebarWidths } from './SidebarResize';
 
 const settingsSections = [
   {
@@ -27,7 +32,7 @@ const settingsSections = [
     label: 'General',
     icon: 'settings',
     keywords:
-      'preferences appearance theme language font text size interaction shortcut review queue scroll files hidden 偏好 外观 主题 语言 字号 字体 交互 快捷键 复查 排队 滚动 文件 隐藏',
+      'preferences appearance theme language font text size interaction keyboard shortcut review queue scroll files hidden sidebar layout width directory reset defaults 偏好 外观 主题 语言 字号 字体 交互 键盘 快捷键 复查 排队 滚动 文件 隐藏 侧栏 布局 宽度 目录 重置 默认',
   },
   {
     id: 'notifications',
@@ -39,7 +44,7 @@ const settingsSections = [
   },
   {
     id: 'defaults',
-    scope: 'workspace',
+    scope: 'codex',
     label: 'Execution',
     icon: 'newchat',
     keywords:
@@ -55,28 +60,30 @@ const settingsSections = [
   },
   {
     id: 'runtime',
-    scope: 'server',
+    scope: 'codex',
     label: 'Codex CLI',
     icon: 'terminal',
-    keywords: 'runtime cli codex questions timeout executable 运行环境 运行时 提问 超时 可执行文件',
+    keywords: 'runtime cli codex request timeout 运行环境 运行时 请求 超时',
   },
   {
     id: 'maintenance',
     scope: 'server',
     label: 'Maintenance',
     icon: 'activity',
-    keywords: 'status task version diagnostics connection logs 维护 状态 任务 版本 诊断 连接 日志',
+    keywords:
+      'status task cli version diagnostics connection logs runtime paths executable launcher data directory 维护 状态 任务 版本 诊断 连接 日志 运行路径 启动入口 可执行文件 数据目录',
   },
   {
     id: 'backup',
-    scope: 'server',
+    scope: 'data',
     label: 'Backup & restore',
     icon: 'archive',
-    keywords: 'snapshot database sqlite export recovery 备份 快照 数据库 恢复 还原',
+    keywords:
+      'snapshot database sqlite import export recovery browser preferences file network configuration json 备份 快照 数据库 恢复 还原 导入 导出 浏览器偏好 网络配置 配置文件',
   },
   {
     id: 'instructions',
-    scope: 'workspace',
+    scope: 'codex',
     label: 'Instructions',
     icon: 'file',
     keywords: 'AGENTS.md Codex global instructions rules 全局 指令 规则',
@@ -84,9 +91,10 @@ const settingsSections = [
 ] as const;
 type SettingsSection = (typeof settingsSections)[number]['id'];
 const settingsScopes = [
-  { id: 'browser', label: 'Browser' },
-  { id: 'workspace', label: 'Workspace' },
+  { id: 'browser', label: 'Preferences' },
+  { id: 'codex', label: 'Codex' },
   { id: 'server', label: 'Server' },
+  { id: 'data', label: 'Data' },
 ] as const;
 
 function ResetSettings({
@@ -110,6 +118,7 @@ function ResetSettings({
   return (
     <div className="preferences-reset">
       <button
+        className="settings-action"
         ref={trigger}
         type="button"
         aria-expanded={confirming}
@@ -143,6 +152,9 @@ function ResetSettings({
 }
 export function PreferencesDialog({
   value,
+  sidebarWidths,
+  restoreSidebarWidths,
+  importBrowserPreferences,
   change,
   changeNotifications,
   close,
@@ -157,6 +169,9 @@ export function PreferencesDialog({
   signInAfterTokenChange,
 }: {
   value: Preferences;
+  sidebarWidths: SidebarWidths;
+  restoreSidebarWidths: () => boolean;
+  importBrowserPreferences: (file: BrowserPreferencesFile) => boolean;
   change: (value: Preferences) => void;
   changeNotifications: (patch: Partial<NotificationPreferences>) => void;
   signInAfterTokenChange: (message: string) => void;
@@ -175,6 +190,8 @@ export function PreferencesDialog({
 }) {
   const { t } = useInterfaceLanguage();
   const [section, setSection] = useState<SettingsSection>('preferences');
+  const [sidebarWidthStatus, setSidebarWidthStatus] = useState<'saved' | 'error'>();
+  const [networkTransferTarget, setNetworkTransferTarget] = useState<HTMLElement | null>(null);
   const [visited, setVisited] = useState({
     preferences: true,
     defaults: false,
@@ -185,11 +202,11 @@ export function PreferencesDialog({
     maintenance: false,
     backup: false,
   });
-  const [configurationDraft, setConfigurationDraft] = useState({ changed: false, busy: false });
-  const [networkDraft, setNetworkDraft] = useState({ changed: false, busy: false });
-  const [runtimeDraft, setRuntimeDraft] = useState({ changed: false, busy: false });
-  const [instructionsDraft, setInstructionsDraft] = useState({ changed: false, busy: false });
-  const [loginDraft, setLoginDraft] = useState({ changed: false, busy: false });
+  const [configurationDraft, setConfigurationDraft] = useState(emptyFormDraft);
+  const [networkDraft, setNetworkDraft] = useState(emptyFormDraft);
+  const [runtimeDraft, setRuntimeDraft] = useState(emptyFormDraft);
+  const [instructionsDraft, setInstructionsDraft] = useState(emptyFormDraft);
+  const [loginDraft, setLoginDraft] = useState(emptyFormDraft);
   const [tokenDraft, setTokenDraft] = useState({ changed: false, busy: false });
   const otherDrafts = [
     configurationDraft,
@@ -199,6 +216,55 @@ export function PreferencesDialog({
     loginDraft,
   ];
   const drafts = [...otherDrafts, tokenDraft];
+  const sectionHasDraft: Partial<Record<SettingsSection, boolean>> = {
+    defaults: configurationDraft.changed,
+    network: networkDraft.changed || loginDraft.changed || tokenDraft.changed,
+    runtime: runtimeDraft.changed,
+    instructions: instructionsDraft.changed,
+  };
+  const dirtySections = settingsSections.filter(({ id }) => sectionHasDraft[id]);
+  const currentForms = [
+    {
+      section: 'defaults',
+      id: executionForm,
+      draft: configurationDraft,
+      label: 'Save execution settings',
+      saved: 'Saved',
+    },
+    {
+      section: 'instructions',
+      id: instructionsForm,
+      draft: instructionsDraft,
+      label: 'Save global instructions',
+      saved: 'Global instructions saved.',
+    },
+    {
+      section: 'runtime',
+      id: runtimeForm,
+      draft: runtimeDraft,
+      label: 'Save runtime settings',
+      saved: 'Runtime settings saved.',
+    },
+    {
+      section: 'network',
+      id: networkForm,
+      draft: networkDraft,
+      label: 'Save network settings',
+      shortLabel: 'Save network',
+      saved: 'Network settings saved.',
+    },
+    {
+      section: 'network',
+      id: loginValidityForm,
+      draft: loginDraft,
+      label: 'Save login validity',
+      shortLabel: 'Save sign-in',
+      saved: 'Workspace settings saved.',
+    },
+  ].filter((form) => form.section === section);
+  const formsToSave = currentForms.filter(({ draft }) => draft.changed);
+  const savedForms = currentForms.filter(({ draft }) => draft.saved && !draft.changed);
+  const restartRequired = otherDrafts.some((draft) => draft.restartRequired);
   const [discarding, setDiscarding] = useState(false);
   const sectionButton = useRef<HTMLButtonElement>(null);
   const categoryButton = useRef<HTMLButtonElement>(null);
@@ -235,11 +301,11 @@ export function PreferencesDialog({
           : searchInput.current
       )?.focus();
     }
-  }, [discarding]);
+  }, [discarding, section]);
   const requestClose = () => {
     if (discarding) {
       stay();
-    } else if (drafts.some((draft) => draft.changed)) {
+    } else if (dirtySections.length) {
       setDiscarding(true);
     } else {
       close();
@@ -319,31 +385,21 @@ export function PreferencesDialog({
             ))}
           </select>
         </label>
-        <div className="preferences-preview" role="region" aria-label={t('Text preview')}>
-          <div className="prose">
-            <p>
-              {t('Aa Bb Cc · 0123456789')}
-              <br />
-              中文字体预览。
-            </p>
-            <pre>
-              <code>const message = "Hello, Codex";</code>
-            </pre>
+        <details className="preferences-help preferences-type-preview">
+          <summary>{t('Text preview')}</summary>
+          <div className="preferences-preview" role="region" aria-label={t('Text preview')}>
+            <div className="prose">
+              <p>
+                {t('Aa Bb Cc · 0123456789')}
+                <br />
+                中文字体预览。
+              </p>
+              <pre>
+                <code>const message = "Hello, Codex";</code>
+              </pre>
+            </div>
           </div>
-        </div>
-      </section>
-      <section className="preferences-section" aria-labelledby="preferences-files">
-        <h3 id="preferences-files">{t('Files')}</h3>
-        <label className="preference-row">
-          <span>{t('Show hidden files')}</span>
-          <input
-            className="preference-checkbox"
-            type="checkbox"
-            role="switch"
-            checked={value.showHiddenFiles}
-            onChange={(event) => change({ ...value, showHiddenFiles: event.target.checked })}
-          />
-        </label>
+        </details>
       </section>
       <section className="preferences-section" aria-labelledby="preferences-interaction">
         <h3 id="preferences-interaction">{t('Interaction')}</h3>
@@ -361,17 +417,18 @@ export function PreferencesDialog({
           </select>
         </label>
         <label className="preference-row">
-          <span className="preference-description">{t('Send shortcut')}</span>
+          <span className="preference-description">{t('New conversation directory')}</span>
           <select
-            aria-label={t('Send shortcut')}
-            value={value.enter}
+            value={value.newConversationDirectory}
             onChange={(event) =>
-              change({ ...value, enter: event.target.value as Preferences['enter'] })
+              change({
+                ...value,
+                newConversationDirectory: event.target.value === 'choose' ? 'choose' : 'current',
+              })
             }
           >
-            <option value="enter">{t('Enter')}</option>
-            <option value="cmdIfMultiline">{t('Multiline: Ctrl/Cmd+Enter')}</option>
-            <option value="cmdAlways">Ctrl/Cmd+Enter</option>
+            <option value="current">{t('Use current directory')}</option>
+            <option value="choose">{t('Choose each time')}</option>
           </select>
         </label>
         <label className="preference-row">
@@ -397,15 +454,49 @@ export function PreferencesDialog({
             onChange={(event) => change({ ...value, autoScroll: event.target.checked })}
           />
         </label>
-        <details className="preferences-help">
-          <summary>{t('Editing and shortcuts')}</summary>
-          <p>{t('Use Up and Down to recall sent messages in the current conversation.')}</p>
-          <p>
-            {t(
-              'Shift+Enter adds a line. On phones, Enter adds a line. Ctrl/Cmd+Shift+Enter switches delivery for one follow-up.',
-            )}
-          </p>
-        </details>
+      </section>
+      <KeyboardSettings value={value} change={change} />
+      <section className="preferences-section" aria-labelledby="preferences-files">
+        <h3 id="preferences-files">{t('Files')}</h3>
+        <label className="preference-row">
+          <span>{t('Show hidden files')}</span>
+          <input
+            className="preference-checkbox"
+            type="checkbox"
+            role="switch"
+            checked={value.showHiddenFiles}
+            onChange={(event) => change({ ...value, showHiddenFiles: event.target.checked })}
+          />
+        </label>
+      </section>
+      <section className="preferences-section" aria-labelledby="preferences-layout">
+        <h3 id="preferences-layout">{t('Layout')}</h3>
+        <div className="preference-row">
+          <span>{t('Sidebar widths')}</span>
+          <button
+            className="settings-action"
+            type="button"
+            onClick={() => setSidebarWidthStatus(restoreSidebarWidths() ? 'saved' : 'error')}
+          >
+            {t('Restore default sidebar widths')}
+          </button>
+        </div>
+        {sidebarWidthStatus === 'saved' && (
+          <p role="status">{t('Default sidebar widths restored.')}</p>
+        )}
+        {sidebarWidthStatus === 'error' && (
+          <p role="alert">{t('Could not save sidebar widths in this browser.')}</p>
+        )}
+      </section>
+      <section className="preferences-section" aria-labelledby="preferences-defaults">
+        <h3 id="preferences-defaults">{t('Defaults')}</h3>
+        <ResetSettings
+          label={t('Reset browser settings')}
+          detail={t(
+            'Restore appearance, interaction, file visibility, and notification preferences in this browser.',
+          )}
+          reset={() => change(defaultBrowserPreferences)}
+        />
       </section>
     </div>
   );
@@ -416,7 +507,31 @@ export function PreferencesDialog({
       busy={discardBusy}
       className="preferences-dialog"
     >
-      <div className="preferences-page" hidden={discarding}>
+      <div
+        className="preferences-page"
+        hidden={discarding}
+        onKeyDown={(event) => {
+          if (
+            currentForms.length &&
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === 's' &&
+            !event.nativeEvent.isComposing
+          ) {
+            const focusedForm = (event.target as HTMLElement).closest('form');
+            if (focusedForm && !currentForms.some(({ id }) => id === focusedForm.id)) return;
+            event.preventDefault();
+            const form = focusedForm
+              ? formsToSave.find(({ id }) => id === focusedForm.id)
+              : formsToSave.length === 1
+                ? formsToSave[0]
+                : undefined;
+            if (form)
+              event.currentTarget
+                .querySelector<HTMLButtonElement>(`button[form="${form.id}"]`)
+                ?.click();
+          }
+        }}
+      >
         <div className="settings-layout">
           <div
             className="settings-navigation"
@@ -483,16 +598,24 @@ export function PreferencesDialog({
                       role="group"
                       aria-label={t(scopeLabel)}
                     >
+                      <span className="settings-scope-label" aria-hidden="true">
+                        {t(scopeLabel)}
+                      </span>
                       {sections.map(({ id, label, icon }) => (
                         <button
                           key={id}
                           type="button"
                           ref={section === id ? sectionButton : undefined}
                           aria-pressed={section === id}
+                          aria-controls="settings-detail"
+                          aria-description={sectionHasDraft[id] ? t('Unsaved changes') : undefined}
                           onClick={() => selectSection(id)}
                         >
                           <Icon name={icon} size={16} />
                           {t(label)}
+                          {sectionHasDraft[id] && (
+                            <span className="settings-draft-dot" aria-hidden="true" />
+                          )}
                         </button>
                       ))}
                     </div>
@@ -502,7 +625,15 @@ export function PreferencesDialog({
               {!matches.length && <p role="status">{t('No matching settings.')}</p>}
             </div>
           </div>
-          <div className="settings-panels">
+          <div
+            className="settings-panels"
+            id="settings-detail"
+            role="group"
+            aria-labelledby="settings-detail-title"
+          >
+            <h2 className="settings-detail-title" id="settings-detail-title">
+              {t(currentCategory.label)}
+            </h2>
             <div className="preferences-page" hidden={section !== 'preferences'}>
               {preferences}
             </div>
@@ -530,23 +661,52 @@ export function PreferencesDialog({
                   maintenanceBusy={maintenanceBusy}
                   changeMaintenance={changeMaintenance}
                 />
-                <DiagnosticsSettings />
+                <DiagnosticsSettings version={system?.version} />
               </div>
             )}
             {visited.backup && (
               <div className="preferences-content" hidden={section !== 'backup'}>
                 <BackupRestoreSettings />
+                <section
+                  className="preferences-section"
+                  aria-labelledby="settings-network-transfer"
+                  ref={setNetworkTransferTarget}
+                >
+                  <h3 id="settings-network-transfer">{t('Network configuration')}</h3>
+                </section>
+                <BrowserPreferencesTransfer
+                  value={value}
+                  widths={sidebarWidths}
+                  apply={(file) => {
+                    if (!importBrowserPreferences(file)) return false;
+                    setSidebarWidthStatus(undefined);
+                    return true;
+                  }}
+                />
               </div>
             )}
-            {visited.network && (
+            {(visited.network || visited.backup) && (
               <div className="preferences-content settings-forms" hidden={section !== 'network'}>
-                <NetworkSettings onDraft={setNetworkDraft} />
-                <WorkspaceSettings onDraft={setLoginDraft} />
-                <AccessTokenSettings
-                  onDraft={setTokenDraft}
-                  otherSettingsPending={otherDrafts.some((draft) => draft.changed || draft.busy)}
-                  onSignIn={signInAfterTokenChange}
+                <NetworkSettings
+                  onDraft={setNetworkDraft}
+                  transferTarget={networkTransferTarget}
+                  onImported={() => {
+                    returnFocus.current = true;
+                    selectSection('network');
+                  }}
                 />
+                {visited.network && (
+                  <>
+                    <WorkspaceSettings onDraft={setLoginDraft} />
+                    <AccessTokenSettings
+                      onDraft={setTokenDraft}
+                      otherSettingsPending={otherDrafts.some(
+                        (draft) => draft.changed || draft.busy,
+                      )}
+                      onSignIn={signInAfterTokenChange}
+                    />
+                  </>
+                )}
               </div>
             )}
             {visited.runtime && (
@@ -556,7 +716,7 @@ export function PreferencesDialog({
             )}
             {visited.instructions && (
               <div
-                className="preferences-content settings-forms"
+                className="preferences-content instructions-settings"
                 hidden={section !== 'instructions'}
               >
                 <GlobalInstructionsSettings onDraft={setInstructionsDraft} />
@@ -573,23 +733,41 @@ export function PreferencesDialog({
               </button>
             </div>
           )}
-          {section === 'preferences' && (
-            <ResetSettings
-              label={t('Reset browser settings')}
-              detail={t(
-                'Restore appearance, interaction, file visibility, and notification preferences in this browser.',
+          {(!!dirtySections.length || !!savedForms.length || restartRequired) && (
+            <div className="settings-footer-status" role="status">
+              {!!dirtySections.length && <span>{t('Unsaved changes')}</span>}
+              {savedForms.map(({ id, saved }) => (
+                <span key={id}>{t(saved)}</span>
+              ))}
+              {restartRequired && (
+                <span className="settings-restart-status">{t('Restart Codes to apply')}</span>
               )}
-              reset={() => change(defaultBrowserPreferences)}
-            />
+            </div>
           )}
-          <button
-            className="preferences-done"
-            type="button"
-            onClick={requestClose}
-            disabled={discardBusy}
-          >
-            {t('Done')}
-          </button>
+          <div className="preferences-footer-actions">
+            <button
+              className="preferences-done"
+              type="button"
+              onClick={requestClose}
+              disabled={discardBusy}
+            >
+              {t('Done')}
+            </button>
+            {formsToSave.map(({ id, draft, label, shortLabel }) => (
+              <button
+                key={id}
+                className="primary preferences-done"
+                type="submit"
+                form={id}
+                aria-label={t(label)}
+                aria-keyshortcuts="Control+S Meta+S"
+                aria-busy={draft.busy}
+                disabled={discardBusy || !draft.canSave}
+              >
+                {t(formsToSave.length > 1 && shortLabel ? shortLabel : 'Save')}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {discarding && (
@@ -599,7 +777,22 @@ export function PreferencesDialog({
           aria-labelledby="discard-settings-heading"
         >
           <h3 id="discard-settings-heading">{t('Discard unsaved settings?')}</h3>
-          <p>{t('Unsaved edits will be lost.')}</p>
+          <ul className="settings-unsaved-list">
+            {dirtySections.map(({ id, label }) => (
+              <li key={id}>
+                <button
+                  className="settings-action"
+                  type="button"
+                  onClick={() => {
+                    selectSection(id);
+                    stay();
+                  }}
+                >
+                  {t(label)}
+                </button>
+              </li>
+            ))}
+          </ul>
           <div className="network-actions">
             <button type="button" autoFocus onClick={stay}>
               {t('Keep editing')}
