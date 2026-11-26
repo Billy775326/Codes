@@ -184,7 +184,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       const all = [...threads.values()]
         .filter(
           (t) =>
-            (!p.cwd || t.cwd === p.cwd) &&
+            (!p.cwd || (Array.isArray(p.cwd) ? p.cwd.includes(t.cwd) : t.cwd === p.cwd)) &&
             !!t.archived === !!p.archived &&
             (!p.includedThreadIds || p.includedThreadIds.includes(t.id)) &&
             (!p.searchTerm ||

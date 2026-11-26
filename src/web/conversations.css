@@ -101,6 +101,17 @@
   overflow-y: auto;
   padding: 0 8px 8px;
 }
+.session-branch {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-branch svg {
+  margin-inline-end: 3px;
+  vertical-align: -1px;
+}
 .session-cwd {
   display: block;
   min-width: 0;

@@ -1,3 +1,5 @@
+import { matchesConversationText } from '../shared/conversation-search.js';
+import { repositoryDirectories } from './repository-directories.js';
 import { isAbsolute, resolve } from 'node:path';
 import type { Driver } from '../codex/driver.js';
 import { AppError, record } from '../shared/errors.js';
@@ -5,6 +7,7 @@ import type { ConversationSort, NativeConversationPage, Summary } from '../share
 
 export interface ConversationFilters {
   cwd?: string;
+  repo?: boolean;
   cursor?: string;
   search?: string;
   archived?: boolean;
@@ -21,7 +24,12 @@ export function nativeConversation(value: unknown) {
   return {
     id: value.id,
     cwd: value.cwd,
-    title: typeof title === 'string' ? title.slice(0, 80) : '',
+    title: typeof title === 'string' ? title.trim().slice(0, 80) : '',
+    preview: typeof value.preview === 'string' ? value.preview : undefined,
+    gitBranch:
+      record(value.gitInfo) && typeof value.gitInfo.branch === 'string'
+        ? value.gitInfo.branch.slice(0, 256)
+        : undefined,
     status: value.status,
     updatedAt: secondsToMilliseconds(value.updatedAt),
     createdAt: secondsToMilliseconds(value.createdAt),
@@ -65,25 +73,49 @@ export class NativeConversationDirectory {
     },
   ) {}
 
+  async repository(cwd: string) {
+    if (!validCwd(cwd))
+      throw new AppError('INVALID_DIRECTORY', 'Enter an absolute path on the server.');
+    await this.driver.start();
+    if (!this.driver.supports('conversationRepository')) return [];
+    const directories = await repositoryDirectories(cwd);
+    return directories.length > 1 ? directories : [];
+  }
+
   async list(
     options: ConversationFilters & { projectId?: string },
     signal?: AbortSignal,
   ): Promise<NativeConversationPage & { scanned: number }> {
-    const { projectId, cwd } = options;
+    const { projectId, cwd, repo } = options;
     if (cwd !== undefined && !validCwd(cwd))
       throw new AppError('INVALID_DIRECTORY', 'Enter an absolute path on the server.');
     const search = (options.search ?? '').trim().slice(0, 120);
     const archived = options.archived === true;
     const limit = Math.min(50, Math.max(1, options.limit ?? 30));
     const sort = options.sort ?? 'updated_at';
-    const filters = JSON.stringify({ projectId, cwd, search, archived, sort });
+    if (repo && (!cwd || projectId))
+      throw new AppError('INVALID_DIRECTORY', 'Choose a working directory.');
+    signal?.throwIfAborted();
+    await this.driver.start();
+    signal?.throwIfAborted();
+    const directories = cwd && repo ? await this.repository(cwd) : [];
+    if (repo && !directories.length)
+      throw new AppError(
+        'REPOSITORY_SCOPE',
+        'Linked worktrees are unavailable. Choose Cwd or All.',
+        409,
+      );
+    const cwdFilter = directories.length ? directories : cwd;
+    const filters = JSON.stringify({ projectId, cwd: cwdFilter, search, archived, sort });
     let cursor: string | undefined;
+    let indexed = !projectId && this.driver.supports('conversationIndexedList');
     if (options.cursor) {
       try {
         const value: unknown = JSON.parse(Buffer.from(options.cursor, 'base64url').toString());
         if (!record(value) || value.filters !== filters || typeof value.cursor !== 'string')
           throw new Error();
         cursor = value.cursor;
+        indexed = indexed && value.indexed === true;
       } catch {
         throw new AppError(
           'LIST_CURSOR',
@@ -92,15 +124,13 @@ export class NativeConversationDirectory {
       }
     }
     signal?.throwIfAborted();
-    await this.driver.start();
-    signal?.throwIfAborted();
     if (sort === 'created_at' && !this.driver.supports('conversationSort'))
       throw new AppError(
         'CLI_FEATURE_UNAVAILABLE',
         'The installed Codex CLI cannot sort by creation time.',
         412,
       );
-    const serverSearch = !projectId && this.driver.supports('conversationSearch');
+    const currentAccountOnly = !projectId && this.driver.supports('conversationAccountScope');
     let scanned = 0;
     const seen = new Set(cursor ? [cursor] : []);
     const deadline = Date.now() + 20_000;
@@ -110,41 +140,66 @@ export class NativeConversationDirectory {
       if (remaining <= 0)
         throw new AppError('LIST_TIMEOUT', 'Conversation browsing timed out. Try again.', 504);
       const revision = this.metadata.revision();
-      const page = pageFromNative(
-        await this.driver.call(
-          'thread/list',
-          {
-            cwd,
-            cursor,
-            limit,
-            archived,
-            sourceKinds: projectId ? ['cli', 'appServer', 'vscode'] : undefined,
-            modelProviders: [],
-            sortKey: this.driver.supports('conversationSort') ? sort : undefined,
-            searchTerm: serverSearch && search ? search : undefined,
-          },
-          remaining,
-        ),
-      );
+      const loadPage = (remaining: number) =>
+        this.driver
+          .call(
+            'thread/list',
+            {
+              cwd: cwdFilter,
+              cursor,
+              currentAccountOnly: currentAccountOnly || undefined,
+              useStateDbOnly: indexed || undefined,
+              limit,
+              archived,
+              sourceKinds: projectId ? ['cli', 'appServer', 'vscode'] : undefined,
+              modelProviders: [],
+              sortKey: this.driver.supports('conversationSort') ? sort : undefined,
+            },
+            remaining,
+          )
+          .then(pageFromNative);
+      let page = await loadPage(remaining);
       signal?.throwIfAborted();
+      if (indexed && !cursor && !page.data.length) {
+        indexed = false;
+        page = await loadPage(Math.max(1, deadline - Date.now()));
+        signal?.throwIfAborted();
+      }
       const data: NativeConversationPage['data'] = [];
       const ids = new Set<string>();
       for (const value of page.data) {
         scanned++;
         const row = nativeConversation(value);
-        if (!row || (cwd && row.cwd !== cwd) || ids.has(row.id)) continue;
+        const matchesCwd = Array.isArray(cwdFilter)
+          ? !!row && cwdFilter.includes(row.cwd)
+          : !cwdFilter || row?.cwd === cwdFilter;
+        if (!row || !matchesCwd || ids.has(row.id)) continue;
         ids.add(row.id);
+        const matchesSearchContext =
+          !projectId &&
+          !!search &&
+          matchesConversationText(search, row.preview, row.id, row.gitBranch, row.cwd);
+        if (!projectId && !matchesSearchContext && !matchesConversationText(search, row.title))
+          continue;
         const summary = this.metadata.observe(row, archived, revision, projectId);
         if (
           !!summary.archived === archived &&
-          (serverSearch || summary.title.toLowerCase().includes(search.toLowerCase()))
+          (matchesSearchContext || matchesConversationText(search, summary.title))
         )
-          data.push({ ...summary, cwd: row.cwd, createdAt: row.createdAt });
+          data.push({
+            ...summary,
+            cwd: row.cwd,
+            createdAt: row.createdAt,
+            gitBranch: row.gitBranch,
+            matchesSearchContext: matchesSearchContext || undefined,
+          });
       }
       if (page.nextCursor && seen.has(page.nextCursor))
         throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
       const nextCursor = page.nextCursor
-        ? Buffer.from(JSON.stringify({ filters, cursor: page.nextCursor })).toString('base64url')
+        ? Buffer.from(JSON.stringify({ filters, cursor: page.nextCursor, indexed })).toString(
+            'base64url',
+          )
         : null;
       if (data.length || !nextCursor || pageNumber === 3) return { data, nextCursor, scanned };
       cursor = page.nextCursor!;

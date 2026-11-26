@@ -48,7 +48,7 @@ export async function installedCodexVersion(binary: string) {
 
 function methods(schema: unknown) {
   if (!record(schema) || !Array.isArray(schema.oneOf)) throw new Error('Invalid App Server schema');
-  const result = new Map<string, Set<string>>();
+  const result = new Map<string, Record<string, unknown>>();
   for (const variant of schema.oneOf) {
     if (!record(variant) || !record(variant.properties)) continue;
     const name = variant.properties.method?.enum?.[0];
@@ -56,9 +56,24 @@ function methods(schema: unknown) {
     let params = variant.properties.params;
     if (typeof params?.$ref === 'string')
       params = schema.definitions?.[params.$ref.split('/').at(-1)];
-    result.set(name, new Set(Object.keys(params?.properties ?? {})));
+    const properties = { ...params?.properties };
+    if (name === 'thread/list' && Object.hasOwn(properties, 'cwd'))
+      properties.cwd = allowsArray(properties.cwd, schema.definitions);
+    result.set(name, properties);
   }
   return result;
+}
+
+function allowsArray(value: unknown, definitions: unknown, depth = 0): boolean {
+  if (!record(value) || depth > 5) return false;
+  if (value.type === 'array') return true;
+  if (typeof value.$ref === 'string' && record(definitions))
+    return allowsArray(definitions[value.$ref.split('/').at(-1)!], definitions, depth + 1);
+  const variants = value.anyOf ?? value.oneOf;
+  return (
+    Array.isArray(variants) &&
+    variants.some((variant: unknown) => allowsArray(variant, definitions, depth + 1))
+  );
 }
 
 export interface NativeProtocol {
@@ -73,8 +88,8 @@ export async function inspectNativeProtocol(
   version: string,
 ): Promise<NativeProtocol> {
   const directory = await mkdtemp(join(tmpdir(), 'codes-protocol-'));
-  let client: Map<string, Set<string>>;
-  let server: Map<string, Set<string>>;
+  let client: ReturnType<typeof methods>;
+  let server: ReturnType<typeof methods>;
   try {
     await execute(
       binary,
@@ -101,7 +116,7 @@ export async function inspectNativeProtocol(
   }
   const supports = (method: string, fields: string[] = []) => {
     const shape = client.get(method);
-    return !!shape && fields.every((field) => shape.has(field));
+    return !!shape && fields.every((field) => Object.hasOwn(shape, field));
   };
   for (const [method, fields] of Object.entries(mandatory)) {
     if (!supports(method, fields))
@@ -124,6 +139,9 @@ export async function inspectNativeProtocol(
     conversationSearch: supports('thread/list', ['searchTerm']),
     conversationIdFilter: supports('thread/list', ['includedThreadIds']),
     conversationSort: supports('thread/list', ['sortKey']),
+    conversationRepository: client.get('thread/list')?.cwd === true,
+    conversationAccountScope: supports('thread/list', ['currentAccountOnly']),
+    conversationIndexedList: supports('thread/list', ['useStateDbOnly']),
     itemHistory: supports('thread/items/list', [
       'threadId',
       'turnId',

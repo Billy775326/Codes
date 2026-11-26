@@ -781,6 +781,13 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Search archives': '搜索归档',
   'Search projects and chats': '搜索项目和会话',
   'Search conversations': '搜索会话',
+  Repo: '仓库',
+  'Linked Git worktrees': '关联的 Git 工作树',
+  'Linked worktrees are unavailable. Choose Cwd or All.':
+    '关联工作树不可用，请选择当前目录或全部。',
+  'Restore and resume {title}': '恢复并继续 {title}',
+  'Preview {title}': '预览 {title}',
+  'Preview archived conversation': '预览归档会话',
   All: '全部',
   'Send message': '发送消息',
   'Send shortcut': '发送快捷键',

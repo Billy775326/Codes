@@ -1364,6 +1364,10 @@ function App() {
           connection={connection}
           disabled={busy}
           supportsCreatedSort={system?.capabilities?.conversationSort !== false}
+          supportsRepositoryScope={
+            system?.runtime === 'mock' || system?.capabilities?.conversationRepository === true
+          }
+          accountScoped={system?.capabilities?.conversationAccountScope === true}
           onNew={newThread}
           onSelect={select}
           onUpdated={conversationUpdated}

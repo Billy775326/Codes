@@ -4,9 +4,9 @@ Codes lists conversations through the running Codex App Server. Use the same Lin
 
 ## Browse and continue work
 
-1. Open **All** for sessions across directories or **Cwd** to filter to the current working directory.
-2. Choose **Active** or **Archived**. Search by title or use the native pagination controls.
-3. Select a conversation to open its history. A new conversation starts as a draft and receives a native thread ID on first send.
+1. **Cwd** opens by default when a working directory is available. Use **All** for sessions across directories or **Repo** for linked Git worktrees when the installed CLI supports the filter.
+2. Choose **Active** or **Archived**. Search by name, first-message preview, ID, Git branch, or working directory. Newer CLI versions restrict the list to sessions visible to the current Codex account.
+3. Select a conversation to open it. Selecting an archived conversation first restores it through Codex. Use the preview icon to read it while archived. A new draft receives a native thread ID on first send.
 
 Switching conversations restores unsent text and leaves live work running. See the [sidebar design](conversation-sidebar.md) for summary and status behavior.
 
@@ -18,11 +18,11 @@ An existing conversation uses the working directory returned by Codex for effect
 
 ## Rename, archive, and restore
 
-| Action  | Where to find it               | Result                                                               |
-| ------- | ------------------------------ | -------------------------------------------------------------------- |
-| Rename  | Next to the conversation title | Updates the native title                                             |
-| Archive | Archive icon on the row        | Runs the native archive operation and keeps the conversation history |
-| Restore | Restore icon in **Archived**   | Runs native unarchive and returns the conversation to **Active**     |
+| Action  | Where to find it                      | Result                                                               |
+| ------- | ------------------------------------- | -------------------------------------------------------------------- |
+| Rename  | Next to the conversation title        | Updates the native title                                             |
+| Archive | Archive icon on the row               | Runs the native archive operation and keeps the conversation history |
+| Restore | Select a conversation in **Archived** | Runs native unarchive and opens the conversation in **Active**       |
 
 Codex may also archive conversations started from the selected thread. Active work, pending interactions, unknown receipts, or waiting deliveries can block archiving. Restore an archived conversation before sending new work. [Queue controls](conversation-workflow.md#manage-the-fifo-queue)
 
@@ -40,4 +40,4 @@ The SQLite snapshot covers Codes metadata. Codex history and credentials stay in
 
 ## Reference decisions
 
-Native management follows the [Codex App Server](https://learn.chatgpt.com/docs/app-server) contracts. Workflow references and validation are recorded in the [IDE audit](ide-parity.md) and [acceptance guide](acceptance.md).
+Session navigation follows the [Codex CLI resume picker](https://github.com/openai/codex/blob/rust-v0.172.0/codex-rs/tui/src/resume_picker.rs). Native management follows the [Codex App Server](https://learn.chatgpt.com/docs/app-server) contracts. Workflow references and validation are recorded in the [IDE audit](ide-parity.md) and [acceptance guide](acceptance.md).
