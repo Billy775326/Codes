@@ -150,7 +150,7 @@ test('edits network settings and Cloudflare Access on a narrow screen', async ({
     await expect(dialog.getByRole('alert')).toContainText('Allowed address 1');
     await addresses.fill('http://127.0.0.1:8787\nhttps://codes.example.test');
     await save.click();
-    await expect(dialog.getByRole('status')).toContainText('Restart Codes to apply');
+    await expect(dialog.locator('.settings-footer-status')).toContainText('Restart Codes to apply');
     expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
     await open();
