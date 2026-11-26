@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { projectFileLimits } from '../shared/project-files';
 import { ApiError, message, reportAuthenticationError, request } from './api';
 import { projectFileUrl } from './file-browser';
@@ -20,7 +20,6 @@ export function ProjectFileControls({
   toolbar: (add: React.ReactNode) => React.ReactNode;
 }) {
   const { t } = useInterfaceLanguage();
-  const uploadHint = useId();
   const picker = useRef<HTMLInputElement>(null);
   const add = useRef<HTMLDetailsElement>(null);
   const xhr = useRef<XMLHttpRequest | null>(null);
@@ -154,15 +153,10 @@ export function ProjectFileControls({
             type="button"
             data-close-menu
             disabled={busy}
-            aria-label={t('Upload to this folder')}
-            aria-describedby={uploadHint}
             onClick={() => picker.current?.click()}
           >
             <Icon name="upload" size={14} />
-            <span className="menu-action-copy">
-              {t('Upload to this folder')}
-              <small id={uploadHint}>{t('Any file type · 64 MiB max')}</small>
-            </span>
+            {t('Upload to this folder')}
           </button>
           <button type="button" data-close-menu disabled={busy} onClick={() => begin('folder')}>
             <Icon name="folder" size={14} />

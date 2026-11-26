@@ -74,7 +74,7 @@
 .app .composer-attachment-menu .panel-menu-content {
   left: 0;
   right: auto;
-  width: min(248px, calc(100vw - 48px));
+  width: min(198px, calc(100vw - 48px));
   padding: 5px;
 }
 .app .permission-menu {

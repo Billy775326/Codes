@@ -2124,23 +2124,10 @@ function App() {
                   <button
                     type="button"
                     data-close-menu
-                    aria-label={t('Upload from device')}
-                    aria-describedby="composer-upload-formats"
                     onClick={() => localAttachments.picker.current?.click()}
                   >
                     <Icon name="upload" size={16} />
-                    <span className="menu-action-copy">
-                      {t('Upload from device')}
-                      <small id="composer-upload-formats">
-                        {t('UTF-8 text · 64 KiB max')}
-                        <br />
-                        {t('PNG, JPEG, WebP · 8 MiB max')}
-                        <br />
-                        {t('PDF, Word, and other files · 64 MiB max')}
-                        <br />
-                        {t('Saved in the project’s codes-attachments folder')}
-                      </small>
-                    </span>
+                    {t('Upload from device')}
                   </button>
                   <button type="button" data-close-menu onClick={() => setPanel('files')}>
                     <Icon name="folder" size={16} />

@@ -39,9 +39,7 @@ test('the plus menu attaches text, local documents, and a file from the project'
   await trigger.click();
   const upload = page.getByRole('button', { name: 'Upload from device', exact: true });
   const browse = page.getByRole('button', { name: 'Browse project files', exact: true });
-  await expect(upload).toHaveAccessibleDescription(/UTF-8 text · 64 KiB max/);
-  await expect(upload).toContainText('PNG, JPEG, WebP · 8 MiB max');
-  await expect(upload).toContainText('PDF, Word, and other files · 64 MiB max');
+  await expect(upload).toHaveText('Upload from device');
   const chooser = page.waitForEvent('filechooser');
   await upload.click();
   await (

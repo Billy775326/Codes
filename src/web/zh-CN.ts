@@ -607,7 +607,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Preview {file}': '预览 {file}',
   'Upload or create': '上传或新建',
   'Upload to this folder': '上传到此目录',
-  'Any file type · 64 MiB max': '任意文件类型 · 最大 64 MiB',
   'New folder': '新建文件夹',
   'Folder name': '文件夹名称',
   'Create folder': '创建文件夹',
@@ -830,10 +829,6 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Unsubmitted edit': '未提交的编辑',
   'Updated: {time}': '更新于 {time}',
   'Upload from device': '从设备上传',
-  'UTF-8 text · 64 KiB max': 'UTF-8 文本 · 最大 64 KiB',
-  'PNG, JPEG, WebP · 8 MiB max': 'PNG、JPEG、WebP · 最大 8 MiB',
-  'PDF, Word, and other files · 64 MiB max': 'PDF、Word 等文件 · 最大 64 MiB',
-  'Saved in the project’s codes-attachments folder': '原文件存入项目的 codes-attachments 目录',
   'Choose a non-empty file.': '请选择非空文件。',
   'Upload was not confirmed. Check the codes-attachments folder before retrying.':
     '上传结果未确认，请先检查项目的 codes-attachments 目录再重试。',

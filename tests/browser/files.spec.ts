@@ -179,7 +179,7 @@ test('manages a project folder and references a file larger than the preview lim
     await add.click();
     const chooser = page.waitForEvent('filechooser');
     const upload = panel.getByRole('button', { name: 'Upload to this folder', exact: true });
-    await expect(upload).toHaveAccessibleDescription('Any file type · 64 MiB max');
+    await expect(upload).toHaveText('Upload to this folder');
     await upload.click();
     await (
       await chooser

@@ -96,7 +96,7 @@
 
 ### Changed
 
-- Upload PDF, Word, spreadsheets, archives, and other local files from the composer. Codes saves the original in the project and adds a file reference to the draft. Both upload menus show their size limits.
+- Upload PDF, Word, spreadsheets, archives, and other local files from the composer. Codes saves the original in the project and adds a file reference to the draft. Upload menus show the available actions, and oversized files report the applicable limit.
 
 - Simplify the composer prompts and settings menus. Find native model, reasoning, and permission controls under **Execution** in Settings.
 
