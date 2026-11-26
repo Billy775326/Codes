@@ -1,23 +1,26 @@
-# codes: philosophy and identity
+# Codes design and identity
+
+[简体中文](zh-CN/brand.md)
 
 **codex no cli = codes**
 
-codes brings Codex into a self-hosted browser workspace. Everyday work should flow through conversations, planning, approvals, queues, and change review without requiring the user to operate a terminal. The phrase expresses the product experience: Codex CLI and its App Server still execute the work.
-
-[中文说明](zh-CN/brand.md)
+The phrase describes everyday use. Open Codex in a self-hosted browser workspace and use one flow for projects, conversations, approvals, queues, and change review. Codex CLI and App Server run on the host.
 
 ## Design principles
 
-- **One clear workflow.** Group project selection, conversation management, task input, and change review by purpose. Use layout and explicit state before adding explanatory copy.
-- **Native execution.** Preserve Codex task, permission, approval, and planning behavior through structured App Server messages.
-- **Simple parts.** Reuse components and state sources. Keep presentation, execution, subscriptions, receipts, and storage responsibilities clear.
-- **Trustworthy state.** Distinguish task progress, required responses, queue conditions, and connection health. An uncertain receipt needs reconciliation before another send.
-- **Clear operations for people and agents.** Retain semantic names, keyboard access, selected state, recoverable errors, and bounded data loading.
+- Group controls by what they let the user do. Use layout and clear state for routine actions and keep recovery instructions where a decision needs them.
+- Preserve native task, permission, approval, and planning behavior.
+- Keep the distinction between task progress, input requests, queue state, and connection state.
+- Keep names, focus, and keyboard actions available to people and agents.
 
-These principles guide implementation choices; they do not promise that every Codex surface feature is already available in codes. The README and acceptance documents track actual support.
+The [interface design](interface-design.md) describes how these principles apply to implementation.
 
 ## Identity assets
 
-The project owner supplied the approved V3 identity in `codes-logo-v3`. The sidebar and login use the original icon and outlined **Codes** wordmark. The interface uses the wordmark outline as a mask so it follows the surrounding foreground color. The browser favicon uses the standalone icon.
+The owner supplied the V3 identity. Navigation and sign-in use the original icon and outlined wordmark. The wordmark follows the interface foreground color. The standalone icon is the favicon.
 
-Production assets are `public/brand/codes-lockup-dark.svg`, `codes-lockup-light.svg`, and `codes-icon.svg`. They are copied into each build; the source is the owner-provided V3 package, not an earlier candidate gallery. Keep these originals unchanged. The outlined wordmark derives from Inter; its font license is preserved in `LICENSES/OFL-Inter.txt`. This attribution does not assign a license to the application's source code. Earlier candidate galleries are review archives, not the current identity.
+- [Light lockup](../public/brand/codes-lockup-light.svg)
+- [Dark lockup](../public/brand/codes-lockup-dark.svg)
+- [Standalone icon](../public/brand/codes-icon.svg)
+
+Preserve the approved assets. The wordmark derives from Inter. The [Inter license](../LICENSES/OFL-Inter.txt) covers its font attribution. See the [README](../README.md) for the application source licensing status.

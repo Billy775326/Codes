@@ -1,169 +1,78 @@
-# codes
+# Codes
 
-A self-hosted web workspace for Codex CLI on Linux, with an IDE-inspired interface. Use a desktop browser to work with conversations and file context, and a phone to check progress and approve requests.
+A self-hosted web UI for Codex CLI on Linux. Manage projects and chats, approve actions, preview files, and review code changes from your browser.
 
-**Status: an initial development preview, not a released product.** The interface and recovery flows have automated simulator coverage. Real CLI metadata has a separate smoke check, and an isolated live read/write/interrupt pilot has passed. Real approval-policy variants and deployment acceptance remain open gates. See the [acceptance plan](docs/acceptance.md).
+[简体中文](docs/README.zh-CN.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md)
 
-## Design philosophy
-
-**codex no cli = codes**
-
-Use Codex through a browser, without operating a terminal for everyday work. Conversations, approvals, planning, queues, and change review should form one clear Web workflow. Codex CLI and its App Server remain the execution engine; “no cli” describes the user experience.
-
-Keep the interface, architecture, and implementation simple. Let layout and explicit state explain the workflow, preserve native behavior, and make operations clear to people and agents. See the [design philosophy](docs/brand.md) ([中文](docs/zh-CN/brand.md)).
-
-## Identity
+<a id="identity"></a>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="public/brand/codes-lockup-dark.svg">
-  <img alt="Codes V3 identity" src="public/brand/codes-lockup-light.svg" width="280" height="96">
+  <img alt="Codes" src="public/brand/codes-lockup-light.svg" width="280" height="96">
 </picture>
 
-The owner-provided V3 SVG identity is active in navigation, sign-in, and the favicon. The outlined wordmark follows the interface foreground color. See [identity assets and attribution](docs/brand.md#identity-assets).
+Codes is an independent, single-owner development preview. Codex App Server runs on your Linux host under your existing Codex account. The browser handles conversations, project navigation, and review. Closing a tab leaves active work running on the host.
 
-## What is implemented
-
-- Projects backed by existing server directories, with lightweight single/multiple-project navigation, per-project last-conversation views, and server-verified conversation/file ownership. Missing directories retain history and offer explicit recovery. See [project and conversation navigation](docs/session-navigation-proposal.md).
-- Native Codex conversations, streamed assistant text, and turn-level work history with intermediate commentary and tool activity collapsed after completion, visible failure counts, and the final answer and edited-files card outside.
-- Searchable, paginated conversation navigation with task/approval/question status, queue conditions, local update times, and native rename, archive, and restore controls. See [sidebar behavior](docs/conversation-sidebar.md).
-- Native **Approve for me** permissions with workspace sandboxing, separate from Full access; live reviewer outcomes and rationale when supplied by Codex.
-- Context-compaction progress, completion, and interruption within the existing task lifecycle.
-- Command, file, and turn-scoped permission approvals; proactive native questions in Code and Plan, with choices, custom answers, secret inputs, and explicit skipping for optional questions.
-- Quoted follow-up drafts, compact durable FIFO queue cards, immediate native steering, and conversation branches through completed turns. Confirmed deliveries leave the queue immediately while task status stays in the conversation. Edit waiting text in the composer area without replacing a separate unsent draft; editing pauses the queue until you resume it.
-- Effective Codex execution settings with a revision-checked user configuration editor. The composer shows the project settings and selects Plan or Execution. See [settings behavior](docs/conversation-settings.md).
-- Edit Codex global instructions under Settings → Projects. Codes opens the active `AGENTS.override.md` or `AGENTS.md` in the server account’s Codex home. Reload the file if it changes on disk while editing.
-- Native Execution/Plan modes, model-specific reasoning effort, Fast speed control, task-plan steps, inline/separate code reviews, and session/context-token status.
-- A browser workspace with persistent desktop project/conversation navigation, central chat, right-side file/change previews, larger text and controls, and dark/light/system themes.
-- IDE-style model/reasoning controls, edited-file cards, questions, approvals and follow-up actions within that Web layout.
-- Browser interaction preferences for Enter, queue/steer inversion, review delivery, and local slash commands.
-- English and Simplified Chinese interface languages in Settings → General → Appearance. English is the default. The language choice is saved in the browser and applies to app controls, not conversation content.
-- Manage the current project's files from **Browse files**. Upload, create folders, download, and reference files from the composer. **Open server path** browses readable server paths and shows a warning outside the usual project file scope. See [project files](docs/conversation-details.md#manage-project-files).
-- Upload local documents, text, and images from the composer plus menu, or browse project files. Paste images directly and preview or remove attachments before sending, queueing, or adding to a turn. See [composer attachments and limits](docs/image-attachments.md).
-- Per-file patch previews with line numbers, change counts, unified/side-by-side layouts, earlier loaded turns, and bounded patch windows; paginated native conversation history.
-- Browser reconnection through snapshots and bounded event replay.
-- Durable operation receipts that block duplicate sends after an uncertain result.
-- A responsive interface, workspace access token, and host-side Codex authentication.
-- An explicit simulation runtime that executes no models or commands.
-
-The server talks to the [Codex App Server](https://learn.chatgpt.com/docs/app-server) over stdio JSONL. It does not parse the interactive terminal UI. Closing a browser does not stop an active task; stopping the codes service does interrupt its CLI process.
-
-## Requirements
-
-- Linux, Node.js **24.19 or newer in the 24.x line**, and npm.
-- Codex CLI with a compatible App Server, already installed and signed in as the server user for real tasks.
-- A current browser. Mobile is intended primarily for viewing and approval.
-
-Codes checks the installed CLI’s generated App Server protocol. CLI 0.166.0, 0.167.0, 0.168.0, and 0.172.0 have metadata smoke coverage. Install Codex with `npm install --global @openai/codex`, then follow the [official CLI login instructions](https://learn.chatgpt.com/docs/codex/cli). codes does not copy or expose your CLI credentials.
+<a id="requirements"></a>
 
 ## Run locally
 
-From the repository directory:
+You need Linux, Node.js 24.19 or newer in the 24.x line, npm, and a current browser. Install Codex CLI and sign in as the Linux user who will run Codes. [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
+
+Run these commands from the repository checkout with an existing project directory.
 
 ```bash
 npm ci
 npm run build
-CODES_PROJECT_ROOT=/absolute/path/to/your/project npm start
+CODES_PROJECT_ROOT=/absolute/path/to/project npm start
 ```
 
-Open **http://127.0.0.1:6670**. Sign in using the value in `.local/access-token` (read it on the server with `cat .local/access-token`). Codes prints the path when it first generates the file. Keep its contents private. Projects can also be added through the interface.
+Open [http://127.0.0.1:6670](http://127.0.0.1:6670) and enter the workspace token stored on the host in `.local/access-token`. Use **Add project** to register more directories. The Codes token signs in to the browser workspace. Codex authentication belongs to the Linux account.
 
-To start with a `codes` command from any directory, install the local launcher once using Node 24.x:
+<a id="remote-access"></a>
+
+For access from another machine, use SSH forwarding or configure a dedicated HTTPS origin. [Network and access](docs/operations.md#network-and-access)
+
+### Install the launcher
 
 ```bash
 npm run install:command
-codes
 ```
 
-The installer creates `~/.local/bin/codes`; add `~/.local/bin` to your shell's `PATH` if needed. It pins the Node executable used during installation and points to this checkout, so keep both paths in place. It refuses to replace a different existing command. Set `CODES_BIN_DIR` during installation to choose another command directory.
+Add `~/.local/bin` to your PATH, then run `codes` from any directory. It starts the same checkout in the foreground. [Launcher, data directory, and environment](docs/configuration.md)
 
-`codes` starts in the foreground, uses this checkout's `.local` directory by default, and keeps the default port 6670. Press Ctrl+C to stop. Existing `CODES_*` configuration still applies; relative paths supplied through the environment resolve from your calling directory. Use `codes --help` for usage. The launcher requires an existing build, does not rebuild or restart a running instance, and uses the same data-directory lock as `npm start`.
-
-If the data directory is already in use, `codes` prints a concise message with the directory and lock owner PID instead of a JavaScript stack trace, then exits with status 1. Use the existing workspace. It leaves the running process and lock intact, including when a live unrelated process owns that lock; inspect the owner before attempting a manual restart.
-
-For a simulation without Codex or an account:
+### Try the workspace without a Codex login
 
 ```bash
 CODES_RUNTIME=mock CODES_DATA_DIR=.local/demo CODES_PROJECT_ROOT="$PWD" npm start
 ```
 
-The UI clearly labels simulation mode. Send `[approve]` or `[question]` to exercise an interaction, or `[slow]` to try stopping and reconnecting. `[hold]` keeps a simulated turn active until explicit Stop for deterministic cancellation checks. These markers have no special meaning in real Codex mode.
+Simulation marks the workspace and uses synthetic turns. Try `[approve]`, `[question]`, or `[hold]` to exercise approvals, questions, and Stop. Use a free listener port if another instance is running. [Development and checks](docs/development.md)
 
-For development, run `npm run dev` after installing dependencies. It serves the UI and API on the same origin with Vite middleware.
+## What is implemented
 
-## Remote access
+- Organize existing Linux directories and native Codex chats as project cards. Search, rename, archive, restore, and resume conversations. [Projects and chats](docs/conversations.md)
+- Send or queue a message, add it to a running turn, answer native questions, and branch through a completed turn. [Working with Codex](docs/conversation-workflow.md)
+- Set effective Codex execution options and choose Plan or Execution. [Execution configuration](docs/conversation-settings.md)
+- Upload files from the composer or Files. Preview source, images, HTML, Word text, and PDF pages, and inspect the changes recorded in a Codex turn. [Files and changes](docs/conversation-details.md)
+- Use the desktop or phone layout with English or Simplified Chinese, themes, optional browser notifications, and saved preferences. [Workspace settings](docs/configuration.md)
 
-The default listener is loopback only. For desktop access over SSH:
-
-```bash
-ssh -L 6670:127.0.0.1:6670 you@your-linux-host
-```
-
-Then open `http://127.0.0.1:6670` on your computer. Phone access requires a private HTTPS reverse proxy or private network with HTTPS. Add the exact browser origin in **Settings → Network & access** and preserve its `Host` header when proxying. See [operations](docs/operations.md#network-and-access).
-
-This is a **single-owner workspace**. Codex resolves execution permissions for each registered project. **Settings → Execution** displays the effective values and edits the native user configuration. The composer summarizes those values and lets you choose Execution or Plan for the next task. Use `/plan` to switch modes.
-
-## Configuration
-
-Set environment variables in the process environment; the application does not automatically load `.env` files.
-
-| Variable              | Default                            | Purpose                                                       |
-| --------------------- | ---------------------------------- | ------------------------------------------------------------- |
-| `CODES_RUNTIME`       | `codex`                            | `codex` or `mock`                                             |
-| `CODES_HOST`          | `127.0.0.1`                        | Loopback address used before saving network settings          |
-| `CODES_PORT`          | `6670`                             | Initial listener port, 1–65535                                |
-| `CODES_PUBLIC_ORIGIN` | Local origins on the listener port | Exact initial browser origin when specified                   |
-| `CODES_DATA_DIR`      | `.local`                           | Private database, token, lock, and simulator data             |
-| `CODES_PROJECT_ROOT`  | unset                              | Register a directory at startup and prefill it in Add project |
-| `CODES_CODEX_BINARY`  | `codex`                            | CLI executable path                                           |
-| `CODES_ACCESS_TOKEN`  | generated token file               | Optional access token, minimum 16 characters                  |
-
-Codex inherits the server user's environment and `CODEX_HOME`. Run codes as the intended user, not as root by default. Keep the same CLI login and filesystem access you would use from the command line.
-
-The Code question setting applies only to the child app-server process, using the pinned CLI's experimental feature. It does not edit global Codex configuration or make every prompt ask questions. Codex chooses when clarification is useful; suggested answers are sent only after you submit. Optional questions can be explicitly skipped, and required Plan questions cannot. See [conversation details](docs/conversation-details.md) for question and patch-preview behavior and limits.
-
-## Checks
-
-```bash
-npm run format:check
-npm run check
-npm test
-npm run test:e2e
-npm run test:native
-```
-
-Install a test browser first with `npx playwright install chromium`. Alternatively, set `CODES_CHROME` to an existing Chrome executable. Browser tests use a temporary project, a test-only token, and the simulation runtime. `test:native` uses the installed compatible CLI (or `CODES_CODEX_BINARY`) and an isolated temporary `CODEX_HOME`; it sends no prompts or model requests.
-
-The opt-in live pilot uses the server's existing login and model quota, edits only a disposable fixture, and leaves native acceptance conversations:
-
-```bash
-npm run test:live -- --allow-model-requests
-```
-
-For the read-only local IDE pilot (Plan/Code, reasoning, same-turn steering, token usage and native review):
-
-```bash
-npm run test:live:ide -- --allow-model-requests
-```
-
-Both pilots are excluded from CI and the default test command. Unexpected approvals are refused; use the manual pilot for policy-dependent approval flows.
+<a id="configuration"></a>
 
 ## Documentation
 
-- [Spec Coding: Codex execution configuration](docs/spec-coding.md)
-- [Architecture and decisions](docs/architecture.md)
-- [Project and conversation navigation](docs/session-navigation-proposal.md)
-- [Interface structure and UX/DX/AX criteria](docs/interface-design.md)
-- [Small-scale acceptance and current evidence](docs/acceptance.md)
-- [Development milestones](docs/roadmap.md)
-- [Remaining implementation and acceptance](docs/requirements.md)
-- [Conversation management](docs/conversations.md)
-- [Questions, queues, and branches](docs/conversation-workflow.md)
-- [Clarifications and file-change previews](docs/conversation-details.md)
-- [IDE interaction alignment and remaining differences](docs/ide-parity.md)
-- [Operations and recovery](docs/operations.md)
-- [Changelog](CHANGELOG.md)
-- [中文说明](docs/README.zh-CN.md)
+| Goal                                    | Guide                                                                       |
+| --------------------------------------- | --------------------------------------------------------------------------- |
+| Run, back up, or recover a workspace    | [Operations](docs/operations.md)                                            |
+| Configure Codes and Codex               | [Configuration](docs/configuration.md)                                      |
+| Build or test a change                  | [Development](docs/development.md)                                          |
+| Understand the implementation           | [Architecture](docs/architecture.md) and [Spec Coding](docs/spec-coding.md) |
+| See current coverage and remaining work | [Acceptance](docs/acceptance.md) and [Roadmap](docs/roadmap.md)             |
 
-The project has no release tags or published packages. No license has been selected yet; public visibility alone does not grant a software license.
+## Checks
 
-codes is an independent project and is not affiliated with OpenAI. Reference interfaces: [Codex CLI](https://learn.chatgpt.com/docs/codex/cli) and [Codex IDE extension](https://learn.chatgpt.com/docs/codex/ide).
+Use the documented [development checks](docs/development.md) for format, types, build, simulator coverage, and the native App Server metadata smoke. The [CI workflow](.github/workflows/checks.yml) lists the tested CLI versions.
+
+<a id="design-philosophy"></a>
+
+See [brand and attribution](docs/brand.md) for the identity assets and their font license. The application source has no selected software license.

@@ -1,43 +1,33 @@
 # Conversation sidebar
 
-The sidebar groups native conversations under their registered projects. Each project remembers its last conversation or explicit new-draft view in this browser; switching retains independent conversation text drafts and server-backed settings. See [directory ownership and recovery](session-navigation-proposal.md). It uses the existing task state, durable execution receipts and FIFO queue, with a lightweight metadata projection. It does not introduce a second execution state machine.
+The sidebar displays lightweight project and conversation summaries. Open [Projects and chats](conversations.md) for the user workflow.
 
 ## Layout
 
-1. The archive icon opens a focused view with an **Archived** back button, refresh, and archive search. Archived projects appear first, followed by active projects with archived conversations. Search by project name to see its conversations, or by conversation title to find matches across projects.
-2. Pinned projects appear first within each group. Cards follow their latest observed conversation update, with empty projects last in name order. Inactive projects default to collapsed in the main sidebar. The current project and projects with ongoing work open by default. The chevron stays to the left of the project name and toggles its conversations. The browser remembers manual choices in the main sidebar. Archive cards open by default and can be folded independently. Search temporarily keeps matching cards open. The name also opens a collapsed card. In an open card, the name restores its last view. In the main sidebar, the plus button starts a conversation there and the actions button expands rename, pin, and archive controls. Renaming changes the workspace label while keeping the directory and existing conversations.
-3. Each open card lists conversations by latest update in a continuous list. Each row keeps its timestamp, task outcome, and queue condition, with a direct archive or restore button. Ready stays in the accessible description. Each card has its own native Previous / Next pagination. Rename the selected conversation next to its title in the workspace header.
-4. The folder-plus button above the project list opens Add project. The path starts with the default directory saved in Settings → Projects. When that field is empty, Codes uses `CODES_PROJECT_ROOT` or the Codes installation directory. Edit it to use another existing server directory and optionally provide a display name. Adding a registered directory selects its project, including when the supplied path is a symlink to that directory. The empty workspace offers one Add project entry. Refresh projects and chats updates the sidebar list. The footer contains connection status, Settings, and Sign out. Reconnect updates appears beside the connection status when the live feed needs attention.
-
-Use **Archive project** to move a project to the archive view, including when it has no chats. Use the **Archived chats** and **Active chats** buttons to browse its conversations. Use **Restore project** in the card header to return it to the main sidebar. Project archiving keeps the directory, chat archive flags, queued work, and direct links. Adding an already registered directory keeps its archive state. All browser windows share the saved archive state.
-
-Settings appears in the footer when navigation is open, and in the conversation header when it is closed. The layout removes duplicate connection controls and routine state labels without removing recovery actions or archived conversations.
-
-Search uses native cursors, including conversations beyond the local 200-summary window. There are no global counts, page-only task filters presented as global filters, automatic history loads for individual rows, or per-row event connections. Times use native/server `updatedAt` in milliseconds, rendered in the browser's timezone with a full timestamp tooltip. Status-only refreshes do not advance this timestamp.
+- Show one card per registered project. Within a group, pinned projects come first, then projects by the latest observed conversation update. Empty projects follow in name order.
+- Open the current project and active work by default. Fold inactive cards and remember explicit user choices. Load a folded project's conversation page when needed.
+- Show each conversation's status and update time. Render times in the browser's timezone with a full timestamp on hover. Keep page cursors within their project.
+- Put new conversation and project actions on the card. Rename the selected conversation in the workspace header and archive or restore from the row.
+- Use the archive view for archived projects and archived conversations. A project's archive state is independent of its chats' archive state.
+- Share title search and refresh across the visible project navigation. Native pagination reaches beyond the local summary snapshot. Each card brings in metadata without loading its conversations' message bodies.
 
 ## State sources and precedence
 
-| Source                                             | Visible state                                                                            | Behavior                                                                           |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Unknown send/review/steer receipt or queue outcome | Check result                                                                             | Takes precedence over terminal labels; never automatically resends                 |
-| Pending archive receipt                            | Check archive                                                                            | Rename/archive controls remain protected; Check status queries native evidence     |
-| Pending execution with a non-active saved state    | Confirming result                                                                        | Does not present saved completion as a confirmed new result                        |
-| Task state                                         | Ready, Running, Needs approval, Needs answer, Completed, Failed, Stopped, Status unknown | Task and interaction lifecycle updates remain authoritative for owned executions   |
-| Queue aggregate                                    | Count, Paused, Failed, Check result                                                      | Displayed alongside task state; sent/completed/cancelled entries excluded          |
-| Browser connection                                 | Connection status                                                                        | Separate from execution state; disconnect does not mean task failure or completion |
+| Source                                                    | Visible result                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------- |
+| Uncertain send, review, steer, or queued dispatch receipt | **Check result** takes precedence over a terminal label             |
+| Uncertain archive receipt                                 | **Check archive** and protected metadata controls                   |
+| Pending operation with an inactive saved state            | Confirmation state rather than a new success outcome                |
+| Native task and interaction state                         | Ready, running, completed, failed, stopped, or awaiting interaction |
+| Queue aggregate                                           | Waiting count, pause, failure, or uncertain result                  |
+| Browser connection                                        | Separate connection status and reconnect action                     |
 
-The SQLite summary projection reads only aggregate queue/receipt metadata, never queued message bodies. Optional summary fields are additive; schema 4 and stored settings/history remain unchanged. Queue counts include waiting, dispatching and uncertain-delivery entries; confirmed deliveries leave the visible queue while their execution receipts are retained. An empty paused queue has no queue badge.
+Native list observations can update available summaries when there is no owned execution lease or pending interaction. Native idle or unloaded status alone cannot settle an operation. Opening imported history can establish an outcome, which a later stale list result must preserve. Revisions protect newer activity and simultaneous rename or archive updates.
 
-Native `thread/list` observations and `thread/status/changed` update known conversations that have no owned execution lease or pending interaction. `idle` and `notLoaded` do not prove a task completed; existing terminal outcomes are retained, while an unloaded previously active conversation becomes Status unknown. Unknown owned receipts remain protected until existing reconciliation establishes their outcome. Native status payloads are validated before use. Runtime flags are not evidence about a separate Codex process sharing the same account.
-
-Opening an imported conversation records its history-established state in the summary, so refreshing the list cannot return it to an older idle/unknown label. Unfinished receipts stay unknown, and concurrent title/archive changes are retained.
-
-A lifecycle revision prevents a native list response captured before a newer event from overwriting it. The browser likewise merges metadata received while its list request was in flight. The initial project list includes saved conversation activity so card order and folding are available before the first native list reads finish. Folded cards load their conversation page on demand. Search, the archived view, and manual Refresh can query all projects. Queue changes publish the same summary projection and refresh the cached snapshot. A ready connection refreshes open cards' displayed pages with their search and cursor. Cards share a budget of four concurrent list reads. Summary events update the owning project through the existing single project-or-thread subscription, including while another project is selected.
+Project activity is available from the local summary before native list pages finish. Cards share a four-request list budget. Summary events and selected conversation events use the existing workspace subscription. Queue badges use metadata and omit accepted deliveries.
 
 ## Interaction and verification
 
-Conversation buttons retain their title as the accessible name, with status/time/queue information in the accessible description. Selected rows use `aria-current`; actions expose expanded state. Mobile actions stay visible and fit 320px layouts. Dark and light themes share semantic palette tokens. Archive confirmation and rename retain their existing keyboard/modal behavior and execution protections.
+Conversation rows keep the title as the accessible name and expose time, execution, and queue details in their description. The selected item uses `aria-current`. Archive confirmations and keyboard focus remain available in both layouts.
 
-Tests cover state precedence, body-free summary aggregation, native status transitions, delayed-list races, selection/reload, paused queues, narrow layouts, both themes, and reconnect refresh with search preservation. Existing conversation tests retain archive/restore, drafts, two-client synchronization, and native pagination beyond 200 rows. Simulator evidence is separate from actual preview checks and does not establish real model execution acceptance.
-
-Protocol reference: [Codex App Server](https://learn.chatgpt.com/docs/app-server), checked against the local CLI 0.167.0 generated `ThreadStatus` and `ThreadStatusChangedNotification` types. Newer documentation features are not assumed available in this pinned adapter.
+Test precedence, stale-list responses, navigation restore, search, archive behavior, and reconnect with both browser themes. [Interface design](interface-design.md) · [Acceptance](acceptance.md)

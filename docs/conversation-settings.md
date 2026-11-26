@@ -1,19 +1,26 @@
 # Codex execution configuration
 
-Open **Settings → Execution** to see the effective model, reasoning, speed, permissions, and native question settings for the selected project. The composer provides compact permission choices, model and reasoning selectors, and a Fast switch. These controls save to the Codex user configuration and display the effective project values after each write. Project overrides remain visible. Open Settings to edit additional native fields using dropdown presets. Existing custom values remain visible. Use **Task mode** in the composer to choose Plan or Execution for new work.
+Open **Settings → Execution** for the selected project's effective model, reasoning, speed, permission, and native feature settings. The composer exposes the short list used for routine work. The **Task mode** choice controls Plan or Execution for the next task.
 
-The settings editor saves to the Codex user configuration through the App Server. It shows the effective project value after each save. A trusted project can supply its own value. Reload after a concurrent change before editing again. Versions that cannot safely write settings show the effective configuration for inspection.
+A write targets the Codex user configuration through App Server. The editor rereads the effective project values after saving, including overrides and their sources. For example, a trusted project setting can continue to determine the value after you save a user default. Reload after a concurrent change. Unsupported write operations leave the effective values available for inspection.
 
 ## Execution and recovery
 
-Codes creates and resumes threads through the App Server. Effective model, reasoning, service tier, and permissions apply at the next dispatch. Codes refreshes a loaded thread from native runtime metadata when those settings change. Codex reads the Code mode question feature when it loads a native thread. Start a new native conversation to use a changed question setting immediately. Session status displays reported runtime values alongside the next task's effective project settings.
+| Task                                                 | Configuration used                                                               |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| New or resumed conversation, send, review, or branch | Codex's effective configuration for the verified project directory               |
+| Waiting queue entry                                  | Effective configuration at dispatch, checked against the recorded configuration  |
+| Add to current task                                  | The active Codex turn's configuration                                            |
+| Session status                                       | Native runtime values for active work alongside effective values for future work |
 
-Queued messages carry the prompt, attachments, and requested task mode. They resolve execution configuration at dispatch. **Add to current task** uses the active native turn. Inline and separate review use the native review operation, and branches use the native fork operation.
+Codex resolves permissions and managed constraints. In Code mode, native questions depend on the installed CLI and effective feature configuration. Codex reads these features when loading a thread. Start a new conversation to use a changed question setting immediately.
+
+Use **Settings → Projects** for global Codex instructions. See the [configuration reference](configuration.md#settings-by-scope) for browser and Codes server settings.
 
 ## Upgrading
 
-Schema 6 retains old settings, operation receipts, historical execution metadata, and waiting messages. Legacy queues pause with a permission review message. Review the active Codex settings before explicitly resuming. Reopening a conversation or restoring the Codes database leaves its native configuration under Codex ownership. Keep a coordinated backup before rolling back across database schema versions.
+Schema 6 retains old settings, operation receipts, historical execution metadata, and waiting messages. A legacy queue can pause for review when permissions or configuration cannot be safely confirmed. Review the effective Codex settings and resume explicitly. [Migration and rollback](conversations.md#metadata-migration-and-rollback)
 
-The previous settings API remains readable for migration. Edit the new configuration through `GET /api/projects/:id/codex-configuration` and `PUT /api/projects/:id/codex-configuration`. The update carries the native user-layer version and the selected changes. Stale versions return `409 SETTINGS_CONFLICT`.
+The previous settings API remains readable for migration. Use `GET /api/projects/:id/codex-configuration` to read effective settings and `PUT` at the same path for a version-checked write. A stale user-layer version returns `409 SETTINGS_CONFLICT`.
 
-See [Spec Coding](spec-coding.md) for the execution policy and [Codex App Server](https://learn.chatgpt.com/docs/app-server) for the native interface.
+See [execution invariants](spec-coding.md) and the [native App Server interface](https://learn.chatgpt.com/docs/app-server).

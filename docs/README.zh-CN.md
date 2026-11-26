@@ -1,27 +1,30 @@
-# codes 中文说明
+# Codes 中文快速开始
 
-codes 是面向单用户的 Linux 自托管 Codex 网页工作台，电脑浏览器用于日常开发，手机主要用于查看进度和审批。项目主文档、界面和提交信息使用英文。
+Codes 是面向单用户的 Linux 自托管 Codex 网页工作台。可以在浏览器里管理项目与会话、审批操作、查看文件和代码变更。任务由 Linux 主机上的 Codex CLI 执行，关掉浏览器后，正在执行的任务会继续运行。
 
-当前是开发预览，尚未正式发布。已实现会话搜索、分页、重命名、归档与恢复，结构化提问与引用追问、可编辑和暂停的持久消息队列、按完成轮次创建分支，以及流式显示、审批与提问、文件选区上下文、只读变更查看、断线恢复和操作回执。模拟器验收与真实 CLI 元数据检查分开进行；真实模型的隔离读写、历史与停止测试已通过；会实际弹出审批的权限策略、提问及实际部署仍需独立验收。
+[English quick start](../README.md) · [完整文档索引](README.md)
 
-技术路线采用 `codex app-server` 的结构化协议。服务端持有 CLI 进程和任务状态，浏览器负责显示；关闭页面不会停止任务。服务重启会终止自己的 CLI 子进程，未确认结果的操作保留为 unknown，不会自动重发。
+## 安装并启动
 
-会话细节支持 Code/Plan 原生主动提问、必答/可选问题、自定义和保密输入；可选问题可明确跳过，预选项和超时都不会自动当成回答。Code 模式提问遵循当前项目的 Codex 有效配置。文件变更支持逐文件增删统计、行号、统一/并排视图、已加载的历史轮次、审批前预览和长补丁分页；截断会明确提示。这些是只读预览，不包含 Git 暂存或回退。详见[交互说明](conversation-details.md)和[插件对齐审计](ide-parity.md)。
+准备 Linux、Node.js 24.19 或更新的 24.x 版本、npm 和浏览器。在运行 Codes 的 Linux 用户下安装 Codex CLI 并完成登录。[Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
 
-请先按英文 [README](../README.md) 安装 Node 24.x 和 Codex CLI 0.167.0，运行 `npm ci`、`npm run build`，再用 `CODES_PROJECT_ROOT=/绝对项目路径 npm start` 启动。默认地址是 `http://127.0.0.1:6670`，登录令牌保存在 `.local/access-token`。Codex 登录沿用服务端用户，不传给浏览器。
+在 Codes 仓库内运行，替换示例中的项目目录：
 
-也可以在 Node 24.x 环境中执行一次 `npm run install:command`，将启动命令安装到 `~/.local/bin/codes`。确保该目录在 `PATH` 中后，在任意目录执行 `codes` 即可前台启动，按 Ctrl+C 停止。默认沿用本仓库的 `.local` 数据目录和 6670 端口；显式设置的相对配置路径以调用目录为基准。安装器固定使用安装时的 Node 路径和仓库路径，请保留它们；已有服务运行时不会重复启动或自动重启。使用 `codes --help` 查看说明。
+```bash
+npm ci
+npm run build
+CODES_PROJECT_ROOT=/absolute/path/to/project npm start
+```
 
-无需模型即可预览：`CODES_RUNTIME=mock CODES_DATA_DIR=.local/demo CODES_PROJECT_ROOT="$PWD" npm start`。界面会明确显示 Simulation；此模式不调用模型、不执行命令、不修改项目文件。
+打开 [http://127.0.0.1:6670](http://127.0.0.1:6670)，用主机上 `.local/access-token` 中的令牌登录。更多目录可通过侧栏的「添加项目」登记。界面默认英文，在 **Settings → General → Appearance** 可切换为简体中文。
 
-发生断连或回执不确定时，先使用 **Check result**，不要重复发送。未能从原生历史证明结束的操作会继续锁定。远程访问默认建议 SSH 隧道，手机使用需要配置私有 HTTPS 入口。
+执行 `npm run install:command` 可安装 `codes` 前台启动命令。配置文件、环境变量和命令路径见[配置参考](configuration.md)。跨设备访问见[网络与访问](operations.md#network-and-access)。
 
-会话管理参考 IDE 插件和 Covro 的交互方式，通过 Codex 原生接口保存名称与归档状态。归档保留历史和项目文件，恢复后才能继续发送；运行中和结果未知的任务禁止归档。搜索每次扫描有限的原生分页，未找到时可继续下一页。首次从旧数据库升级时，系统会先保存私有备份，再迁移到 schema 6，保留队列、分支回执与审查执行租约。队列在服务重启、任务停止/失败或结果未知时暂停；分支共享当前项目文件，不回退文件。详见英文[会话管理说明](conversations.md)。
+## 使用工作台
 
-模型、速度及权限遵循当前项目的 Codex 有效配置。打开 **设置 → Codex 配置** 查看来源和编辑用户层。压缩上下文期间显示 **Compacting context…**。压缩完成仍属于当前任务，队列等待本轮结束。真实自动审批与长会话压缩尚需单独验收。
+- **项目和会话**。按本机目录管理已有 Codex 会话。支持搜索、归档和恢复。[项目与会话](conversations.md)
+- **执行**。直接发送、排队，或把追问加入当前轮次。模型、速度和权限遵循当前项目的 Codex 有效配置。[会话操作](conversation-workflow.md) · [执行配置](conversation-settings.md)
+- **文件**。从输入框的 `+` 上传，或者从 Files 引用项目文件。Word 支持正文预览，PDF 支持页面预览。[附件](image-attachments.md) · [文件与变更](conversation-details.md)
+- **恢复**。断线后可重连。发送结果不明确时，先用「检查结果」核对原操作。服务重启后，待处理队列会保留并暂停。[运行与恢复](operations.md)
 
-当前标识为项目所有者提供的 V3 Logo，导航、登录与 favicon 已使用原始 SVG；详见[品牌说明](zh-CN/brand.md)。
-
-项目＋会话的双层结构继续保留：单项目显示目录名，多项目使用选择器；每个项目记住本浏览器最近会话或新建草稿视图。文件、附件和执行依据服务端确认的会话归属，切换不取消后台任务。目录失效时保留历史与配置，阻止新的文件访问和执行，恢复后使用 Retry directory；已登记目录失效也不妨碍服务重启查看历史。详见[项目与会话说明](session-navigation-proposal.md)。
-
-更多说明：[架构](architecture.md)、[验收标准](acceptance.md)、[开发里程碑](roadmap.md)、[待实现与待验收清单](requirements.md)、[运行与恢复](operations.md)。正式发版、发布标签和部署须由项目所有者另行确认。
+目前为开发预览。用 `CODES_RUNTIME=mock` 和独立数据目录可在不使用模型的情况下体验界面。真实任务、权限策略和部署的验收范围见[验收说明](acceptance.md)。项目理念和标识来源见[品牌说明](zh-CN/brand.md)。
