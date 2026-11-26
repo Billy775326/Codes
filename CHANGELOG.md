@@ -2,12 +2,16 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-26
+
 ### Added
+
+- Install the Linux x64 or ARM64 release with one command. Release packages include Node.js and verify the download checksum before installation.
 
 #### Workspace and execution
 
 - Run a single-owner Codex web workspace on Linux with the host's CLI login, a simulated runtime for testing, and a foreground `codes` launcher.
-- Browse native Codex conversations across directories or in the selected working directory. Filter active and archived conversations, search titles, and sort by update or creation time. Native rename, archive, and restore keep the same conversation ID.
+- Browse native Codex conversations across working directories. Filter active and archived conversations, search titles, and save a sort preference for recent updates or newest creations. Native rename, archive, and restore keep the same conversation ID.
 - Send, queue, edit waiting messages, pause or resume dispatch, add a draft or waiting message to the active turn, and branch through a completed turn. Durable receipts protect work after disconnects and restarts.
 - Show native Code and Plan questions, including optional input, custom and masked answers, and answer status. Confirmed asynchronous answers remain on the original card.
 - Choose model, reasoning, Fast, permissions, and Plan or Execution using Codex configuration. Use native Auto-review, native code reviews, and reported task-plan and compaction state when supported.
@@ -24,6 +28,11 @@
 
 #### Settings and operations
 
+- Use `codes start`, `codes status`, `codes stop`, and `codes restart` to manage a workspace from the terminal.
+- Use `codes help` for command usage, `codes doctor` for startup and listener checks, and `codes logs -f` for live background logs.
+- Configure send and Tab behavior under **Keyboard**, choose whether new conversations ask for a directory, and restore both sidebar widths from **Layout**.
+- Export browser preferences and sidebar widths as JSON. Review a valid import before applying it in this browser.
+
 - Set English or Simplified Chinese, theme, conversation and code font sizes, sidebar widths, hidden-file visibility, automatic scrolling, and browser notifications.
 - Configure native execution options, Codex global instructions, the listener and allowed origins, sign-in lifetime, network export/import, and the native RPC deadline.
 - Use a private workspace token for Local / Tailscale or add a verified Cloudflare Access assertion. Rotate the file-backed token while existing server tasks continue.
@@ -32,18 +41,32 @@
 
 ### Changed
 
+- Reopen recent folders, small text previews, and the first conversation list page while they refresh. Restore the last reading position when returning to a conversation and share Codex model and mode catalogs across tabs.
+- Group settings by function and show the selected page title above its sections. Collect database backups and restores, network configuration files, and browser preference files under **Backup & restore**. Align controls with their labels and stack dropdowns and numeric fields on narrow panels.
+
 - Use native Codex configuration for effective execution settings. Schema 6 retains legacy metadata and holds affected queue entries for review. Startup makes a private backup before migrating a supported older schema.
 - Add follow-ups to the current turn from the desktop send shortcut by default when eligible. Use Tab to queue or change the default in **Settings → General → Interaction**.
 - Keep workspace controls compact with named icons, keyboard and hover cues, and direct archive, restore, sign-out, status, and review actions. Required choices, task states, and recovery actions remain explicit.
+- Open Files and Changes from one toolbar button and return to the last tab used. Start Codex reviews from Changes.
+- Keep room for the conversation and composer by opening the right panel as a drawer when it cannot dock. Narrow file panels switch between the list and preview. Changes scroll independently and use unified patches when space is limited.
+- Show a conversation's directory in the sidebar when it differs from the current directory. Hover or focus a row to see the full path.
+- Label **New conversation** with a subdued sidebar button, reveal desktop archive actions on selection, hover, or focus, and keep them visible on touch layouts. The sort menu shows and marks the current order. List retry and stream reconnect appear where each failure occurs.
 - Keep settings in browser, workspace, and server scopes. Use a branded sign-in form and print the access-token file path only when the server generates it.
+- Group maintenance and recovery separately from server settings. Show read-only runtime paths when expanded in connection diagnostics.
+- Show settings drafts in navigation and give the instructions editor more room. Save execution, instructions, network, sign-in validity, and CLI settings from the footer, which shows save and restart status.
 - Choose a working directory when starting a new conversation. Files and execution follow the native conversation directory. Existing Codes queues and receipts retain their conversation IDs.
 - Store new installations in the user data directory. Existing installations continue using their configured directory or detected checkout data.
 - Open external web links in new tabs. The default listener remains loopback on port 6670 unless the environment or saved settings choose another port.
 
 ### Fixed
 
+- Edit conversation titles in place without moving the main header tools. The editor uses more of the title row when space is tight.
+- Keep successful and failed tool output collapsed by default while showing failure counts, questions, approvals, and final replies. Keep the pinned turn-message header on one line with both actions available.
+
+- Keep historical image attachments visible after a conversation changes its native working directory.
+- Preserve instructions and CLI setting drafts when reloading after a save conflict. Keep the desktop workspace header aligned on one row.
 - Preserve newer text and attachments when earlier send, queue, steering, or conversation-creation acknowledgements arrive. Keep the original prompt and confirmed follow-ups in their native turn.
-- Resolve confirmed questions and imported legacy answers in their originating cards. Keep distinct question requests separate, mark expired callbacks, and check uncertain answers independently of task delivery.
+- Resolve confirmed questions and imported legacy answers in their originating cards. Show native question options once, keep distinct requests separate, mark expired callbacks, and check uncertain answers independently of task delivery.
 - Keep queued messages and their counts aligned with native acceptance. Scope automatic queue pauses to current failures, stops, configuration changes, and uncertain results.
 - Preserve verified project ownership, retained history, and drafts when switching, opening shared links, or reconnecting. Ignore stale list and history responses that would overwrite newer activity or metadata.
 - Handle active-writer contention when opening native history from another client. Preserve the draft and prior outcome and offer an availability check or branch.

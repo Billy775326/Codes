@@ -15,6 +15,16 @@ Codes is an independent, single-owner development preview. Codex App Server runs
 
 <a id="requirements"></a>
 
+## One-command install
+
+This command installs the release on glibc-based Linux (x86-64 or ARM64).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.1.0/scripts/install.sh | bash
+```
+
+The release includes Node.js. Install Codex CLI and sign in as the Linux account that will run Codes. Then run `~/.local/bin/codes start` and open [http://127.0.0.1:6670](http://127.0.0.1:6670). Initial startup prints the path to the workspace token. [Install, upgrade, and recover](docs/operations.md#install-or-upgrade-a-release)
+
 ## Run locally
 
 You need Linux, Node.js 24.19 or newer in the 24.x line, npm, and a current browser. Install Codex CLI and sign in as the Linux user who will run Codes. [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
@@ -39,7 +49,7 @@ For access from another machine, use SSH forwarding or configure a dedicated HTT
 npm run install:command
 ```
 
-Add `~/.local/bin` to your PATH, then run `codes` from any directory. It starts the same checkout in the foreground. [Launcher, data directory, and environment](docs/configuration.md)
+Add `~/.local/bin` to your PATH. Run `codes` from any directory to start in the foreground, or `codes start` to start in the background. Use `codes help` for commands, `codes doctor` for diagnostics, and `codes logs -f` to follow background output. [Launcher, data directory, and environment](docs/configuration.md)
 
 ### Try the workspace without a Codex login
 
@@ -51,7 +61,7 @@ Simulation marks the workspace and uses synthetic turns. Try `[approve]`, `[ques
 
 ## What is implemented
 
-- Browse native Codex conversations by current directory or across directories. Search, rename, archive, restore, and resume conversations. [Conversations](docs/conversations.md)
+- Browse native Codex conversations across working directories. Search, rename, archive, restore, and resume conversations. [Conversations](docs/conversations.md)
 - Send or queue a message, add it to a running turn, answer native questions, and branch through a completed turn. [Working with Codex](docs/conversation-workflow.md)
 - Set effective Codex execution options and choose Plan or Execution. [Execution configuration](docs/conversation-settings.md)
 - Upload files from the composer or Files. Preview source, images, HTML, Word text, and PDF pages, and inspect the changes recorded in a Codex turn. [Files and changes](docs/conversation-details.md)

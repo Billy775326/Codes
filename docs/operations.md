@@ -2,6 +2,14 @@
 
 Run Codes under the Linux account that owns the projects and is signed in to Codex. Use one service per data directory. See the [quick start](../README.md#run-locally) and [startup environment](configuration.md#startup-environment).
 
+## Install or upgrade a release
+
+The [release installer](../README.md#one-command-install) needs Bash, curl, GNU tar and coreutils, and `flock` from util-linux. The Linux x64 and ARM64 bundles include the Node.js runtime and JavaScript dependencies. Codex CLI and its login come from the host account.
+
+Install runs as your user and places releases in `$XDG_DATA_HOME/codes-app` or `~/.local/share/codes-app`, with a launcher in `~/.local/bin`. Configure these locations with `CODES_APP_DIR` and `CODES_BIN_DIR` respectively. The launcher directs commands to the installed version. The workspace database and token use the usual data directory.
+
+Before upgrading, let work finish and stop Codes with the current launcher. Run the installer for the desired release, then start Codes with the same environment. An existing source-checkout launcher can coexist by setting `CODES_BIN_DIR` to a different directory. To open data from a checkout that uses `.local`, set `CODES_DATA_DIR` to that directory and stop the old instance before starting the installed release. The source checkout and Codex home remain in place.
+
 ## Network and access
 
 Codes binds to loopback. For desktop access over SSH, start this tunnel on your own computer, then open [http://127.0.0.1:6670](http://127.0.0.1:6670) there.
@@ -14,7 +22,7 @@ In **Settings → Network & access**, set the listener address, port, and exact 
 
 Review the saved and active settings, then restart with the same data directory to apply listener changes. Update any proxy upstream or SSH forward when the listener port changes. **Local / Tailscale** uses the Codes workspace token. Tailscale Serve can forward a permitted tailnet HTTPS origin to the same loopback listener.
 
-**Export saved** produces a versioned JSON settings file. **Import configuration** loads that file into the form for review and an explicit save. Workspace tokens and Codex credentials stay in their own storage.
+Use **Settings → Backup & restore → Network configuration** to export a versioned JSON file of saved network settings or to import it. An import opens **Network & access** with a draft for review and explicit save. Workspace tokens and Codex credentials stay in their own storage.
 
 If saved network settings prevent access, stop the service, move `network-settings.json` to a private backup outside the active path, then restart with the desired environment. A `HOST_DENIED` response usually means the forwarded Host is missing from the allowed origins or changed at the proxy.
 
@@ -46,11 +54,23 @@ If the service uses `CODES_ACCESS_TOKEN`, change that value in the service envir
 
 ## Process lifecycle
 
-Stop the foreground launcher with Ctrl+C, or send SIGTERM to the Codes process identified by the data directory's lock. Shutdown closes event streams, stops the child CLI, closes SQLite, and releases the lock. Check the process identity before acting on an occupied lock.
+| Command         | Behavior                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `codes`         | Run in the foreground. Press Ctrl+C to stop.                                                                                              |
+| `codes start`   | Start in the background and wait for the listener. Output goes to the data directory's private `server.log`.                              |
+| `codes status`  | Show the running PID and data directory. The exit status is 0 for a verified running instance and 1 for a stopped or unverified instance. |
+| `codes stop`    | Send SIGTERM to the verified instance and wait for it to exit. An already stopped instance returns success.                               |
+| `codes restart` | Stop the verified instance and start in the background with its original startup environment. If stopped, use the current environment.    |
+
+Use `codes help` (also `-h` or `--help`) for command usage. `codes logs` prints up to 50 recent lines from `server.log`. Use `codes logs -f` to keep reading. Ctrl+C exits the log viewer. A foreground `codes` process normally writes to its terminal. A supervisor can redirect that output to its own log.
+
+`codes doctor` checks the platform, Node.js, build, data-directory access, process identity, Codex CLI version, saved settings, and the configured loopback listener. For a verified running process, it uses its startup environment when available. The configured listener can differ from the running listener when a saved change needs a restart. Diagnostics report failed checks with exit status 1.
+
+The launcher checks the Linux process identity, data directory lock, and open database before signaling. Shutdown closes event streams, stops the child CLI, closes SQLite, and releases the lock. If the foreground process predates the launcher metadata and used relative project or CLI executable paths, stop it and start with the intended environment to update those paths.
 
 Closing a browser tab leaves work running. A service restart can interrupt tools, expire approvals, or leave a running operation unresolved. Waiting messages survive and start paused. Use **Check result** for uncertain work before resuming a queue. [Queue recovery](conversation-workflow.md#queue-recovery)
 
-Use your process supervisor with an explicit working directory and private environment.
+Use the supervisor's lifecycle commands for services it manages. Configure its working directory and environment explicitly.
 
 ## Prepare maintenance
 
@@ -93,7 +113,7 @@ Codes retains completed or failed operation receipts and completed or cancelled 
 
 ## Download a database backup
 
-In **Settings → Backup & restore**, select **Download database backup**. Codes takes one consistent SQLite snapshot at a time, up to 64 MiB. It includes workspace metadata, receipts, and queues. For a larger database, use a host-side SQLite backup or copy the database after a graceful stop. Back up native history, project files, images, and configuration separately for full recovery.
+In **Settings → Backup & restore → Workspace database**, select **Download database backup**. Codes takes one consistent SQLite snapshot at a time, up to 64 MiB. It includes workspace metadata, receipts, and queues. For a larger database, use a host-side SQLite backup or copy the database after a graceful stop. Back up native history, project files, images, and configuration separately for full recovery.
 
 1. Select a same-schema SQLite snapshot in **Backup & restore** and choose **Prepare restore**.
 2. Let active work finish, stop the service, and run `codes restore-database` as the service user with the same data directory. In a built checkout, `npm run restore:database` is equivalent.
@@ -103,7 +123,7 @@ Codes locks the data directory, writes the original database to a private `befor
 
 ## Existing Codex conversations
 
-Run Codes with the same Linux account and effective `CODEX_HOME` as your CLI. Choose **All**, then search **Active** or **Archived**. Codes opens the native thread ID and reads both legacy and paginated history. [Conversations](conversations.md)
+Run Codes with the same Linux account and effective `CODEX_HOME` as your CLI. Search **Active** or **Archived** across all working directories. Codes opens the native thread ID and reads both legacy and paginated history. [Conversations](conversations.md)
 
 ### Imported conversations still open in another client
 
