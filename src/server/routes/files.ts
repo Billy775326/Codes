@@ -6,7 +6,13 @@ import { AppError } from '../../shared/errors.js';
 import { imageLimits, imageTypes } from '../../shared/images.js';
 import { limits } from '../../shared/types.js';
 import { htmlPreviewDocument, htmlPreviewPolicy } from '../html-preview.js';
-import { json, type HttpRequest, type RouteResult } from '../http-io.js';
+import {
+  fileDisposition,
+  json,
+  untilClosed,
+  type HttpRequest,
+  type RouteResult,
+} from '../http-io.js';
 import type { openImagePreview } from '../images.js';
 import type { Service } from '../service.js';
 
@@ -33,13 +39,31 @@ export async function workspaceFileRoutes(
     const path = url.searchParams.get('path') ?? '';
     const showHidden = url.searchParams.get('showHidden') === 'true';
     const kind = z
-      .enum(['directory', 'location', 'file', 'image'])
+      .enum(['directory', 'location', 'file', 'image', 'document', 'pdf'])
       .parse(url.searchParams.get('kind'));
     if (kind === 'image')
       return await serveImagePreview(
         response,
         await service.browseImage(projectId, path, showHidden),
       );
+    if (kind === 'document')
+      return untilClosed(response, async (signal) => {
+        const document = await service.browseDocument(projectId, path, showHidden, signal);
+        if (!signal.aborted) return json(response, document);
+      });
+    if (kind === 'pdf')
+      return service.browsePdf(projectId, path, showHidden, async (stream, size) => {
+        response.writeHead(200, {
+          'content-type': 'application/pdf',
+          'content-length': size,
+          'content-disposition': fileDisposition('inline', path.split('/').at(-1)!),
+          'cache-control': 'private,no-store',
+          'content-security-policy': "default-src 'none'; frame-ancestors 'self'",
+          'x-frame-options': 'SAMEORIGIN',
+          'cross-origin-resource-policy': 'same-origin',
+        });
+        await pipeline(stream, response);
+      });
     if (kind === 'directory')
       return json(response, await service.browseDirectory(projectId, path, showHidden));
     if (kind === 'location')

@@ -23,7 +23,7 @@ export function projectFileUrl(
 }
 
 export function fileBrowserUrl(
-  kind: 'directory' | 'location' | 'file' | 'image',
+  kind: 'directory' | 'location' | 'file' | 'image' | 'document' | 'pdf',
   path: string,
   showHidden: boolean,
   projectId?: string,

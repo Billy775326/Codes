@@ -2,7 +2,7 @@ import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 import { AppError } from '../../shared/errors.js';
 import { projectFileLimits } from '../../shared/project-files.js';
-import { body, json, type HttpRequest, type RouteResult } from '../http-io.js';
+import { body, fileDisposition, json, type HttpRequest, type RouteResult } from '../http-io.js';
 import type { ProjectFileManagement } from '../project-file-management.js';
 
 export async function projectFileRoutes(
@@ -66,15 +66,10 @@ export async function projectFileRoutes(
     return json(response, await files.reference(projectId, path, showHidden));
   if (operation === 'download' && method === 'GET') {
     return files.download(projectId, path, showHidden, async (file, size) => {
-      const name = path.split('/').at(-1)!;
-      const encoded = encodeURIComponent(name).replace(
-        /['()*]/g,
-        (character) => '%' + character.charCodeAt(0).toString(16),
-      );
       response.writeHead(200, {
         'content-type': 'application/octet-stream',
         'content-length': size.toString(),
-        'content-disposition': "attachment; filename*=UTF-8''" + encoded,
+        'content-disposition': fileDisposition('attachment', path.split('/').at(-1)!),
         'cache-control': 'private,no-store',
       });
       await pipeline(file.createReadStream({ autoClose: false }), response);

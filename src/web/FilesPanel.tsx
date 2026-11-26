@@ -1,6 +1,7 @@
 import { useInterfaceLanguage } from './interface-language';
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { projectImageType } from '../shared/images';
+import { documentPreviewFormat, type DocumentPreview } from '../shared/document-previews';
 import {
   hasHiddenPathSegment,
   type FileBrowserResult,
@@ -250,14 +251,7 @@ function FileTextContents({
   showHidden,
   onScopeWarning,
   attachment,
-}: {
-  apiBase?: string;
-  projectId?: string;
-  path: string;
-  showHidden: boolean;
-  onScopeWarning: () => void;
-  attachment?: AttachmentControls;
-}) {
+}: FileContentsProps) {
   const { t } = useInterfaceLanguage();
   const { result, reload } = useRead<FileContent>(
     apiBase && !path.startsWith('/') ? fileReadUrl(apiBase, 'file', path, showHidden) : undefined,
@@ -270,10 +264,71 @@ function FileTextContents({
         {t('Loading file…')}
       </p>
     );
-  if ('error' in result) return <ReadError error={result.error} retry={reload} />;
+  if ('error' in result) {
+    if (result.code === 'BINARY_FILE')
+      return (
+        <p className="file-state" role="alert">
+          {t('Preview is unavailable for this file type.')}
+        </p>
+      );
+    return <ReadError error={result.error} retry={reload} />;
+  }
   return (
     <TextPreview file={result.value} attachment={result.outsideScope ? undefined : attachment} />
   );
+}
+
+interface FileContentsProps {
+  apiBase?: string;
+  projectId?: string;
+  path: string;
+  showHidden: boolean;
+  onScopeWarning: () => void;
+  attachment?: AttachmentControls;
+}
+
+function DocumentContents({ projectId, path, showHidden, onScopeWarning }: FileContentsProps) {
+  const { t } = useInterfaceLanguage();
+  const { result, reload } = useRead<DocumentPreview>(
+    undefined,
+    fileBrowserUrl('document', path, showHidden, projectId),
+    onScopeWarning,
+  );
+  if (!result)
+    return (
+      <p className="file-state" role="status">
+        {t('Loading file…')}
+      </p>
+    );
+  if ('error' in result) return <ReadError error={result.error} retry={reload} />;
+  if (result.value.format === 'pdf') {
+    const src = '/api' + fileBrowserUrl('pdf', path, showHidden, projectId);
+    return (
+      <div className="file-pdf-preview">
+        <iframe src={src} title={t('PDF preview')} />
+        <a href={src} target="_blank" rel="noopener noreferrer">
+          {t('Open PDF')}
+        </a>
+      </div>
+    );
+  }
+  return (
+    <article className="file-preview-scroll word-preview" aria-label={t('Word document preview')}>
+      {result.value.text || <p>{t('This document contains no previewable text.')}</p>}
+      {result.value.truncated && <p role="status">{t('Preview truncated.')}</p>}
+    </article>
+  );
+}
+
+function FileContents(props: FileContentsProps) {
+  if (projectImageType(props.path))
+    return (
+      <div className="file-preview-scroll file-image">
+        <BrowserImagePreview {...props} />
+      </div>
+    );
+  if (documentPreviewFormat(props.path)) return <DocumentContents {...props} />;
+  return <FileTextContents {...props} />;
 }
 
 export function LinkedFilePreview({
@@ -296,24 +351,13 @@ export function LinkedFilePreview({
       className="linked-file-dialog"
     >
       <section className="file-preview" aria-label={t('File preview')}>
-        {projectImageType(file.path) ? (
-          <div className="file-preview-scroll file-image">
-            <BrowserImagePreview
-              projectId={file.projectId}
-              path={file.path}
-              showHidden={showHidden}
-              onScopeWarning={onScopeWarning}
-            />
-          </div>
-        ) : (
-          <FileTextContents
-            apiBase={file.projectId ? '/projects/' + file.projectId : undefined}
-            projectId={file.projectId}
-            onScopeWarning={onScopeWarning}
-            path={file.path}
-            showHidden={showHidden}
-          />
-        )}
+        <FileContents
+          apiBase={file.projectId ? '/projects/' + file.projectId : undefined}
+          projectId={file.projectId}
+          onScopeWarning={onScopeWarning}
+          path={file.path}
+          showHidden={showHidden}
+        />
       </section>
     </InteractionDialog>
   );
@@ -375,25 +419,14 @@ function FilePreview({
           </button>
         )}
       </div>
-      {image ? (
-        <div className="file-preview-scroll file-image">
-          <BrowserImagePreview
-            projectId={projectId}
-            path={path}
-            showHidden={showHidden}
-            onScopeWarning={onScopeWarning}
-          />
-        </div>
-      ) : (
-        <FileTextContents
-          apiBase={apiBase}
-          projectId={projectId}
-          onScopeWarning={onScopeWarning}
-          path={path}
-          showHidden={showHidden}
-          attachment={attachment}
-        />
-      )}
+      <FileContents
+        apiBase={apiBase}
+        projectId={projectId}
+        onScopeWarning={onScopeWarning}
+        path={path}
+        showHidden={showHidden}
+        attachment={attachment}
+      />
       {onReference && (
         <div className="file-reference-actions">
           <button type="button" onClick={onReference} disabled={attachment.attachmentBlocked}>

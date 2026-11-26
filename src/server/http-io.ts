@@ -15,6 +15,14 @@ export interface HttpRequest {
 // A feature route returns false if its path or method was not matched.
 export type RouteResult = Promise<void | false>;
 
+export function fileDisposition(mode: 'inline' | 'attachment', name: string) {
+  const encoded = encodeURIComponent(name).replace(
+    /['()*]/g,
+    (character) => '%' + character.charCodeAt(0).toString(16),
+  );
+  return mode + "; filename*=UTF-8''" + encoded;
+}
+
 export async function body(request: IncomingMessage) {
   const chunks: Buffer[] = [];
   let bytes = 0;

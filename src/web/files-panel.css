@@ -254,6 +254,36 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.word-preview {
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+.word-preview p {
+  color: var(--muted);
+}
+.file-pdf-preview {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.file-pdf-preview iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+}
+.file-pdf-preview a {
+  align-self: flex-end;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.linked-file-dialog .file-pdf-preview iframe {
+  height: min(60dvh, 540px);
+  flex: auto;
+}
 .file-state {
   display: flex;
   flex-wrap: wrap;

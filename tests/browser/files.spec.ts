@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { sampleDocx, samplePdf } from '../fixtures/document';
 
 async function openFiles(page: Page) {
   await page.goto('/');
@@ -202,6 +203,41 @@ test('manages a project folder and references a file larger than the preview lim
     page.getByRole('button', { name: 'Remove reports/summary.log', exact: true }),
   ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test('previews Word text and PDF pages from the Files sidebar', async ({ page }) => {
+  await openFiles(page);
+  const response = await page.request.get('/api/projects');
+  const projects = (await response.json()) as { path: string }[];
+  const project = projects.find(({ path }) => path.endsWith('/sample-project'));
+  expect(project).toBeDefined();
+  const docx = join(project!.path, 'layout-preview.docx');
+  const pdf = join(project!.path, 'layout-preview.pdf');
+  try {
+    await writeFile(docx, sampleDocx);
+    await writeFile(pdf, samplePdf());
+    await page.getByRole('button', { name: 'Refresh file list' }).click();
+    await page.getByRole('button', { name: 'layout-preview.docx', exact: true }).click();
+    const preview = page.getByRole('region', { name: 'File preview', exact: true });
+    await expect(preview.getByRole('article', { name: 'Word document preview' })).toContainText(
+      'Quarterly plan preview',
+    );
+    await expect(preview.getByRole('button', { name: 'Attach file', exact: true })).toHaveCount(0);
+    const loaded = page.waitForResponse((result) => {
+      const url = new URL(result.url());
+      return url.pathname === '/api/file-browser' && url.searchParams.get('kind') === 'pdf';
+    });
+    await page.getByRole('button', { name: 'layout-preview.pdf', exact: true }).click();
+    expect((await loaded).headers()['content-type']).toBe('application/pdf');
+    await expect(preview.locator('iframe[title="PDF preview"]')).toBeVisible();
+    await expect(preview.getByRole('link', { name: 'Open PDF' })).toHaveAttribute(
+      'target',
+      '_blank',
+    );
+  } finally {
+    await rm(docx, { force: true });
+    await rm(pdf, { force: true });
+  }
 });
 
 test('long source lines wrap inside Files at desktop and phone widths', async ({ page }) => {

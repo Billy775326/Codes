@@ -1,7 +1,16 @@
 import { deferred } from '../src/shared/deferred';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
-import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  symlink,
+  truncate,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -14,6 +23,7 @@ import { Driver } from '../src/codex/driver';
 import { application } from '../src/server/http';
 import { NetworkConfiguration } from '../src/server/network-settings';
 import { AccessToken } from '../src/server/access-token';
+import { sampleDocx, samplePdf } from './fixtures/document';
 let app: Awaited<ReturnType<typeof application>>;
 let directory: string;
 let service: Service;
@@ -832,6 +842,53 @@ it('serves only validated images inside the authenticated project scope', async 
   expect((await read('escape.png', cookie, true)).status).toBe(403);
   expect((await read('wrong.jpg')).status).toBe(415);
   expect((await read('not-an-image.png')).status).toBe(400);
+});
+
+it('serves authenticated Word and PDF previews without treating the originals as UTF-8', async () => {
+  const workspace = join(directory, 'document-project');
+  await mkdir(workspace);
+  await writeFile(join(workspace, 'plan.docx'), sampleDocx);
+  await writeFile(join(workspace, 'layout.pdf'), samplePdf());
+  await writeFile(join(workspace, 'invalid.pdf'), '<script>not a PDF</script>');
+  await writeFile(join(workspace, 'invalid.doc'), 'not a Word file');
+  const oversizedWord = join(workspace, 'oversized.docx');
+  const oversizedPdf = join(workspace, 'oversized.pdf');
+  await writeFile(oversizedWord, sampleDocx);
+  await writeFile(oversizedPdf, samplePdf());
+  await truncate(oversizedWord, 8 * 1024 * 1024 + 1);
+  await truncate(oversizedPdf, 32 * 1024 * 1024 + 1);
+  const project = await service.addProject(workspace);
+  const read = (kind: 'document' | 'pdf', path: string, session = cookie) =>
+    fetch(
+      origin + '/api/file-browser?' + new URLSearchParams({ kind, projectId: project.id, path }),
+      {
+        headers: { cookie: session },
+      },
+    );
+  expect((await read('document', 'plan.docx', '')).status).toBe(401);
+  const word = await read('document', 'plan.docx');
+  expect(word.status).toBe(200);
+  expect(await word.json()).toEqual({
+    value: {
+      format: 'word',
+      text: expect.stringContaining('Quarterly plan preview'),
+      truncated: false,
+    },
+    outsideScope: false,
+  });
+  expect((await read('document', 'invalid.doc')).status).toBe(422);
+  expect((await read('document', 'oversized.docx')).status).toBe(413);
+  expect((await read('pdf', 'oversized.pdf')).status).toBe(413);
+  const outside = await read('document', join(workspace, 'layout.pdf'));
+  expect(await outside.json()).toEqual({ value: { format: 'pdf' }, outsideScope: false });
+  const pdf = await read('pdf', 'layout.pdf');
+  expect(pdf.status).toBe(200);
+  expect(pdf.headers.get('content-type')).toBe('application/pdf');
+  expect(pdf.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+  expect(pdf.headers.get('content-disposition')).toContain('layout.pdf');
+  expect(Buffer.from(await pdf.arrayBuffer())).toEqual(samplePdf());
+  expect((await read('pdf', 'plan.docx')).status).toBe(415);
+  expect((await read('pdf', 'invalid.pdf')).status).toBe(415);
 });
 
 it('previews named raster images across workspace paths without exposing private data folders', async () => {

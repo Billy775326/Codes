@@ -4,6 +4,7 @@ import type { Snapshot, Message } from '../../src/shared/types';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { imagePng } from '../fixtures/image';
+import { sampleDocx } from '../fixtures/document';
 async function fixture(page: Page, count: number) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
@@ -447,6 +448,33 @@ test('HTML reply links and visualization references open the preview in one clic
   await expect(link).toBeFocused();
   await expect(page).toHaveURL(url);
   await expect(input).toHaveValue('Keep the draft');
+});
+
+test('Word links open read-only previews in the active project or a separate dialog', async ({
+  page,
+}, testInfo) => {
+  const { base } = await fixture(page, 0);
+  const document = testInfo.outputPath('linked-plan.docx');
+  await mkdir(dirname(document), { recursive: true });
+  await writeFile(document, sampleDocx);
+  await writeFile(join(base.context!.project.path, 'local-plan.docx'), sampleDocx);
+  base.thread.messages.find((message) => message.phase === 'final_answer')!.text =
+    `[Open local plan](./local-plan.docx)\n\n[Open Word plan](${document})`;
+  await reconnectUpdates(page);
+  const url = page.url();
+  await page.getByRole('button', { name: 'Open local plan', exact: true }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'File preview', exact: true })
+      .getByRole('article', { name: 'Word document preview' }),
+  ).toContainText('Quarterly plan preview');
+  await page.getByRole('button', { name: 'Close file preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Word plan', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: document, exact: true });
+  await expect(dialog.getByRole('article', { name: 'Word document preview' })).toContainText(
+    'Quarterly plan preview',
+  );
+  await expect(page).toHaveURL(url);
 });
 
 test('work sections around a question expand independently with commands collapsed', async ({

@@ -1,5 +1,6 @@
 import type { Parent, Root } from 'mdast';
 import { projectImageType } from '../shared/images';
+import { documentPreviewFormat } from '../shared/document-previews';
 import type { Project } from '../shared/types';
 import { isHtmlFile } from './file-browser';
 
@@ -40,7 +41,8 @@ export function resolveMessageFile(
   if (!href || !projectPath || href.startsWith('/') || /^[a-z][a-z\d+.-]*:/i.test(href)) return;
   const relative = href.replace(/^(?:\.\/)+/, '');
   try {
-    if (!isHtmlFile(decodeURIComponent(relative.split(/[?#]/, 1)[0]!))) return;
+    const pathname = decodeURIComponent(relative.split(/[?#]/, 1)[0]!);
+    if (!isHtmlFile(pathname) && !documentPreviewFormat(pathname)) return;
     return resolveFile(encodeFilePath(projectPath.replace(/\/$/, '')) + '/' + relative);
   } catch {
     return;

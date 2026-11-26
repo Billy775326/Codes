@@ -3,6 +3,8 @@ import { constants, existsSync, realpathSync } from 'node:fs';
 import { mkdir, open, opendir, realpath, readFile, stat } from 'node:fs/promises';
 import { resolve, relative, basename, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
+import type { Readable } from 'node:stream';
+import { documentPreviewFormat } from '../shared/document-previews.js';
 import { AppError, record } from '../shared/errors.js';
 import {
   limits,
@@ -20,6 +22,7 @@ import {
 } from '../shared/project-files.js';
 import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
 import { openImagePreview } from './images.js';
+import { previewDocument, streamPdf } from './document-previews.js';
 import {
   globalInstructions,
   instructionsChanged,
@@ -259,6 +262,32 @@ export class ProjectFiles {
     } finally {
       await file.close();
     }
+  }
+  async browseDocument(
+    projectId: string | undefined,
+    path: string,
+    showHidden: boolean,
+    signal: AbortSignal,
+  ) {
+    const format = documentPreviewFormat(path);
+    if (!format)
+      throw new AppError('DOCUMENT_FORMAT', 'Preview is unavailable for this file type.', 415);
+    const target = await this.browsePath(projectId, path, showHidden);
+    return {
+      value: await previewDocument(target.absolute, format, signal).catch(browseError),
+      outsideScope: target.outsideScope,
+    };
+  }
+  async browsePdf(
+    projectId: string | undefined,
+    path: string,
+    showHidden: boolean,
+    send: (stream: Readable, size: number) => Promise<void>,
+  ) {
+    if (documentPreviewFormat(path) !== 'pdf')
+      throw new AppError('DOCUMENT_FORMAT', 'This file is not a valid PDF.', 415);
+    const target = await this.browsePath(projectId, path, showHidden);
+    await streamPdf(target.absolute, send).catch(browseError);
   }
   async browseImage(projectId: string | undefined, path: string, showHidden: boolean) {
     const contentType = projectImageType(path);

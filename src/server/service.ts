@@ -4,6 +4,7 @@ import { nativeExecutionSettings } from './native-configuration.js';
 import { activeTurn, interactionActivity } from '../shared/conversation-activity.js';
 import { realpath, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
+import type { Readable } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Driver } from '../codex/driver.js';
 import { Store } from './store.js';
@@ -338,6 +339,22 @@ export class Service {
   }
   browseFile(projectId: string | undefined, path: string, showHidden: boolean) {
     return this.projectFiles.browseFile(projectId, path, showHidden);
+  }
+  browseDocument(
+    projectId: string | undefined,
+    path: string,
+    showHidden: boolean,
+    signal: AbortSignal,
+  ) {
+    return this.projectFiles.browseDocument(projectId, path, showHidden, signal);
+  }
+  browsePdf(
+    projectId: string | undefined,
+    path: string,
+    showHidden: boolean,
+    send: (stream: Readable, size: number) => Promise<void>,
+  ) {
+    return this.projectFiles.browsePdf(projectId, path, showHidden, send);
   }
   browseImage(projectId: string | undefined, path: string, showHidden: boolean) {
     return this.projectFiles.browseImage(projectId, path, showHidden);
