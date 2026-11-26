@@ -96,6 +96,8 @@
 
 ### Changed
 
+- Show format and size limits in both upload menus and guide users to attach PDF, Word, and other project files by reference.
+
 - Simplify the composer prompts and settings menus. Find native model, reasoning, and permission controls under **Execution** in Settings.
 
 - Make the send shortcut add a draft to the running Codex turn by default. Tab queues a draft in this mode. Switch the default in Settings → General → Interaction.

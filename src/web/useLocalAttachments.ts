@@ -39,12 +39,16 @@ export function useLocalAttachments({
         owner.error(new Error('Choose a PNG, JPEG, or WebP image.'));
         continue;
       }
-      if (!file.size || file.size > (image ? imageLimits.bytes : limits.uploadedFile)) {
+      if (!file.size) {
+        owner.error(new Error('Choose a non-empty file.'));
+        continue;
+      }
+      if (file.size > (image ? imageLimits.bytes : limits.uploadedFile)) {
         owner.error(
           new Error(
             image
               ? 'Images must be at most 8 MiB.'
-              : 'Choose a non-empty UTF-8 text file of at most 64 KiB.',
+              : 'Text attachments are limited to 64 KiB. For larger files, upload in Files and choose Reference in conversation.',
           ),
         );
         continue;
@@ -74,12 +78,20 @@ export function useLocalAttachments({
             current.current.attach(attachment);
         })
         .catch((value) => {
-          if (!controller.signal.aborted && current.current.scope === owner.scope)
+          if (controller.signal.aborted || current.current.scope !== owner.scope) return;
+          if (value instanceof ApiError && value.code === 'BINARY_FILE') {
             current.current.error(
-              value instanceof ApiError && value.uncertain
-                ? new Error('Upload was not confirmed. Select the file or paste the image again.')
-                : value,
+              new Error(
+                'This file is not UTF-8 text. Upload it in Files and choose Reference in conversation.',
+              ),
             );
+            return;
+          }
+          current.current.error(
+            value instanceof ApiError && value.uncertain
+              ? new Error('Upload was not confirmed. Select the file or paste the image again.')
+              : value,
+          );
         })
         .finally(() => {
           requests.current.delete(controller);

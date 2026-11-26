@@ -607,6 +607,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Preview {file}': '预览 {file}',
   'Upload or create': '上传或新建',
   'Upload to this folder': '上传到此目录',
+  'Any file type · 64 MiB max': '任意文件类型 · 最大 64 MiB',
   'New folder': '新建文件夹',
   'Folder name': '文件夹名称',
   'Create folder': '创建文件夹',
@@ -829,6 +830,14 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Unsubmitted edit': '未提交的编辑',
   'Updated: {time}': '更新于 {time}',
   'Upload from device': '从设备上传',
+  'UTF-8 text · 64 KiB max': 'UTF-8 文本 · 最大 64 KiB',
+  'PNG, JPEG, WebP · 8 MiB max': 'PNG、JPEG、WebP · 最大 8 MiB',
+  'Upload or reference PDF, Word, and other files': '上传或引用 PDF、Word 等文件',
+  'Choose a non-empty file.': '请选择非空文件。',
+  'Text attachments are limited to 64 KiB. For larger files, upload in Files and choose Reference in conversation.':
+    '文本附件最大为 64 KiB。更大的文件可在「文件」侧栏上传，再选择「引用到会话」。',
+  'This file is not UTF-8 text. Upload it in Files and choose Reference in conversation.':
+    '这个文件无法作为 UTF-8 文本导入。请在「文件」侧栏上传，再选择「引用到会话」。',
   'Uploading {count} attachment(s)…': '正在上传 {count} 个附件…',
   'Use the folder name': '使用目录名称',
   Viewed: '已查看',

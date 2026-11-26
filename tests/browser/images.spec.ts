@@ -35,20 +35,36 @@ test('the plus menu attaches a local text file and a file from the project', asy
   const trigger = page.getByRole('button', { name: 'Attach files', exact: true });
   await expect(page.getByRole('button', { name: 'Attach image', exact: true })).toHaveCount(0);
   await trigger.click();
+  const upload = page.getByRole('button', { name: 'Upload from device', exact: true });
+  const browse = page.getByRole('button', { name: 'Browse project files', exact: true });
+  await expect(upload).toHaveAccessibleDescription(/UTF-8 text · 64 KiB max/);
+  await expect(upload).toContainText('PNG, JPEG, WebP · 8 MiB max');
+  await expect(browse).toHaveAccessibleDescription(
+    'Upload or reference PDF, Word, and other files',
+  );
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Upload from device', exact: true }).click();
+  await upload.click();
   await (
     await chooser
   ).setFiles({
-    name: 'device-notes.txt',
-    mimeType: 'text/plain',
+    name: 'device-notes.md',
+    mimeType: 'text/markdown',
     buffer: Buffer.from('Local attachment test content'),
   });
   await expect(
-    page.getByRole('button', { name: 'Remove device-notes.txt', exact: true }),
+    page.getByRole('button', { name: 'Remove device-notes.md', exact: true }),
   ).toBeVisible();
+  await page.getByLabel('Choose local files', { exact: true }).setInputFiles({
+    name: 'report.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0xff]),
+  });
+  await expect(page.getByRole('alert')).toContainText(
+    'Upload it in Files and choose Reference in conversation.',
+  );
+  await page.getByRole('button', { name: 'Dismiss error', exact: true }).click();
   await trigger.click();
-  await page.getByRole('button', { name: 'Browse project files', exact: true }).click();
+  await browse.click();
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
   await page.getByRole('button', { name: 'Attach file', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
@@ -62,7 +78,7 @@ test('the plus menu attaches a local text file and a file from the project', asy
     {
       kind: 'uploaded-file',
       id: expect.stringMatching(/^[a-f0-9]{64}$/),
-      name: 'device-notes.txt',
+      name: 'device-notes.md',
     },
     { path: 'example.ts', fromLine: 1, toLine: expect.any(Number), sha: expect.any(String) },
   ]);

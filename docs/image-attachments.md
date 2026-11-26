@@ -1,6 +1,8 @@
 # Composer attachments
 
-Open the composer **+** menu. **Upload from device** accepts UTF-8 text files and PNG, JPEG, or WebP images. **Browse project files** opens the current project's read-only text browser, where you can attach a whole file or a line selection. The composer displays file names and image thumbnails with removal actions. You can also paste images directly into **Message Codex**. Clicking a thumbnail opens the original in an authenticated browser tab.
+Open the composer **+** menu. **Upload from device** accepts UTF-8 text files and PNG, JPEG, or WebP images. **Browse project files** opens the current project's file browser, where you can attach text, a line selection, or a file reference. The composer displays file names and image thumbnails with removal actions. You can also paste images directly into **Message Codex**. Clicking a thumbnail opens the original in an authenticated browser tab.
+
+For PDFs, Word documents, and files over the composer limit, open **Browse project files** and use **Upload to this folder**. Then choose **Reference in conversation** from the file’s actions. This attaches the path. See [project file management](conversation-details.md#manage-project-files) for the project upload limit.
 
 Uploads are separate from task dispatch. Send, Queue, and Add now wait until uploads finish; Stop remains available. Attach text files as context for a message. An image can be sent with or without a caption. Uploads are cancelled when the project, conversation, or signed-in state changes, so a late response cannot attach a file to another conversation. Unsent attachments clear when switching conversations or reloading; browser text drafts retain their existing persistence behavior.
 
