@@ -780,6 +780,8 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Scroll with replies': '随回复自动滚动',
   'Search archives': '搜索归档',
   'Search projects and chats': '搜索项目和会话',
+  'Search conversations': '搜索会话',
+  All: '全部',
   'Send message': '发送消息',
   'Send shortcut': '发送快捷键',
   'Send test notification': '发送测试通知',

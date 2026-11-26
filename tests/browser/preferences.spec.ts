@@ -20,7 +20,7 @@ test('settings edit global Codex instructions without a selected project', async
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
-  await expect(page.locator('.project-card')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Cwd', exact: true })).toBeDisabled();
   const projects = await (await page.request.get('/api/projects')).json();
   const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
   const projectInstructions = join(project.path, 'AGENTS.md');
@@ -29,7 +29,7 @@ test('settings edit global Codex instructions without a selected project', async
   await writeFile(path, '# Original fixture\n', { flag: 'wx' });
   try {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    const tab = page.getByRole('button', { name: 'Projects', exact: true });
+    const tab = page.getByRole('button', { name: 'Instructions', exact: true });
     await tab.click();
     await expect(
       page.getByRole('heading', { name: 'Codex global instructions', exact: true }),
