@@ -35,20 +35,28 @@ export async function projectFileRoutes(
       .parse(await body(request));
     return json(response, await files.makeDirectory(projectId, path, name, showHidden), 201);
   }
-  if (operation === 'upload' && method === 'POST') {
+  if ((operation === 'upload' || operation === 'attach') && method === 'POST') {
     try {
       if (Number(request.headers['content-length'] ?? 0) > projectFileLimits.uploadBytes)
         throw new AppError('PROJECT_FILE_LIMIT', 'Project uploads must be at most 64 MiB.', 413);
       const name = z.string().min(1).max(255).parse(url.searchParams.get('name'));
-      const result = await files.upload(
+      const content = request.iterator({ destroyOnReturn: false });
+      const cancelled = () => !request.complete || response.destroyed;
+      if (operation === 'attach')
+        return json(
+          response,
+          await files.uploadAttachment(projectId, name, content, cancelled),
+          201,
+        );
+      const { path: uploadedPath, size } = await files.upload(
         projectId,
         path,
         name,
         showHidden,
-        request.iterator({ destroyOnReturn: false }),
-        () => !request.complete || response.destroyed,
+        content,
+        cancelled,
       );
-      return json(response, result, 201);
+      return json(response, { path: uploadedPath, size }, 201);
     } catch (error) {
       request.resume();
       throw error;

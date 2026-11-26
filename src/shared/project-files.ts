@@ -11,10 +11,12 @@ export interface FileEntry {
 
 export const projectFileLimits = {
   uploadBytes: 64 * 1024 * 1024,
+  uploadTimeoutMs: 120_000,
   concurrentUploads: 2,
   pageSize: 200,
   pathLength: 1024,
 };
+export const composerAttachmentDirectory = 'codes-attachments';
 export const projectUploadStagingPrefix = '.codes-upload-';
 
 export interface ProjectFileReferenceAttachment {

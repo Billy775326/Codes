@@ -101,7 +101,7 @@ export function ProjectFileControls({
     );
     transfer.setRequestHeader('Content-Type', 'application/octet-stream');
     transfer.responseType = 'json';
-    transfer.timeout = 120_000;
+    transfer.timeout = projectFileLimits.uploadTimeoutMs;
     setSent(0);
     transfer.upload.onprogress = (event) => {
       if (xhr.current === transfer) setSent(event.loaded);

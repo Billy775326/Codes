@@ -11,10 +11,11 @@ import {
   type FileHandle,
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { extname, isAbsolute, relative, resolve } from 'node:path';
 import { AppError, record } from '../shared/errors.js';
 import {
   hasHiddenPathSegment,
+  composerAttachmentDirectory,
   projectFileLimits,
   projectUploadStagingPrefix,
   type FileEntry,
@@ -234,6 +235,26 @@ export class ProjectFileManagement {
     });
   }
 
+  async uploadAttachment(
+    projectId: string,
+    name: string,
+    content: AsyncIterable<Buffer>,
+    cancelled: () => boolean,
+  ): Promise<ProjectFileReferenceAttachment> {
+    if (pathParts(name).length !== 1) throw denied();
+    const showHidden = hasHiddenPathSegment(name);
+    const { path, version } = await this.upload(
+      projectId,
+      composerAttachmentDirectory,
+      name,
+      showHidden,
+      content,
+      cancelled,
+      true,
+    );
+    return { kind: 'file-reference', path, version, ...(showHidden ? { showHidden: true } : {}) };
+  }
+
   async upload(
     projectId: string,
     directory: string,
@@ -241,6 +262,7 @@ export class ProjectFileManagement {
     showHidden: boolean,
     content: AsyncIterable<Buffer>,
     cancelled: () => boolean,
+    composerAttachment = false,
   ) {
     if (this.uploads >= projectFileLimits.concurrentUploads)
       throw new AppError(
@@ -250,12 +272,16 @@ export class ProjectFileManagement {
       );
     this.uploads++;
     try {
+      if (composerAttachment)
+        await this.makeDirectory(projectId, '', directory, false).catch((error) => {
+          if (!(error instanceof AppError) || error.code !== 'FILE_EXISTS') throw error;
+        });
       return await this.directory(
         projectId,
         directory,
         showHidden,
         async (handle, project, roots) => {
-          const path = this.child(project, directory, name, showHidden, roots);
+          let path = this.child(project, directory, name, showHidden, roots);
           this.checkWrite(project);
           const fd = fdPath(handle);
           const { bavail, bsize } = await statfs(fd, { bigint: true });
@@ -273,29 +299,46 @@ export class ProjectFileManagement {
           const file = await open(staged, 'wx', 0o600);
           let size = 0;
           try {
-            for await (const chunk of content) {
-              size += chunk.length;
-              if (size > projectFileLimits.uploadBytes)
-                throw new AppError(
-                  'PROJECT_FILE_LIMIT',
-                  'Project uploads must be at most 64 MiB.',
-                  413,
-                );
-              await file.writeFile(chunk);
-            }
-            await file.sync();
-            await this.checkDirectory(handle, resolve(project.path, directory));
-            this.checkWrite(project);
-            if (cancelled()) throw new AppError('UPLOAD_CANCELLED', 'Upload cancelled.', 409);
-            // A same-directory hard link publishes the complete file without replacing an existing name.
-            await link(staged, fd + '/' + name);
-            return { path, size };
-          } finally {
             try {
-              await file.close();
+              for await (const chunk of content) {
+                size += chunk.length;
+                if (size > projectFileLimits.uploadBytes)
+                  throw new AppError(
+                    'PROJECT_FILE_LIMIT',
+                    'Project uploads must be at most 64 MiB.',
+                    413,
+                  );
+                await file.writeFile(chunk);
+              }
+              await file.sync();
+              await this.checkDirectory(handle, resolve(project.path, directory));
+              this.checkWrite(project);
+              if (cancelled()) throw new AppError('UPLOAD_CANCELLED', 'Upload cancelled.', 409);
+              // Publish the complete file without replacing an existing name.
+              try {
+                await link(staged, fd + '/' + name);
+              } catch (error) {
+                if (!composerAttachment || !record(error) || error.code !== 'EEXIST') throw error;
+                const id = randomUUID();
+                const prefix = id.slice(0, 8) + '-';
+                const extension = extname(name);
+                const alternative =
+                  Buffer.byteLength(prefix + name) <= 255
+                    ? prefix + name
+                    : id + (Buffer.byteLength(extension) <= 32 ? extension : '');
+                path = this.child(project, directory, alternative, showHidden, roots);
+                await this.checkDirectory(handle, resolve(project.path, directory));
+                this.checkWrite(project);
+                if (cancelled()) throw new AppError('UPLOAD_CANCELLED', 'Upload cancelled.', 409);
+                await link(staged, fd + '/' + alternative);
+              }
             } finally {
               await unlink(staged);
             }
+            // Removing the staging link updates ctime. Capture the version after that change.
+            return { path, size, version: version(await file.stat({ bigint: true })) };
+          } finally {
+            await file.close();
           }
         },
       );

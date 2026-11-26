@@ -26,13 +26,14 @@ async function sendRequest<T>(
   init: RequestInit = {},
   signal?: AbortSignal,
   readDownload?: (response: Response) => Promise<T>,
+  idleTimeoutMs = inactivityTimeoutMs,
 ): Promise<T> {
   const writing = !['GET', 'HEAD', 'OPTIONS'].includes((init.method ?? 'GET').toUpperCase());
   const timeout = new AbortController();
   let phase: 'headers' | 'body' = 'headers';
   let deadlineReached = false;
   const expire = () => timeout.abort(new DOMException('Request deadline exceeded', 'TimeoutError'));
-  let idleTimer = setTimeout(expire, inactivityTimeoutMs);
+  let idleTimer = setTimeout(expire, idleTimeoutMs);
   const deadline = writing
     ? undefined
     : setTimeout(() => {
@@ -41,7 +42,7 @@ async function sendRequest<T>(
       }, readDeadlineMs);
   const progress = () => {
     clearTimeout(idleTimer);
-    idleTimer = setTimeout(expire, inactivityTimeoutMs);
+    idleTimer = setTimeout(expire, idleTimeoutMs);
   };
   const uncertainty = writing ? ' Check the result before sending again.' : '';
   try {
@@ -136,8 +137,13 @@ async function sendRequest<T>(
     clearTimeout(deadline);
   }
 }
-export function request<T>(path: string, init: RequestInit = {}, signal?: AbortSignal) {
-  return sendRequest<T>(path, init, signal);
+export function request<T>(
+  path: string,
+  init: RequestInit = {},
+  signal?: AbortSignal,
+  idleTimeoutMs?: number,
+) {
+  return sendRequest<T>(path, init, signal, undefined, idleTimeoutMs);
 }
 export function downloadDatabaseBackup(signal: AbortSignal) {
   return sendRequest('/settings/backup', { method: 'POST' }, signal, async (response) => {

@@ -936,6 +936,64 @@ it('saves project uploads without overwrite and streams downloads', async () => 
   }
 });
 
+it('saves composer documents in the project with a version and preserves both uploads on collision', async () => {
+  const testRoot = await mkdtemp(join(tmpdir(), 'codes-composer-attachment-test-'));
+  try {
+    const workspace = join(testRoot, 'attachments-project');
+    await mkdir(workspace);
+    const project = await service.addProject(workspace);
+    const api = origin + '/api/projects/' + project.id + '/file-management';
+    const attach = (content: Uint8Array<ArrayBuffer>, name: string, session = cookie) =>
+      fetch(api + '/attach?' + new URLSearchParams({ name }), {
+        method: 'POST',
+        headers: { origin, cookie: session, 'content-type': 'application/octet-stream' },
+        body: content,
+      });
+    const firstBytes = Uint8Array.of(0x25, 0x50, 0x44, 0x46, 0xff);
+    const otherBytes = Uint8Array.of(0x25, 0x50, 0x44, 0x46, 0x00);
+    expect((await attach(firstBytes, 'sample.pdf', '')).status).toBe(401);
+    expect((await attach(firstBytes, '../escape.pdf')).status).toBe(403);
+    const responses = await Promise.all([
+      attach(firstBytes, 'sample.pdf'),
+      attach(otherBytes, 'sample.pdf'),
+    ]);
+    expect(responses.map((item) => item.status)).toEqual([201, 201]);
+    const [first, second] = await Promise.all(responses.map((item) => item.json()));
+    expect(first.path).not.toEqual(second.path);
+    for (const [attachment, bytes] of [
+      [first, firstBytes],
+      [second, otherBytes],
+    ] as const) {
+      expect(attachment).toEqual({
+        kind: 'file-reference',
+        path: expect.stringMatching(/^codes-attachments\/(?:[a-f0-9]{8}-)?sample\.pdf$/),
+        version: expect.stringMatching(/^[a-f0-9]{64}$/),
+      });
+      expect(await readFile(join(workspace, attachment.path))).toEqual(Buffer.from(bytes));
+      const reference = await fetch(
+        api + '/reference?' + new URLSearchParams({ path: attachment.path }),
+        {
+          headers: { cookie },
+        },
+      );
+      expect(await reference.json()).toEqual(attachment);
+    }
+
+    const otherDirectory = join(testRoot, 'symlink-attachments-project');
+    await mkdir(otherDirectory);
+    await symlink(workspace, join(otherDirectory, 'codes-attachments'));
+    const other = await service.addProject(otherDirectory);
+    const denied = await fetch(
+      origin + '/api/projects/' + other.id + '/file-management/attach?name=outside.pdf',
+      { method: 'POST', headers: { origin, cookie }, body: firstBytes },
+    );
+    expect(denied.status).toBe(403);
+    expect(await readdir(workspace)).toEqual(['codes-attachments']);
+  } finally {
+    await rm(testRoot, { recursive: true, force: true });
+  }
+});
+
 it('paginates a managed project folder and invalidates the page when the directory changes', async () => {
   const workspace = await mkdtemp(join(tmpdir(), 'codes-file-pages-'));
   try {

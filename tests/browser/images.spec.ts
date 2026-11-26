@@ -29,7 +29,9 @@ async function loadedImages(page: Page, selector: string, count: number) {
     .toBe(true);
 }
 
-test('the plus menu attaches a local text file and a file from the project', async ({ page }) => {
+test('the plus menu attaches text, local documents, and a file from the project', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   const trigger = page.getByRole('button', { name: 'Attach files', exact: true });
@@ -39,9 +41,7 @@ test('the plus menu attaches a local text file and a file from the project', asy
   const browse = page.getByRole('button', { name: 'Browse project files', exact: true });
   await expect(upload).toHaveAccessibleDescription(/UTF-8 text · 64 KiB max/);
   await expect(upload).toContainText('PNG, JPEG, WebP · 8 MiB max');
-  await expect(browse).toHaveAccessibleDescription(
-    'Upload or reference PDF, Word, and other files',
-  );
+  await expect(upload).toContainText('PDF, Word, and other files · 64 MiB max');
   const chooser = page.waitForEvent('filechooser');
   await upload.click();
   await (
@@ -54,15 +54,36 @@ test('the plus menu attaches a local text file and a file from the project', asy
   await expect(
     page.getByRole('button', { name: 'Remove device-notes.md', exact: true }),
   ).toBeVisible();
-  await page.getByLabel('Choose local files', { exact: true }).setInputFiles({
-    name: 'report.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from([0x25, 0x50, 0x44, 0x46, 0xff]),
+  await page.getByLabel('Choose local files', { exact: true }).setInputFiles([
+    {
+      name: 'report.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\nDocument bytes stay on disk'),
+    },
+    {
+      name: 'notes.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+    },
+    {
+      name: 'unknown.bin',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from([0xff, 0x00]),
+    },
+  ]);
+  const removeUnknown = page.getByRole('button', {
+    name: 'Remove codes-attachments/unknown.bin',
+    exact: true,
   });
-  await expect(page.getByRole('alert')).toContainText(
-    'Upload it in Files and choose Reference in conversation.',
-  );
-  await page.getByRole('button', { name: 'Dismiss error', exact: true }).click();
+  await expect(removeUnknown).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Remove codes-attachments/report.pdf' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Remove codes-attachments/notes.docx' }),
+  ).toBeVisible();
+  await removeUnknown.click();
   await trigger.click();
   await browse.click();
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
@@ -71,7 +92,7 @@ test('the plus menu attaches a local text file and a file from the project', asy
   const sending = page.waitForRequest(
     (request) => request.method() === 'POST' && request.url().endsWith('/send'),
   );
-  await page.getByLabel('Message Codex').fill('Read both attachments');
+  await page.getByLabel('Message Codex').fill('Read these attachments');
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   const body = (await sending).postDataJSON();
   expect(body.attachments).toEqual([
@@ -80,11 +101,23 @@ test('the plus menu attaches a local text file and a file from the project', asy
       id: expect.stringMatching(/^[a-f0-9]{64}$/),
       name: 'device-notes.md',
     },
+    {
+      kind: 'file-reference',
+      path: 'codes-attachments/report.pdf',
+      version: expect.stringMatching(/^[a-f0-9]{64}$/),
+    },
+    {
+      kind: 'file-reference',
+      path: 'codes-attachments/notes.docx',
+      version: expect.stringMatching(/^[a-f0-9]{64}$/),
+    },
     { path: 'example.ts', fromLine: 1, toLine: expect.any(Number), sha: expect.any(String) },
   ]);
   expect(JSON.stringify(body)).not.toContain('Local attachment test content');
   await expect(page.getByTestId('message-user')).toContainText('Local attachment test content');
   await expect(page.getByTestId('message-user')).toContainText('export function hello');
+  await expect(page.getByTestId('message-user')).toContainText('codes-attachments/report.pdf');
+  await expect(page.getByTestId('message-user')).not.toContainText('Document bytes stay on disk');
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
 });
 

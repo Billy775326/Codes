@@ -832,12 +832,11 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Upload from device': '从设备上传',
   'UTF-8 text · 64 KiB max': 'UTF-8 文本 · 最大 64 KiB',
   'PNG, JPEG, WebP · 8 MiB max': 'PNG、JPEG、WebP · 最大 8 MiB',
-  'Upload or reference PDF, Word, and other files': '上传或引用 PDF、Word 等文件',
+  'PDF, Word, and other files · 64 MiB max': 'PDF、Word 等文件 · 最大 64 MiB',
+  'Saved in the project’s codes-attachments folder': '原文件存入项目的 codes-attachments 目录',
   'Choose a non-empty file.': '请选择非空文件。',
-  'Text attachments are limited to 64 KiB. For larger files, upload in Files and choose Reference in conversation.':
-    '文本附件最大为 64 KiB。更大的文件可在「文件」侧栏上传，再选择「引用到会话」。',
-  'This file is not UTF-8 text. Upload it in Files and choose Reference in conversation.':
-    '这个文件无法作为 UTF-8 文本导入。请在「文件」侧栏上传，再选择「引用到会话」。',
+  'Upload was not confirmed. Check the codes-attachments folder before retrying.':
+    '上传结果未确认，请先检查项目的 codes-attachments 目录再重试。',
   'Uploading {count} attachment(s)…': '正在上传 {count} 个附件…',
   'Use the folder name': '使用目录名称',
   Viewed: '已查看',

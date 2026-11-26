@@ -2135,23 +2135,16 @@ function App() {
                         {t('UTF-8 text · 64 KiB max')}
                         <br />
                         {t('PNG, JPEG, WebP · 8 MiB max')}
+                        <br />
+                        {t('PDF, Word, and other files · 64 MiB max')}
+                        <br />
+                        {t('Saved in the project’s codes-attachments folder')}
                       </small>
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    data-close-menu
-                    aria-label={t('Browse project files')}
-                    aria-describedby="composer-project-file-formats"
-                    onClick={() => setPanel('files')}
-                  >
+                  <button type="button" data-close-menu onClick={() => setPanel('files')}>
                     <Icon name="folder" size={16} />
-                    <span className="menu-action-copy">
-                      {t('Browse project files')}
-                      <small id="composer-project-file-formats">
-                        {t('Upload or reference PDF, Word, and other files')}
-                      </small>
-                    </span>
+                    {t('Browse project files')}
                   </button>
                 </PanelMenu>
                 <input
