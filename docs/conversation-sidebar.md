@@ -1,15 +1,10 @@
 # Conversation sidebar
 
-The sidebar displays lightweight project and conversation summaries. Open [Projects and chats](conversations.md) for the user workflow.
+The sidebar lists native Codex conversations. The list starts with active sessions across all working directories. Use **Cwd** for the selected working directory or **Archived** for native archived conversations. [Conversation workflow](conversations.md)
 
-## Layout
-
-- Show one card per registered project. Within a group, pinned projects come first, then projects by the latest observed conversation update. Empty projects follow in name order.
-- Open the current project and active work by default. Fold inactive cards and remember explicit user choices. Load a folded project's conversation page when needed.
-- Show each conversation's status and update time. Render times in the browser's timezone with a full timestamp on hover. Keep page cursors within their project.
-- Put new conversation and project actions on the card. Rename the selected conversation in the workspace header and archive or restore from the row.
-- Use the archive view for archived projects and archived conversations. A project's archive state is independent of its chats' archive state.
-- Share title search and refresh across the visible project navigation. Native pagination reaches beyond the local summary snapshot. Each card brings in metadata without loading its conversations' message bodies.
+- Each row shows a title and timestamp. The **All** view also shows the working directory. Select **Updated** or **Created** when the installed CLI supports sorting.
+- Search uses native title filtering where available. Older versions use bounded page scans. Page cursors are tied to the current directory, archive, sort, and search filters.
+- Rename the selected conversation in the header. Archive and restore from its sidebar row. The new conversation button starts a draft in the current directory or prompts for one.
 
 ## State sources and precedence
 
@@ -24,10 +19,10 @@ The sidebar displays lightweight project and conversation summaries. Open [Proje
 
 Native list observations can update available summaries when there is no owned execution lease or pending interaction. Native idle or unloaded status alone cannot settle an operation. Opening imported history can establish an outcome, which a later stale list result must preserve. Revisions protect newer activity and simultaneous rename or archive updates.
 
-Project activity is available from the local summary before native list pages finish. Cards share a four-request list budget. Summary events and selected conversation events use the existing workspace subscription. Queue badges use metadata and omit accepted deliveries.
+Browsing uses metadata pages without loading transcripts. A new search or filter cancels obsolete browser reads. Summary events update visible rows through the existing workspace subscription. Queue badges omit accepted deliveries.
 
 ## Interaction and verification
 
 Conversation rows keep the title as the accessible name and expose time, execution, and queue details in their description. The selected item uses `aria-current`. Archive confirmations and keyboard focus remain available in both layouts.
 
-Test precedence, stale-list responses, navigation restore, search, archive behavior, and reconnect with both browser themes. [Interface design](interface-design.md) · [Acceptance](acceptance.md)
+Test precedence, stale-list responses, working directory selection, search, archive behavior, and reconnect with both browser themes. [Interface design](interface-design.md) · [Acceptance](acceptance.md)

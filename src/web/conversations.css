@@ -50,128 +50,64 @@
   align-items: center;
   justify-content: center;
 }
-.conversation-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 10px;
-}
+.conversation-controls,
 .conversation-tools {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
-.app .conversation-controls .archive-toggle[aria-pressed='true'] {
-  width: auto;
-  gap: 6px;
-  padding-inline: 8px;
-  font-size: 13px;
+.conversation-controls {
+  justify-content: space-between;
+  padding: 0 8px;
 }
-.archive-toggle[aria-pressed='true'] svg {
-  transform: rotate(180deg);
-}
-.project-cards {
-  padding: 0 10px 10px;
-  flex: 1;
-  overflow: auto;
-  min-height: 0;
-}
-.project-card {
+.session-sort {
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  margin-bottom: 5px;
-  background: var(--field);
+  min-height: 30px;
+  max-width: 46%;
+  padding: 2px 5px;
+  font-size: 12px;
 }
-.project-cards:has(.project-card:not([hidden])) > .sidebar-search-empty {
-  display: none;
-}
-.archive-loading,
-.project-cards:has(.project-card[aria-busy='true']) > .archive-empty,
-.project-cards:has(.project-card:not([hidden])) > .archive-empty {
-  display: none;
-}
-.project-cards:has(.project-card[aria-busy='true']):not(:has(.project-card:not([hidden])))
-  > .archive-loading {
-  display: block;
-}
-.project-card:has(.project-card-name[aria-current='true']) {
-  border-color: color-mix(in srgb, var(--link) 45%, var(--line));
-}
-.project-card-header {
+.session-filters {
   display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 8px 6px;
 }
-.project-card-header h2 {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0;
-}
-.project-card-name {
+.session-filters > div {
   display: flex;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  min-height: 32px;
-  border-radius: 5px;
-  text-align: left;
-}
-.project-card-name svg,
-.project-card-header > .icon-button {
-  flex-shrink: 0;
-}
-.app .project-card-header .project-card-disclosure {
-  color: var(--fg);
-}
-.project-card-disclosure[aria-expanded='true'] svg {
-  transform: rotate(90deg);
-}
-.project-card-name svg {
-  color: var(--muted);
-}
-.project-card-name span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.project-card-name:hover:not(:disabled) {
-  background: var(--hover);
-}
-.project-conversations:not(:empty) {
-  padding: 0 2px 2px;
-}
-.project-chat-filter {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2px;
-  margin: 0 4px 4px;
-  padding: 2px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--panel);
+  padding: 2px;
 }
-.project-chat-filter button {
-  min-height: calc(var(--control-size) - 8px);
-  padding: 3px 4px;
-  border: 1px solid transparent;
+.session-filters button {
+  padding: 3px 6px;
   border-radius: 4px;
   color: var(--muted);
   font-size: 12px;
+  min-height: 24px;
 }
-.project-chat-filter button:hover:not(:disabled) {
+.session-filters button:hover:not(:disabled) {
   background: var(--hover);
 }
-.project-chat-filter button[aria-pressed='true'] {
-  border-color: var(--border);
+.session-filters button[aria-pressed='true'] {
   background: var(--selected);
   color: var(--fg);
+}
+.session-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+.session-cwd {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .conversation-row {
   border-radius: 5px;
@@ -184,6 +120,9 @@
 }
 .conversation-row.selected:hover {
   background: var(--selected);
+}
+.conversation-row-action {
+  flex-shrink: 0;
 }
 .conversation-row-heading {
   display: flex;
@@ -304,62 +243,6 @@
 .conversation-queue.tone-error {
   color: var(--status-error);
 }
-.project-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 2px;
-  padding: 0 6px 4px;
-  flex-wrap: wrap;
-}
-.project-actions .sidebar-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 32px;
-  min-height: 30px;
-  font-size: 12px;
-  padding: 4px 6px;
-  color: var(--muted);
-  border-radius: 5px;
-}
-.sidebar-action > svg {
-  flex-shrink: 0;
-}
-.sidebar-action > span {
-  display: none;
-}
-.project-actions .sidebar-action:hover:not(:disabled),
-.project-actions .sidebar-action:focus-visible {
-  color: var(--fg);
-  background: var(--hover);
-}
-.conversation-rename {
-  padding: 2px 8px 12px;
-}
-.conversation-rename label {
-  display: block;
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 7px;
-}
-.conversation-rename input {
-  width: 100%;
-  font-size: 14px;
-  padding: 8px 9px;
-}
-.conversation-rename > div {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
-}
-.conversation-rename button {
-  font-size: 12px;
-  padding: 7px 8px;
-  border-radius: 5px;
-}
 .conversation-pagination {
   display: flex;
   align-items: center;
@@ -468,11 +351,15 @@
   }
   .conversation-controls select,
   .conversation-search button,
-  .project-actions .sidebar-action {
+  .session-filters button {
     min-height: 36px;
   }
-  .conversation-rename input {
-    font-size: 16px;
+  .conversation-confirm .conversation-confirm-actions {
+    flex-wrap: nowrap;
+  }
+  .conversation-confirm .conversation-confirm-actions button {
+    min-width: 0;
+    padding-inline: 8px;
   }
   .conversation-pagination button {
     width: 36px;
@@ -488,16 +375,44 @@
   }
 }
 @media (hover: none) {
-  .project-actions .sidebar-action {
-    min-height: 40px;
-  }
-  .project-actions .sidebar-action > span {
-    display: inline;
-  }
-  .project-card-name {
-    min-height: 38px;
-  }
   .conversations .thread-link {
     min-height: 36px;
   }
+}
+
+.directory-picker-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.directory-picker-input input {
+  flex: 1;
+  min-width: 0;
+}
+.directory-picker-list {
+  display: grid;
+  max-height: 200px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px;
+}
+.directory-picker-list button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  min-height: 32px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.directory-picker-list button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.directory-picker-list svg {
+  flex-shrink: 0;
+}
+
+.directory-picker-parent svg {
+  transform: rotate(-90deg);
 }

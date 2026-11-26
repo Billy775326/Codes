@@ -182,7 +182,7 @@ for (const width of [1440, 320])
     await fixture(page);
     await page.getByRole('button', { name: 'New conversation', exact: true }).click();
     let fail = true;
-    await page.route('**/api/projects/*/snapshot', (route) =>
+    await page.route('**/api/conversations/snapshot', (route) =>
       fail
         ? route.fulfill({
             status: 403,

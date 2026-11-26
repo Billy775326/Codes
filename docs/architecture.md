@@ -62,11 +62,11 @@ The read scheduler shares identical requests and stops fetching subsequent nativ
 
 Other budgets are documented where they apply. [Files and previews](conversation-details.md#preview-documents-images-and-html) · [Attachments](image-attachments.md#supported-inputs-and-limits) · [Browser recovery](operations.md#when-the-page-disconnects)
 
-## Project and conversation context
+## Native sessions and working directories
 
-The server checks native conversation ownership against the registered directory. Snapshots carry verified project context and directory health. The browser uses that context for file and execution actions. A broken directory retains readable history while the affected actions wait for directory recovery. [Navigation](session-navigation-proposal.md#ownership-and-directory-health)
+The session list pages native metadata without loading transcripts. Snapshots use the native thread working directory to establish file and execution context. A missing directory keeps history readable while directory actions wait for recovery. [Working directories](conversations.md#working-directories)
 
-SQLite schema 6 stores Codes projects, preferences where applicable, receipts, queues, and attachment metadata. The native history and CLI login belong to the Codex home. [Persistent state](operations.md#persistent-state)
+SQLite schema 6 stores directory scopes, preferences where applicable, receipts, queues, and attachment metadata. The native history and CLI login belong to the Codex home. [Persistent state](operations.md#persistent-state)
 
 ## Compatibility and trust
 

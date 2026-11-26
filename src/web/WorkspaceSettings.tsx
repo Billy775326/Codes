@@ -6,19 +6,7 @@ import { useInterfaceLanguage } from './interface-language';
 const path = '/settings/workspace';
 type Draft = { changed: boolean; busy: boolean };
 
-export function WorkspaceSettings({
-  field,
-  onDraft,
-  onSaved,
-  fallbackDirectory,
-  activeDirectory,
-}: {
-  field: 'defaultProjectDirectory' | 'sessionHours';
-  onDraft: (draft: Draft) => void;
-  onSaved?: () => void;
-  fallbackDirectory?: string;
-  activeDirectory?: string;
-}) {
+export function WorkspaceSettings({ onDraft }: { onDraft: (draft: Draft) => void }) {
   const { t } = useInterfaceLanguage();
   const [snapshot, setSnapshot] = useState<WorkspaceSettingsSnapshot>();
   const [value, setValue] = useState('');
@@ -27,10 +15,7 @@ export function WorkspaceSettings({
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(false);
-  const directory = field === 'defaultProjectDirectory';
-  const heading = directory ? 'New project default' : 'Sign-in session';
-  const label = directory ? 'Default project directory' : 'Login validity';
-  const changed = !!snapshot && value.trim() !== String(snapshot.settings[field]);
+  const changed = !!snapshot && value !== String(snapshot.settings.sessionHours);
 
   function load() {
     setError('');
@@ -45,14 +30,14 @@ export function WorkspaceSettings({
     void request<WorkspaceSettingsSnapshot>(path, {}, controller.signal).then(
       (next) => {
         setSnapshot(next);
-        setValue(String(next.settings[field]));
+        setValue(String(next.settings.sessionHours));
       },
       (failure) => {
         if (!controller.signal.aborted) setError(message(failure));
       },
     );
     return () => controller.abort();
-  }, [attempt, field]);
+  }, [attempt]);
 
   useEffect(() => onDraft({ changed, busy }), [busy, changed, onDraft]);
   async function save() {
@@ -64,15 +49,14 @@ export function WorkspaceSettings({
       const next = await request<WorkspaceSettingsSnapshot>(path, {
         method: 'PATCH',
         body: JSON.stringify({
-          field,
-          expected: snapshot.settings[field],
-          value: directory ? value : Number(value),
+          field: 'sessionHours',
+          expected: snapshot.settings.sessionHours,
+          value: Number(value),
         }),
       });
       setSnapshot(next);
-      setValue(String(next.settings[field]));
+      setValue(String(next.settings.sessionHours));
       setSaved(true);
-      onSaved?.();
     } catch (failure) {
       setError(message(failure));
       setReload(failure instanceof ApiError && (failure.status === 409 || failure.uncertain));
@@ -82,8 +66,8 @@ export function WorkspaceSettings({
   }
 
   return (
-    <section className="preferences-section" aria-labelledby={'settings-heading-' + field}>
-      <h3 id={'settings-heading-' + field}>{t(heading)}</h3>
+    <section className="preferences-section" aria-labelledby="settings-heading-sessionHours">
+      <h3 id="settings-heading-sessionHours">{t('Sign-in session')}</h3>
       <form
         className="network-settings"
         onSubmit={(event) => {
@@ -92,54 +76,31 @@ export function WorkspaceSettings({
         }}
       >
         {snapshot && (
-          <label className={directory ? undefined : 'preference-row'}>
+          <label className="preference-row">
             <span className="preference-description">
-              {t(label)}
-              <span className="preference-help" id={'settings-help-' + field}>
-                {t(
-                  directory
-                    ? 'Prefills Add project. Leave empty to use the server default.'
-                    : 'Applies to new sign-ins. Existing sessions keep their expiry.',
-                )}
+              {t('Login validity')}
+              <span className="preference-help" id="settings-help-sessionHours">
+                {t('Applies to new sign-ins. Existing sessions keep their expiry.')}
               </span>
             </span>
-            {directory ? (
-              <input
-                value={value}
-                aria-label={t(label)}
-                placeholder={
-                  fallbackDirectory ??
-                  (snapshot.settings.defaultProjectDirectory ? undefined : activeDirectory)
-                }
-                aria-describedby={'settings-help-' + field}
-                disabled={busy}
-                maxLength={2048}
-                spellCheck={false}
-                onChange={(event) => {
-                  setValue(event.target.value);
-                  setSaved(false);
-                }}
-              />
-            ) : (
-              <select
-                value={value}
-                aria-label={t(label)}
-                aria-describedby={'settings-help-' + field}
-                disabled={busy}
-                onChange={(event) => {
-                  setValue(event.target.value);
-                  setSaved(false);
-                }}
-              >
-                {sessionHours.map((hours) => (
-                  <option value={hours} key={hours}>
-                    {hours < 24
-                      ? t('{count} hours', { count: hours })
-                      : t('{count} days', { count: hours / 24 })}
-                  </option>
-                ))}
-              </select>
-            )}
+            <select
+              value={value}
+              aria-label={t('Login validity')}
+              aria-describedby="settings-help-sessionHours"
+              disabled={busy}
+              onChange={(event) => {
+                setValue(event.target.value);
+                setSaved(false);
+              }}
+            >
+              {sessionHours.map((hours) => (
+                <option value={hours} key={hours}>
+                  {hours < 24
+                    ? t('{count} hours', { count: hours })
+                    : t('{count} days', { count: hours / 24 })}
+                </option>
+              ))}
+            </select>
           </label>
         )}
         {!snapshot && !error && <p role="status">{t('Loading workspace settings…')}</p>}
@@ -155,7 +116,7 @@ export function WorkspaceSettings({
             <button
               type="submit"
               className="settings-action"
-              aria-label={t(directory ? 'Save default project directory' : 'Save login validity')}
+              aria-label={t('Save login validity')}
               disabled={!changed || busy || reload}
             >
               {busy ? t('Saving…') : t('Save')}

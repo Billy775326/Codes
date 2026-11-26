@@ -22,7 +22,7 @@ Start with the [English quick start](../README.md) or [简体中文快速开始]
 - [Development](development.md) lists build commands, test fixtures, and the CLI compatibility checks.
 - [Architecture](architecture.md) explains process boundaries, task coordination, and resource limits.
 - [Spec Coding](spec-coding.md) records execution ownership and invariants for changes.
-- [Interface design](interface-design.md), [project navigation](session-navigation-proposal.md), and [sidebar state](conversation-sidebar.md) document interaction and implementation contracts.
+- [Interface design](interface-design.md), [native conversation navigation](conversations.md), and [sidebar state](conversation-sidebar.md) document interaction and implementation contracts.
 - [Acceptance](acceptance.md) lists verification gates and recorded evidence. [IDE alignment](ide-parity.md) describes the historical client audit and the supported interaction surface.
 - [Roadmap](roadmap.md) and [open work](requirements.md) describe proposals and remaining verification.
 - [Changelog](../CHANGELOG.md) and [brand](brand.md) cover user-visible changes and identity assets.

@@ -72,7 +72,7 @@ test('full names appear on hover only when the displayed title is clipped', asyn
 });
 
 for (const width of [1440, 320]) {
-  test(`one workspace heading and project dialog preserve keyboard access at ${width}px`, async ({
+  test(`one workspace heading and directory dialog preserve keyboard access at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: width === 320 ? 640 : 1000 });
@@ -81,28 +81,24 @@ for (const width of [1440, 320]) {
       page.getByRole('main', { name: 'Conversation workspace', exact: true }),
     ).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('New conversation');
-    if (width === 320)
-      await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
-    await expect(page.locator('.project-card-name[aria-current="true"]')).toHaveCount(1);
-    const add = page.getByRole('button', { name: 'Add project', exact: true });
-    await add.click();
-    const dialog = page.getByRole('dialog', { name: 'Add a project', exact: true });
-    await expect(
-      page.getByRole('dialog', { name: 'Workspace navigation', exact: true }),
-    ).toHaveCount(0);
-    await expect(dialog.getByLabel('Project directory on server')).toBeFocused();
-    await dialog.getByLabel('Project directory on server').fill('/synthetic/project-path');
+    const changeDirectory = page.getByRole('button', {
+      name: 'Change working directory',
+      exact: true,
+    });
+    await changeDirectory.click();
+    const dialog = page.getByRole('dialog', { name: 'Choose a working directory', exact: true });
+    const path = dialog.getByLabel('Working directory', { exact: true });
+    await expect(path).toBeFocused();
+    await path.fill('/synthetic/project-path');
     await page.keyboard.press('Shift+Tab');
     await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused();
     await page.keyboard.press('Shift+Tab');
-    await expect(dialog.getByRole('button', { name: 'Add project', exact: true })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: 'Use directory', exact: true })).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(dialog.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
-    await expect(add).toBeFocused();
-    if (width === 320)
-      await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
+    await expect(changeDirectory).toBeFocused();
     await page.getByRole('button', { name: 'Explore this project', exact: true }).click();
     await expect(page.getByLabel('Message Codex')).toHaveValue(
       'Explain the architecture of this project and its main entry points.',

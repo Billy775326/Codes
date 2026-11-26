@@ -82,12 +82,12 @@ The command checks matching backend output and unversioned public assets, retain
 
 ## Persistent state
 
-| Location                            | Contents                                                                                                           |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `CODES_DATA_DIR` (default `.local`) | Codes SQLite database, workspace settings, access token, image files, server lock, and simulator history when used |
-| Codex home                          | Native configuration, login, and Codex conversation history                                                        |
-| Project directories                 | Source, user files, and originals uploaded into the project                                                        |
-| Browser local storage               | Text drafts, selected views, and preferences                                                                       |
+| Location                                          | Contents                                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `CODES_DATA_DIR` (default `~/.local/share/codes`) | Codes SQLite database, workspace settings, access token, image files, server lock, and simulator history when used |
+| Codex home                                        | Native configuration, login, and Codex conversation history                                                        |
+| Project directories                               | Source, user files, and originals uploaded into the project                                                        |
+| Browser local storage                             | Text drafts, selected views, and preferences                                                                       |
 
 Codes retains completed or failed operation receipts and completed or cancelled queue entries for 30 days. Unknown receipts and waiting or unresolved queue entries remain available for recovery. Protect the data directory and Codex home with the service account's permissions. [Schema and rollback](conversations.md#metadata-migration-and-rollback)
 
@@ -97,13 +97,13 @@ In **Settings → Backup & restore**, select **Download database backup**. Codes
 
 1. Select a same-schema SQLite snapshot in **Backup & restore** and choose **Prepare restore**.
 2. Let active work finish, stop the service, and run `codes restore-database` as the service user with the same data directory. In a built checkout, `npm run restore:database` is equivalent.
-3. Restart, sign in, and verify projects, native histories, and queues before resuming work.
+3. Restart, sign in, and verify native histories, working directories, and queues before resuming work.
 
 Codes locks the data directory, writes the original database to a private `before-restore-*` recovery directory, then installs the validated snapshot. Use **Remove prepared backup** to cancel a staged restore. [Migration backups and cross-version rollback](conversations.md#metadata-migration-and-rollback)
 
 ## Existing Codex conversations
 
-Register the original working directory in **Add project** using the Linux account that has the native history. Search **Chats** and **Archived** to find the thread. Codes reuses its native ID and reads both legacy and paginated history. [Projects and chats](conversations.md)
+Run Codes with the same Linux account and effective `CODEX_HOME` as your CLI. Choose **All**, then search **Active** or **Archived**. Codes opens the native thread ID and reads both legacy and paginated history. [Conversations](conversations.md)
 
 ### Imported conversations still open in another client
 
@@ -111,9 +111,9 @@ Register the original working directory in **Add project** using the Linux accou
 
 Use **Continue in branch** when the source must remain open. The branch includes history through the latest eligible terminal turn and carries the unsent draft and attachments. Check queued work before resuming after contention. [Native writer locking at CLI 0.167.0](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/rollout/src/writer_lock.rs)
 
-## Project directory recovery
+## Working directory recovery
 
-Restore the registered directory or its access permissions and choose **Retry directory**. Historical messages remain available while new execution and project file access are blocked. A waiting queue may need an explicit resume after recovery. [Directory states](session-navigation-proposal.md#ownership-and-directory-health)
+Restore the original working directory or its access permissions and choose **Retry directory**. Historical messages remain available while new execution and project file access are blocked. A waiting queue may need an explicit resume after recovery. [Working directories](conversations.md#working-directories)
 
 ## Runtime settings
 

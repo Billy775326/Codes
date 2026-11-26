@@ -89,7 +89,6 @@ export class ProjectFileManagement {
   constructor(
     private readonly dataDirectory: string,
     private readonly requireProject: (id: string) => Promise<Project>,
-    private readonly project: (id: string) => Project,
   ) {}
 
   private async privateRoots() {
@@ -156,8 +155,6 @@ export class ProjectFileManagement {
 
   private checkWrite(project: Project) {
     if (project.path === '/') throw denied();
-    if (this.project(project.id).archived)
-      throw new AppError('PROJECT_ARCHIVED', 'Restore the project before changing its files.', 409);
   }
 
   private child(

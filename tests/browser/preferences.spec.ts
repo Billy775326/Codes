@@ -693,14 +693,10 @@ test('searches settings in both languages and downloads a database backup on a n
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
-test('saves project and sign-in settings independently and remembers file visibility', async ({
+test('saves sign-in settings and remembers hidden-file visibility independently', async ({
   page,
 }) => {
   await fixture(page, 'Workspace settings fixture');
-  const project = (await (await page.request.get('/api/projects')).json()).find(
-    (item: { name: string }) => item.name === 'sample-project',
-  );
-  const directory = join(project.path, 'conversation-fixtures');
   const launcher = page.getByRole('button', { name: 'Interaction settings', exact: true });
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   await launcher.click();
@@ -708,52 +704,30 @@ test('saves project and sign-in settings independently and remembers file visibi
   await chooseSettingsSection(dialog, 'Network & access');
   const validity = dialog.getByRole('combobox', { name: 'Login validity', exact: true });
   const before = await validity.inputValue();
-  await validity.selectOption('24');
-  await chooseSettingsSection(dialog, 'Projects');
-  const defaultPath = dialog.getByRole('textbox', {
-    name: 'Default project directory',
-    exact: true,
-  });
-  await expect(defaultPath).toHaveValue('');
-  await expect(defaultPath).toHaveAttribute('placeholder', project.path);
-  await defaultPath.fill(directory);
-  const refresh = page.waitForResponse((response) => response.url().endsWith('/api/system'));
-  await dialog.getByRole('button', { name: 'Save default project directory' }).click();
-  await refresh;
-  await expect(
-    dialog.getByRole('status').filter({ hasText: 'Workspace settings saved.' }),
-  ).toBeVisible();
+  const duration = before === '24' ? '12' : '24';
+  await validity.selectOption(duration);
+  await chooseSettingsSection(dialog, 'Instructions');
+  await expect(dialog.getByLabel('Default project directory')).toHaveCount(0);
   await chooseSettingsSection(dialog, 'Network & access');
-  await expect(validity).toHaveValue('24');
+  await expect(validity).toHaveValue(duration);
   await dialog.getByRole('button', { name: 'Save login validity' }).click();
   await expect(
     dialog.getByRole('status').filter({ hasText: 'Workspace settings saved.' }),
   ).toBeVisible();
   try {
     await dialog.getByRole('button', { name: 'Done' }).click();
-    await page.getByRole('button', { name: 'Add project', exact: true }).click();
-    await expect(page.getByLabel('Project directory on server')).toHaveValue(directory);
-    await page.keyboard.press('Escape');
     await page.reload();
     await launcher.click();
     await expect(
       dialog.getByRole('switch', { name: 'Show hidden files', exact: true }),
     ).toBeChecked();
     await chooseSettingsSection(dialog, 'Network & access');
-    await expect(validity).toHaveValue('24');
-    await chooseSettingsSection(dialog, 'Projects');
-    await expect(defaultPath).toHaveValue(directory);
-    await defaultPath.clear();
-    await expect(defaultPath).toHaveAttribute('placeholder', project.path);
+    await expect(validity).toHaveValue(duration);
   } finally {
-    const headers = { Origin: new URL(page.url()).origin };
-    for (const patch of [
-      { field: 'sessionHours', expected: 24, value: Number(before) },
-      { field: 'defaultProjectDirectory', expected: directory, value: '' },
-    ]) {
-      expect(
-        (await page.request.patch('/api/settings/workspace', { headers, data: patch })).ok(),
-      ).toBe(true);
-    }
+    const response = await page.request.patch('/api/settings/workspace', {
+      headers: { Origin: new URL(page.url()).origin },
+      data: { field: 'sessionHours', expected: Number(duration), value: Number(before) },
+    });
+    expect(response.ok()).toBe(true);
   }
 });

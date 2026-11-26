@@ -23,7 +23,7 @@ Desktop sidebars resize by dragging the inner divider or using the arrow keys wh
 | Surface                        | Contract                                                                                                                                        |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | Sign-in                        | One token field, clear pending and error states, accessible visibility and submit controls                                                      |
-| Navigation                     | Recognizable project cards and named conversation actions, with current selection and focused archive confirmation                              |
+| Navigation                     | Native conversation rows, directory and archive filters, current selection, and focused archive confirmation                                    |
 | Composer                       | Attachment, model, and permissions near the input. Delivery and Stop remain adjacent. Hover or focus explains icon actions and their shortcuts. |
 | Files and Changes              | Distinct whole-file, line-range, and reference actions. Keep file names, line numbers where applicable, and meaningful error states.            |
 | Settings                       | Group related controls and keep saved versus active values visible when a restart is required                                                   |

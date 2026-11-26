@@ -9,8 +9,9 @@ import { NetworkConfiguration } from './network-settings.js';
 import { RuntimeConfiguration } from './runtime-settings.js';
 import { AccessToken } from './access-token.js';
 import { acquireDataDirectoryLock } from './data-directory-lock.js';
+import { dataDirectory } from './data-directory.js';
 
-const directory = resolve(process.env.CODES_DATA_DIR ?? '.local');
+const directory = dataDirectory();
 mkdirSync(directory, { recursive: true, mode: 0o700 });
 const network = new NetworkConfiguration(directory, process.env);
 const runtime = new RuntimeConfiguration(directory, process.env);
@@ -35,7 +36,8 @@ const service = new Service(
     stateFile: join(directory, 'mock-history.json'),
     timeoutMs: runtime.active.requestTimeoutMs,
   }),
-  configuredProjectPath ?? resolve(import.meta.dirname, '../..'),
+  configuredProjectPath,
+  configuredProjectPath,
 );
 // Existing registrations must stay readable when a directory is temporarily absent.
 if (

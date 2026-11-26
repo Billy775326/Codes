@@ -205,6 +205,13 @@ export class QueueStore {
       )
       .run(threadId, reason, threadId);
   }
+  blockOldDirectoryAttachments(threadId: string) {
+    this.db
+      .prepare(
+        "UPDATE queued_messages SET state='failed',error=? WHERE thread_id=? AND state='queued' AND json_array_length(payload,'$.attachments')>0",
+      )
+      .run('The working directory changed. Attach files again in the current directory.', threadId);
+  }
   resume(threadId: string) {
     this.db
       .prepare(

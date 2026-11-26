@@ -1,8 +1,8 @@
-import { resolve } from 'node:path';
+import { dataDirectory } from './data-directory.js';
 import { restoreDatabase } from './restore-database.js';
 
 try {
-  const previous = await restoreDatabase(resolve(process.env.CODES_DATA_DIR ?? '.local'));
+  const previous = await restoreDatabase(dataDirectory());
   console.log('Database restored. Start Codes with the same data directory.');
   console.log('Previous database:', previous);
 } catch (error) {

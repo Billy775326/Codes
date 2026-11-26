@@ -1,3 +1,4 @@
+import { nativeConversationRoutes } from './routes/native-conversations.js';
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
@@ -193,6 +194,11 @@ export async function application(
           (await projectCollection(context, service)) !== false
         )
           return;
+        if (
+          url.pathname.startsWith('/api/conversations') &&
+          (await nativeConversationRoutes(context, service, diagnostics)) !== false
+        )
+          return;
         const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
         if (segments[1] === 'projects' && (await projectRoutes(context, segments)) !== false)
           return;
@@ -212,7 +218,8 @@ export async function application(
                 const thread = service.store.thread(id);
                 if (!thread) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
                 service.project(thread.projectId);
-              } else service.project(url.searchParams.get('projectId') ?? '');
+              } else if (url.searchParams.get('scope') !== 'conversations')
+                service.project(url.searchParams.get('projectId') ?? '');
               service.events.checkCapacity();
               response.writeHead(200, {
                 'content-type': 'text/event-stream',

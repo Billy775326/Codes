@@ -7,22 +7,16 @@ export async function reconnectUpdates(page: Page) {
   });
 }
 
-export function projectCard(page: Page, id: string) {
-  return page.locator('[data-project-id="' + id + '"]');
+export function conversationList(page: Page) {
+  return page.getByRole('navigation', { name: 'Conversations', exact: true });
 }
 
-export function activeProjectCard(page: Page) {
-  return page.locator('.project-card').filter({
-    has: page.locator('.project-card-name[aria-current="true"]'),
-  });
-}
-
-export async function openProject(page: Page, id: string) {
-  const name = projectCard(page, id).locator('.project-card-name');
-  if ((await name.getAttribute('aria-expanded')) === 'false') {
-    await name.click();
-    await expect(name).not.toHaveAttribute('aria-expanded', 'false');
-  }
-  await name.click();
-  await expect(name).toHaveAttribute('aria-current', 'true');
+export async function chooseWorkingDirectory(page: Page, path: string) {
+  const trigger = page.getByRole('button', { name: 'Change working directory', exact: true });
+  const empty = page.getByRole('button', { name: 'Choose a working directory', exact: true });
+  await trigger.or(empty).click();
+  const picker = page.getByRole('dialog', { name: 'Choose a working directory' });
+  await picker.getByLabel('Working directory', { exact: true }).fill(path);
+  await picker.getByRole('button', { name: 'Use directory', exact: true }).click();
+  await expect(picker).toHaveCount(0);
 }

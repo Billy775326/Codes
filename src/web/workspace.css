@@ -1149,3 +1149,28 @@
   background: currentColor;
   content: '';
 }
+
+.app .workspace-directory {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  max-width: min(25vw, 230px);
+  min-width: 0;
+  gap: 5px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.workspace-directory span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.workspace-directory svg {
+  flex-shrink: 0;
+}
+.app button.workspace-directory:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--fg);
+}

@@ -37,7 +37,7 @@ export class ReadDiagnostics {
 
 export async function traceRead<T>(
   response: ServerResponse,
-  route: 'snapshot' | 'history' | 'project-snapshot' | 'events',
+  route: 'snapshot' | 'history' | 'project-snapshot' | 'conversation-list' | 'events',
   threadId: string | undefined,
   work: () => Promise<T>,
   verbose: () => boolean,

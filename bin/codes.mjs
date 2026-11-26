@@ -12,7 +12,7 @@ if (args.length === 1 && ['--help', '-h'].includes(args[0])) {
 
 Start the codes web workspace in the foreground (default: http://127.0.0.1:6670).
 Configuration uses CODES_* environment variables. Press Ctrl+C to stop.
-Default data directory: ${join(root, '.local')}
+Default data directory: \$XDG_DATA_HOME/codes or ~/.local/share/codes. Existing checkout data is detected.
 Relative configuration paths resolve from the calling directory.
 Use codes restore-database while Codes is stopped to apply a prepared database restore.
 Build the application first with npm run build in ${root}`);
@@ -44,7 +44,8 @@ Build the application first with npm run build in ${root}`);
     // Other startup failures retain their original diagnostic and exit behavior.
     if (!(error instanceof Error) || error.message !== 'The data directory is already in use.')
       throw error;
-    const directory = process.env.CODES_DATA_DIR ?? join(root, '.local');
+    const { dataDirectory } = await import('../dist/server/data-directory.js');
+    const directory = dataDirectory();
     let pid;
     try {
       const owner = Number(readFileSync(join(directory, 'server.lock'), 'utf8'));

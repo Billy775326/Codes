@@ -90,7 +90,7 @@ it('preserves history and settings while a missing directory blocks file access,
   expect((await service.projectContext(projectA.id)).directory.available).toBe(true);
   expect((await service.conversationFile(threadA.id, 'same.ts')).text).toBe('ALPHA_SOURCE\n');
 });
-it('refuses a native conversation whose working directory no longer matches its registration', async () => {
+it('blocks stale file operations after the native working directory changes', async () => {
   const { service, threadA, b } = await fixture();
   const call = service.driver.call.bind(service.driver);
   const spy = vi
@@ -101,11 +101,11 @@ it('refuses a native conversation whose working directory no longer matches its 
       return result;
     });
   await expect(service.conversationFile(threadA.id, 'same.ts')).rejects.toMatchObject({
-    code: 'PROJECT_OWNERSHIP',
+    code: 'NATIVE_DIRECTORY_CHANGED',
   });
   await expect(
     service.send(threadA.id, randomUUID(), 'Do not run in another folder', threadA.settings),
-  ).rejects.toMatchObject({ code: 'PROJECT_OWNERSHIP' });
+  ).rejects.toMatchObject({ code: 'NATIVE_DIRECTORY_CHANGED' });
   expect(spy.mock.calls.some(([method]) => method === 'turn/start')).toBe(false);
 });
 it('does not silently follow a registered directory retargeted to another project', async () => {

@@ -21,54 +21,31 @@ for (const width of [1440, 390, 320]) {
       width < 700
         ? page.getByRole('dialog', { name: 'Workspace navigation', exact: true })
         : sidebar;
-    await expect(navigation.locator('.project-card-name[aria-current="true"]')).toBeVisible();
-    const card = navigation.locator('.project-card').filter({
-      has: page.locator('.project-card-name[aria-current="true"]'),
-    });
-    const disclosure = card.locator('.project-card-disclosure');
-    const disclosureBox = (await disclosure.boundingBox())!;
-    expect(disclosureBox.x).toBeLessThan(
-      (await card.locator('.project-card-name').boundingBox())!.x,
+    const directory = navigation.getByRole('group', { name: 'Directory filter' });
+    const filter = navigation.getByRole('group', { name: 'Archive filter' });
+    await expect(directory.getByRole('button', { name: 'All', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
     );
-    expect(disclosureBox.width).toBeGreaterThanOrEqual(width < 700 ? 40 : 36);
-    await disclosure.click();
-    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
-    expect((await disclosure.boundingBox())!.x).toBe(disclosureBox.x);
-    await disclosure.press('Enter');
-    await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
-    await expect(
-      page.getByRole('button', { name: 'Interaction settings', exact: true }),
-    ).toHaveCount(1);
-    const view = navigation.getByRole('button', {
-      name: 'Archived projects and chats',
+    await expect(filter.getByRole('button', { name: 'Active', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const archived = filter.getByRole('button', { name: 'Archived', exact: true });
+    await archived.click();
+    await expect(archived).toHaveAttribute('aria-pressed', 'true');
+    await expect(navigation.getByRole('textbox', { name: 'Search conversations' })).toBeVisible();
+    await filter.getByRole('button', { name: 'Active', exact: true }).click();
+    await expect(archived).toHaveAttribute('aria-pressed', 'false');
+    const newConversation = navigation.getByRole('button', {
+      name: 'New conversation',
       exact: true,
     });
-    await expect(view).toHaveAttribute('aria-pressed', 'false');
-    await expect(view).toHaveText('');
-    const chatsWidth = (await view.boundingBox())!.width;
-    await view.click();
-    await expect(view).toHaveAttribute('aria-pressed', 'true');
-    await expect(view).toHaveText('Archived');
-    await expect(navigation.getByRole('textbox', { name: 'Search archives' })).toBeVisible();
-    await expect(navigation.getByRole('button', { name: 'Add project', exact: true })).toHaveCount(
-      0,
+    await expect(newConversation).toBeVisible();
+    await expect(newConversation).toHaveText('');
+    await expect(navigation.getByRole('combobox', { name: 'Sort conversations' })).toHaveValue(
+      'updated_at',
     );
-    const archiveWidth = (await view.boundingBox())!.width;
-    expect(archiveWidth).toBeGreaterThan(chatsWidth);
-    expect(archiveWidth).toBeLessThan(125);
-    if (width === 1440) {
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Shift+Tab');
-      await expect(view).toBeFocused();
-      await expect(page.locator('.control-tooltip')).toHaveText('Back to chats');
-      await page.keyboard.press('Enter');
-    } else await view.click();
-    await expect(view).toHaveAttribute('aria-pressed', 'false');
-    await expect(
-      navigation
-        .locator('.conversation-controls')
-        .getByRole('button', { name: 'Add project', exact: true }),
-    ).toBeVisible();
     const signOut = navigation.getByRole('button', { name: 'Sign out', exact: true });
     await expect(signOut).toBeInViewport({ ratio: 1 });
     await expect(signOut).toHaveText('');
@@ -138,7 +115,7 @@ test('Codes wordmark remains legible when browser colors differ from the selecte
   }, png.toString('base64'));
   expect(foregroundPixels).toBeGreaterThan(40);
   const placeholder = await navigation
-    .getByRole('textbox', { name: 'Search projects and chats' })
+    .getByRole('textbox', { name: 'Search conversations' })
     .evaluate((element) => getComputedStyle(element, '::placeholder').color);
   expect(placeholder).toBe('rgb(177, 171, 160)');
 });

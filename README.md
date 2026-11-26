@@ -1,6 +1,6 @@
 # Codes
 
-A self-hosted web UI for Codex CLI on Linux. Manage projects and chats, approve actions, preview files, and review code changes from your browser.
+A self-hosted web UI for Codex CLI on Linux. Resume and manage Codex conversations, approve actions, preview files, and review code changes from your browser.
 
 [简体中文](docs/README.zh-CN.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md)
 
@@ -11,7 +11,7 @@ A self-hosted web UI for Codex CLI on Linux. Manage projects and chats, approve 
   <img alt="Codes" src="public/brand/codes-lockup-light.svg" width="280" height="96">
 </picture>
 
-Codes is an independent, single-owner development preview. Codex App Server runs on your Linux host under your existing Codex account. The browser handles conversations, project navigation, and review. Closing a tab leaves active work running on the host.
+Codes is an independent, single-owner development preview. Codex App Server runs on your Linux host under your existing Codex account. The browser handles conversation navigation, file browsing, and review. Closing a tab leaves active work running on the host.
 
 <a id="requirements"></a>
 
@@ -19,15 +19,15 @@ Codes is an independent, single-owner development preview. Codex App Server runs
 
 You need Linux, Node.js 24.19 or newer in the 24.x line, npm, and a current browser. Install Codex CLI and sign in as the Linux user who will run Codes. [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
 
-Run these commands from the repository checkout with an existing project directory.
+Run these commands from the repository checkout.
 
 ```bash
 npm ci
 npm run build
-CODES_PROJECT_ROOT=/absolute/path/to/project npm start
+npm start
 ```
 
-Open [http://127.0.0.1:6670](http://127.0.0.1:6670) and enter the workspace token stored on the host in `.local/access-token`. Use **Add project** to register more directories. The Codes token signs in to the browser workspace. Codex authentication belongs to the Linux account.
+Open [http://127.0.0.1:6670](http://127.0.0.1:6670) and enter the workspace token from the path printed at initial startup. Existing native conversations appear automatically. Choose a working directory to start a new conversation. The Codes token signs in to the browser workspace. Codex authentication belongs to the Linux account.
 
 <a id="remote-access"></a>
 
@@ -51,7 +51,7 @@ Simulation marks the workspace and uses synthetic turns. Try `[approve]`, `[ques
 
 ## What is implemented
 
-- Organize existing Linux directories and native Codex chats as project cards. Search, rename, archive, restore, and resume conversations. [Projects and chats](docs/conversations.md)
+- Browse native Codex conversations by current directory or across directories. Search, rename, archive, restore, and resume conversations. [Conversations](docs/conversations.md)
 - Send or queue a message, add it to a running turn, answer native questions, and branch through a completed turn. [Working with Codex](docs/conversation-workflow.md)
 - Set effective Codex execution options and choose Plan or Execution. [Execution configuration](docs/conversation-settings.md)
 - Upload files from the composer or Files. Preview source, images, HTML, Word text, and PDF pages, and inspect the changes recorded in a Codex turn. [Files and changes](docs/conversation-details.md)

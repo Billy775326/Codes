@@ -182,8 +182,18 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       return result(id, { account: { type: 'mock' }, requiresOpenaiAuth: false });
     if (method === 'thread/list') {
       const all = [...threads.values()]
-        .filter((t) => t.cwd === p.cwd && !!t.archived === !!p.archived)
-        .sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id));
+        .filter(
+          (t) =>
+            (!p.cwd || t.cwd === p.cwd) &&
+            !!t.archived === !!p.archived &&
+            (!p.includedThreadIds || p.includedThreadIds.includes(t.id)) &&
+            (!p.searchTerm ||
+              (t.name || t.preview).toLowerCase().includes(p.searchTerm.toLowerCase())),
+        )
+        .sort((a, b) => {
+          const key = p.sortKey === 'created_at' ? 'createdAt' : 'updatedAt';
+          return b[key] - a[key] || b.id.localeCompare(a.id);
+        });
       const start = Number(p.cursor ?? 0);
       const end = start + (p.limit ?? 30);
       return result(id, {

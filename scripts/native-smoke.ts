@@ -1,5 +1,6 @@
 /** Metadata-only compatibility check. No account, prompt, command, or model execution. */
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -97,10 +98,65 @@ try {
   assert.equal((await service.conversationContext(thread.id)).directory.available, false);
   assert.equal((await service.history(thread.id)).messages.length, 0);
   await assert.rejects(service.create(project.id), { code: 'DIRECTORY_UNAVAILABLE' });
+  const externalCwd = join(directory, 'external');
+  const nativeId = randomUUID();
+  const timestamp = '2026-05-10T12:00:00.000Z';
+  const rollouts = join(process.env.CODEX_HOME!, 'sessions/2026/05/10');
+  await mkdir(externalCwd);
+  await mkdir(rollouts, { recursive: true });
+  await writeFile(
+    join(rollouts, 'rollout-2026-05-10T12-00-00-' + nativeId + '.jsonl'),
+    [
+      {
+        timestamp,
+        type: 'session_meta',
+        payload: {
+          id: nativeId,
+          timestamp,
+          cwd: externalCwd,
+          originator: 'codex_cli_rs',
+          cli_version: service.system().version,
+          source: 'cli',
+          model_provider: 'openai',
+        },
+      },
+      {
+        timestamp,
+        type: 'event_msg',
+        payload: {
+          type: 'user_message',
+          message: 'Synthetic native conversation',
+          images: [],
+          local_images: [],
+          text_elements: [],
+        },
+      },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join('\n') + '\n',
+  );
+  assert.equal(
+    service.store.projects().some((item) => item.path === externalCwd),
+    false,
+  );
+  const all = await service.nativeConversations({ sort: 'created_at' });
+  assert.ok(all.data.some((row) => row.id === nativeId && row.cwd === externalCwd));
+  assert.equal(
+    (await service.nativeConversations({ cwd })).data.some((row) => row.id === nativeId),
+    false,
+  );
+  await service.archive(nativeId, randomUUID(), true);
+  assert.equal((await service.nativeConversations({ cwd: externalCwd })).data.length, 0);
+  assert.equal(
+    (await service.nativeConversations({ cwd: externalCwd, archived: true })).data[0]?.id,
+    nativeId,
+  );
+  await service.archive(nativeId, randomUUID(), false);
+  assert.equal((await service.nativeConversations({ cwd: externalCwd })).data[0]?.id, nativeId);
   console.log(
     'PASS: CLI ' +
       service.system().version +
-      ' native layers, revision-checked writes, runtime permissions, model and Plan metadata, and history recovery. No model requests.',
+      ' native layers, revision-checked writes, runtime permissions, model and Plan metadata, history recovery, Cwd/All discovery, and archive/restore. No model requests.',
   );
 } finally {
   await service.close();

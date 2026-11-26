@@ -27,8 +27,9 @@ async function stop(child: ChildProcess) {
   }
 }
 
-for (const relativeData of [false, true]) {
-  test(`installed command starts outside checkout with ${relativeData ? 'relative' : 'default'} data and stops cleanly`, async ({
+for (const mode of ['default', 'legacy', 'relative'] as const) {
+  const relativeData = mode === 'relative';
+  test(`installed command starts outside checkout with ${mode} data and stops cleanly`, async ({
     playwright,
   }) => {
     const directory = await realpath(await mkdtemp(join(tmpdir(), 'codes-command-')));
@@ -44,7 +45,13 @@ for (const relativeData of [false, true]) {
       await copyFile('bin/codes.mjs', join(checkout, 'bin/codes.mjs'));
       await copyFile('scripts/install-command.mjs', join(checkout, 'scripts/install-command.mjs'));
       await symlink(resolve('dist'), join(checkout, 'dist'));
-      const environment = { ...process.env, CODES_BIN_DIR: commandDir };
+      const xdgData = join(directory, 'xdg');
+      const environment = { ...process.env, CODES_BIN_DIR: commandDir, XDG_DATA_HOME: xdgData };
+      if (mode === 'legacy') {
+        const legacy = join(checkout, '.local');
+        await mkdir(legacy);
+        await writeFile(join(legacy, 'codes.sqlite'), '', { mode: 0o600 });
+      }
       const install = () =>
         spawnSync(process.execPath, [join(checkout, 'scripts/install-command.mjs')], {
           env: environment,
@@ -83,7 +90,11 @@ for (const relativeData of [false, true]) {
         delete (env as Partial<typeof env>).CODES_DATA_DIR;
         delete (env as Partial<typeof env>).CODES_ACCESS_TOKEN;
       }
-      const data = relativeData ? join(caller, 'private/state') : join(checkout, '.local');
+      const data = relativeData
+        ? join(caller, 'private/state')
+        : mode === 'legacy'
+          ? join(checkout, '.local')
+          : join(xdgData, 'codes');
       const tokenFile = join(data, 'access-token');
       const start = async () => {
         let output = '';

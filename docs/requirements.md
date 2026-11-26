@@ -11,7 +11,7 @@ This page tracks proposed implementation and evidence still needed for the singl
 | R3  | Document service supervision                    | Validate a reviewed example with the intended service user, working directory, environment, ready check, and bounded restart behavior.             |
 | R6  | Add targeted runtime diagnostics                | Use the existing status and diagnostics surfaces to explain authentication and runtime failures with safe, actionable details.                     |
 
-R4 conversation management and R5 directory ownership are implemented. Use [Projects and chats](conversations.md) and [Navigation ownership](session-navigation-proposal.md) for those contracts, including bounded search, project archiving, and missing-directory handling.
+R4 conversation management and R5 directory ownership are implemented. See [Conversations](conversations.md) for bounded search, native archiving, and missing working directories.
 
 ## Existing behavior still requiring acceptance
 

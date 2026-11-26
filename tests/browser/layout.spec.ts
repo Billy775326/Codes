@@ -11,11 +11,11 @@ test('workspace defaults to persistent navigation, retains drafts through histor
   page,
 }) => {
   await login(page);
-  await expect(page.getByLabel('Search projects and chats', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Search conversations', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'New conversation' })).toBeVisible();
   await page.getByLabel('Message Codex').fill('Unsent panel draft');
   await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
-  await expect(page.getByLabel('Search projects and chats', { exact: true })).toBeHidden();
+  await expect(page.getByLabel('Search conversations', { exact: true })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Open navigation', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Close navigation', exact: true })).toBeFocused();

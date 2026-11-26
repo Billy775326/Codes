@@ -3,7 +3,7 @@ import { directoryStatus, directoryError } from './project-context.js';
 import { nativeExecutionSettings } from './native-configuration.js';
 import { activeTurn, interactionActivity } from '../shared/conversation-activity.js';
 import { realpath, stat } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { basename, isAbsolute } from 'node:path';
 import type { Readable } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Driver } from '../codex/driver.js';
@@ -23,6 +23,11 @@ import { encodeQuestionReplies } from '../shared/question-replies.js';
 import { nativeMessage as item, nativeTurn } from './transcript.js';
 import { readConversationHistory } from './conversation-history.js';
 import { ConversationReads } from './conversation-reads.js';
+import {
+  NativeConversationDirectory,
+  type ConversationFilters,
+  nativeConversation,
+} from './native-conversation-directory.js';
 import { nativeThreadState as state, nativeStatus, terminal } from './native-thread-status.js';
 import { z } from 'zod';
 import { AppError, record } from '../shared/errors.js';
@@ -63,23 +68,28 @@ export class Service {
   private metadataRevisions = new Map<string, number>();
   private readonly interactions: NativeInteractions;
   private readonly projectFiles: ProjectFiles;
+  private readonly nativeDirectory: NativeConversationDirectory;
   readonly fileManagement: ProjectFileManagement;
   readonly workspaceSettings: WorkspaceConfiguration;
   constructor(
     readonly store: Store,
     readonly driver: Driver,
     private readonly defaultProjectPath?: string,
+    private readonly initialWorkingDirectory?: string,
   ) {
     this.workspaceSettings = new WorkspaceConfiguration(store.directory);
+    this.nativeDirectory = new NativeConversationDirectory(driver, {
+      revision: () => this.metadataRevision,
+      observe: (row, archived, revision, scope) =>
+        this.importConversation(row, archived, revision, scope),
+    });
     this.projectFiles = new ProjectFiles(
       store,
       (id) => this.project(id),
       (id) => this.requireProject(id),
     );
-    this.fileManagement = new ProjectFileManagement(
-      store.directory,
-      (id) => this.requireProject(id),
-      (id) => this.project(id),
+    this.fileManagement = new ProjectFileManagement(store.directory, (id) =>
+      this.requireProject(id),
     );
     this.images = new Images(store.directory);
     this.asyncQuestions = new AsyncQuestions(store.db);
@@ -218,6 +228,7 @@ export class Service {
     return {
       ...this.driver.system(),
       projectDirectoryFallback: this.defaultProjectPath,
+      initialWorkingDirectory: this.initialWorkingDirectory,
       defaultProjectPath:
         this.workspaceSettings.snapshot().settings.defaultProjectDirectory ||
         this.defaultProjectPath,
@@ -274,7 +285,7 @@ export class Service {
       throw new AppError('MAINTENANCE_ACTIVE', 'Maintenance is active. New tasks are paused.', 503);
   }
   project(id: string) {
-    const project = this.store.projects().find((x) => x.id === id);
+    const project = this.store.project(id);
     if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Project not found.', 404);
     return project;
   }
@@ -360,11 +371,13 @@ export class Service {
     return this.projectFiles.browseImage(projectId, path, showHidden);
   }
   async addProject(path: string, name?: string) {
+    if (!isAbsolute(path))
+      throw new AppError('INVALID_DIRECTORY', 'Enter an absolute path on the server.');
     try {
       const canonical = await realpath(path);
       if (!(await stat(canonical)).isDirectory())
         throw new AppError('INVALID_DIRECTORY', 'Choose an existing directory.');
-      return this.store.addProject(name || basename(canonical), canonical);
+      return this.store.addProject(name || basename(canonical) || canonical, canonical);
     } catch (error) {
       if (record(error) && ['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP'].includes(error.code))
         throw new AppError('INVALID_DIRECTORY', 'Choose an existing, accessible directory.');
@@ -478,142 +491,82 @@ export class Service {
     await this.conversations(projectId, { limit: 30 });
     return this.summaries(projectId);
   }
-  async conversations(
-    projectId: string,
-    options: { cursor?: string; search?: string; archived?: boolean; limit?: number } = {},
-  ) {
-    const project = this.project(projectId);
-    const search = (options.search ?? '').trim().slice(0, 120);
-    const archived = options.archived === true;
-    const limit = Math.min(50, Math.max(1, options.limit ?? 30));
-    let nativeCursor: string | undefined;
-    if (options.cursor) {
-      try {
-        const c = JSON.parse(Buffer.from(options.cursor, 'base64url').toString());
-        if (
-          c.projectId !== projectId ||
-          c.search !== search ||
-          c.archived !== archived ||
-          typeof c.nativeCursor !== 'string'
-        )
-          throw new Error();
-        nativeCursor = c.nativeCursor;
-      } catch {
-        throw new AppError(
-          'LIST_CURSOR',
-          'This conversation page no longer matches the current filters.',
-        );
-      }
-    }
-    const encode = (cursor: string) =>
-      Buffer.from(JSON.stringify({ projectId, search, archived, nativeCursor: cursor })).toString(
-        'base64url',
-      );
-    const seen = new Set<string>();
-    let scanned = 0;
-    const deadline = Date.now() + 20_000;
-    for (let pageNumber = 0; pageNumber < 4; pageNumber++) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0)
-        throw new AppError('LIST_TIMEOUT', 'Conversation browsing timed out. Try again.', 504);
-      const readRevision = this.metadataRevision;
-      const page = await this.driver.call(
-        'thread/list',
-        {
-          cwd: project.path,
-          cursor: nativeCursor,
-          limit,
-          archived,
-          sourceKinds: ['cli', 'appServer', 'vscode'],
-          modelProviders: [],
-          sortKey: 'updated_at',
-          sortDirection: 'desc',
-        },
-        remaining,
-      );
-      if (
-        !Array.isArray(page.data) ||
-        (page.nextCursor != null && typeof page.nextCursor !== 'string')
-      )
-        throw new AppError('PROTOCOL_ERROR', 'Invalid conversation page.', 502);
-      const data: import('../shared/types.js').Summary[] = [];
-      const ids = new Set<string>();
-      for (const raw of page.data) {
-        scanned++;
-        if (!record(raw) || typeof raw.id !== 'string' || raw.cwd !== project.path) continue;
-        const saved = this.store.thread(raw.id);
-        const title = text(raw.name || raw.preview, 80) || saved?.title || 'Untitled conversation';
-        const updatedAt =
-          typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt)
-            ? Math.max(0, raw.updatedAt * 1000)
-            : 0;
-        if (!saved)
-          this.store.saveThread(
-            {
-              id: raw.id,
-              projectId,
-              title,
-              state: state(raw.status),
-              updatedAt,
-              archived,
-              forkedFromId: typeof raw.forkedFromId === 'string' ? raw.forkedFromId : undefined,
-            },
-            { permission: 'read-only' },
-          );
-        else {
-          if (saved.projectId !== projectId)
-            throw new AppError(
-              'PROJECT_OWNERSHIP',
-              'The conversation belongs to another project.',
-              403,
-            );
-          if ((this.metadataRevisions.get(raw.id) ?? 0) <= readRevision) {
-            this.observeConversation(raw.id, { title, archived, updatedAt });
-            this.observeStatus(raw.id, raw.status);
-          }
-        }
-        const summary = this.store.thread(raw.id)!;
-        if (
-          !!summary.archived === archived &&
-          (!search || summary.title.toLowerCase().includes(search.toLowerCase())) &&
-          !ids.has(summary.id)
-        ) {
-          data.push(this.withSidebarActivity(summary));
-          ids.add(summary.id);
-        }
-      }
-      if (page.nextCursor && page.nextCursor === nativeCursor)
-        throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
-      const nextCursor = page.nextCursor ? encode(page.nextCursor) : null;
-      if (data.length || !nextCursor || pageNumber === 3)
-        return {
-          data,
-          nextCursor,
-          scanned,
-          latestConversationAt: this.store.latestConversationAt(projectId),
-        };
-      if (seen.has(page.nextCursor))
-        throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
-      seen.add(page.nextCursor);
-      nativeCursor = page.nextCursor;
-    }
-    throw new AppError('PROTOCOL_ERROR', 'Invalid conversation scan.', 502);
+  async conversations(projectId: string, options: ConversationFilters = {}) {
+    const { path } = this.project(projectId);
+    const page = await this.nativeDirectory.list({ ...options, cwd: path, projectId });
+    return { ...page, latestConversationAt: this.store.latestConversationAt(projectId) };
   }
-  private async conversationOwner(id: string, timeoutMs?: number) {
-    const saved = this.store.thread(id);
-    if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
-    const project = this.project(saved.projectId);
+  nativeConversations(options: ConversationFilters, signal?: AbortSignal) {
+    return this.reads.run('list:' + JSON.stringify(options), 'history', signal, (readSignal) =>
+      this.nativeDirectory.list(options, readSignal),
+    );
+  }
+  private importConversation(
+    row: NonNullable<ReturnType<typeof nativeConversation>>,
+    archived: boolean,
+    readRevision: number,
+    scope?: string,
+  ) {
+    const saved = this.store.thread(row.id);
+    if (scope && saved && saved.projectId !== scope)
+      throw new AppError('PROJECT_OWNERSHIP', 'The conversation belongs to another project.', 403);
+    const title = row.title || saved?.title || 'Untitled conversation';
+    if (!saved) {
+      const projectId = scope ?? this.store.addProject(basename(row.cwd) || row.cwd, row.cwd).id;
+      this.store.saveThread(
+        {
+          id: row.id,
+          projectId,
+          title,
+          state: state(row.status),
+          updatedAt: row.updatedAt,
+          archived,
+          forkedFromId: row.forkedFromId,
+        },
+        scope ? { permission: 'read-only' } : {},
+      );
+    } else if ((this.metadataRevisions.get(row.id) ?? 0) <= readRevision) {
+      if (
+        !scope &&
+        this.cache.has(row.id) &&
+        !this.loaded.has(row.id) &&
+        row.cwd !== this.project(saved.projectId).path
+      )
+        this.cache.delete(row.id);
+      this.observeConversation(row.id, { title, archived, updatedAt: row.updatedAt });
+      this.observeStatus(row.id, row.status);
+    }
+    return this.withSidebarActivity(this.store.thread(row.id)!);
+  }
+  private async conversationOwner(id: string, timeoutMs?: number, rebind = false) {
+    const deadline = Date.now() + (timeoutMs ?? 10_000);
     const response = await this.driver.call(
       'thread/read',
       { threadId: id, includeTurns: false },
       timeoutMs,
     );
-    if (response.thread?.cwd !== project.path)
-      throw new AppError(
-        'PROJECT_OWNERSHIP',
-        'This conversation no longer belongs to the project.',
-        403,
-      );
+    const row = nativeConversation(response.thread);
+    if (!row || row.id !== id)
+      throw new AppError('PROTOCOL_ERROR', 'Invalid conversation identity.', 502);
+    let saved = this.store.thread(id);
+    if (!saved) {
+      const archived = await this.nativeDirectory.archived(row, deadline);
+      this.importConversation(row, archived, this.metadataRevision);
+      saved = this.store.thread(id)!;
+    }
+    if (row.cwd !== this.project(saved.projectId).path) {
+      const reason =
+        'The Codex working directory changed. Review waiting messages before continuing.';
+      this.store.queue.pauseForReview(id, reason);
+      this.queue.notify(id);
+      if (!this.loaded.has(id)) this.cache.delete(id);
+      if (!rebind || saved.executionPending || saved.managementPending || this.loaded.has(id))
+        throw new AppError('NATIVE_DIRECTORY_CHANGED', reason, 409);
+      const project = this.store.addProject(basename(row.cwd) || row.cwd, row.cwd);
+      this.store.rebindThreadDirectory(id, project.id);
+      saved = this.store.thread(id)!;
+      this.queue.notify(id);
+    }
     return { saved, native: response.thread };
   }
   async rename(id: string, operationId: string, name: string) {
@@ -740,50 +693,13 @@ export class Service {
     }
   }
   async checkManagement(id: string) {
-    const { saved } = await this.conversationOwner(id);
+    const { saved, native } = await this.conversationOwner(id);
     const operation = this.store.pendingManagement(id);
     if (!operation) return saved;
-    const project = this.project(saved.projectId);
-    const deadline = Date.now() + 20_000;
-    for (const archived of [true, false]) {
-      let cursor: string | undefined;
-      const seen = new Set<string>();
-      for (let pageNumber = 0; pageNumber < 4; pageNumber++) {
-        const remaining = deadline - Date.now();
-        if (remaining <= 0)
-          throw new AppError(
-            'MANAGEMENT_UNKNOWN',
-            'The status check timed out. The conversation remains protected.',
-            409,
-          );
-        const page = await this.driver.call(
-          'thread/list',
-          {
-            cwd: project.path,
-            archived,
-            cursor,
-            limit: 50,
-            sourceKinds: ['cli', 'appServer', 'vscode'],
-            modelProviders: [],
-          },
-          Math.min(remaining, 5000),
-        );
-        if (!Array.isArray(page.data))
-          throw new AppError('PROTOCOL_ERROR', 'Invalid conversation status page.', 502);
-        if (page.data.some((row: any) => row.id === id))
-          return this.observeConversation(id, { archived })!;
-        if (!page.nextCursor) break;
-        if (seen.has(page.nextCursor))
-          throw new AppError('PROTOCOL_ERROR', 'The CLI repeated a conversation cursor.', 502);
-        seen.add(page.nextCursor);
-        cursor = page.nextCursor;
-      }
-    }
-    throw new AppError(
-      'MANAGEMENT_UNKNOWN',
-      'The status could not be located in this scan. Search both active and archived views; the conversation remains protected.',
-      409,
-    );
+    const row = nativeConversation(native)!;
+    return this.observeConversation(id, {
+      archived: await this.nativeDirectory.archived(row, Date.now() + 20_000, 'MANAGEMENT_UNKNOWN'),
+    })!;
   }
   async create(projectId: string, settings: Settings = {}) {
     const project = await this.requireProject(projectId);
@@ -869,10 +785,9 @@ export class Service {
     return profile;
   }
   private async load(id: string, signal: AbortSignal) {
-    const saved = this.store.thread(id);
-    if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
-    this.project(saved.projectId);
-    const page = await this.readHistory(id, undefined, signal);
+    const { saved, native } = await this.conversationOwner(id, undefined, true);
+    signal.throwIfAborted();
+    const page = await this.readHistory(id, undefined, signal, native);
     signal.throwIfAborted();
     const pending = this.store.active(id);
     const metadata = this.store.thread(id)!;
@@ -922,7 +837,12 @@ export class Service {
       (readSignal) => this.readHistory(id, continuation, readSignal),
     );
   }
-  private async readHistory(id: string, continuation: string | undefined, signal: AbortSignal) {
+  private async readHistory(
+    id: string,
+    continuation: string | undefined,
+    signal: AbortSignal,
+    native?: unknown,
+  ) {
     const saved = this.store.thread(id);
     if (!saved) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
     const project = this.project(saved.projectId);
@@ -933,6 +853,7 @@ export class Service {
       continuation,
       signal,
       (path) => this.images.reference(saved.projectId, path),
+      native,
     );
     signal.throwIfAborted();
     let questionChanged = this.asyncQuestions.observeHistory(id, page.messages);

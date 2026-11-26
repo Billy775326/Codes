@@ -9,7 +9,8 @@ interface Props {
   title: string;
   conversationId?: string;
   renameDisabled?: boolean;
-  projectName?: string;
+  cwd?: string;
+  onChooseDirectory?: () => void;
   sidebarOpen: boolean;
   connection: string;
   theme: 'dark' | 'light';
@@ -138,11 +139,6 @@ export function WorkspaceHeader(props: Props) {
         />
       )}
       <div className="breadcrumb">
-        {!props.sidebarOpen && props.projectName && (
-          <span className="project-breadcrumb" data-tooltip-overflow="">
-            {props.projectName}
-          </span>
-        )}
         <ConversationHeading
           key={props.conversationId ?? ''}
           title={props.title}
@@ -150,6 +146,25 @@ export function WorkspaceHeader(props: Props) {
           renameDisabled={props.renameDisabled}
           onRename={props.onRename}
         />
+        {props.cwd &&
+          (props.onChooseDirectory ? (
+            <button
+              type="button"
+              className="workspace-directory"
+              aria-label={t('Change working directory')}
+              data-tooltip={props.cwd}
+              disabled={props.busy}
+              onClick={props.onChooseDirectory}
+            >
+              <Icon name="folder" size={14} />
+              <span>{props.cwd}</span>
+            </button>
+          ) : (
+            <span className="workspace-directory" data-tooltip-overflow="">
+              <Icon name="folder" size={14} />
+              <span>{props.cwd}</span>
+            </span>
+          ))}
         <IconButton
           className="session-status-button"
           icon="activity"

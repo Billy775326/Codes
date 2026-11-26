@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { dataDirectory } from '../src/server/data-directory.js';
 import { webEntrySignature } from '../src/shared/web-build.js';
 
 const maxAssetsBytes = 96 * 1024 * 1024;
@@ -139,7 +140,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const dist = resolve('dist');
       await switchWebPreview(
         dist,
-        join(process.env.CODES_DATA_DIR ?? '.local', 'web-preview'),
+        join(dataDirectory(), 'web-preview'),
         candidate ? resolve(candidate) : undefined,
       );
       console.log(

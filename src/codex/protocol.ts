@@ -121,6 +121,9 @@ export async function inspectNativeProtocol(
       412,
     );
   const capabilities: CodexCapabilities = {
+    conversationSearch: supports('thread/list', ['searchTerm']),
+    conversationIdFilter: supports('thread/list', ['includedThreadIds']),
+    conversationSort: supports('thread/list', ['sortKey']),
     itemHistory: supports('thread/items/list', [
       'threadId',
       'turnId',

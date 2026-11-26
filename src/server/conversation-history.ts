@@ -1,5 +1,5 @@
 import type { Driver } from '../codex/driver.js';
-import { AppError } from '../shared/errors.js';
+import { AppError, record } from '../shared/errors.js';
 import { activeTurn } from '../shared/conversation-activity.js';
 import { limits, type Message, type State, type TurnInfo } from '../shared/types.js';
 import type { Images } from './images.js';
@@ -17,6 +17,7 @@ export async function readConversationHistory(
   continuation: string | undefined,
   signal: AbortSignal,
   imageReference: (path: string) => ReturnType<Images['reference']>,
+  native?: unknown,
 ) {
   const deadline = Date.now() + 25_000;
   const call = async (method: string, params: unknown) => {
@@ -47,8 +48,9 @@ export async function readConversationHistory(
       throw new AppError('HISTORY_CURSOR', 'Invalid history cursor.');
     }
   }
-  const header = await call('thread/read', { threadId: id, includeTurns: false });
-  if (header.thread?.cwd !== cwd)
+  const thread =
+    native ?? (await call('thread/read', { threadId: id, includeTurns: false })).thread;
+  if (!record(thread) || thread.id !== id || thread.cwd !== cwd)
     throw new AppError(
       'PROJECT_OWNERSHIP',
       'The conversation no longer belongs to this project.',
@@ -117,7 +119,7 @@ export async function readConversationHistory(
   };
   // Legacy stores expose turn pages with full items, but no item-pagination endpoint.
   // Start with one turn so old transcripts cannot create an eager multi-turn payload.
-  const legacy = header.thread.historyMode === 'legacy' || !driver.supports('itemHistory');
+  const legacy = thread.historyMode === 'legacy' || !driver.supports('itemHistory');
   let pageLimit: number = legacy ? 1 : limits.page;
   for (;;) {
     let page;
@@ -159,7 +161,7 @@ export async function readConversationHistory(
     const messages = await hydrate(turns);
     if (messages) {
       const latest = turns.at(-1);
-      const current = nativeThreadState(header.thread.status);
+      const current = nativeThreadState(thread.status);
       return {
         messages,
         olderCursor: historyCursor(

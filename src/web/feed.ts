@@ -18,7 +18,7 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
     private snapshot: (snapshot: T) => void,
     private event: (event: Envelope) => void,
     private status: (state: string) => void,
-    private scope: 'threads' | 'projects' = 'threads',
+    private scope: 'threads' | 'conversations' = 'threads',
     private failure?: (error: unknown) => void,
   ) {}
   async connect() {
@@ -30,11 +30,11 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
     this.ready = false;
     this.controller = new AbortController();
     try {
-      const snapshot = await request<T>(
-        `/${this.scope}/${this.id}/snapshot`,
-        {},
-        this.controller.signal,
-      );
+      const path =
+        this.scope === 'conversations'
+          ? '/conversations/snapshot'
+          : '/threads/' + encodeURIComponent(this.id) + '/snapshot';
+      const snapshot = await request<T>(path, {}, this.controller.signal);
       if (generation !== this.generation || this.disposed) return;
       if (
         !snapshot ||
@@ -48,9 +48,10 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
         );
       this.snapshot(snapshot);
       let seq = snapshot.cursor.seq;
-      const source = new EventSource(
-        `/api/events?${this.scope === 'projects' ? 'projectId' : 'threadId'}=${encodeURIComponent(this.id)}&after=${seq}&epoch=${snapshot.cursor.epoch}`,
-      );
+      const params = new URLSearchParams({ after: String(seq), epoch: snapshot.cursor.epoch });
+      if (this.scope === 'conversations') params.set('scope', 'conversations');
+      else params.set('threadId', this.id);
+      const source = new EventSource('/api/events?' + params);
       this.source = source;
       this.alive = Date.now();
       const handshakeAt = Date.now();

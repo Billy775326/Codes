@@ -1,164 +1,57 @@
-import { useInterfaceLanguage } from './interface-language';
-import { memo, useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { ConversationPage, Project, ProjectUpdate, Summary } from '../shared/types';
+import type {
+  ConversationSort,
+  NativeConversationPage,
+  NativeConversationSummary,
+  Project,
+  Summary,
+} from '../shared/types';
 import { message, post, request } from './api';
 import { Icon, IconButton } from './primitives';
 import { InteractionDialog } from './InteractionDialog';
 import { conversationStatus } from './conversation-status';
+import { useInterfaceLanguage } from './interface-language';
 import { formatMessageTime } from './MessageTime';
-import type { ProjectSidebarPreference } from './project-navigation';
 import './conversations.css';
 
-function SidebarAction({
-  icon,
-  label,
-  ...props
-}: Pick<ComponentProps<'button'>, 'onClick' | 'disabled'> & {
-  icon: string;
-  label: string;
-}) {
-  return (
-    <button {...props} type="button" className="sidebar-action" aria-label={label}>
-      <Icon name={icon} size={15} />
-      <span>{label}</span>
-    </button>
-  );
-}
-
-interface Props {
-  projects: Project[];
-  activeProjectId: string;
-  selectedId: string;
-  updates: Record<string, Summary[]>;
-  disabled: boolean;
-  connection: string;
-  sidebarPreferences: Record<string, ProjectSidebarPreference>;
-  onProject: (id: string) => void;
-  onNew: (projectId: string) => void;
-  onAddProject: () => void;
-  onSelect: (id: string, projectId: string) => void;
-  onUpdated: (summary: Summary) => void;
-  onProjectUpdated: (project: ProjectUpdate, expected: Omit<ProjectUpdate, 'id'>) => void;
-  onSidebarPreference: (id: string, patch: ProjectSidebarPreference) => void;
-  onRefreshProjects: () => void;
-  onModalChange: (open: boolean) => void;
-}
-
-const noUpdates: Summary[] = [];
-const maxProjectReads = 4;
-const inactiveProjectAgeMs = 3 * 24 * 60 * 60 * 1000;
-let projectReads = 0;
-const waitingReads: (() => void)[] = [];
-
-// All project cards share one request budget. Aborted, queued reads never reach the server.
-function readConversationPage(path: string, signal: AbortSignal) {
-  return new Promise<ConversationPage>((resolve, reject) => {
-    const cancel = () => {
-      const index = waitingReads.indexOf(start);
-      if (index >= 0) waitingReads.splice(index, 1);
-      reject(signal.reason);
-    };
-    const start = () => {
-      signal.removeEventListener('abort', cancel);
-      projectReads++;
-      void request<ConversationPage>(path, {}, signal)
-        .then(resolve, reject)
-        .finally(() => {
-          projectReads--;
-          waitingReads.shift()?.();
-        });
-    };
-    if (signal.aborted) reject(signal.reason);
-    else if (projectReads < maxProjectReads) start();
-    else {
-      waitingReads.push(start);
-      signal.addEventListener('abort', cancel, { once: true });
-    }
-  });
-}
+const pageLimit = 30;
 const isWorking = (row: Summary) =>
   !!row.executionPending ||
   !!row.queueCount ||
   ['running', 'waitingApproval', 'waitingInput'].includes(row.state);
-const matches = (row: Summary, archived: boolean, search: string) =>
-  !!row.archived === archived && row.title.toLowerCase().includes(search.toLowerCase());
-const signature = (row: Summary) =>
-  JSON.stringify([
-    row.title,
-    row.state,
-    row.updatedAt,
-    !!row.archived,
-    !!row.managementPending,
-    !!row.executionPending,
-    row.queueCount,
-    row.queuePaused,
-    row.queueIssue,
-    row.executionUnknown,
-    row.sidebarActivity,
-    row.expiredQuestion,
-    row.forkedFromId,
-  ]);
-const sidebarTimes = Object.fromEntries(
-  ['en-US', 'zh-CN'].map((locale) => [
-    locale,
-    {
-      clock: new Intl.DateTimeFormat(locale, {
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
-      }),
-      date: new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }),
-    },
-  ]),
-);
 
-export const Conversations = memo(function Conversations({
-  projects,
-  activeProjectId,
-  selectedId,
-  updates,
-  sidebarPreferences,
-  onAddProject,
-  onRefreshProjects,
-  ...props
-}: Props) {
+interface Props {
+  projects: Project[];
+  cwd?: string;
+  selectedId: string;
+  updates: Summary[];
+  disabled: boolean;
+  connection: string;
+  supportsCreatedSort: boolean;
+  onNew: () => void;
+  onSelect: (id: string, projectId: string) => void;
+  onUpdated: (summary: Summary) => void;
+  onModalChange: (open: boolean) => void;
+}
+
+export const Conversations = memo(function Conversations(props: Props) {
   const { t } = useInterfaceLanguage();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
+  const [onlyCwd, setOnlyCwd] = useState(false);
   const [archived, setArchived] = useState(false);
+  const [sort, setSort] = useState<ConversationSort>('updated_at');
   const [revision, setRevision] = useState(0);
-  const [activity, setActivity] = useState<Record<string, number>>({});
   const archiveToggle = useRef<HTMLButtonElement>(null);
-  const focusArchiveToggle = useCallback(() => archiveToggle.current?.focus(), []);
-  const recordActivity = useCallback((projectId: string, updatedAt: number) => {
-    setActivity((previous) =>
-      updatedAt > (previous[projectId] ?? -1) ? { ...previous, [projectId]: updatedAt } : previous,
-    );
-  }, []);
+  const cwd = onlyCwd ? props.cwd : undefined;
+  const effectiveSort = props.supportsCreatedSort ? sort : 'updated_at';
+
   useEffect(() => {
-    if (query.trim() === search) return;
     const timer = setTimeout(() => setSearch(query.trim()), 200);
     return () => clearTimeout(timer);
-  }, [query, search]);
-  if (!projects.length) return null;
-  const orderedProjects = projects
-    .filter((project) => archived || !project.archived)
-    .map((project) => ({
-      project,
-      updatedAt: Math.max(activity[project.id] ?? -1, project.latestConversationAt ?? -1),
-    }))
-    .sort(
-      (a, b) =>
-        Number(!!b.project.archived) - Number(!!a.project.archived) ||
-        Number(!!sidebarPreferences[b.project.id]?.pinned) -
-          Number(!!sidebarPreferences[a.project.id]?.pinned) ||
-        b.updatedAt - a.updatedAt ||
-        a.project.name.localeCompare(b.project.name) ||
-        a.project.id.localeCompare(b.project.id),
-    );
-  const inactiveBefore = Date.now() - inactiveProjectAgeMs;
-  const searchLabel = t(archived ? 'Search archives' : 'Search projects and chats');
+  }, [query]);
+
   return (
     <section
       className="conversations"
@@ -166,50 +59,40 @@ export const Conversations = memo(function Conversations({
       data-live={props.connection === 'Connected'}
     >
       <div className="conversation-controls">
-        <button
-          ref={archiveToggle}
-          className={'icon-button archive-toggle' + (archived ? ' selected' : '')}
-          aria-label={t('Archived projects and chats')}
-          aria-pressed={archived}
-          data-tooltip={archived ? t('Back to chats') : t('Archive')}
-          onClick={() => setArchived((value) => !value)}
-        >
-          <Icon name={archived ? 'chevron' : 'archive'} size={16} />
-          {archived && <span>{t('Archived')}</span>}
-        </button>
-        <div className="conversation-tools">
-          {!archived && (
-            <button
-              className="icon-button"
-              aria-label={t('Add project')}
-              data-tooltip=""
-              onClick={onAddProject}
-            >
-              <Icon name="folder-add" size={16} />
-            </button>
-          )}
-          <button
-            className="icon-button"
-            aria-label={t('Refresh projects and chats')}
-            data-tooltip=""
-            onClick={() => {
-              onRefreshProjects();
-              setRevision((value) => value + 1);
-            }}
-          >
-            <Icon name="refresh" size={15} />
-          </button>
+        <div className="conversation-tools" role="group" aria-label={t('Session actions')}>
+          <IconButton
+            icon="newchat"
+            label={t('New conversation')}
+            disabled={props.disabled}
+            onClick={props.onNew}
+          />
+          <IconButton
+            icon="refresh"
+            label={t('Refresh conversations')}
+            onClick={() => setRevision((value) => value + 1)}
+          />
         </div>
+        {props.supportsCreatedSort && (
+          <select
+            className="session-sort"
+            aria-label={t('Sort conversations')}
+            value={effectiveSort}
+            onChange={(event) => setSort(event.currentTarget.value as ConversationSort)}
+          >
+            <option value="updated_at">{t('Updated')}</option>
+            <option value="created_at">{t('Created')}</option>
+          </select>
+        )}
       </div>
       <div className="conversation-search-row">
         <div className="conversation-search">
           <Icon name="search" size={14} />
           <input
-            aria-label={searchLabel}
-            placeholder={searchLabel}
+            aria-label={t('Search conversations')}
+            placeholder={t('Search conversations')}
             value={query}
             maxLength={120}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.currentTarget.value)}
           />
           {query && (
             <button aria-label={t('Clear search')} data-tooltip="" onClick={() => setQuery('')}>
@@ -218,708 +101,281 @@ export const Conversations = memo(function Conversations({
           )}
         </div>
       </div>
-      <nav
-        className="project-cards"
-        aria-label={t(archived ? 'Archived projects and chats' : 'Conversations')}
-      >
-        {orderedProjects.map(({ project, updatedAt }) => {
-          const projectMatch =
-            !!search && project.name.toLowerCase().includes(search.toLowerCase());
-          return (
-            <ProjectCard
-              key={JSON.stringify([project.id, search, projectMatch, archived, !!project.archived])}
-              project={project}
-              active={project.id === activeProjectId}
-              selectedId={project.id === activeProjectId ? selectedId : ''}
-              updates={updates[project.id] ?? noUpdates}
-              search={projectMatch ? '' : search}
-              filtering={!!search}
-              refreshVersion={revision}
-              archiveView={archived}
-              inactive={updatedAt >= 0 && updatedAt <= inactiveBefore}
-              preference={sidebarPreferences[project.id]}
-              onActivity={recordActivity}
-              onArchiveChange={focusArchiveToggle}
-              {...props}
-            />
-          );
-        })}
-        {archived && (
-          <>
-            <p className="archive-loading conversation-empty" role="status">
-              {t('Loading…')}
-            </p>
-            <p className="archive-empty conversation-empty">
-              {t(
-                search ? 'No matching projects or conversations' : 'No archived projects or chats',
-              )}
-            </p>
-          </>
-        )}
-        {!archived && search && (
-          <p className="sidebar-search-empty conversation-empty">
-            {t('No matching projects or conversations')}
-          </p>
-        )}
-        {!archived && !search && !orderedProjects.length && (
-          <p className="conversation-empty">{t('No active projects')}</p>
-        )}
-      </nav>
+      <div className="session-filters">
+        <div role="group" aria-label={t('Directory filter')}>
+          <button aria-pressed={!cwd} onClick={() => setOnlyCwd(false)}>
+            {t('All')}
+          </button>
+          <button
+            aria-pressed={!!cwd}
+            disabled={!props.cwd}
+            data-tooltip={props.cwd || t('Choose a working directory')}
+            onClick={() => setOnlyCwd(true)}
+          >
+            {t('Cwd')}
+          </button>
+        </div>
+        <div role="group" aria-label={t('Archive filter')}>
+          <button aria-pressed={!archived} onClick={() => setArchived(false)}>
+            {t('Active')}
+          </button>
+          <button ref={archiveToggle} aria-pressed={archived} onClick={() => setArchived(true)}>
+            {t('Archived')}
+          </button>
+        </div>
+      </div>
+      <ConversationList
+        key={JSON.stringify([cwd, archived, effectiveSort, search])}
+        {...props}
+        cwd={cwd}
+        archived={archived}
+        search={search}
+        sort={effectiveSort}
+        revision={revision}
+        onArchive={() => archiveToggle.current?.focus()}
+      />
     </section>
   );
 });
 
-const ProjectCard = memo(function ProjectCard({
-  project,
-  active,
+function ConversationList({
+  projects,
+  cwd,
+  archived,
   search,
-  filtering,
-  refreshVersion,
-  archiveView,
-  inactive,
-  preference,
+  sort,
+  revision,
   selectedId,
   updates,
   disabled,
   connection,
-  onProject,
-  onNew,
   onSelect,
   onUpdated,
-  onSidebarPreference,
-  onProjectUpdated,
-  onActivity,
-  onArchiveChange,
+  onArchive,
   onModalChange,
-}: Omit<
-  Props,
-  | 'projects'
-  | 'activeProjectId'
-  | 'updates'
-  | 'sidebarPreferences'
-  | 'onRefreshProjects'
-  | 'onAddProject'
-> & {
-  project: Project;
-  active: boolean;
+}: Props & {
+  archived: boolean;
   search: string;
-  filtering: boolean;
-  refreshVersion: number;
-  archiveView: boolean;
-  inactive: boolean;
-  preference?: ProjectSidebarPreference;
-  updates: Summary[];
-  onActivity: (projectId: string, updatedAt: number) => void;
-  onArchiveChange: () => void;
+  sort: ConversationSort;
+  revision: number;
+  onArchive: () => void;
 }) {
-  const { t, locale } = useInterfaceLanguage();
-  const projectId = project.id;
-  const listId = 'project-conversations-' + projectId;
-  const actionsId = 'project-actions-' + projectId;
-  const projectName = useRef<HTMLButtonElement>(null);
-  const [archiveExpanded, setArchiveExpanded] = useState(true);
-  const [archivedChats, setArchivedChats] = useState(true);
-  const archived = archiveView && (!project.archived || archivedChats);
+  const { t } = useInterfaceLanguage();
   const [cursor, setCursor] = useState<string>();
   const [previous, setPrevious] = useState<(string | undefined)[]>([]);
-  const [page, setPage] = useState<ConversationPage>({ data: [], nextCursor: null, scanned: 0 });
-  const [loading, setLoading] = useState(filtering || archiveView);
+  const [page, setPage] = useState<NativeConversationPage>();
+  const [reload, setReload] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [revision, setRevision] = useState(0);
-  const [projectMenu, setProjectMenu] = useState(false);
-  const projectMenuButton = useRef<HTMLButtonElement>(null);
-  const [projectEdit, setProjectEdit] = useState<{ original: string; name: string }>();
-  const [savingProject, setSavingProject] = useState(false);
-  const [projectError, setProjectError] = useState('');
+  const [mutationError, setMutationError] = useState('');
   const [pending, setPending] = useState('');
-  const [confirmation, saveConfirmation] = useState<Summary | 'project'>();
-  const setConfirmation = useCallback(
-    (value?: Summary | 'project') => {
-      saveConfirmation(value);
-      onModalChange(!!value);
-    },
-    [onModalChange],
-  );
-  useEffect(() => () => onModalChange(false), [onModalChange]);
+  const [confirmation, setConfirmation] = useState<NativeConversationSummary>();
+  const archiveOpener = useRef<HTMLElement | null>(null);
+  const refreshOnConnect = useRef(false);
+  const latest = useRef(updates);
+  latest.current = updates;
+  const baseline = useRef(new Map(updates.map((row) => [row.id, row])));
+  const loadedAt = useRef(0);
   const lastConnection = useRef(connection);
   useEffect(() => {
-    // Replay may have expired while the browser was away. Re-read only the current
-    // native list page, preserving search/cursor and avoiding conversation histories.
-    if (connection === 'Connected' && lastConnection.current !== 'Connected')
-      setRevision((value) => value + 1);
+    const wasOffline = ['Reconnecting', 'Disconnected', 'Unavailable'].includes(
+      lastConnection.current,
+    );
     lastConnection.current = connection;
+    if ((wasOffline || refreshOnConnect.current) && connection === 'Connected') {
+      refreshOnConnect.current = false;
+      setReload((value) => value + 1);
+    }
   }, [connection]);
-  const priorUpdates = useRef(new Map<string, string>());
-  const generation = useRef(0);
-  const latestUpdates = useRef(updates);
-  latestUpdates.current = updates;
-  const defaultExpanded =
-    !inactive || active || updates.some(isWorking) || page.data.some(isWorking);
-  const isExpanded = archiveView ? archiveExpanded : (preference?.expanded ?? defaultExpanded);
-  const setExpanded = (expanded: boolean) => {
-    if (archiveView) setArchiveExpanded(expanded);
-    else onSidebarPreference(projectId, { expanded });
-  };
-  const shouldLoad = filtering || archiveView || isExpanded;
-  const keepOpen = !!(
-    filtering ||
-    error ||
-    pending ||
-    confirmation ||
-    projectEdit ||
-    savingProject
-  );
-  const collapsed = !keepOpen && !isExpanded;
-  const projectConfirmation = confirmation === 'project';
-  const archiveBusy = projectConfirmation ? savingProject : !!pending;
-  const closeProjectEdit = () => {
-    setProjectEdit(undefined);
-    projectMenuButton.current?.focus();
-  };
-  const seenRefresh = useRef(refreshVersion);
+  useEffect(() => {
+    const refresh = () => {
+      if (
+        !cursor &&
+        document.visibilityState === 'visible' &&
+        Date.now() - loadedAt.current > 15_000
+      )
+        setReload((value) => value + 1);
+    };
+    const online = () => {
+      refreshOnConnect.current = true;
+    };
+    window.addEventListener('online', online);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [cursor]);
+  const dialogOpen = !!confirmation;
 
   useEffect(() => {
-    const force = seenRefresh.current !== refreshVersion;
-    seenRefresh.current = refreshVersion;
-    if (!shouldLoad && !force) {
-      setLoading(false);
-      return;
-    }
+    if (!dialogOpen) return;
+    onModalChange(true);
+    return () => onModalChange(false);
+  }, [dialogOpen, onModalChange]);
+
+  useEffect(() => {
     const controller = new AbortController();
-    const current = ++generation.current;
-    const before = new Map(latestUpdates.current.map((row) => [row.id, signature(row)]));
+    const params = new URLSearchParams({ archived: String(archived), search, sort });
+    if (cwd) params.set('cwd', cwd);
+    if (cursor) params.set('cursor', cursor);
+    const known = new Map(latest.current.map((row) => [row.id, row]));
     setLoading(true);
     setError('');
-    const params = new URLSearchParams({ search, archived: String(archived) });
-    if (cursor) params.set('cursor', cursor);
-    void readConversationPage(
-      '/projects/' + projectId + '/conversations?' + params.toString(),
-      controller.signal,
-    )
-      .then((result) => {
-        if (current !== generation.current || controller.signal.aborted) return;
-        onActivity(projectId, result.latestConversationAt ?? 0);
-        // A delayed list response must not undo metadata received over SSE in the meantime.
-        const changed = latestUpdates.current.filter(
-          (row) => row.projectId === projectId && before.get(row.id) !== signature(row),
-        );
-        let data = result.data;
-        for (const row of changed) {
-          const index = data.findIndex((item) => item.id === row.id);
-          if (index >= 0) data = data.map((item) => (item.id === row.id ? row : item));
-          else if (!cursor) data = [row, ...data];
-        }
-        setPage({
-          ...result,
-          data: data
-            .filter((row) => matches(row, archived, search))
-            .sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id))
-            .slice(0, 30),
-        });
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) setError(message(error));
-      })
+    void request<NativeConversationPage>('/conversations?' + params, {}, controller.signal)
+      .then(
+        (result) => {
+          if (controller.signal.aborted) return;
+          baseline.current = known;
+          loadedAt.current = Date.now();
+          setPage(result);
+        },
+        (cause) => {
+          if (!controller.signal.aborted) setError(message(cause));
+        },
+      )
       .finally(() => {
-        if (current === generation.current && !controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [projectId, search, archived, cursor, revision, refreshVersion, shouldLoad, onActivity]);
-  useEffect(() => {
-    const delta = updates.filter(
-      (row) => row.projectId === projectId && priorUpdates.current.get(row.id) !== signature(row),
-    );
-    priorUpdates.current = new Map(
-      updates.filter((row) => row.projectId === projectId).map((row) => [row.id, signature(row)]),
-    );
-    if (!delta.length) return;
-    onActivity(projectId, Math.max(...delta.map((row) => row.updatedAt)));
-    setPage((old) => {
-      let data = old.data.slice();
-      for (const row of delta) {
-        const index = data.findIndex((item) => item.id === row.id);
-        if (index >= 0) {
-          if (matches(row, archived, search)) data[index] = row;
-          else data.splice(index, 1);
-        } else if (!cursor && matches(row, archived, search)) data.unshift(row);
-      }
-      return {
-        ...old,
-        data: data
-          .sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id))
-          .slice(0, 30),
-      };
-    });
-  }, [updates, projectId, archived, search, cursor, onActivity]);
+  }, [archived, cursor, cwd, search, sort, revision, reload]);
 
-  const refresh = () => {
-    if (!shouldLoad) onSidebarPreference(projectId, { expanded: true });
-    setCursor(undefined);
-    setPrevious([]);
-    setRevision((v) => v + 1);
+  const rows = useMemo(() => {
+    if (!page) return [];
+    const pendingUpdates = updates.filter((row) => baseline.current.get(row.id) !== row);
+    const byId = new Map(pendingUpdates.map((row) => [row.id, row]));
+    const paths = new Map(projects.map((project) => [project.id, project.path]));
+    const matches = (row: NativeConversationSummary) =>
+      !!row.archived === archived &&
+      (!cwd || row.cwd === cwd) &&
+      (!search || row.title.toLowerCase().includes(search.toLowerCase()));
+    const present = new Set(page.data.map((row) => row.id));
+    const visible = page.data.flatMap((row) => {
+      const change = byId.get(row.id);
+      if (!change) return [row];
+      const next = {
+        ...row,
+        ...change,
+        cwd:
+          change.projectId === row.projectId ? row.cwd : (paths.get(change.projectId) ?? row.cwd),
+      };
+      return matches(next) ? [next] : [];
+    });
+    if (cursor || sort !== 'updated_at') return visible;
+    const oldest = page.data.at(-1)?.updatedAt ?? 0;
+    const newRows = pendingUpdates.flatMap((row) => {
+      const path = paths.get(row.projectId);
+      if (!path || present.has(row.id) || row.updatedAt < oldest) return [];
+      const next = { ...row, cwd: path, createdAt: 0 };
+      return matches(next) ? [next] : [];
+    });
+    return [...newRows, ...visible].slice(0, pageLimit);
+  }, [page, updates, projects, archived, cwd, search, cursor, sort]);
+
+  const closeConfirmation = () => {
+    onModalChange(false);
+    setConfirmation(undefined);
+    requestAnimationFrame(() => archiveOpener.current?.focus());
   };
-  const renameProject = async () => {
-    if (!projectEdit || savingProject) return;
-    const name = projectEdit.name.trim();
-    if (!name || name === projectEdit.original) return;
-    setSavingProject(true);
-    setProjectError('');
-    try {
-      const updated = await request<Project>('/projects/' + encodeURIComponent(projectId), {
-        method: 'PUT',
-        body: JSON.stringify({ name, expectedName: projectEdit.original }),
-      });
-      onProjectUpdated({ id: projectId, name: updated.name }, { name: projectEdit.original });
-      setProjectEdit(undefined);
-      setProjectMenu(false);
-      projectName.current?.focus();
-    } catch (error) {
-      setProjectError(message(error));
-    } finally {
-      setSavingProject(false);
-    }
-  };
-  const changeProjectArchive = async () => {
-    if (savingProject) return;
-    const archived = !project.archived;
-    setSavingProject(true);
-    setProjectError('');
-    try {
-      const updated = await request<ProjectUpdate>(
-        '/projects/' + encodeURIComponent(projectId) + '/archive',
-        {
-          method: 'PUT',
-          body: JSON.stringify({ archived }),
-        },
-      );
-      setConfirmation(undefined);
-      setProjectMenu(false);
-      onProjectUpdated(updated, { archived: !archived });
-      requestAnimationFrame(onArchiveChange);
-    } catch (error) {
-      setProjectError(message(error));
-    } finally {
-      setSavingProject(false);
-    }
-  };
-  const mutate = async (row: Summary, action: 'archive' | 'check') => {
+  const mutate = async (row: NativeConversationSummary, check = false) => {
     if (pending) return;
     setPending(row.id);
-    setError('');
+    setMutationError('');
     try {
       const result = await post<Summary>(
-        '/threads/' + row.id + '/' + (action === 'check' ? 'management-status' : action),
-        action === 'check' ? {} : { operationId: crypto.randomUUID(), archived: !row.archived },
+        '/threads/' + encodeURIComponent(row.id) + (check ? '/management-status' : '/archive'),
+        check ? {} : { operationId: crypto.randomUUID(), archived: !row.archived },
       );
       onUpdated(result);
+      onModalChange(false);
       setConfirmation(undefined);
-      if (!!result.archived !== !!row.archived) requestAnimationFrame(onArchiveChange);
-      setPage((old) => ({
-        ...old,
-        data: old.data
-          .map((item) => (item.id === result.id ? result : item))
-          .filter((item) => matches(item, archived, search)),
-      }));
-      refresh();
-    } catch (error) {
-      setError(message(error));
+      if (!!result.archived !== !!row.archived) requestAnimationFrame(onArchive);
+      setReload((value) => value + 1);
+    } catch (cause) {
+      setMutationError(message(cause));
     } finally {
       setPending('');
     }
   };
   const next = () => {
-    if (!page.nextCursor || loading) return;
-    setPrevious((old) => [...old.slice(-127), cursor]);
+    if (!page?.nextCursor || loading) return;
+    setPrevious((value) => [...value.slice(-127), cursor]);
     setCursor(page.nextCursor);
   };
   const back = () => {
     if (!previous.length || loading) return;
     setCursor(previous.at(-1));
-    setPrevious((old) => old.slice(0, -1));
+    setPrevious((value) => value.slice(0, -1));
   };
-  const rows = page.data.filter(
-    (row) => row.projectId === projectId && matches(row, archived, search),
-  );
-  const empty = !rows.length && !page.nextCursor && !previous.length && !error && !projectError;
-  const hideEmpty =
-    (archiveView && !project.archived) || (!!search && !loading && !projectEdit && archivedChats);
-  const showProjectActions = !collapsed && (!archiveView || project.archived);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   return (
-    <section
-      className="project-card"
-      data-project-id={projectId}
-      aria-labelledby={'project-heading-' + projectId}
-      aria-busy={loading}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || !projectMenu || savingProject) return;
-        event.stopPropagation();
-        setProjectMenu(false);
-        projectMenuButton.current?.focus();
-      }}
-      hidden={empty && hideEmpty}
-    >
-      <header className="project-card-header">
-        <IconButton
-          className="project-card-disclosure"
-          icon="chevron"
-          size={14}
-          label={t(collapsed ? 'Expand {project}' : 'Collapse {project}', {
-            project: project.name,
-          })}
-          aria-controls={listId}
-          aria-expanded={!collapsed}
-          disabled={keepOpen}
-          onClick={() => {
-            setProjectMenu(false);
-            setExpanded(collapsed);
+    <nav className="session-list" aria-label={t('Conversations')} aria-busy={loading}>
+      {rows.map((row) => (
+        <ConversationRow
+          key={row.id}
+          row={row}
+          selected={row.id === selectedId}
+          showDirectory={!cwd}
+          sort={sort}
+          disabled={disabled}
+          pending={!!pending}
+          onSelect={() => onSelect(row.id, row.projectId)}
+          onArchive={(button) => {
+            if (row.archived) void mutate(row);
+            else {
+              archiveOpener.current = button;
+              setMutationError('');
+              setConfirmation(row);
+            }
           }}
+          onCheck={() => void mutate(row, true)}
         />
-        <h2 id={'project-heading-' + projectId}>
-          <button
-            ref={projectName}
-            className="project-card-name"
-            aria-current={active ? 'true' : undefined}
-            aria-description={
-              project.archived
-                ? t('Archived project')
-                : preference?.pinned
-                  ? t('Pinned project')
-                  : undefined
-            }
-            aria-controls={collapsed ? listId : undefined}
-            aria-expanded={collapsed ? false : undefined}
-            title={project.path}
-            disabled={!collapsed && disabled}
-            onClick={() => {
-              if (collapsed) setExpanded(true);
-              else onProject(projectId);
-            }}
-          >
-            {(project.archived || preference?.pinned) && (
-              <Icon name={project.archived ? 'archive' : 'pin'} size={14} />
-            )}
-            <span>{project.name}</span>
-          </button>
-        </h2>
-        {!collapsed && !archiveView && (
-          <button
-            className="icon-button project-card-new"
-            aria-label={
-              active
-                ? t('New conversation')
-                : t('New conversation in {project}', { project: project.name })
-            }
-            data-tooltip={t('New conversation')}
-            disabled={disabled}
-            onClick={() => onNew(projectId)}
-          >
-            <Icon name="newchat" size={16} />
-          </button>
-        )}
-        {project.archived && (
-          <IconButton
-            icon="unarchive"
-            label={t('Restore project')}
-            disabled={savingProject}
-            onClick={() => void changeProjectArchive()}
-          />
-        )}
-        {showProjectActions && (
-          <button
-            ref={projectMenuButton}
-            className="icon-button"
-            aria-label={t('Project actions for {project}', { project: project.name })}
-            aria-expanded={projectMenu}
-            aria-controls={projectMenu ? actionsId : undefined}
-            data-tooltip=""
-            disabled={savingProject}
-            onClick={() => {
-              setProjectMenu(!projectMenu);
-              setProjectEdit(undefined);
-              setProjectError('');
-            }}
-          >
-            <Icon name="more" size={16} />
-          </button>
-        )}
-      </header>
-      {showProjectActions && projectMenu && (
-        <div
-          id={actionsId}
-          className="project-actions"
-          role="group"
-          aria-label={t('Project actions: {project}', { project: project.name })}
-        >
-          <SidebarAction
-            icon="edit"
-            label={t('Rename')}
-            disabled={savingProject}
-            onClick={() => {
-              setProjectEdit({ original: project.name, name: project.name });
-              setProjectError('');
-            }}
-          />
-          <SidebarAction
-            icon={preference?.pinned ? 'pin-off' : 'pin'}
-            label={preference?.pinned ? t('Unpin') : t('Pin')}
-            onClick={() => onSidebarPreference(projectId, { pinned: !preference?.pinned })}
-          />
-          {!archiveView && (
-            <SidebarAction
-              icon="archive"
-              label={t('Archive project')}
-              disabled={savingProject}
-              onClick={() => {
-                setProjectEdit(undefined);
-                setProjectError('');
-                setConfirmation('project');
-              }}
-            />
-          )}
-        </div>
-      )}
-      {projectError && !projectEdit && !projectConfirmation && (
-        <p className="conversation-error" role="alert">
-          {t(projectError)}
+      ))}
+      {loading && !rows.length && (
+        <p className="conversation-empty" role="status">
+          {t('Loading conversations…')}
         </p>
       )}
-      {projectEdit && (
-        <form
-          className="conversation-rename"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void renameProject();
-          }}
-        >
-          <label htmlFor={'project-rename-' + projectId}>{t('Project name')}</label>
-          <input
-            id={'project-rename-' + projectId}
-            value={projectEdit.name}
-            maxLength={80}
-            disabled={savingProject}
-            autoFocus
-            onChange={(event) => setProjectEdit({ ...projectEdit, name: event.target.value })}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && !savingProject) {
-                event.stopPropagation();
-                closeProjectEdit();
-              }
-            }}
-          />
-          {projectError && (
-            <p className="error-text" role="alert">
-              {t(projectError)}
-            </p>
+      {!loading && !error && !rows.length && (
+        <p className="conversation-empty">
+          {t(
+            page?.nextCursor
+              ? 'No matches on this page'
+              : archived
+                ? 'No archived conversations'
+                : 'No conversations',
           )}
-          <div>
-            <button type="button" disabled={savingProject} onClick={closeProjectEdit}>
-              {t('Cancel')}
-            </button>
-            <button
-              className="primary"
-              disabled={
-                savingProject ||
-                !projectEdit.name.trim() ||
-                projectEdit.name.trim() === projectEdit.original
-              }
-            >
-              {savingProject ? t('Saving…') : t('Save project name')}
-            </button>
-          </div>
-        </form>
+        </p>
       )}
-      {error && !confirmation && (
+      {!confirmation && (error || mutationError) && (
         <div className="conversation-error" role="alert">
-          {t(error)}
-          <button onClick={refresh}>{t('Refresh list')}</button>
+          <span>{t(error || mutationError)}</span>
+          {error && <button onClick={() => setReload((value) => value + 1)}>{t('Retry')}</button>}
         </div>
       )}
-      <div className="project-conversations" id={listId} hidden={collapsed}>
-        {project.archived && !collapsed && (
-          <div
-            className="project-chat-filter"
-            role="group"
-            aria-label={t('Chats in {project}', { project: project.name })}
-          >
-            {[true, false].map((showArchived) => (
-              <button
-                key={String(showArchived)}
-                type="button"
-                aria-pressed={showArchived === archivedChats}
-                disabled={!!pending || !!confirmation}
-                onClick={() => {
-                  if (showArchived === archivedChats) return;
-                  setArchivedChats(showArchived);
-                  setPage({ data: [], nextCursor: null, scanned: 0 });
-                  setLoading(true);
-                  refresh();
-                }}
-              >
-                {t(showArchived ? 'Archived chats' : 'Active chats')}
-              </button>
-            ))}
-          </div>
-        )}
-        {(collapsed ? noUpdates : rows).map((row) => {
-          const status = conversationStatus(row, t);
-          const routine = status.tone === 'neutral' && row.state === 'idle';
-          const time = row.updatedAt > 0 ? formatMessageTime(row.updatedAt, locale) : undefined;
-          const shortTime =
-            time &&
-            (row.updatedAt >= today.getTime()
-              ? sidebarTimes[locale]!.clock
-              : sidebarTimes[locale]!.date
-            ).format(row.updatedAt);
-          return (
-            <div
-              key={row.id}
-              className={'conversation-row ' + (row.id === selectedId ? 'selected' : '')}
-              data-conversation-id={row.id}
-              data-state={row.state}
-            >
-              <div className="conversation-row-heading">
-                <button
-                  className={'thread-link ' + (row.id === selectedId ? 'active' : '')}
-                  aria-current={row.id === selectedId ? 'page' : undefined}
-                  disabled={disabled}
-                  onClick={() => onSelect(row.id, projectId)}
-                  aria-label={row.title}
-                  aria-describedby={
-                    'conversation-status-' +
-                    row.id +
-                    (time ? ' conversation-updated-' + row.id : '')
-                  }
-                >
-                  <span className="conversation-title">
-                    <span data-tooltip-overflow="">{row.title}</span>
-                    {row.forkedFromId && (
-                      <span
-                        className="branch-mark"
-                        title={t('Conversation branch')}
-                        aria-label={t('Conversation branch')}
-                      >
-                        ⑂
-                      </span>
-                    )}
-                    {time && (
-                      <time
-                        id={'conversation-updated-' + row.id}
-                        dateTime={time.iso}
-                        title={t('Updated: {time}', { time: time.full })}
-                        aria-label={t('Updated: {time}', { time: time.full })}
-                      >
-                        {shortTime}
-                      </time>
-                    )}
-                  </span>
-                  <span
-                    className={
-                      'conversation-meta' + (routine && !status.queue ? ' is-routine' : '')
-                    }
-                    id={'conversation-status-' + row.id}
-                  >
-                    <span
-                      data-indicator={status.indicator}
-                      className={
-                        'conversation-status tone-' +
-                        status.tone +
-                        (routine ? ' visually-hidden' : '')
-                      }
-                    >
-                      {status.label}
-                    </span>
-                    {status.queue && (
-                      <span
-                        className={
-                          'conversation-queue ' +
-                          (row.queueIssue === 'failed'
-                            ? 'tone-error'
-                            : row.queueIssue || row.queuePaused
-                              ? 'tone-attention'
-                              : '')
-                        }
-                      >
-                        {status.queue}
-                      </span>
-                    )}
-                  </span>
-                </button>
-                {row.managementPending ? (
-                  <IconButton
-                    className="conversation-row-action"
-                    icon="refresh"
-                    label={t('Check status for {title}', { title: row.title })}
-                    disabled={!!pending}
-                    onClick={() => void mutate(row, 'check')}
-                  />
-                ) : (
-                  <IconButton
-                    className="conversation-row-action"
-                    icon={row.archived ? 'unarchive' : 'archive'}
-                    label={t(row.archived ? 'Restore {title}' : 'Archive {title}', {
-                      title: row.title,
-                    })}
-                    disabled={!!pending || isWorking(row)}
-                    hint={t(
-                      isWorking(row)
-                        ? 'Resolve active work and clear the queue first.'
-                        : row.archived
-                          ? 'Restore conversation'
-                          : 'Archive conversation',
-                    )}
-                    onClick={() =>
-                      row.archived
-                        ? void mutate(row, 'archive')
-                        : (setConfirmation(row), setError(''))
-                    }
-                  />
-                )}
-              </div>
-            </div>
-          );
-        })}
-        {!collapsed && !rows.length && !loading && !error && (search || archiveView) && (
-          <p className="conversation-empty">
-            {search
-              ? page.nextCursor
-                ? t('No matches on this page')
-                : t('No matches')
-              : archived
-                ? t('No archived chats')
-                : t('No active chats')}
-          </p>
-        )}
-      </div>
-      {!collapsed && (page.nextCursor || previous.length > 0) && (
+      {(!!page?.nextCursor || previous.length > 0) && (
         <div className="conversation-pagination">
-          <button
-            aria-label={t('Previous conversation page')}
-            data-tooltip=""
-            disabled={!previous.length || loading}
+          <IconButton
+            icon="chevron"
+            label={t('Previous conversation page')}
+            disabled={loading || !previous.length}
             onClick={back}
-          >
-            <Icon name="chevron" size={12} />
-          </button>
+          />
           <span>{t('Page {number}', { number: previous.length + 1 })}</span>
-          <button
-            aria-label={t('Next conversation page')}
-            data-tooltip=""
-            disabled={!page.nextCursor || loading}
+          <IconButton
+            icon="chevron"
+            label={t('Next conversation page')}
+            disabled={loading || !page?.nextCursor}
             onClick={next}
-          >
-            <Icon name="chevron" size={12} />
-          </button>
+          />
         </div>
       )}
       {confirmation &&
         createPortal(
           <InteractionDialog
-            title={t(projectConfirmation ? 'Archive this project?' : 'Archive this conversation?')}
-            close={() => setConfirmation(undefined)}
-            busy={archiveBusy}
+            title={t('Archive this conversation?')}
+            close={closeConfirmation}
+            busy={!!pending}
             className="conversation-confirm"
             closeOnBackdrop
             initialFocus="[data-confirm-cancel]"
@@ -927,21 +383,17 @@ const ProjectCard = memo(function ProjectCard({
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                if (confirmation === 'project') void changeProjectArchive();
-                else void mutate(confirmation, 'archive');
+                void mutate(confirmation);
               }}
             >
               <div className="conversation-confirm-target">
                 <Icon name="archive" size={18} />
-                <strong>{confirmation === 'project' ? project.name : confirmation.title}</strong>
+                <strong>{confirmation.title}</strong>
               </div>
-              <p>{t('Restore from Archived projects and chats. Project files are kept.')}</p>
-              {!projectConfirmation && (
-                <p>{t('Codex may also archive conversations started from this one.')}</p>
-              )}
-              {(projectConfirmation ? projectError : error) && (
+              <p>{t('Codex may also archive conversations started from this one.')}</p>
+              {mutationError && (
                 <p className="error-text" role="alert">
-                  {t(projectConfirmation ? projectError : error)}
+                  {t(mutationError)}
                 </p>
               )}
               <div className="conversation-confirm-actions">
@@ -949,29 +401,151 @@ const ProjectCard = memo(function ProjectCard({
                   type="button"
                   className="secondary"
                   data-confirm-cancel
-                  disabled={archiveBusy}
-                  onClick={() => setConfirmation(undefined)}
+                  disabled={!!pending}
+                  onClick={closeConfirmation}
                 >
                   {t('Cancel')}
                 </button>
-                <button
-                  className="primary"
-                  aria-label={t(
-                    archiveBusy
-                      ? 'Archiving…'
-                      : projectConfirmation
-                        ? 'Archive project'
-                        : 'Archive conversation',
-                  )}
-                  disabled={archiveBusy}
-                >
-                  {archiveBusy ? t('Archiving…') : t('Archive')}
+                <button className="primary" disabled={!!pending}>
+                  {t(pending ? 'Archiving…' : 'Archive conversation')}
                 </button>
               </div>
             </form>
           </InteractionDialog>,
-          document.querySelector<HTMLElement>('.app')!,
+          document.querySelector('.app') ?? document.body,
         )}
-    </section>
+    </nav>
   );
-});
+}
+
+function ConversationRow({
+  row,
+  selected,
+  showDirectory,
+  sort,
+  disabled,
+  pending,
+  onSelect,
+  onArchive,
+  onCheck,
+}: {
+  row: NativeConversationSummary;
+  selected: boolean;
+  showDirectory: boolean;
+  sort: ConversationSort;
+  disabled: boolean;
+  pending: boolean;
+  onSelect: () => void;
+  onArchive: (button: HTMLButtonElement) => void;
+  onCheck: () => void;
+}) {
+  const { t, locale } = useInterfaceLanguage();
+  const status = conversationStatus(row, t);
+  const routine = status.tone === 'neutral' && !status.queue;
+  const moment = sort === 'created_at' ? row.createdAt : row.updatedAt;
+  const date = useMemo(() => {
+    if (!moment) return;
+    const full = formatMessageTime(moment, locale);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const options: Intl.DateTimeFormatOptions =
+      moment >= today.getTime()
+        ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+        : { month: 'short', day: 'numeric' };
+    return full && { ...full, label: new Intl.DateTimeFormat(locale, options).format(moment) };
+  }, [moment, locale]);
+  const timeLabel = date
+    ? t(sort === 'created_at' ? 'Created: {time}' : 'Updated: {time}', { time: date.full })
+    : undefined;
+  return (
+    <div
+      className={'conversation-row' + (selected ? ' selected' : '')}
+      data-conversation-id={row.id}
+      data-state={row.state}
+    >
+      <div className="conversation-row-heading">
+        <button
+          className="thread-link"
+          aria-current={selected ? 'page' : undefined}
+          disabled={disabled}
+          onClick={onSelect}
+          aria-label={row.title}
+          aria-describedby={
+            'conversation-status-' + row.id + (date ? ' conversation-time-' + row.id : '')
+          }
+        >
+          <span className="conversation-title">
+            <span data-tooltip-overflow="">{row.title}</span>
+            {row.forkedFromId && <Icon name="branch" size={12} />}
+            {date && (
+              <time
+                id={'conversation-time-' + row.id}
+                dateTime={date.iso}
+                title={timeLabel}
+                aria-label={timeLabel}
+              >
+                {date.label}
+              </time>
+            )}
+          </span>
+          <span
+            className={'conversation-meta' + (!showDirectory && routine ? ' is-routine' : '')}
+            id={'conversation-status-' + row.id}
+          >
+            {showDirectory && (
+              <span className="session-cwd" data-tooltip-overflow="">
+                {row.cwd}
+              </span>
+            )}
+            <span
+              data-indicator={status.indicator}
+              className={
+                'conversation-status tone-' + status.tone + (routine ? ' visually-hidden' : '')
+              }
+            >
+              {status.label}
+            </span>
+            {status.queue && (
+              <span
+                className={
+                  'conversation-queue ' +
+                  (row.queueIssue === 'failed'
+                    ? 'tone-error'
+                    : row.queueIssue || row.queuePaused
+                      ? 'tone-attention'
+                      : '')
+                }
+              >
+                {status.queue}
+              </span>
+            )}
+          </span>
+        </button>
+        {row.managementPending ? (
+          <IconButton
+            className="conversation-row-action"
+            icon="refresh"
+            label={t('Check status for {title}', { title: row.title })}
+            disabled={pending}
+            onClick={onCheck}
+          />
+        ) : (
+          <IconButton
+            className="conversation-row-action"
+            icon={row.archived ? 'unarchive' : 'archive'}
+            label={t(row.archived ? 'Restore {title}' : 'Archive {title}', { title: row.title })}
+            disabled={pending || isWorking(row)}
+            hint={t(
+              isWorking(row)
+                ? 'Resolve active work and clear the queue first.'
+                : row.archived
+                  ? 'Restore conversation'
+                  : 'Archive conversation',
+            )}
+            onClick={(event) => onArchive(event.currentTarget)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}

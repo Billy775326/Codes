@@ -1696,3 +1696,46 @@ it('restores usage for the original completed turn after another turn and a serv
     outputTokens: 120,
   });
 });
+
+it('discovers native sessions across directories and preserves Codex archive membership', async () => {
+  const { service, directory } = await fixture();
+  const cwd = join(directory, 'unregistered');
+  await mkdir(cwd);
+  const imported = await service.driver.call('test/seed', { cwd, count: 2 });
+  const id = imported.thread.id;
+  expect(service.store.projects().some((project) => project.path === cwd)).toBe(false);
+
+  const list = await service.nativeConversations({ search: 'rendering reference' });
+  expect(list.data).toEqual([
+    expect.objectContaining({ id, cwd, title: 'Rendering reference', archived: false }),
+  ]);
+  expect(
+    (await service.nativeConversations({ cwd: directory })).data.every((row) => row.id !== id),
+  ).toBe(true);
+  expect((await service.read(id)).id).toBe(id);
+  expect(service.project((await service.read(id)).projectId).path).toBe(cwd);
+
+  await service.archive(id, randomUUID(), true);
+  expect((await service.nativeConversations({ cwd })).data).toEqual([]);
+  expect((await service.nativeConversations({ cwd, archived: true })).data).toEqual([
+    expect.objectContaining({ id, cwd, archived: true }),
+  ]);
+  await service.archive(id, randomUUID(), false);
+  expect((await service.nativeConversations({ cwd })).data[0]?.id).toBe(id);
+});
+
+it('loads a native deep link before listing and keeps history with a missing working directory', async () => {
+  const { service, directory } = await fixture();
+  const cwd = join(directory, 'missing');
+  const imported = await service.driver.call('test/seed', { cwd, count: 2 });
+  const id = imported.thread.id;
+  await service.driver.call('thread/archive', { threadId: id });
+  expect(service.store.thread(id)).toBeUndefined();
+  const thread = await service.read(id);
+  expect(thread).toMatchObject({ id, archived: true, state: 'completed' });
+  expect(thread.messages.length).toBeGreaterThan(0);
+  expect(await service.conversationContext(id)).toMatchObject({
+    project: { path: cwd },
+    directory: { available: false, code: 'DIRECTORY_UNAVAILABLE' },
+  });
+});

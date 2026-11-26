@@ -206,6 +206,9 @@ export interface MaintenanceState {
   ready: boolean;
 }
 export interface CodexCapabilities {
+  conversationSearch?: boolean;
+  conversationIdFilter?: boolean;
+  conversationSort?: boolean;
   itemHistory: boolean;
   branch: boolean;
   review: boolean;
@@ -215,6 +218,7 @@ export interface System {
   maintenance?: MaintenanceState;
   defaultProjectPath?: string;
   projectDirectoryFallback?: string;
+  initialWorkingDirectory?: string;
   runtime: 'codex' | 'mock';
   state: string;
   version: string;
@@ -245,6 +249,18 @@ export const limits = {
   active: 4,
   idleThreads: 20,
 } as const;
+
+export type ConversationSort = 'updated_at' | 'created_at';
+
+export interface NativeConversationSummary extends Summary {
+  cwd: string;
+  createdAt: number;
+}
+
+export interface NativeConversationPage {
+  data: NativeConversationSummary[];
+  nextCursor: string | null;
+}
 
 export interface ConversationPage {
   data: Summary[];

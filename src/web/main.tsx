@@ -6,13 +6,7 @@ import {
   interfaceLanguages,
   useInterfaceLanguage,
 } from './interface-language';
-import {
-  linkedConversation,
-  projectSidebarPreferences,
-  projectViews,
-  rememberProject,
-  type ProjectSidebarPreference,
-} from './project-navigation';
+import { linkedConversation, projectViews } from './project-navigation';
 import { draftKey, save, saved } from './browser-storage';
 import { useMessageDelivery } from './useMessageDelivery';
 import { parseQuestionReplies, questionSourceItemId } from '../shared/question-replies';
@@ -66,7 +60,7 @@ import { reloadStaleWebBuildAfterSignIn, useWebBuild } from './useWebBuild';
 import { InteractionDialog, ReviewDialog, StatusDialog } from './InteractionDialog';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
 import { ControlTooltip } from './ControlTooltip';
-import { AddProjectDialog } from './AddProjectDialog';
+import { WorkingDirectoryDialog } from './WorkingDirectoryDialog';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import { ConnectionStatus } from './ConnectionStatus';
 import { SidebarResize } from './SidebarResize';
@@ -100,15 +94,6 @@ function App() {
     [projects],
   );
   const projectMetadataRevision = useRef(0);
-  const [sidebarPreferences, setSidebarPreferences] = useState(() =>
-    projectSidebarPreferences(saved('codes.project-sidebar')),
-  );
-  const changeSidebarPreference = useCallback((id: string, patch: ProjectSidebarPreference) => {
-    setSidebarPreferences((old) => ({ ...old, [id]: { ...old[id], ...patch } }));
-  }, []);
-  useEffect(() => {
-    save('codes.project-sidebar', JSON.stringify(sidebarPreferences));
-  }, [sidebarPreferences]);
   const projectUpdated = useCallback(
     (project: ProjectUpdate, expected?: Omit<ProjectUpdate, 'id'>) => {
       projectMetadataRevision.current++;
@@ -124,19 +109,19 @@ function App() {
     },
     [],
   );
-  const views = useRef<Record<string, string>>({});
-  const recentProject = useRef<string | undefined>(undefined);
   const [selection, setSelection] = useState(() => {
-    // Streaming renders must not repeatedly read browser storage.
-    views.current = projectViews(saved('codes.project-views'));
-    const projectId = saved('codes.project'),
-      explicitThread = linkedConversation(location.search) || saved('codes.thread');
-    const threadId = explicitThread || views.current[projectId] || '';
-    recentProject.current = !explicitThread && threadId ? projectId : undefined;
+    const projectId = saved('codes.project');
+    const threadId =
+      linkedConversation(location.search) ||
+      saved('codes.thread') ||
+      (saved('codes.native-navigation')
+        ? ''
+        : projectViews(saved('codes.project-views'))[projectId]) ||
+      '';
     return { projectId, threadId };
   });
   const { projectId, threadId } = selection;
-  const [threads, setThreads] = useState<Record<string, Summary[]>>({});
+  const [sidebarUpdates, setSidebarUpdates] = useState<Summary[]>([]);
   const [context, setContext] = useState<ProjectContext>();
   const [thread, setThread] = useState<Thread>();
   const conversationViews = useMemo(() => new ConversationViewCache(), []);
@@ -150,11 +135,7 @@ function App() {
   const contextBase = threadId ? '/threads/' + threadId : '/projects/' + projectId;
   const contextReady = !!contextProjectId && context?.project.id === contextProjectId;
   const directoryBlocked = contextReady && !context.directory.available;
-  const remember = (owner: string, id: string) => {
-    if (!owner) return;
-    views.current = rememberProject(views.current, owner, id);
-    save('codes.project-views', JSON.stringify(views.current));
-  };
+
   const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
   const [previewedImage, setPreviewedImage] = useState<string>();
   const [linkedFile, setLinkedFile] = useState<ProjectFileReference>();
@@ -248,8 +229,8 @@ function App() {
     saved('codes.diff-layout') === 'split' ? 'split' : 'unified',
   );
   const [diffPath, setDiffPath] = useState('');
-  const [adding, setAdding] = useState(false);
-  const openAddProject = useCallback(() => setAdding(true), []);
+  const [choosingDirectory, setChoosingDirectory] = useState(false);
+  const openDirectoryPicker = useCallback(() => setChoosingDirectory(true), []);
   const [conversationModalOpen, setConversationModalOpen] = useState(false);
   const [directory, setDirectory] = useState('');
   const showHiddenFiles = preferences.showHiddenFiles;
@@ -386,10 +367,12 @@ function App() {
       ]);
       setSystem(system);
       setProjects(projects);
-      if (!projects.some((p) => p.id === projectId)) {
-        const project = projects.find((p) => !p.archived) ?? projects[0];
-        setSelection((current) => ({ ...current, projectId: project?.id ?? '' }));
-      }
+      setSelection((current) => {
+        if (current.threadId || projects.some((entry) => entry.id === current.projectId))
+          return current;
+        const initial = projects.find((entry) => entry.path === system.initialWorkingDirectory);
+        return { ...current, projectId: initial?.id ?? '' };
+      });
       setAuth('ready');
     } catch (e) {
       if (e instanceof ApiError && e.code === 'AUTH_REQUIRED') setAuth('login');
@@ -461,20 +444,14 @@ function App() {
       sidebarActivity,
       expiredQuestion,
     };
-    setThreads((byProject) => ({
-      ...byProject,
-      [projectId]: [summary, ...(byProject[projectId] ?? []).filter((row) => row.id !== id)].slice(
-        0,
-        200,
-      ),
-    }));
+    setSidebarUpdates((rows) => [summary, ...rows.filter((row) => row.id !== id)].slice(0, 100));
     if (updateThread)
       setThread((current) => (current?.id === summary.id ? { ...current, ...summary } : current));
   }, []);
   useEffect(() => {
     if (auth !== 'ready') {
       conversationViews.clear();
-      setThreads({});
+      setSidebarUpdates([]);
       setContext(undefined);
     }
   }, [auth, conversationViews]);
@@ -503,14 +480,10 @@ function App() {
     return () => controller.abort();
   }, [projectId, threadId, auth, retry]);
   useEffect(() => {
-    if (!projectId || threadId || auth !== 'ready') return;
-    const stream = new Feed<{ threads: Summary[]; cursor: { seq: number; epoch: string } }>(
-      projectId,
-      (snapshot) => {
-        if (notifyInBackground)
-          for (const row of snapshot.threads) notifications.observe(row, false);
-        setThreads((byProject) => ({ ...byProject, [projectId]: snapshot.threads }));
-      },
+    if (threadId || auth !== 'ready') return;
+    const stream = new Feed<{ cursor: { seq: number; epoch: string } }>(
+      '',
+      () => {},
       (event) => {
         if (event.kind === 'summary') {
           const row = event.data as Summary;
@@ -530,7 +503,7 @@ function App() {
         else if (event.kind === 'runtime') setSystem(event.data as System);
       },
       connectionStatus,
-      'projects',
+      'conversations',
       connectionFailure,
     );
     const focus = () => {
@@ -545,9 +518,9 @@ function App() {
       document.removeEventListener('visibilitychange', focus);
       window.removeEventListener('online', focus);
     };
-  }, [projectId, threadId, auth, retry, notifyInBackground, notifications]);
+  }, [threadId, auth, retry, notifyInBackground, notifications]);
   const select = useCallback(
-    (id: string, owner = projectRef.current, restore = false) => {
+    (id: string, owner = projectRef.current) => {
       const changed = id !== threadRef.current || owner !== projectRef.current;
       if (changed) {
         conversationViews.refreshRecency(id, owner);
@@ -564,9 +537,7 @@ function App() {
       setThread((current) =>
         current?.id === id && current.projectId === owner ? current : undefined,
       );
-      recentProject.current = restore && id ? owner : undefined;
       setSelection({ projectId: owner, threadId: id });
-      if (!id) remember(owner, '');
       if (changed) {
         setContext(undefined);
         setFilePath(undefined);
@@ -652,14 +623,13 @@ function App() {
   });
   useEffect(() => {
     if (auth !== 'ready') return;
-    if (
-      save('codes.thread', threadId) &&
-      linkedConversation(location.search) === threadId &&
-      threadId
-    ) {
-      const url = new URL(location.href);
-      url.searchParams.delete('conversation');
-      window.history.replaceState(window.history.state, '', url);
+    if (save('codes.thread', threadId)) {
+      if (!saved('codes.native-navigation')) save('codes.native-navigation', '1');
+      if (threadId && linkedConversation(location.search) === threadId) {
+        const url = new URL(location.href);
+        url.searchParams.delete('conversation');
+        window.history.replaceState(window.history.state, '', url);
+      }
     }
     const key = draftKey(projectId, threadId);
     // Move the legacy unscoped new draft into the selected project once.
@@ -677,10 +647,7 @@ function App() {
   }, [threadId, projectId, auth]);
   useEffect(() => {
     if (auth !== 'ready') return;
-    if (!threadId) {
-      if (!projectId) setConnection('Ready');
-      return;
-    }
+    if (!threadId) return;
     const deltas = new Map<string, string>();
     let flushTimer: ReturnType<typeof setTimeout> | undefined;
     const flush = () => {
@@ -757,24 +724,16 @@ function App() {
             'The service returned a result for a different conversation.',
             'INVALID_RESPONSE',
           );
-        if (recentProject.current && snapshot.thread.projectId !== recentProject.current) {
-          conversationViews.forget(threadId);
-          remember(recentProject.current, '');
-          recentProject.current = undefined;
-          setSelection((current) => ({ ...current, threadId: '' }));
-          setThread(undefined);
-          setContext(undefined);
-          setError('The saved conversation belongs to another project. Choose a conversation.');
-          return;
-        }
-        recentProject.current = undefined;
         if (snapshot.thread.projectId !== projectId)
           setSelection({ projectId: snapshot.thread.projectId, threadId });
         if (snapshot.context) {
+          const workspace = snapshot.context.project;
+          setProjects((list) =>
+            list.some((entry) => entry.id === workspace.id) ? list : [...list, workspace],
+          );
           setContext(snapshot.context);
           if (!snapshot.context.directory.available) setFilePath(undefined);
         }
-        remember(snapshot.thread.projectId, snapshot.thread.id);
         deltas.clear();
         observeQueue();
         setThread({ ...snapshot.thread, messages: snapshot.thread.messages.slice(-historyLimit) });
@@ -919,17 +878,10 @@ function App() {
     },
     [select],
   );
-  const newThread = () => newThreadIn(projectId);
-  const verifiedProject = thread?.projectId;
-  const changeProject = useCallback(
-    (id: string) => {
-      if (!threadId || verifiedProject === projectId) remember(projectId, threadId);
-      select(views.current[id] || '', id, true);
-      setPanel(null);
-      setError('');
-    },
-    [projectId, select, threadId, verifiedProject],
-  );
+  const newThread = useCallback(() => {
+    if (projectId && !directoryBlocked) newThreadIn(projectId);
+    else openDirectoryPicker();
+  }, [projectId, directoryBlocked, newThreadIn, openDirectoryPicker]);
   const send = () => {
     if (draft.trimStart().startsWith('/')) runCommand(draft.trim());
     else void sendMessage();
@@ -940,11 +892,17 @@ function App() {
   ) => {
     await post(`/actions/${action.id}`, { operationId: crypto.randomUUID(), ...resolution });
   };
-  const projectAdded = (project: Project) => {
+  const directoryChosen = (workspace: Project) => {
+    if (!projectRef.current && !threadRef.current && draftValue.current) {
+      const key = draftKey(workspace.id, '');
+      if (!saved(key) && save(key, draftValue.current)) save(draftKey('', ''), '');
+    }
     projectMetadataRevision.current++;
-    setProjects((list) => (list.some((x) => x.id === project.id) ? list : [...list, project]));
-    if (project.id !== projectRef.current) changeProject(project.id);
-    setAdding(false);
+    setProjects((list) =>
+      list.some((entry) => entry.id === workspace.id) ? list : [...list, workspace],
+    );
+    newThreadIn(workspace.id);
+    setChoosingDirectory(false);
   };
   const browseDirectory = useCallback((path: string) => {
     setDirectory(path);
@@ -1316,7 +1274,12 @@ function App() {
     return () => document.removeEventListener('keydown', shortcut);
   }, [auth, busy, settings]);
   const modalOpen =
-    adding || !!dialog || !!previewedImage || !!linkedFile || !!forking || conversationModalOpen;
+    choosingDirectory ||
+    !!dialog ||
+    !!previewedImage ||
+    !!linkedFile ||
+    !!forking ||
+    conversationModalOpen;
   const conversationLoadError =
     connectionError ||
     (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
@@ -1395,18 +1358,13 @@ function App() {
         </div>
         <Conversations
           projects={projects}
-          activeProjectId={projectId}
+          cwd={project?.path}
           selectedId={threadId}
-          updates={threads}
+          updates={sidebarUpdates}
           connection={connection}
           disabled={busy}
-          sidebarPreferences={sidebarPreferences}
-          onSidebarPreference={changeSidebarPreference}
-          onRefreshProjects={refreshProjects}
-          onAddProject={openAddProject}
-          onProjectUpdated={projectUpdated}
-          onProject={changeProject}
-          onNew={newThreadIn}
+          supportsCreatedSort={system?.capabilities?.conversationSort !== false}
+          onNew={newThread}
           onSelect={select}
           onUpdated={conversationUpdated}
           onModalChange={setConversationModalOpen}
@@ -1457,7 +1415,8 @@ function App() {
           }
           conversationId={thread?.id === threadId ? threadId : undefined}
           renameDisabled={busy || !!thread?.managementPending}
-          projectName={project?.name}
+          cwd={project?.path}
+          onChooseDirectory={!threadId ? openDirectoryPicker : undefined}
           sidebarOpen={sidebar}
           connection={connection}
           theme={theme}
@@ -1612,9 +1571,9 @@ function App() {
                     ))}
                   </div>
                 ) : (
-                  <button className="primary" onClick={openAddProject}>
-                    <Icon name="folder-add" />
-                    {t('Add project')}
+                  <button className="primary" onClick={openDirectoryPicker}>
+                    <Icon name="folder" />
+                    {t('Choose a working directory')}
                   </button>
                 )}
               </section>
@@ -2273,7 +2232,6 @@ function App() {
           system={system}
           maintenanceBusy={maintenanceBusy}
           changeMaintenance={changeMaintenance}
-          refreshSystem={() => void request<System>('/system').then(setSystem, notice)}
           signInAfterTokenChange={(message) => {
             feed.current?.close();
             setDialog(undefined);
@@ -2493,11 +2451,11 @@ function App() {
           {t('Viewing a path outside the usual file scope.')}
         </div>
       )}
-      {adding && (
-        <AddProjectDialog
-          defaultPath={system?.defaultProjectPath ?? ''}
-          close={() => setAdding(false)}
-          added={projectAdded}
+      {choosingDirectory && (
+        <WorkingDirectoryDialog
+          initialPath={project?.path ?? ''}
+          close={() => setChoosingDirectory(false)}
+          choose={directoryChosen}
         />
       )}
     </div>,

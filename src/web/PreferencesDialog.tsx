@@ -77,10 +77,9 @@ const settingsSections = [
   {
     id: 'instructions',
     scope: 'workspace',
-    label: 'Projects',
-    icon: 'folder',
-    keywords:
-      'project default directory path AGENTS.md Codex global instructions rules 项目 目录 路径 默认 全局 指令 规则',
+    label: 'Instructions',
+    icon: 'file',
+    keywords: 'AGENTS.md Codex global instructions rules 全局 指令 规则',
   },
 ] as const;
 type SettingsSection = (typeof settingsSections)[number]['id'];
@@ -155,13 +154,11 @@ export function PreferencesDialog({
   system,
   maintenanceBusy,
   changeMaintenance,
-  refreshSystem,
   signInAfterTokenChange,
 }: {
   value: Preferences;
   change: (value: Preferences) => void;
   changeNotifications: (patch: Partial<NotificationPreferences>) => void;
-  refreshSystem: () => void;
   signInAfterTokenChange: (message: string) => void;
   close: () => void;
   saveError?: string;
@@ -192,7 +189,6 @@ export function PreferencesDialog({
   const [networkDraft, setNetworkDraft] = useState({ changed: false, busy: false });
   const [runtimeDraft, setRuntimeDraft] = useState({ changed: false, busy: false });
   const [instructionsDraft, setInstructionsDraft] = useState({ changed: false, busy: false });
-  const [projectDefaultDraft, setProjectDefaultDraft] = useState({ changed: false, busy: false });
   const [loginDraft, setLoginDraft] = useState({ changed: false, busy: false });
   const [tokenDraft, setTokenDraft] = useState({ changed: false, busy: false });
   const otherDrafts = [
@@ -200,7 +196,6 @@ export function PreferencesDialog({
     networkDraft,
     runtimeDraft,
     instructionsDraft,
-    projectDefaultDraft,
     loginDraft,
   ];
   const drafts = [...otherDrafts, tokenDraft];
@@ -546,7 +541,7 @@ export function PreferencesDialog({
             {visited.network && (
               <div className="preferences-content settings-forms" hidden={section !== 'network'}>
                 <NetworkSettings onDraft={setNetworkDraft} />
-                <WorkspaceSettings field="sessionHours" onDraft={setLoginDraft} />
+                <WorkspaceSettings onDraft={setLoginDraft} />
                 <AccessTokenSettings
                   onDraft={setTokenDraft}
                   otherSettingsPending={otherDrafts.some((draft) => draft.changed || draft.busy)}
@@ -564,13 +559,6 @@ export function PreferencesDialog({
                 className="preferences-content settings-forms"
                 hidden={section !== 'instructions'}
               >
-                <WorkspaceSettings
-                  field="defaultProjectDirectory"
-                  fallbackDirectory={system?.projectDirectoryFallback}
-                  activeDirectory={system?.defaultProjectPath}
-                  onDraft={setProjectDefaultDraft}
-                  onSaved={refreshSystem}
-                />
                 <GlobalInstructionsSettings onDraft={setInstructionsDraft} />
               </div>
             )}

@@ -1,5 +1,34 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
+  'Session actions': '会话操作',
+  'Refresh conversations': '刷新会话',
+  'Sort conversations': '会话排序',
+  'Directory filter': '目录筛选',
+  'Archive filter': '归档筛选',
+  Cwd: '当前目录',
+  Active: '未归档',
+  'Loading conversations…': '正在加载会话…',
+  'No archived conversations': '没有归档会话',
+  'Created: {time}': '创建于 {time}',
+  Created: '创建时间',
+  Updated: '更新时间',
+  'Choose a working directory': '选择工作目录',
+  'Working directory': '工作目录',
+  'Change working directory': '更改工作目录',
+  'Browse directories': '浏览目录',
+  Directories: '目录',
+  'Parent directory': '上级目录',
+  'Use directory': '使用此目录',
+  Instructions: '指令',
+  'The Codex working directory changed. Review waiting messages before continuing.':
+    'Codex 工作目录已变更，请先检查等待中的消息。',
+  'The working directory changed. Attach files again in the current directory.':
+    '工作目录已变更，请在当前目录重新添加附件。',
+  'The working directory is unavailable. Restore it or choose another directory.':
+    '工作目录不可用，请恢复该目录或选择其他目录。',
+  'The working directory cannot be accessed. Check its permissions or choose another directory.':
+    '无法访问工作目录，请检查权限或选择其他目录。',
+
   'Legacy sandbox mode': '传统沙箱模式',
   'Saved. Restart Codes to apply. Active timeout {timeout} ms.':
     '已保存。重启 Codes 后生效。当前超时为 {timeout} 毫秒。',

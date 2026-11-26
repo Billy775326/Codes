@@ -76,8 +76,6 @@ export class ProjectFiles {
   }
   async saveProjectInstructions(id: string, update: ProjectInstructions) {
     const project = await this.requireProject(id);
-    if (this.project(id).archived)
-      throw new AppError('PROJECT_ARCHIVED', 'Restore this project before editing AGENTS.md.', 409);
     return projectInstructions(project.path, update);
   }
   async globalInstructions(update?: GlobalInstructions): Promise<GlobalInstructions> {

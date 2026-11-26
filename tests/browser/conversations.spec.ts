@@ -1,4 +1,4 @@
-import { activeProjectCard, projectCard, reconnectUpdates } from './sidebar-helpers';
+import { conversationList, chooseWorkingDirectory, reconnectUpdates } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 const token = 'test-only-browser-token-not-a-real-secret';
 async function login(page: Page) {
@@ -52,7 +52,7 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await page.getByRole('button', { name: renamed, exact: true }).click();
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
-  await page.getByLabel('Search projects and chats', { exact: true }).fill(renamed.toUpperCase());
+  await page.getByLabel('Search conversations', { exact: true }).fill(renamed.toUpperCase());
   await expect(page.locator('.thread-link')).toHaveCount(1);
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await expect(page.locator('.conversation-row.selected').getByRole('button')).toHaveCount(2);
@@ -60,7 +60,9 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await archive.click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('dialog')).toContainText(renamed);
-  await expect(page.getByRole('dialog')).toContainText('Restore from Archived projects and chats.');
+  await expect(page.getByRole('dialog')).toContainText(
+    'Codex may also archive conversations started from this one.',
+  );
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(archive).toBeFocused();
@@ -75,14 +77,14 @@ test('rename, search, draft preservation, archive, reload, and restoration keep 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(renamed);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this unsent draft');
   await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
-  const archives = page.getByRole('button', { name: 'Archived projects and chats', exact: true });
+  const archives = page.getByRole('button', { name: 'Archived', exact: true });
   await archives.click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   await page.getByRole('button', { name: 'Restore ' + renamed, exact: true }).click();
   await expect(page.getByLabel('Message Codex')).not.toHaveAttribute('readonly', '');
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
-  await archives.click();
+  await page.getByRole('button', { name: 'Active', exact: true }).click();
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await expect(page.getByTestId('message-user').locator('pre code')).toHaveText(code);
   expect(errors).toEqual([]);
@@ -114,58 +116,31 @@ test('native cursor navigation reaches conversations beyond the local 200-summar
     return fixture;
   });
   await page.reload();
-  const card = projectCard(page, fixture.id);
-  const projectName = card.getByRole('button', { name: fixture.name, exact: true });
-  const disclosure = card.locator('.project-card-disclosure');
-  await expect(projectName).toHaveAttribute('aria-expanded', 'false');
-  await expect(disclosure).toHaveAccessibleName('Expand ' + fixture.name);
-  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
-  await expect(card.getByRole('button')).toHaveCount(2);
-  await expect(card.locator('.thread-link')).toHaveCount(0);
-  await projectName.press('Enter');
-  await expect(card.locator('.thread-link')).toHaveCount(30);
-  await expect(card.locator('h3')).toHaveCount(0);
+  await chooseWorkingDirectory(page, fixture.path);
+  await page.getByRole('button', { name: 'Cwd', exact: true }).click();
+  const list = conversationList(page);
+  await expect(list.locator('.thread-link')).toHaveCount(30);
   await expect(
-    card.getByRole('button', { name: 'Fixture conversation 249', exact: true }),
+    list.getByRole('button', { name: 'Fixture conversation 249', exact: true }),
   ).toBeVisible();
   for (let i = 0; i < 8; i++) {
-    await card.getByRole('button', { name: 'Next conversation page' }).click();
-    await expect(card.locator('.conversation-pagination')).toContainText('Page ' + (i + 2));
-    await expect(card).toHaveAttribute('aria-busy', 'false');
+    await list.getByRole('button', { name: 'Next conversation page' }).click();
+    await expect(list.locator('.conversation-pagination')).toContainText('Page ' + (i + 2));
+    await expect(list).toHaveAttribute('aria-busy', 'false');
   }
-  await expect(card.locator('.thread-link')).toHaveCount(10);
+  await expect(list.locator('.thread-link')).toHaveCount(10);
   await expect(
-    card.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
+    list.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
   ).toBeVisible();
-  await card.getByRole('button', { name: 'Previous conversation page' }).click();
-  await expect(card.locator('.conversation-pagination')).toContainText('Page 8');
-  await expect(disclosure).toHaveAccessibleName('Collapse ' + fixture.name);
-  await disclosure.press('Space');
-  await expect(projectName).toHaveAttribute('aria-expanded', 'false');
-  await expect(disclosure).toBeFocused();
-  await expect(disclosure).toHaveAccessibleName('Expand ' + fixture.name);
-  await page
-    .getByLabel('Search projects and chats', { exact: true })
-    .fill('FIXTURE CONVERSATION 0');
-  // Searches scan at most four native pages per request. Continue through sparse results.
-  await expect(card).toHaveAttribute('aria-busy', 'false');
-  await expect(card.locator('.conversation-pagination')).toContainText('Page 1');
-  for (
-    let i = 0;
-    i < 2 &&
-    !(await card.getByRole('button', { name: 'Fixture conversation 0', exact: true }).count());
-    i++
-  ) {
-    await card.getByRole('button', { name: 'Next conversation page' }).click();
-    await expect(card).toHaveAttribute('aria-busy', 'false');
-  }
+  await list.getByRole('button', { name: 'Previous conversation page' }).click();
+  await expect(list.locator('.conversation-pagination')).toContainText('Page 8');
+  await page.getByLabel('Search conversations', { exact: true }).fill('FIXTURE CONVERSATION 0');
+  await expect(list.locator('.thread-link')).toHaveCount(1);
   await expect(
-    card.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
+    list.getByRole('button', { name: 'Fixture conversation 0', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Clear search' }).click();
-  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
-  await page.reload();
-  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  await expect(list.locator('.thread-link')).toHaveCount(30);
 });
 test('another client sees metadata changes, and renaming never clears a live execution receipt', async ({
   browser,
@@ -227,22 +202,6 @@ test.describe('touch sidebar controls', () => {
     await rename(page, original, title);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
     await page.getByRole('button', { name: 'Open navigation' }).click();
-    const card = activeProjectCard(page);
-    const projectName = await card.locator('.project-card-name').innerText();
-    await card.getByRole('button', { name: 'Project actions for ' + projectName }).tap();
-    const projectActions = card.getByRole('group', { name: 'Project actions: ' + projectName });
-    await expect(projectActions).toBeInViewport();
-    for (const label of ['Rename', 'Pin', 'Archive project']) {
-      const action = projectActions.getByRole('button', { name: label, exact: true });
-      await expect(action.getByText(label, { exact: true })).toBeVisible();
-      expect((await action.boundingBox())?.height).toBeGreaterThanOrEqual(40);
-    }
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog', { name: 'Workspace navigation' })).toBeVisible();
-    await expect(projectActions).toHaveCount(0);
-    await expect(
-      card.getByRole('button', { name: 'Project actions for ' + projectName }),
-    ).toBeFocused();
     const archive = page.getByRole('button', { name: 'Archive ' + title, exact: true });
     await expect(archive).toBeVisible();
     expect((await archive.boundingBox())?.height).toBeGreaterThanOrEqual(40);
@@ -278,7 +237,7 @@ test('a delayed list response cannot undo a title already received through live 
   await login(page);
   const title = 'List race fixture ' + Date.now();
   await create(page, title);
-  await expect(activeProjectCard(page)).toHaveAttribute('aria-busy', 'false');
+  await expect(conversationList(page)).toHaveAttribute('aria-busy', 'false');
   let captured!: () => void;
   let release!: () => void;
   const ready = new Promise<void>((resolve) => {
@@ -287,9 +246,8 @@ test('a delayed list response cannot undo a title already received through live 
   const paused = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const owner = await page.evaluate(() => localStorage.getItem('codes.project'));
   await page.route(
-    '**/api/projects/' + owner + '/conversations?**',
+    '**/api/conversations?**',
     async (route) => {
       const response = await route.fetch();
       captured();
@@ -298,7 +256,7 @@ test('a delayed list response cannot undo a title already received through live 
     },
     { times: 1 },
   );
-  await page.getByRole('button', { name: 'Refresh projects and chats' }).click();
+  await page.getByRole('button', { name: 'Refresh conversations' }).click();
   await ready;
   const renamed = 'Live event wins ' + Date.now();
   try {
@@ -315,7 +273,7 @@ test('a delayed list response cannot undo a title already received through live 
   } finally {
     release();
   }
-  await expect(activeProjectCard(page)).toHaveAttribute('aria-busy', 'false');
+  await expect(conversationList(page)).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
 });
@@ -464,7 +422,7 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   await login(page);
   const title = 'Sidebar reconnect ' + Date.now();
   await create(page, title);
-  await page.getByLabel('Search projects and chats', { exact: true }).fill(title);
+  await page.getByLabel('Search conversations', { exact: true }).fill(title);
   await expect(page.locator('.thread-link')).toHaveCount(1);
   const row = page
     .locator('.conversation-row')
@@ -502,7 +460,7 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   await list;
   await expect(page.locator('.connection')).toHaveText('Connected');
   await expect(page.getByRole('button', { name: 'Reconnect updates', exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Search projects and chats', { exact: true })).toHaveValue(title);
+  await expect(page.getByLabel('Search conversations', { exact: true })).toHaveValue(title);
   await expect(row.locator('.conversation-status')).toHaveText('Completed');
   expect(
     await page.evaluate(

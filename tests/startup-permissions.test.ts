@@ -120,7 +120,7 @@ it('uses the saved port and allows local and HTTPS proxy origins after restart',
           restartRequired: false,
         });
         const system = await (await fetch(base + '/api/system', { headers: { cookie } })).json();
-        expect(system).toMatchObject({ defaultProjectPath: resolve(import.meta.dirname, '..') });
+        expect(system).not.toHaveProperty('initialWorkingDirectory');
         expect(system).not.toHaveProperty('codeQuestions');
         expect(await (await fetch(base + '/api/projects', { headers: { cookie } })).json()).toEqual(
           [],

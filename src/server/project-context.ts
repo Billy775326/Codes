@@ -17,7 +17,7 @@ export async function directoryStatus(project: Project): Promise<DirectoryStatus
         available: false,
         code: 'DIRECTORY_ACCESS',
         message:
-          'The project directory cannot be accessed. Check its permissions or choose another project.',
+          'The working directory cannot be accessed. Check its permissions or choose another directory.',
       };
     throw error;
   }
@@ -26,7 +26,7 @@ function unavailable(): DirectoryStatus {
   return {
     available: false,
     code: 'DIRECTORY_UNAVAILABLE',
-    message: 'The project directory is unavailable. Restore it or choose another project.',
+    message: 'The working directory is unavailable. Restore it or choose another directory.',
   };
 }
 export function directoryError(status: DirectoryStatus) {

@@ -1,4 +1,4 @@
-import { openProject } from './sidebar-helpers';
+import { chooseWorkingDirectory } from './sidebar-helpers';
 import { test, expect, type Page } from '@playwright/test';
 async function login(page: Page) {
   await page.goto('/');
@@ -31,7 +31,7 @@ test('new drafts and attachments remain in their project when navigating without
   await login(page);
   const { original, added } = await projects(page);
   await page.reload();
-  await openProject(page, original.id);
+  await chooseWorkingDirectory(page, original.path);
   await page.getByLabel('Message Codex').fill('Draft for the original project');
   await page.getByRole('button', { name: 'Browse files', exact: true }).click();
   await page.getByRole('button', { name: 'example.ts', exact: true }).click();
@@ -42,16 +42,16 @@ test('new drafts and attachments remain in their project when navigating without
     .click();
   await page.getByRole('button', { name: /^Attach lines/ }).click();
   await expect(page.getByRole('button', { name: 'Remove example.ts', exact: true })).toBeVisible();
-  await openProject(page, added.id);
+  await chooseWorkingDirectory(page, added.path);
   await expect(page.getByLabel('Message Codex')).toHaveValue('');
   await expect(page.locator('.context-panel')).toHaveCount(0);
   await expect(page.locator('.attachments')).toHaveCount(0);
   await page.getByLabel('Message Codex').fill('Draft for the second project');
-  await openProject(page, original.id);
+  await chooseWorkingDirectory(page, original.path);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft for the original project');
   await page.reload();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft for the original project');
-  await openProject(page, added.id);
+  await chooseWorkingDirectory(page, added.path);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Draft for the second project');
 });
 
@@ -64,10 +64,31 @@ test('a legacy new draft migrates once into its selected project', async ({ page
   await page.reload();
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the legacy draft');
   expect(await page.evaluate(() => localStorage.getItem('codes.draft.new'))).toBeNull();
-  await openProject(page, added.id);
+  await chooseWorkingDirectory(page, added.path);
   await expect(page.getByLabel('Message Codex')).toHaveValue('');
-  await openProject(page, original.id);
+  await chooseWorkingDirectory(page, original.path);
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep the legacy draft');
+});
+
+test('a new draft stays selected on reload after migrating a legacy conversation view', async ({
+  page,
+}) => {
+  await login(page);
+  const { original } = await projects(page);
+  await page.getByLabel('Message Codex').fill('Legacy selected conversation');
+  await page.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Legacy selected conversation');
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      'codes.project-views',
+      JSON.stringify({ [id]: localStorage.getItem('codes.thread') }),
+    );
+  }, original.id);
+  await page.getByRole('button', { name: 'New conversation', exact: true }).click();
+  await page.getByLabel('Message Codex').fill('Keep this new draft after reload');
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('New conversation');
+  await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this new draft after reload');
 });
 
 test('switching projects aborts a delayed file preview and cannot attach its old file', async ({
@@ -76,7 +97,7 @@ test('switching projects aborts a delayed file preview and cannot attach its old
   await login(page);
   const { original, added } = await projects(page);
   await page.reload();
-  await openProject(page, original.id);
+  await chooseWorkingDirectory(page, original.path);
   let release!: () => void, accepted!: () => void;
   const hold = new Promise<void>((resolve) => {
     release = resolve;
@@ -98,7 +119,7 @@ test('switching projects aborts a delayed file preview and cannot attach its old
     await page.getByRole('button', { name: 'Browse files', exact: true }).click();
     await page.getByRole('button', { name: 'example.ts', exact: true }).click();
     await processed;
-    await openProject(page, added.id);
+    await chooseWorkingDirectory(page, added.path);
     release();
     await page.getByRole('button', { name: 'Browse files', exact: true }).click();
     await expect(page.locator('.file-preview')).toHaveCount(0);

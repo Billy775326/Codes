@@ -53,9 +53,7 @@ export class Store {
   }
   private readProjects(sql: string): Project[] {
     const rows = this.db.prepare(sql).all() as unknown as ProjectRow[];
-    return rows.map(({ archived, ...project }) =>
-      archived ? { ...project, archived: true } : project,
-    );
+    return rows.map((row) => this.projectFromRow(row));
   }
   latestConversationAt(projectId: string) {
     const row = this.db
@@ -137,11 +135,33 @@ export class Store {
     return { revision: row.revision, settings: next };
   }
   addProject(name: string, path: string): Project {
-    const existing = this.projects().find((p) => p.path === path);
-    if (existing) return existing;
+    const existing = this.db
+      .prepare(`SELECT p.*, ${projectArchiveStatus} FROM projects p WHERE p.path=?`)
+      .get(path) as unknown as ProjectRow | undefined;
+    if (existing) return this.projectFromRow(existing);
     const project = { id: randomUUID(), name, path };
     this.db.prepare('INSERT INTO projects VALUES(?,?,?)').run(project.id, name, path);
     return project;
+  }
+  project(id: string): Project | undefined {
+    const row = this.db
+      .prepare(`SELECT p.*, ${projectArchiveStatus} FROM projects p WHERE p.id=?`)
+      .get(id) as unknown as ProjectRow | undefined;
+    return row && this.projectFromRow(row);
+  }
+  private projectFromRow({ archived, ...project }: ProjectRow): Project {
+    return archived ? { ...project, archived: true } : project;
+  }
+  rebindThreadDirectory(threadId: string, projectId: string) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.queue.blockOldDirectoryAttachments(threadId);
+      this.db.prepare('UPDATE threads SET project_id=? WHERE id=?').run(projectId, threadId);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
   renameProject(id: string, name: string) {
     this.db.prepare('UPDATE projects SET name=? WHERE id=?').run(name, id);
