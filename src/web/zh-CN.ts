@@ -1,6 +1,7 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Usage and billing': '用量与计费',
+  'Usage & runtime': '用量与运行时',
   'Context window': '上下文窗口',
   'Context window · {percent}% used': '上下文窗口 · 已用 {percent}%',
   '{percent}% used': '已用 {percent}%',
@@ -15,6 +16,14 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Secondary limit': '次要限额',
   'Resets {time}': '重置于 {time}',
   'Available resets': '可用重置次数',
+  'Usage limit resets': '额度重置',
+  'Reset credit': '重置额度',
+  Available: '可用',
+  Redeeming: '正在兑换',
+  Redeemed: '已兑换',
+  'Granted {time}': '发放于 {time}',
+  'Expires {time}': '到期于 {time}',
+  'Never expires': '长期有效',
   'Credit balance': '点数余额',
   Unlimited: '不限量',
   'Refresh usage': '刷新用量',
@@ -26,7 +35,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Recent token activity': '近期 token 用量',
   'Daily usage not reported.': '未报告每日用量。',
   'Lifetime activity · {count} tokens': '累计用量 · {count} tokens',
-  'Open Codex usage dashboard': '打开 Codex 用量面板',
+  'Codex dashboard': 'Codex 用量面板',
   'Sign in to Codex': '登录 Codex',
   'Enter this one-time code on the OpenAI sign-in page.':
     '请在 OpenAI 登录页面输入此一次性验证码。',
@@ -324,8 +333,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   Waiting: '等待中',
   'Use Cloudflare Access for public hostnames.': '公网域名请使用 Cloudflare Access。',
   'You can also answer after the task ends.': '任务结束后也可回答。',
-  '1,000–300,000 ms. Applies to CLI requests, such as loading metadata.':
-    '1,000–300,000 毫秒。适用于加载元数据等 CLI 请求。',
+  '1,000–300,000 ms': '1,000–300,000 毫秒',
   'Archive this project?': '归档这个项目？',
   'Default ({size} px)': '默认（{size} px）',
   'Codex global instructions': 'Codex 全局指令',
