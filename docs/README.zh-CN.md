@@ -8,15 +8,15 @@ Codes 是面向单用户的 Linux 自托管 Codex 网页工作台。可以在浏
 
 ## 快速开始
 
-使用基于 glibc 的 Linux x86-64 或 ARM64 主机。请在运行 Codes 的 Linux 用户下安装 Codex CLI 并完成登录。[Codex CLI 安装文档](https://learn.chatgpt.com/docs/codex/cli)
+使用基于 glibc 的 Linux x86-64 或 ARM64 主机。请在运行 Codes 的 Linux 用户下安装 Codex CLI。[Codex CLI 安装文档](https://learn.chatgpt.com/docs/codex/cli)
 
 ### 安装 Codes
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.1.0/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.2.0/scripts/install.sh | bash
 ```
 
-安装包包含 Node.js，并将 `codes` 启动命令安装到 `~/.local/bin`。[安装和升级](operations.md#install-or-upgrade-a-release)
+在终端选择界面语言和监听端口。安装器会显示工作区地址和新生成的访问令牌。安装包包含 Node.js，并将 `codes` 启动命令安装到 `~/.local/bin`。[安装和升级](operations.md#install-or-upgrade-a-release)
 
 ### 启动工作台
 
@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.1.0/scripts/in
 ~/.local/bin/codes start
 ```
 
-打开 [http://127.0.0.1:6670](http://127.0.0.1:6670)，使用首次启动时提示的令牌文件登录。可从侧栏继续 Codex 原生会话，也可新建会话。界面默认英文，在 **Settings → General → Appearance** 可切换为简体中文。[工作目录](conversations.md#working-directories) · [网络与访问](operations.md#network-and-access)
+打开安装器显示的地址，默认是 [http://127.0.0.1:6670](http://127.0.0.1:6670)，然后输入工作区访问令牌。若 Codex 尚未登录，兼容的 CLI 可通过工作区里的「登录 Codex」进行设备码授权。侧栏可继续 Codex 原生会话，也可新建会话。[工作目录](conversations.md#working-directories) · [网络与访问](operations.md#network-and-access)
 
 ## 从源码运行
 

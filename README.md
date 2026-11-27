@@ -18,15 +18,15 @@ Codes is an independent, single-owner development preview. Codex App Server runs
 
 ## Quick start
 
-Use a glibc-based Linux host (x86-64 or ARM64). Install Codex CLI and sign in as the Linux user who will run Codes. [Codex CLI setup](https://learn.chatgpt.com/docs/codex/cli)
+Use a glibc-based Linux host (x86-64 or ARM64). Install Codex CLI as the Linux user who will run Codes. [Codex CLI setup](https://learn.chatgpt.com/docs/codex/cli)
 
 ### Install Codes
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.1.0/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.2.0/scripts/install.sh | bash
 ```
 
-The release includes Node.js and installs the `codes` launcher in `~/.local/bin`. [Install and upgrade](docs/operations.md#install-or-upgrade-a-release)
+Choose the interface language and listener port in the terminal. The installer prints the workspace URL and a newly generated access token. The release includes Node.js and installs the `codes` launcher in `~/.local/bin`. [Install and upgrade](docs/operations.md#install-or-upgrade-a-release)
 
 ### Start the workspace
 
@@ -34,7 +34,7 @@ The release includes Node.js and installs the `codes` launcher in `~/.local/bin`
 ~/.local/bin/codes start
 ```
 
-Open [http://127.0.0.1:6670](http://127.0.0.1:6670) and sign in with the workspace token. On first startup, Codes prints the path to the token file. Continue a native Codex conversation from the sidebar or start a new one. [Working directories](docs/conversations.md#working-directories)
+Open the URL printed by the installer, which defaults to [http://127.0.0.1:6670](http://127.0.0.1:6670), and enter the workspace token. If Codex needs an account, use **Sign in to Codex** in the workspace for device-code sign-in on compatible CLI versions. Continue a native Codex conversation from the sidebar or start a new one. [Working directories](docs/conversations.md#working-directories)
 
 <a id="remote-access"></a>
 

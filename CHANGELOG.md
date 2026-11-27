@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-27
+
 ### Added
 
 - Choose the initial browser language and port during interactive installation. The installer displays the new workspace token and replaces it when reinstalling the same version.
@@ -16,6 +18,8 @@
 
 ### Fixed
 
+- Keep the full title row available on phones by placing the connection status alongside toolbar controls.
+- Describe what sending does when the composer is empty, and show the relevant connection or account requirement when execution is unavailable.
 - Open new drafts in the Codex App Server's startup directory by default while loading native conversations in the sidebar. Codex creates the native conversation on first send.
 
 ## [0.1.0] - 2026-11-26
