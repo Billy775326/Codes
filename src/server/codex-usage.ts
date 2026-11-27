@@ -1,11 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Driver } from '../codex/driver.js';
-import { record } from '../shared/errors.js';
+import { AppError, record } from '../shared/errors.js';
+import { usageResetOutcomes } from '../shared/codex-usage.js';
 import type {
   AccountActivity,
   AccountLimits,
   CodexUsageSnapshot,
   UsageRead,
+  UsageResetResult,
   UsageWindow,
 } from '../shared/codex-usage.js';
 
@@ -121,21 +124,106 @@ const unavailable = {
 } as const;
 const cacheTtlMs = 30_000;
 const refreshCooldownMs = 5000;
+const consumeReset = 'account/rateLimitResetCredit/consume';
+const nativeResetResult = z.object({ outcome: z.enum(usageResetOutcomes) });
+type ResetAttempt = {
+  key: string;
+  epoch: string;
+  retry: boolean;
+};
 
 export class CodexUsage {
   private revision = 0;
   private cached?: { epoch: string; value: CodexUsageSnapshot; expiresAt: number };
   private pending?: { epoch: string; value: Promise<CodexUsageSnapshot> };
+  private reset?: ResetAttempt;
+  private lastReset?: Pick<ResetAttempt, 'key' | 'epoch'> & {
+    outcome: UsageResetResult['outcome'];
+  };
+  private pendingReset?: { attempt: ResetAttempt; result: Promise<UsageResetResult> };
 
   constructor(private driver: Driver) {}
 
+  get redeeming() {
+    return !!this.pendingReset;
+  }
+
   invalidate() {
+    this.reset = undefined;
+    this.lastReset = undefined;
+    this.clearReads();
+  }
+
+  private clearReads() {
     this.revision++;
     this.cached = undefined;
     this.pending = undefined;
   }
 
   async read(refresh = false): Promise<CodexUsageSnapshot> {
+    const revision = this.revision;
+    const epoch = this.driver.epoch;
+    const value = await this.readSnapshot(refresh);
+    if (this.revision !== revision || this.driver.epoch !== epoch) return unavailable;
+    if (!this.canReset()) return value;
+    const hasCredit =
+      value.limits.status === 'reported' && (value.limits.value.availableResets ?? 0) > 0;
+    if (this.reset?.epoch !== epoch) this.reset = undefined;
+    if (hasCredit && !this.reset) this.reset = { epoch, key: randomUUID(), retry: false };
+    if (!this.reset || (!hasCredit && !this.reset.retry)) return value;
+    return { ...value, reset: { key: this.reset.key, retry: this.reset.retry } };
+  }
+
+  async redeem(key: string): Promise<UsageResetResult> {
+    if (!this.canReset())
+      throw new AppError('RESET_UNAVAILABLE', 'Reset redemption is unavailable.', 412);
+    const epoch = this.driver.epoch;
+    if (this.lastReset?.key === key && this.lastReset.epoch === epoch)
+      return { outcome: this.lastReset.outcome, usage: await this.read() };
+    const attempt = this.reset;
+    if (!attempt || attempt.key !== key || attempt.epoch !== epoch)
+      throw new AppError('RESET_STALE', 'Usage has changed. Review the current limits.', 409);
+    if (this.pendingReset?.attempt === attempt) return this.pendingReset.result;
+    if (this.pendingReset) throw new AppError('RESET_BUSY', 'A reset is already in progress.', 409);
+    const result = this.consume(attempt).finally(() => {
+      this.pendingReset = undefined;
+    });
+    this.pendingReset = { attempt, result };
+    return result;
+  }
+
+  private canReset() {
+    return (
+      this.driver.state === 'ready' &&
+      this.driver.mode !== 'mock' &&
+      this.driver.supportsMethod(consumeReset)
+    );
+  }
+
+  private async consume(attempt: ResetAttempt): Promise<UsageResetResult> {
+    let outcome: UsageResetResult['outcome'];
+    try {
+      const result = await this.driver.call(consumeReset, { idempotencyKey: attempt.key }, 15_000);
+      outcome = nativeResetResult.parse(result).outcome;
+      if (this.reset !== attempt || this.driver.epoch !== attempt.epoch)
+        throw new Error('The Codex account changed during redemption.');
+    } catch {
+      attempt.retry = true;
+      this.clearReads();
+      throw new AppError(
+        'RESET_UNCERTAIN',
+        'Codex could not confirm the reset. Retrying uses the same request.',
+        502,
+        true,
+      );
+    }
+    this.lastReset = { key: attempt.key, epoch: attempt.epoch, outcome };
+    this.reset = undefined;
+    this.clearReads();
+    return { outcome, usage: await this.read() };
+  }
+
+  private async readSnapshot(refresh: boolean): Promise<CodexUsageSnapshot> {
     if (this.driver.state !== 'ready' || this.driver.mode === 'mock') return unavailable;
     const { epoch } = this.driver;
     const now = Date.now();

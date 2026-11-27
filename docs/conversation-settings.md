@@ -21,7 +21,9 @@ Use **Settings → Instructions** for global Codex instructions. See the [config
 
 The composer shows the latest context usage reported by Codex for the open conversation. Hover over or focus the context indicator to see the token counts. Its percentage divides the reported context tokens by the reported model window.
 
-Open **Settings → Usage & runtime** for usage windows and their reset times, credit balance, and up to seven recently reported days of token activity. **Usage and billing** in **Session status** opens this section directly. **Usage limit resets** shows the available count and any status, grant, and expiry details returned by Codex. Times use the browser's local time. The linked Codex dashboard handles billing and eligible resets. [Codex App Server account API](https://learn.chatgpt.com/docs/app-server)
+Open **Settings → Usage & runtime** for usage windows and their reset times, credit balance, and up to seven recently reported days of token activity. **Usage and billing** in **Session status** opens this section directly. **Usage limit resets** shows the available count and any status, grant, and expiry details returned by Codex. Times use the browser's local time.
+
+Choose **Use one reset** and confirm to redeem one available credit when the installed CLI supports redemption. Codex chooses the credit and determines which windows can reset. Codes requests the updated limits and remaining credits after the attempt. If the result is uncertain, **Retry same reset** reuses the original request while that Codex connection remains active. [Codex App Server account API](https://learn.chatgpt.com/docs/app-server#8-earned-rate-limit-resets-chatgpt)
 
 ## Upgrading
 

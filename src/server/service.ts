@@ -303,6 +303,7 @@ export class Service {
               !this.sending.size &&
               !this.managing.size &&
               !this.interactions.size &&
+              !this.codexUsage.redeeming &&
               !this.store.db
                 .prepare(
                   `SELECT 1 FROM operations
@@ -323,6 +324,14 @@ export class Service {
     const saved = await this.workspaceSettings.save(input);
     this.events.publish('runtime', this.system());
     return saved;
+  }
+  async redeemUsageReset(key: string) {
+    this.requireTaskAdmission();
+    try {
+      return await this.codexUsage.redeem(key);
+    } finally {
+      if (this.maintenance) this.events.publish('runtime', this.system());
+    }
   }
   startMaintenance() {
     if (this.maintenance)

@@ -439,6 +439,31 @@ it('rejects cross-origin mutations and untrusted Host headers', async () => {
   });
   expect(status).toBe(403);
 });
+it('accepts reset redemption only with a trusted origin, session and issued-key shape', async () => {
+  const redeem = vi.spyOn(service.codexUsage, 'redeem').mockResolvedValue({
+    outcome: 'noCredit',
+    usage: { limits: { status: 'unavailable' }, activity: { status: 'unavailable' } },
+  });
+  const key = 'bceda480-e8c9-4eef-8964-29566fd3bb03';
+  const reset = (value: string, headers: Record<string, string>) =>
+    fetch(origin + '/api/connection/codex/usage/reset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ key: value }),
+    });
+  expect((await reset(key, { cookie, origin: 'https://untrusted.example' })).status).toBe(403);
+  expect((await reset(key, { origin })).status).toBe(401);
+  expect((await reset('invalid', { origin, cookie })).status).toBe(400);
+  service.startMaintenance();
+  expect((await reset(key, { origin, cookie })).status).toBe(503);
+  service.cancelMaintenance();
+  expect(redeem).not.toHaveBeenCalled();
+  const response = await reset(key, { origin, cookie });
+  expect(response.status).toBe(200);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await response.json()).toMatchObject({ outcome: 'noCredit' });
+  expect(redeem).toHaveBeenCalledExactlyOnceWith(key);
+});
 it('protects and validates pending network settings without changing the running listener', async () => {
   const path = origin + '/api/settings/network';
   const active = (await (await fetch(path, { headers: { cookie } })).json()).settings;

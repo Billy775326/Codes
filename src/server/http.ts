@@ -187,6 +187,14 @@ export async function application(
             await service.codexUsage.read(url.searchParams.get('refresh') === '1'),
           );
         }
+        if (url.pathname === '/api/connection/codex/usage/reset' && method === 'POST') {
+          const { key } = z
+            .object({ key: z.uuid() })
+            .strict()
+            .parse(await body(request));
+          response.setHeader('cache-control', 'no-store');
+          return json(response, await service.redeemUsageReset(key));
+        }
         if (url.pathname === '/api/connection/codex/login') {
           if (method === 'GET') return json(response, service.codexLogin.current());
           if (method === 'POST') return json(response, await service.codexLogin.start());

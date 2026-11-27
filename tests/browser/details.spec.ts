@@ -120,6 +120,58 @@ for (const width of [320, 1440]) {
     ).toBeVisible();
   });
 }
+test('a confirmed reset uses one available credit and an uncertain response reuses the request', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  const key = 'bceda480-e8c9-4eef-8964-29566fd3bb03';
+  const requests: unknown[] = [];
+  const snapshot = (availableResets: number, usedPercent: number) => ({
+    limits: {
+      status: 'reported',
+      value: {
+        availableResets,
+        windows: [{ id: 'codex', primary: { usedPercent, durationMins: 300 } }],
+      },
+    },
+    activity: { status: 'unavailable' },
+  });
+  await page.route('**/api/connection/codex/usage', (route) =>
+    route.fulfill({ json: { ...snapshot(1, 90), reset: { key, retry: false } } }),
+  );
+  await page.route('**/api/connection/codex/usage/reset', (route) => {
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1)
+      return route.fulfill({
+        status: 502,
+        json: { error: { code: 'RESET_UNCERTAIN', uncertain: true } },
+      });
+    return route.fulfill({ json: { outcome: 'alreadyRedeemed', usage: snapshot(0, 0) } });
+  });
+  await login(page);
+  await page.getByRole('button', { name: 'Session status', exact: true }).click();
+  await page.getByRole('button', { name: 'Usage and billing', exact: true }).click();
+  const resets = page.getByRole('region', { name: 'Usage limit resets' });
+  const useReset = resets.getByRole('button', { name: 'Use one reset' });
+  await useReset.click();
+  await expect(resets.getByText(/Use one available reset/)).toBeVisible();
+  await resets.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(useReset).toBeFocused();
+  expect(requests).toEqual([]);
+  await useReset.click();
+  await resets.getByRole('button', { name: 'Confirm reset', exact: true }).click();
+  await expect(resets.getByRole('status')).toContainText('Retrying uses the same request');
+  await resets.getByRole('button', { name: 'Retry same reset' }).click();
+  await resets.getByRole('button', { name: 'Confirm reset', exact: true }).click();
+  await expect(resets.getByRole('status')).toHaveText('Usage limits reset.');
+  await expect(resets.getByText('0', { exact: true })).toBeVisible();
+  await expect(page.getByRole('meter', { name: '5-hour limit' })).toHaveAttribute(
+    'aria-valuetext',
+    '100% remaining',
+  );
+  await expect(useReset).toHaveCount(0);
+  expect(requests).toEqual([{ key }, { key }]);
+});
 test('Code questions suggest without sending, support radio keys and keep the next draft', async ({
   page,
 }) => {

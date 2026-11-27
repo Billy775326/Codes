@@ -38,4 +38,17 @@ export type UsageRead<T> =
 export interface CodexUsageSnapshot {
   limits: UsageRead<AccountLimits>;
   activity: UsageRead<AccountActivity>;
+  reset?: { key: string; retry: boolean };
+}
+
+export const usageResetOutcomes = [
+  'reset',
+  'alreadyRedeemed',
+  'nothingToReset',
+  'noCredit',
+] as const;
+
+export interface UsageResetResult {
+  outcome: (typeof usageResetOutcomes)[number];
+  usage: CodexUsageSnapshot;
 }

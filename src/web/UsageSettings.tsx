@@ -1,7 +1,7 @@
-import { useEffect, useState, type CSSProperties } from 'react';
-import type { CodexUsageSnapshot, UsageWindow } from '../shared/codex-usage';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import type { CodexUsageSnapshot, UsageResetResult, UsageWindow } from '../shared/codex-usage';
 import type { Thread } from '../shared/types';
-import { request } from './api';
+import { ApiError, post, request } from './api';
 import { useInterfaceLanguage } from './interface-language';
 import { Icon, IconButton } from './primitives';
 import './usage.css';
@@ -97,6 +97,11 @@ export function UsageSettings() {
   const [refresh, setRefresh] = useState(0);
   const [snapshot, setSnapshot] = useState<CodexUsageSnapshot>();
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [confirming, setConfirming] = useState<string>();
+  const [resetBusy, setResetBusy] = useState(false);
+  const [retryKey, setRetryKey] = useState<string>();
+  const [resetMessage, setResetMessage] = useState('');
+  const resetTrigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const controller = new AbortController();
     setStatus('loading');
@@ -119,6 +124,8 @@ export function UsageSettings() {
     return () => controller.abort();
   }, [refresh]);
   const limits = snapshot?.limits.status === 'reported' ? snapshot.limits.value : undefined;
+  const reset = snapshot?.reset;
+  const retrying = reset?.retry || (!!reset && reset.key === retryKey);
   const activity = snapshot?.activity.status === 'reported' ? snapshot.activity.value : undefined;
   const date = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const timestamp = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
@@ -128,6 +135,44 @@ export function UsageSettings() {
     redeemed: 'Redeemed',
     unknown: 'Unknown',
   } as const;
+  const resetMessages: Record<UsageResetResult['outcome'], string> = {
+    reset: 'Usage limits reset.',
+    alreadyRedeemed: 'Usage limits reset.',
+    nothingToReset: 'No usage window is eligible for a reset.',
+    noCredit: 'No reset credits are available.',
+  };
+
+  const cancelReset = () => {
+    setConfirming(undefined);
+    resetTrigger.current?.focus();
+  };
+
+  async function redeem(key: string) {
+    setConfirming(undefined);
+    setResetBusy(true);
+    setResetMessage('');
+    try {
+      const result = await post<UsageResetResult>('/connection/codex/usage/reset', { key });
+      setSnapshot(result.usage);
+      setRetryKey(undefined);
+      setResetMessage(resetMessages[result.outcome]);
+    } catch (error) {
+      if (error instanceof ApiError && error.uncertain) {
+        setRetryKey(key);
+        setResetMessage('Codex could not confirm the reset. Retrying uses the same request.');
+      } else {
+        setRetryKey(undefined);
+        setResetMessage(
+          error instanceof ApiError && ['RESET_STALE', 'RESET_BUSY'].includes(error.code)
+            ? error.message
+            : 'Reset redemption is unavailable.',
+        );
+        setRefresh((value) => value + 1);
+      }
+    } finally {
+      setResetBusy(false);
+    }
+  }
   return (
     <div className="usage-settings">
       <section
@@ -148,8 +193,11 @@ export function UsageSettings() {
             <IconButton
               icon="refresh"
               label={t('Refresh usage')}
-              disabled={status === 'loading'}
-              onClick={() => setRefresh((value) => value + 1)}
+              disabled={status === 'loading' || resetBusy}
+              onClick={() => {
+                setConfirming(undefined);
+                setRefresh((value) => value + 1);
+              }}
             />
           </div>
         </div>
@@ -204,10 +252,62 @@ export function UsageSettings() {
             <h3 id="codex-usage-resets">{t('Usage limit resets')}</h3>
             <div className="usage-row">
               <span>{t('Available resets')}</span>
-              <strong>
-                {limits?.availableResets?.toLocaleString(locale) ?? t('Not reported')}
-              </strong>
+              <div className="usage-reset-action">
+                <strong>
+                  {limits?.availableResets?.toLocaleString(locale) ?? t('Not reported')}
+                </strong>
+                {reset && (
+                  <button
+                    ref={resetTrigger}
+                    type="button"
+                    className="settings-action"
+                    disabled={status === 'loading' || resetBusy}
+                    aria-expanded={confirming === reset.key}
+                    onClick={() => setConfirming(confirming === reset.key ? undefined : reset.key)}
+                  >
+                    {t(retrying ? 'Retry same reset' : 'Use one reset')}
+                  </button>
+                )}
+              </div>
             </div>
+            {reset && confirming === reset.key && (
+              <div
+                role="group"
+                aria-labelledby="usage-reset-confirmation"
+                className="usage-reset-confirmation"
+                onKeyDown={(event) => {
+                  if (event.key !== 'Escape') return;
+                  event.stopPropagation();
+                  cancelReset();
+                }}
+              >
+                <p id="usage-reset-confirmation">
+                  {t(
+                    retrying
+                      ? 'Retry this reset using the original request?'
+                      : 'Use one available reset to reset eligible Codex usage limits?',
+                  )}
+                </p>
+                <div className="preferences-reset-actions">
+                  <button type="button" onClick={cancelReset} autoFocus>
+                    {t('Cancel')}
+                  </button>
+                  <button type="button" onClick={() => void redeem(reset.key)}>
+                    {t('Confirm reset')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {(resetBusy || resetMessage || retrying) && (
+              <p role="status">
+                {t(
+                  resetBusy
+                    ? 'Redeeming reset…'
+                    : resetMessage ||
+                        'Codex could not confirm the reset. Retrying uses the same request.',
+                )}
+              </p>
+            )}
             {!!limits?.resetCredits?.length && (
               <ul className="usage-days">
                 {limits.resetCredits.map((credit, index) => (
