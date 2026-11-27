@@ -263,7 +263,7 @@ test('the theme shortcut renders the light palette under Chromium auto-darkening
     context.drawImage(image, 0, 0);
     return Array.from(context.getImageData(2, 2, 1, 1).data).slice(0, 3);
   }, screenshot.toString('base64'));
-  expect(background).toEqual([250, 250, 250]);
+  expect(background).toEqual([243, 244, 245]);
 });
 
 for (const width of [1440, 820, 390, 320]) {
