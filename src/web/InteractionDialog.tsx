@@ -189,6 +189,7 @@ export function StatusDialog({
   thread,
   configuration,
   connection,
+  openUsage,
   close,
 }: {
   system?: System;
@@ -197,6 +198,7 @@ export function StatusDialog({
   thread?: Thread;
   configuration?: NativeConfigurationSnapshot;
   connection: string;
+  openUsage: () => void;
   close: () => void;
 }) {
   const { t, locale } = useInterfaceLanguage();
@@ -285,12 +287,17 @@ export function StatusDialog({
             : t('Accepting tasks')}
         </dd>
       </dl>
-      <button
-        disabled={maintenanceBusy}
-        onClick={() => void changeMaintenance(system?.maintenance ? 'cancel' : 'start')}
-      >
-        {system?.maintenance ? t('Cancel maintenance') : t('Prepare maintenance')}
-      </button>
+      <div className="status-dialog-actions">
+        <button type="button" onClick={openUsage}>
+          {t('Usage and billing')}
+        </button>
+        <button
+          disabled={maintenanceBusy}
+          onClick={() => void changeMaintenance(system?.maintenance ? 'cancel' : 'start')}
+        >
+          {system?.maintenance ? t('Cancel maintenance') : t('Prepare maintenance')}
+        </button>
+      </div>
     </InteractionDialog>
   );
 }

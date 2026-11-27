@@ -17,6 +17,12 @@ Codex resolves permissions and managed constraints. In Code mode, native questio
 
 Use **Settings → Instructions** for global Codex instructions. See the [configuration reference](configuration.md#settings-by-function) for browser and Codes server settings.
 
+## Usage and billing
+
+The composer shows the latest context usage reported by Codex for the open conversation. Its percentage divides the reported context tokens by the reported model window. Open the indicator or choose **Usage and billing** in **Session status** to see the token counts.
+
+The same panel reads the account's usage windows and reset times, credit balance and available resets, and up to seven recently reported days of token activity. Each section depends on the data returned by the installed CLI and signed-in account. Reset times use the browser's local time. Use the linked Codex dashboard to manage billing and eligible resets. [Codex App Server account API](https://learn.chatgpt.com/docs/app-server)
+
 ## Upgrading
 
 Schema 6 retains old settings, operation receipts, historical execution metadata, and waiting messages. A legacy queue can pause for review when permissions or configuration cannot be safely confirmed. Review the effective Codex settings and resume explicitly. [Migration and rollback](conversations.md#metadata-migration-and-rollback)

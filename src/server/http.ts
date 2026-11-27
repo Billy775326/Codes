@@ -180,6 +180,13 @@ export async function application(
               method === 'POST',
             ),
           );
+        if (url.pathname === '/api/connection/codex/usage' && method === 'GET') {
+          response.setHeader('cache-control', 'no-store');
+          return json(
+            response,
+            await service.codexUsage.read(url.searchParams.get('refresh') === '1'),
+          );
+        }
         if (url.pathname === '/api/connection/codex/login') {
           if (method === 'GET') return json(response, service.codexLogin.current());
           if (method === 'POST') return json(response, await service.codexLogin.start());

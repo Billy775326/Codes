@@ -12,6 +12,53 @@ async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
 }
+test('the composer opens context, account limits and activity on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.route('**/api/connection/codex/usage*', (route) =>
+    route.fulfill({
+      json: {
+        limits: {
+          status: 'reported',
+          value: {
+            plan: 'plus',
+            availableResets: 2,
+            windows: [
+              {
+                id: 'codex',
+                primary: { usedPercent: 25, durationMins: 300, resetsAt: 1_800_000_000 },
+              },
+            ],
+          },
+        },
+        activity: { status: 'reported', value: { days: [{ date: '2026-11-27', tokens: 3456 }] } },
+      },
+    }),
+  );
+  await login(page);
+  await send(page, 'Usage indicator fixture');
+  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
+  const context = page.getByRole('button', { name: 'Context window · 1% used', exact: true });
+  await expect(context).toBeInViewport();
+  await context.click();
+  const dialog = page.getByRole('dialog', { name: 'Usage and billing', exact: true });
+  await expect(dialog).toContainText('1,200 / 128,000 tokens');
+  await expect(dialog.getByRole('meter', { name: '5-hour limit' })).toHaveAttribute(
+    'aria-valuetext',
+    '75% remaining',
+  );
+  await expect(dialog.getByText(/^Resets /)).toBeVisible();
+  await expect(dialog).toContainText('3,456 tokens');
+  await expect(dialog.getByRole('link', { name: 'Open Codex usage dashboard' })).toHaveAttribute(
+    'target',
+    '_blank',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const refresh = page.waitForRequest((request) => request.url().endsWith('/usage?refresh=1'));
+  await dialog.getByRole('button', { name: 'Refresh usage' }).click();
+  await refresh;
+  await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(context).toBeFocused();
+});
 test('Code questions suggest without sending, support radio keys and keep the next draft', async ({
   page,
 }) => {

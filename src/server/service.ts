@@ -17,6 +17,7 @@ import { ProjectFileManagement } from './project-file-management.js';
 import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
 import { Images } from './images.js';
 import { CodexAccount } from './codex-account.js';
+import { CodexUsage } from './codex-usage.js';
 import { CodexDeviceLogin } from './codex-device-login.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
@@ -63,6 +64,7 @@ export class Service {
   private readonly conversationQueue: ConversationQueue;
   readonly modelSettings: ModelSettings;
   private readonly codexAccount: CodexAccount;
+  readonly codexUsage: CodexUsage;
   readonly codexLogin: CodexDeviceLogin;
   private readonly asyncQuestions: AsyncQuestions;
   private sending = new Map<string, number>();
@@ -108,6 +110,7 @@ export class Service {
     });
     this.modelSettings = new ModelSettings(driver);
     this.codexAccount = new CodexAccount(driver);
+    this.codexUsage = new CodexUsage(driver);
     this.codexLogin = new CodexDeviceLogin(driver, this.codexAccount);
     this.queue = new MessageQueue(
       store.queue,
@@ -212,6 +215,7 @@ export class Service {
     };
     driver.on('ready', () => {
       this.codexAccount.invalidate();
+      this.codexUsage.invalidate();
       this.events.publish('runtime', this.system());
       catalogChanged();
     });
@@ -228,6 +232,7 @@ export class Service {
         this.codexLogin.reset();
       if (event.method === 'account/updated' || event.method === 'account/login/completed') {
         this.codexAccount.invalidate();
+        this.codexUsage.invalidate();
         this.events.publish('codex-account', {});
         catalogChanged();
       }
@@ -239,6 +244,7 @@ export class Service {
     driver.on('offline', () => {
       this.codexLogin.reset();
       this.codexAccount.invalidate();
+      this.codexUsage.invalidate();
       this.modelSettings.invalidateCatalogs();
       this.loaded.clear();
       store.queue.pauseAll('The runtime stopped. Review outcomes before resuming.');

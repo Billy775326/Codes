@@ -69,6 +69,7 @@ import { FilesReadCache } from './files-read-cache';
 import { applyConversationEvent } from './conversation-events';
 import { reloadStaleWebBuildAfterSignIn, useWebBuild } from './useWebBuild';
 import { InteractionDialog, ReviewDialog, StatusDialog } from './InteractionDialog';
+import { ContextUsageButton, UsageDialog } from './UsageDialog';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
 import { ControlTooltip } from './ControlTooltip';
 import { WorkingDirectoryDialog } from './WorkingDirectoryDialog';
@@ -151,7 +152,10 @@ function App() {
   const contextReady = !!contextProjectId && context?.project.id === contextProjectId;
   const directoryBlocked = contextReady && !context.directory.available;
 
-  const [dialog, setDialog] = useState<'preferences' | 'review' | 'status' | 'codex-login'>();
+  const [dialog, setDialog] = useState<
+    'preferences' | 'review' | 'status' | 'codex-login' | 'usage' | 'usage-from-status'
+  >();
+  const [usageRevision, setUsageRevision] = useState(0);
   const [previewedImage, setPreviewedImage] = useState<string>();
   const [linkedFile, setLinkedFile] = useState<ProjectFileReference>();
   const [fileScopeWarning, setFileScopeWarning] = useState(0);
@@ -788,10 +792,13 @@ function App() {
         else if (event.kind === 'codex-catalog') {
           refreshCatalog();
           refreshConfiguration();
-        } else if (event.kind === 'codex-account') invalidateCodexConnection();
-        else if (event.kind === 'runtime') {
+        } else if (event.kind === 'codex-account') {
+          invalidateCodexConnection();
+          setUsageRevision((revision) => revision + 1);
+        } else if (event.kind === 'runtime') {
           setSystem(event.data as System);
           invalidateCodexConnection();
+          setUsageRevision((revision) => revision + 1);
         } else selected?.receive(event);
       },
       (status) => {
@@ -2276,6 +2283,9 @@ function App() {
                     busy || loadingConversation || !!thread?.archived || !!thread?.managementPending
                   }
                 />
+                {thread?.usage && (
+                  <ContextUsageButton usage={thread.usage} open={() => setDialog('usage')} />
+                )}
               </div>
               <div
                 className="composer-dispatch-actions"
@@ -2452,7 +2462,15 @@ function App() {
           thread={thread}
           configuration={codexDefaults}
           connection={t(connection === 'Connected' ? 'Web connected' : connection)}
+          openUsage={() => setDialog('usage-from-status')}
           close={() => setDialog(undefined)}
+        />
+      )}
+      {(dialog === 'usage' || dialog === 'usage-from-status') && (
+        <UsageDialog
+          key={usageRevision}
+          usage={thread?.usage}
+          close={() => setDialog(dialog === 'usage-from-status' ? 'status' : undefined)}
         />
       )}
       {forking && (
