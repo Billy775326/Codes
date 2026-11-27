@@ -24,7 +24,19 @@ it('shares read-only queries and returns only supported account usage fields', a
             },
             invalid: { primary: { usedPercent: -1 } },
           },
-          rateLimitResetCredits: { availableCount: 0, credits: [{ id: 'private-reset' }] },
+          rateLimitResetCredits: {
+            availableCount: 2,
+            credits: [
+              {
+                id: 'private-reset',
+                status: 'available',
+                grantedAt: 1_799_000_000,
+                expiresAt: null,
+                title: 'Codex reset',
+              },
+              { id: 'invalid', status: 'invented', grantedAt: 1_799_000_000 },
+            ],
+          },
         }
       : {
           summary: { lifetimeTokens: 1000 },
@@ -49,7 +61,10 @@ it('shares read-only queries and returns only supported account usage fields', a
         plan: 'plus',
         creditBalance: '10.5',
         unlimitedCredits: false,
-        availableResets: 0,
+        availableResets: 2,
+        resetCredits: [
+          { status: 'available', grantedAt: 1_799_000_000, expiresAt: null, title: 'Codex reset' },
+        ],
         windows: [
           {
             id: 'codex',

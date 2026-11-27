@@ -30,6 +30,12 @@ const activitySchema = z.object({
   dailyUsageBuckets: z.array(z.unknown()).nullish(),
 });
 const daySchema = z.object({ startDate: z.iso.date(), tokens: count });
+const resetCreditSchema = z.object({
+  status: z.enum(['available', 'redeeming', 'redeemed', 'unknown']),
+  grantedAt: timestamp,
+  expiresAt: timestamp.nullish(),
+  title: z.string().trim().max(96).nullish().catch(undefined),
+});
 
 function usageWindow(
   window: z.infer<typeof windowSchema> | null | undefined,
@@ -66,8 +72,13 @@ function accountLimits(raw: unknown): AccountLimits | undefined {
         ]
       : [],
   );
-  const resets = record(raw.rateLimitResetCredits)
-    ? count.safeParse(raw.rateLimitResetCredits.availableCount).data
+  const resetSummary = record(raw.rateLimitResetCredits) ? raw.rateLimitResetCredits : undefined;
+  const resets = count.safeParse(resetSummary?.availableCount).data;
+  const resetCredits = Array.isArray(resetSummary?.credits)
+    ? resetSummary.credits.slice(0, 16).flatMap((entry: unknown) => {
+        const parsed = resetCreditSchema.safeParse(entry);
+        return parsed.success ? [{ ...parsed.data, title: parsed.data.title || undefined }] : [];
+      })
     : undefined;
   if (!preferred && resets === undefined) return;
   return {
@@ -76,6 +87,7 @@ function accountLimits(raw: unknown): AccountLimits | undefined {
     creditBalance: preferred?.credits?.balance ?? undefined,
     unlimitedCredits: preferred?.credits?.unlimited,
     availableResets: resets,
+    resetCredits,
   };
 }
 

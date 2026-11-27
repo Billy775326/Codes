@@ -12,53 +12,114 @@ async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
 }
-test('the composer opens context, account limits and activity on a phone', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 740 });
-  await page.route('**/api/connection/codex/usage*', (route) =>
-    route.fulfill({
-      json: {
-        limits: {
-          status: 'reported',
-          value: {
-            plan: 'plus',
-            availableResets: 2,
-            windows: [
-              {
-                id: 'codex',
-                primary: { usedPercent: 25, durationMins: 300, resetsAt: 1_800_000_000 },
-              },
-            ],
+for (const width of [320, 1440]) {
+  test(`context is a read-only indicator and usage fits settings at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 740 });
+    await page.addInitScript(
+      (theme) => localStorage.setItem('codes.preferences', JSON.stringify({ theme })),
+      width === 320 ? 'light' : 'dark',
+    );
+    let usageReads = 0;
+    await page.route('**/api/connection/codex/usage*', (route) => {
+      usageReads++;
+      return route.fulfill({
+        json: {
+          limits: {
+            status: 'reported',
+            value: {
+              plan: 'plus',
+              availableResets: 2,
+              resetCredits: [
+                {
+                  status: 'available',
+                  title: 'Codex reset',
+                  grantedAt: 1_799_000_000,
+                  expiresAt: 1_801_000_000,
+                },
+              ],
+              windows: [
+                {
+                  id: 'codex',
+                  primary: { usedPercent: 25, durationMins: 300, resetsAt: 1_800_000_000 },
+                  secondary: { usedPercent: 50, durationMins: 10080, resetsAt: 1_800_000_000 },
+                },
+              ],
+            },
           },
+          activity: { status: 'reported', value: { days: [{ date: '2026-11-27', tokens: 3456 }] } },
         },
-        activity: { status: 'reported', value: { days: [{ date: '2026-11-27', tokens: 3456 }] } },
-      },
-    }),
-  );
-  await login(page);
-  await send(page, 'Usage indicator fixture');
-  await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
-  const context = page.getByRole('button', { name: 'Context window · 1% used', exact: true });
-  await expect(context).toBeInViewport();
-  await context.click();
-  const dialog = page.getByRole('dialog', { name: 'Usage and billing', exact: true });
-  await expect(dialog).toContainText('1,200 / 128,000 tokens');
-  await expect(dialog.getByRole('meter', { name: '5-hour limit' })).toHaveAttribute(
-    'aria-valuetext',
-    '75% remaining',
-  );
-  await expect(dialog.getByText(/^Resets /)).toBeVisible();
-  await expect(dialog).toContainText('3,456 tokens');
-  await expect(dialog.getByRole('link', { name: 'Open Codex usage dashboard' })).toHaveAttribute(
-    'target',
-    '_blank',
-  );
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const refresh = page.waitForRequest((request) => request.url().endsWith('/usage?refresh=1'));
-  await dialog.getByRole('button', { name: 'Refresh usage' }).click();
-  await refresh;
-  await dialog.getByRole('button', { name: 'Close dialog' }).click();
-  await expect(context).toBeFocused();
-});
+      });
+    });
+    await login(page);
+    await send(page, 'Usage indicator fixture');
+    await expect(
+      page.locator('.turn-status').getByText('Completed', { exact: true }),
+    ).toBeVisible();
+    const context = page.getByRole('img', { name: 'Context window · 1% used', exact: true });
+    await expect(context).toBeInViewport();
+    await context.hover();
+    const hint = page.locator('.control-tooltip');
+    await expect(hint).toContainText('1,200 / 128,000 tokens');
+    expect(usageReads).toBe(0);
+    await page.mouse.move(2, 2);
+    await page.keyboard.press('Escape');
+    await expect(hint).toBeHidden();
+    await context.press('Tab');
+    await page.keyboard.press('Shift+Tab');
+    await expect(context).toBeFocused();
+    await expect(hint).toContainText('1,200 / 128,000 tokens');
+    await context.press('Enter');
+    await context.click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(usageReads).toBe(0);
+    const status = page.getByRole('button', { name: 'Session status', exact: true });
+    await status.click();
+    await page.getByRole('button', { name: 'Usage and billing', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+    await expect(dialog.getByRole('group', { name: 'Usage & runtime', exact: true })).toBeVisible();
+    const primary = dialog.getByRole('meter', { name: '5-hour limit' });
+    const secondary = dialog.getByRole('meter', { name: 'Weekly limit' });
+    await expect(primary).toHaveAttribute('aria-valuetext', '75% remaining');
+    await expect(secondary).toHaveAttribute('aria-valuetext', '50% remaining');
+    await expect(dialog.getByText(/^Resets /)).toHaveCount(2);
+    const resets = dialog.getByRole('region', { name: 'Usage limit resets' });
+    await expect(resets).toContainText('Available resets');
+    await expect(resets.getByText('2', { exact: true })).toBeVisible();
+    await expect(resets).toContainText('Codex reset');
+    await expect(resets.getByText(/^Expires /)).toBeVisible();
+    const activity = dialog.getByRole('region', { name: 'Recent token activity' });
+    await expect(activity).toContainText('3,456 tokens');
+    const planGrid = (await primary.boundingBox())!;
+    const weeklyGrid = (await secondary.boundingBox())!;
+    const resetGrid = (await resets.boundingBox())!;
+    const activityGrid = (await activity.boundingBox())!;
+    if (width === 320) {
+      expect(weeklyGrid.y).toBeGreaterThan(planGrid.y);
+      expect(activityGrid.y).toBeGreaterThan(resetGrid.y);
+    } else {
+      expect(weeklyGrid.x).toBeGreaterThan(planGrid.x);
+      expect(activityGrid.x).toBeGreaterThan(resetGrid.x);
+    }
+    const dashboard = dialog.getByRole('link', { name: 'Codex dashboard' });
+    await expect(dashboard).toHaveAttribute('target', '_blank');
+    await expect(dashboard).toHaveCSS(
+      'color',
+      width === 320 ? 'rgb(36, 84, 129)' : 'rgb(168, 200, 235)',
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    const refresh = page.waitForRequest((request) => request.url().endsWith('/usage?refresh=1'));
+    await dialog.getByRole('button', { name: 'Refresh usage' }).click();
+    await refresh;
+    await dialog.getByRole('button', { name: 'Close dialog' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Usage and billing', exact: true }),
+    ).toBeVisible();
+  });
+}
 test('Code questions suggest without sending, support radio keys and keep the next draft', async ({
   page,
 }) => {

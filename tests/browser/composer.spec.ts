@@ -51,6 +51,12 @@ for (const width of [1440, 320]) {
     await page.setViewportSize({ width, height: width === 320 ? 720 : 1000 });
     await login(page);
     const input = page.getByLabel('Message Codex');
+    await page.keyboard.press('Tab');
+    await expect(input).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(input).toBeFocused();
     await input.fill('A short draft');
     await expect(input).toBeFocused();
     expect(await input.evaluate((e) => getComputedStyle(e).outlineStyle)).toBe('none');
