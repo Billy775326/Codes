@@ -6,6 +6,10 @@
 
 - Prepopulate Allowed addresses with the host's IP addresses on fresh installations that use the default browser origins.
 
+### Fixed
+
+- Show the most recent loaded patch when the last turn has none, and explain when a turn has no recorded patch.
+
 ## [0.2.0] - 2026-11-27
 
 ### Added

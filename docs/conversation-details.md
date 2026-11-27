@@ -57,8 +57,8 @@ Answer the card in its original turn. Code-mode availability follows effective n
 Choose **Changes** or use **View changes** on an **Edited files** card to inspect a patch. The viewer can also show proposed changes for native approvals. To start a new Codex review, choose **Review code** in the **Changes** tab.
 
 - Changes use a **Unified** layout by default. When the panel has room, choose **Side by side**. Expand a changed file to see up to 200 rows per page, with before and after line numbers.
-- Choose among change-bearing turns in the loaded history. The current turn can use its native aggregate diff. Historical repeated edits retain their native order.
+- Choose the last turn or a change-bearing turn in the loaded history. When the last turn has no patch, Changes defaults to the most recent loaded turn with a patch. The last turn can use its native aggregate diff. Historical repeated edits retain their native order.
 - Use **Mark viewed** for the displayed revision. A changed patch resets the marker.
 - Use **Open file** to see the current file contents. The patch records the edit at the time of the turn.
 
-Truncation notices mark incomplete patches or output. Use the project or native history to inspect the full content. The viewer displays the patch and leaves Git staging and workspace files unchanged.
+Truncation notices mark incomplete patches or output. Use the project or native history to inspect the full content. Commands and scripts can change files without producing a native patch. Use **Files** to inspect their current contents. The viewer leaves Git staging and workspace files unchanged.

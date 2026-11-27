@@ -132,11 +132,14 @@ test('earlier turn changes remain inspectable after a later turn and reload', as
   await page.reload();
   await openContextTab(page, 'Changes');
   const panel = page.locator('.context-panel');
-  await expect(panel).toContainText('No changes to review');
-  await panel.getByLabel('Change scope').selectOption({ index: 1 });
+  const scope = panel.getByLabel('Change scope');
   const edits = panel.getByRole('region', { name: 'Changes in example.ts', exact: true });
   await expect(edits).toHaveCount(2);
   await expect(panel).toContainText('Native edit sequence');
+  await scope.selectOption({ label: 'Last turn' });
+  await expect(panel).toContainText('No patch recorded for this turn');
+  await expect(panel).toContainText('File edits made by commands or scripts may not have a patch.');
+  await scope.selectOption({ index: 1 });
   await edits.last().locator('.diff-file-toggle').click();
   await expect(edits.last()).toContainText('Greetings');
 });

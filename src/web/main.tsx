@@ -271,7 +271,7 @@ function App() {
     setPreferencesError('');
     return true;
   };
-  const [diffTurn, setDiffTurn] = useState('');
+  const [diffTurn, setDiffTurn] = useState<string>();
   const [diffLayout, setDiffLayout] = useState<DiffLayout>(() =>
     saved('codes.diff-layout') === 'split' ? 'split' : 'unified',
   );
@@ -583,7 +583,7 @@ function App() {
         setDirectory('');
         setAttachments([]);
       }
-      setDiffTurn('');
+      setDiffTurn(undefined);
       setDiffPath('');
       if (changed) setPanel(null);
       if (window.innerWidth <= 1099) setSidebar(false);
@@ -1084,10 +1084,20 @@ function App() {
       if (item.kind === 'assistant') tails.set(item.turnId, item.id);
     return tails;
   }, [thread?.messages]);
-  const changeTurns = [
-    ...new Set(reviewMessages.filter((item) => item.kind === 'change').map((item) => item.turnId)),
-  ].reverse();
-  const selectedDiffTurn = diffTurn || thread?.turnId;
+  const lastTurn = thread?.turnId;
+  const changeTurns = new Set(
+    reviewMessages
+      .filter((item) => item.kind === 'change' && item.files?.length)
+      .map((item) => item.turnId),
+  );
+  const earlierChangeTurns = [...changeTurns].filter((id) => id !== lastTurn).reverse();
+  const lastTurnHasChanges = !!thread?.diff || (!!lastTurn && changeTurns.has(lastTurn));
+  const defaultDiffScope = lastTurnHasChanges ? '' : (earlierChangeTurns[0] ?? '');
+  const selectedDiffScope =
+    diffTurn === '' || (diffTurn && earlierChangeTurns.includes(diffTurn))
+      ? diffTurn
+      : defaultDiffScope;
+  const selectedDiffTurn = selectedDiffScope || lastTurn;
   const changeFiles = new Map<string, FileChange>();
   for (const message of reviewMessages)
     if (message.kind === 'change' && message.turnId === selectedDiffTurn)
@@ -2527,7 +2537,7 @@ function App() {
               >
                 <Icon name="diff" size={15} />
                 {t('Changes')}
-                {thread?.diff && <i />}
+                {(lastTurnHasChanges || earlierChangeTurns.length > 0) && <i />}
               </button>
             </div>
             <IconButton
@@ -2545,20 +2555,18 @@ function App() {
                   {t('Change scope')}
                   <select
                     aria-label={t('Change scope')}
-                    value={diffTurn}
+                    value={selectedDiffScope}
                     onChange={(event) => {
                       setDiffTurn(event.target.value);
                       setDiffPath('');
                     }}
                   >
                     <option value="">{t('Last turn')}</option>
-                    {changeTurns
-                      .filter((id) => id !== thread?.turnId)
-                      .map((id, i) => (
-                        <option key={id} value={id}>
-                          {t('Earlier turn {number} · {id}', { number: i + 1, id: id.slice(0, 8) })}
-                        </option>
-                      ))}
+                    {earlierChangeTurns.map((id, i) => (
+                      <option key={id} value={id}>
+                        {t('Earlier turn {number} · {id}', { number: i + 1, id: id.slice(0, 8) })}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 {canReview && (
@@ -2595,7 +2603,8 @@ function App() {
                 ) : (
                   <div className="panel-empty">
                     <Icon name="diff" size={30} />
-                    <h3>{t('No changes to review')}</h3>
+                    <h3>{t('No patch recorded for this turn')}</h3>
+                    <p>{t('File edits made by commands or scripts may not have a patch.')}</p>
                   </div>
                 )}
               </div>

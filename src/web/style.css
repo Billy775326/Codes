@@ -587,23 +587,19 @@
 }
 .panel-empty {
   text-align: center;
-  color: #5d5869;
+  color: var(--muted);
   margin: 70px auto;
   padding: 15px;
-}
-.panel-empty svg {
-  color: #5c506c;
 }
 .panel-empty h3 {
   font-size: 12px;
   font-weight: 500;
-  color: #93899f;
+  color: var(--fg);
   margin-top: 19px;
 }
 .panel-empty p {
-  font-size: 11px;
-  line-height: 1.9;
-  color: #686170;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .diff-panel {
   flex: 1;
