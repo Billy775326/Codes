@@ -493,7 +493,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'On phones, Enter adds a line.': '手机上按 Enter 换行。',
   'New conversation directory': '新会话目录',
   'The startup working directory is unavailable.': '启动时的工作目录不可用。',
-  'Use current directory': '沿用当前目录',
+  'Use Codex startup directory': '使用 Codex 启动目录',
   'Choose each time': '每次选择',
   Layout: '布局',
   'Sidebar widths': '侧栏宽度',

@@ -40,6 +40,7 @@ const service = new Service(
     binary: process.env.CODES_CODEX_BINARY,
     stateFile: join(directory, 'mock-history.json'),
     timeoutMs: runtime.active.requestTimeoutMs,
+    startupDirectory: initialWorkingDirectory,
   }),
   initialWorkingDirectory,
   initialWorkingDirectory,

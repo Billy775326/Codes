@@ -27,8 +27,9 @@ const mandatory = {
   'turn/interrupt': ['threadId', 'turnId'],
 };
 
-export async function installedCodexVersion(binary: string) {
+export async function installedCodexVersion(binary: string, cwd?: string) {
   const output = await execute(binary, ['--version'], {
+    cwd,
     timeout: probeTimeout,
     maxBuffer: 4096,
   }).catch(() => {
@@ -71,6 +72,7 @@ export interface NativeProtocol {
 export async function inspectNativeProtocol(
   binary: string,
   version: string,
+  cwd?: string,
 ): Promise<NativeProtocol> {
   const directory = await mkdtemp(join(tmpdir(), 'codes-protocol-'));
   let client: Map<string, Set<string>>;
@@ -80,6 +82,7 @@ export async function inspectNativeProtocol(
       binary,
       ['app-server', 'generate-json-schema', '--experimental', '--out', directory],
       {
+        cwd,
         timeout: probeTimeout,
         maxBuffer: 64 * 1024,
       },

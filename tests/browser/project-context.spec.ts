@@ -141,7 +141,7 @@ test('switching native conversations preserves drafts, running work, and the que
   page,
 }) => {
   await login(page);
-  const { first, second, path } = await fixture(page);
+  const { a, first, second, path } = await fixture(page);
   await page.reload();
   await row(page, first.id).getByRole('button', { name: first.title, exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(first.title);
@@ -170,13 +170,15 @@ test('switching native conversations preserves drafts, running work, and the que
   await expect(page.getByLabel('Message Codex')).toHaveValue('Second draft');
   await page.getByRole('button', { name: 'New conversation', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('New conversation');
-  await expect(page.getByRole('button', { name: 'Change working directory' })).toHaveText(path);
-  const title = 'Draft in current cwd ' + randomUUID();
+  await expect(page.getByRole('button', { name: 'Change working directory' })).toHaveText(a.path);
+  const title = 'Draft at startup ' + randomUUID();
   await page.getByLabel('Message Codex').fill(title);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
   const summary = conversationList(page).getByRole('button', { name: title, exact: true });
-  await expect(summary).toContainText(path);
+  await expect(summary).toBeVisible();
+  const { data } = await (await page.request.get('/api/conversations')).json();
+  expect(data).toContainEqual(expect.objectContaining({ title, cwd: a.path }));
 });
 test('missing directories preserve history and block execution until explicit retry after restoration', async ({
   page,
@@ -377,6 +379,13 @@ test('a first visit lists native sessions and opens a draft in the startup direc
     await expect(
       firstVisit.getByRole('heading', { name: second.title, exact: true }),
     ).toBeVisible();
+    await firstVisit.getByRole('button', { name: 'New conversation', exact: true }).click();
+    await expect(firstVisit.getByRole('button', { name: 'Change working directory' })).toHaveText(
+      a.path,
+    );
+    await expect(
+      firstVisit.getByRole('dialog', { name: 'Choose a working directory' }),
+    ).toHaveCount(0);
   } finally {
     await firstVisit.close();
   }

@@ -955,18 +955,13 @@ function App() {
       openDirectoryPicker();
       return;
     }
-    if (projectId && !directoryBlocked) {
-      newThreadIn(projectId);
-      return;
-    }
-    const fallback = projects.find(
-      (entry) => entry.path === system?.initialWorkingDirectory && entry.id !== projectId,
-    );
-    if (fallback) newThreadIn(fallback.id);
+    const startupProject = projects.find((entry) => entry.path === system?.initialWorkingDirectory);
+    if (startupProject && (!directoryBlocked || startupProject.id !== contextProjectId))
+      newThreadIn(startupProject.id);
     else setError('The startup working directory is unavailable.');
   }, [
     preferences.newConversationDirectory,
-    projectId,
+    contextProjectId,
     directoryBlocked,
     projects,
     system?.initialWorkingDirectory,

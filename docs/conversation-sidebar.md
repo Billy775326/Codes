@@ -5,7 +5,7 @@ The sidebar lists active native Codex conversations across all working directori
 - Each row shows its title and timestamp, plus activity or a status that needs attention. The working directory appears when it differs from the current directory. Hover or focus the row to see the full path.
 - The sort menu shows the current order and marks the selected option. **Last updated** is the default. Choose **Date created** to show the newest conversations first when supported by the installed CLI. The browser remembers the selected order. Use the arrow keys to move between options and Escape to close the menu.
 - Search uses native title filtering where available. Older versions use bounded page scans. Page cursors follow the current archive, sort, and search filters.
-- **New conversation** starts a draft in the current directory or prompts for one. On phones, **New** is next to the brand.
+- **New conversation** starts a draft in the Codex startup directory by default. Enable **Choose each time** to choose a directory when starting a draft. On phones, **New** is next to the brand.
 - Rename the selected conversation in the header. On desktop, select, hover over, or focus an active conversation to reveal its archive button. Touch layouts keep the button visible. In **Archived**, restore from the conversation row.
 - Use **Retry** by the list error if loading fails. Use **Reconnect updates** by the connection status when the update stream is unavailable.
 

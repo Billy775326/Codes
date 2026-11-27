@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { constants, existsSync } from 'node:fs';
+import { access, realpath, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { Rpc } from './rpc.js';
@@ -17,6 +18,7 @@ export class Driver extends EventEmitter {
   private stopping = false;
   private version?: string;
   private protocol?: NativeProtocol;
+  private launchedDirectory?: string;
   private error?: string;
   state = 'not_started';
   constructor(
@@ -25,6 +27,7 @@ export class Driver extends EventEmitter {
       binary?: string;
       stateFile: string;
       timeoutMs?: number;
+      startupDirectory?: string;
     },
   ) {
     super();
@@ -55,6 +58,21 @@ export class Driver extends EventEmitter {
       this.starting = undefined;
     }
   }
+  private async usableStartupDirectory() {
+    const directory = this.options.startupDirectory;
+    if (!directory) return;
+    try {
+      if ((await realpath(directory)) !== directory || !(await stat(directory)).isDirectory())
+        return;
+      await access(directory, constants.X_OK);
+      return directory;
+    } catch (error) {
+      // Native history must remain readable when the startup directory is unavailable.
+      if (record(error) && ['ENOENT', 'ENOTDIR', 'ELOOP', 'EACCES', 'EPERM'].includes(error.code))
+        return;
+      throw error;
+    }
+  }
   private async launch() {
     await this.retiring;
     if (this.stopping) throw new AppError('RUNTIME_OFFLINE', 'The runtime is stopping.', 503);
@@ -62,11 +80,12 @@ export class Driver extends EventEmitter {
     this.epoch = randomUUID();
     const compiled = new URL('./simulator.js', import.meta.url);
     const binary = this.mode === 'mock' ? process.execPath : (this.options.binary ?? 'codex');
+    const cwd = await this.usableStartupDirectory();
     if (this.mode === 'codex') {
-      this.version = await installedCodexVersion(binary);
+      this.version = await installedCodexVersion(binary, cwd);
       if (this.protocol?.version !== this.version) {
         this.protocol = undefined;
-        this.protocol = await inspectNativeProtocol(binary, this.version);
+        this.protocol = await inspectNativeProtocol(binary, this.version, cwd);
       }
     }
     if (this.stopping) throw new AppError('RUNTIME_OFFLINE', 'The runtime is stopping.', 503);
@@ -74,9 +93,14 @@ export class Driver extends EventEmitter {
       this.mode === 'mock'
         ? existsSync(compiled)
           ? [fileURLToPath(compiled)]
-          : ['--import', 'tsx', fileURLToPath(new URL('./simulator.ts', import.meta.url))]
+          : [
+              '--import',
+              import.meta.resolve('tsx'),
+              fileURLToPath(new URL('./simulator.ts', import.meta.url)),
+            ]
         : ['app-server', '--listen', 'stdio://'];
     const child = spawn(binary, args, {
+      cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
       env: { ...process.env, CODES_MOCK_STATE_FILE: this.options.stateFile },
@@ -107,6 +131,7 @@ export class Driver extends EventEmitter {
           502,
         );
       await rpc.notify('initialized');
+      this.launchedDirectory = cwd;
       this.state = 'ready';
       this.emit('ready');
     } catch (error) {
@@ -139,6 +164,10 @@ export class Driver extends EventEmitter {
         412,
       );
     return this.rpc!.request(method, params, timeoutMs);
+  }
+  async startThread(cwd: string) {
+    await this.start();
+    return this.call('thread/start', cwd === this.launchedDirectory ? {} : { cwd });
   }
   answer(id: string | number, result: unknown) {
     if (!this.rpc || this.state !== 'ready')

@@ -715,9 +715,7 @@ export class Service {
   async create(projectId: string, settings: Settings = {}) {
     const project = await this.requireProject(projectId);
     const native = await this.modelSettings.configuration.read(project.path);
-    const result = await this.driver.call('thread/start', {
-      cwd: project.path,
-    });
+    const result = await this.driver.startThread(project.path);
     if (
       !record(result.thread) ||
       typeof result.thread.id !== 'string' ||

@@ -427,7 +427,7 @@ export function PreferencesDialog({
               })
             }
           >
-            <option value="current">{t('Use current directory')}</option>
+            <option value="current">{t('Use Codex startup directory')}</option>
             <option value="choose">{t('Choose each time')}</option>
           </select>
         </label>

@@ -34,7 +34,7 @@ For changes to this contract, test a trusted project override, stale user-layer 
 ## Session discovery and working directories
 
 - Codex owns the session list, native thread IDs, archive state, and conversation working directories. The web sidebar must support the same working-directory and archive filters as the CLI.
-- A directory choice applies to the new draft and becomes the cwd passed to native thread creation. Existing conversation history, files, and execution use the cwd returned for that thread.
+- New drafts use the Codex App Server's startup directory by default and acquire a native thread ID on first send. A directory chosen for a draft becomes the explicit `cwd` passed to Codex. Use the returned native `cwd` to verify working-directory ownership. Existing conversation history, files, and execution use the directory reported by Codex for that thread.
 - Codes keeps local metadata only for web delivery, files, preferences, and compatibility with existing receipts and queues. Derive workspace keys from native cwd without requiring project registration. An unresolved directory change must not replay queued paths in a new directory.
 
 ## Launcher lifecycle

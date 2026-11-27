@@ -37,6 +37,7 @@ const service = new Service(
   new Driver('codex', {
     binary: process.env.CODES_CODEX_BINARY,
     stateFile: join(directory, 'unused'),
+    startupDirectory: cwd,
   }),
 );
 
@@ -63,6 +64,11 @@ try {
   assert.equal(collaborationMode.settings.reasoning_effort, 'high');
 
   const thread = await service.create(project.id, { permission: 'read-only' });
+  assert.equal(
+    (await service.driver.call('thread/read', { threadId: thread.id, includeTurns: false })).thread
+      .cwd,
+    cwd,
+  );
   assert.equal(thread.nativeSettings?.sandbox, 'workspaceWrite');
   const next = await configuration.save(cwd, {
     version: first.userVersion!,

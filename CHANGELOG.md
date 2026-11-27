@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Open the first draft in the startup working directory while loading native conversations in the sidebar. Default new conversations use the current available directory.
+- Open new drafts in the Codex App Server's startup directory by default while loading native conversations in the sidebar. Codex creates the native conversation on first send.
 
 ## [0.1.0] - 2026-11-26
 

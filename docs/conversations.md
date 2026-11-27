@@ -12,7 +12,7 @@ Switching conversations restores unsent text and leaves live work running. See t
 
 ## Working directories
 
-On first visit, Codes loads the native conversation list and opens a draft in the directory Codes was started from. `CODES_PROJECT_ROOT` overrides that initial directory. A new draft uses the current available directory, then falls back to the startup directory. Change it with the folder control in the draft header. The server verifies that the directory exists and is accessible before creating the native thread.
+On first visit, Codes loads the native conversation list and opens a draft in the Codex App Server's startup directory. Codes launches the App Server from the calling directory or the `CODES_PROJECT_ROOT` override. New drafts use that startup directory by default. Change the directory with the folder control in the draft header. On first send, Codex creates the native thread and Codes verifies its returned `cwd` before sending the message.
 
 For the v0.1.0 release, set `CODES_PROJECT_ROOT` before startup to provide the initial directory.
 

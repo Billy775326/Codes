@@ -211,9 +211,9 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       return result(id, {});
     }
     if (method === 'thread/start') {
-      if (p.ephemeral)
-        return result(id, { ...effective(), thread: { id: randomUUID(), cwd: p.cwd } });
-      const thread = create(p.cwd);
+      const cwd = p.cwd ?? process.cwd();
+      if (p.ephemeral) return result(id, { ...effective(), thread: { id: randomUUID(), cwd } });
+      const thread = create(cwd);
       note('thread/started', { thread: summary(thread) });
       return result(id, { ...effective(), thread: summary(thread) });
     }
