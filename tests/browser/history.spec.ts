@@ -128,7 +128,16 @@ test('a long active turn keeps the original prompt in history without recreating
   const older = 'earlier-long-turn';
   base.thread.messages = [
     { id: 'older-prompt', turnId: older, kind: 'user', text: 'Earlier request' },
-    { ...commentary, id: 'older-answer', turnId: older, phase: 'final_answer' },
+    {
+      ...commentary,
+      id: 'older-answer',
+      turnId: older,
+      phase: 'final_answer',
+      text: commentary.text.replace(
+        'The long task is still working.',
+        'The earlier task finished.',
+      ),
+    },
     prompt,
     commentary,
   ];
@@ -185,8 +194,8 @@ test('a long active turn keeps the original prompt in history without recreating
   base.thread.messages = [prompt, ...work, commentary];
   await reconnectUpdates(page);
   await scrollToEnd();
-  await expect(page.getByText('The long task is still working.', { exact: true })).toBeVisible();
   await expect(page.getByText('239 activities', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('The long task is still working.', { exact: true })).toBeVisible();
   await expect(bubbles).toHaveCount(0);
   await expect(bar).toContainText(prompt.text);
 
