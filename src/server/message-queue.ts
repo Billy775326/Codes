@@ -94,7 +94,12 @@ export class MessageQueue {
           this.notify(id);
           return;
         }
-        if (error instanceof AppError && error.code === 'FILE_REFERENCE_CHANGED') {
+        if (
+          error instanceof AppError &&
+          ['FILE_REFERENCE_CHANGED', 'CODEX_SIGN_IN_REQUIRED', 'CODEX_ACCOUNT_RELOAD'].includes(
+            error.code,
+          )
+        ) {
           if (this.store.get(first.id)?.state === 'dispatching')
             this.store.set(first.id, 'queued', error.message);
           this.store.pauseForReview(id, error.message);

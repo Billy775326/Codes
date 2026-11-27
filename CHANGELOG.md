@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Open Connection status to check the browser, Codex runtime, and Codex account independently. A slow conversation can load while the browser remains connected. Signed-out users can keep editing drafts, and waiting messages stay queued until the owner resumes dispatch.
+
 ### Fixed
 
 - Open new drafts in the Codex App Server's startup directory by default while loading native conversations in the sidebar. Codex creates the native conversation on first send.

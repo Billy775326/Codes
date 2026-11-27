@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Store } from '../src/server/store';
 import { Service } from '../src/server/service';
+import { CodexAccount } from '../src/server/codex-account';
 import { Driver } from '../src/codex/driver';
 import { AppError } from '../src/shared/errors';
 import type { Thread } from '../src/shared/types';
@@ -1738,4 +1739,40 @@ it('loads a native deep link before listing and keeps history with a missing wor
     project: { path: cwd },
     directory: { available: false, code: 'DIRECTORY_UNAVAILABLE' },
   });
+});
+
+it('holds a signed-out queue entry in place and resumes only after an explicit request', async () => {
+  const { service, thread, project } = await fixture();
+  const call = service.driver.call.bind(service.driver);
+  vi.spyOn(service.driver, 'call').mockImplementation(async (method, params, timeout) => {
+    const result = await call(method, params, timeout);
+    if (method === 'config/read') result.config.model_provider = null;
+    if (method === 'thread/read') result.thread.modelProvider = 'openai';
+    return result;
+  });
+  const account = vi.spyOn(CodexAccount.prototype, 'status').mockResolvedValue('signed-out');
+  const id = randomUUID();
+  try {
+    await expect(service.create(project.id, {}, true)).rejects.toMatchObject({
+      code: 'CODEX_SIGN_IN_REQUIRED',
+    });
+    await service.enqueue(thread.id, id, {
+      text: 'Preserved queue draft',
+      settings: {},
+      attachments: [],
+    });
+    await until(() => service.store.queue.state(thread.id).paused);
+    expect(service.store.operation(id)).toBeUndefined();
+    expect(service.store.queue.state(thread.id)).toMatchObject({
+      reason: 'Codex is not signed in.',
+      items: [{ id, text: 'Preserved queue draft', state: 'queued' }],
+    });
+    account.mockResolvedValue('signed-in');
+    expect(await service.checkConnection(project.id, true)).toMatchObject({ account: 'signed-in' });
+    expect(service.store.queue.get(id)?.state).toBe('queued');
+    service.controlQueue(thread.id, false);
+    await until(() => service.store.queue.get(id)?.state === 'completed');
+  } finally {
+    account.mockRestore();
+  }
 });

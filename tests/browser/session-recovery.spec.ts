@@ -4,7 +4,7 @@ async function signin(page: Page) {
   await page.getByLabel('Workspace access token').fill(token);
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await expect(page.getByLabel('Message Codex')).toBeVisible();
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
 }
 async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
@@ -32,7 +32,7 @@ test('an expired snapshot returns to sign-in and restores the selected conversat
   await expire(page);
   await page.locator('.thread-link').filter({ hasText: 'Session recovery first' }).click();
   await expect(page.getByLabel('Workspace access token')).toBeEnabled();
-  await expect(page.getByRole('alert')).toContainText('session has expired');
+  await expect(page.getByRole('alert')).toContainText('Codes session expired');
   await signin(page);
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   expect(await page.evaluate(() => localStorage.getItem('codes.thread'))).toBe(first);

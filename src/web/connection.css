@@ -1,0 +1,93 @@
+.app button:is(.connection, .header-connection) {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 30px;
+  gap: 6px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.app button:is(.connection, .header-connection):hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.app button:is(.connection, .header-connection) > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app button:is(.connection, .header-connection) > i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--status-attention);
+}
+.app button:is(.connection, .header-connection).connected > i {
+  background: var(--status-response);
+}
+.connection-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(340px, calc(100vw - 24px));
+  max-height: calc(100dvh - 90px);
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: 0 8px 28px #0004;
+  font-size: 13px;
+}
+.connection-popover[data-placement='sidebar'] {
+  left: 12px;
+  bottom: 54px;
+}
+.connection-popover[data-placement='header'] {
+  right: 12px;
+  top: 58px;
+}
+.connection-popover dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 0;
+}
+.connection-popover dt,
+.connection-detail,
+.connection-version {
+  color: var(--muted);
+}
+.connection-popover dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.connection-popover button,
+.connection-actions {
+  margin-top: 12px;
+}
+.connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.connection-actions button {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .app button.header-connection {
+    width: auto;
+    height: auto;
+    max-width: min(38vw, 145px);
+  }
+  .connection-popover[data-placement='header'] {
+    top: 86px;
+  }
+}

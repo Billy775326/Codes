@@ -115,7 +115,10 @@ export function createProjectRoutes(service: Service, diagnostics: ReadDiagnosti
         }
       }
       if (segments[3] === 'threads' && method === 'POST')
-        return json(response, await service.create(projectId, settings.parse(await body(request))));
+        return json(
+          response,
+          await service.create(projectId, settings.parse(await body(request)), true),
+        );
       if (segments[3] === 'files' && method === 'GET')
         return json(
           response,

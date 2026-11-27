@@ -226,7 +226,7 @@ test('another client sees metadata changes, and renaming never clears a live exe
     await expect(owner.getByRole('button', { name: title, exact: true })).toBeVisible();
     await owner.unroute('**/api/events?threadId=*');
     await reconnectUpdates(owner);
-    await expect(owner.locator('.connection')).toHaveText('Connected');
+    await expect(owner.locator('.connection')).toHaveText('Ready');
     await observer.getByRole('button', { name: title, exact: true }).click();
     await owner.bringToFront();
     const newTitle = 'Active renamed ' + Date.now();
@@ -515,16 +515,10 @@ test('sidebar preserves search and statuses while disconnected and reconciles it
   );
   await reconnectUpdates(page);
   await ready;
-  await expect(page.locator('.connection')).toHaveText('Connecting');
-  await expect(page.getByRole('button', { name: 'Reconnect updates', exact: true })).toHaveCount(0);
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await expect(row.locator('.conversation-status')).toHaveText('Completed');
-  const list = page.waitForResponse(
-    (response) => response.url().includes('/conversations?') && response.status() === 200,
-  );
   release();
-  await list;
-  await expect(page.locator('.connection')).toHaveText('Connected');
-  await expect(page.getByRole('button', { name: 'Reconnect updates', exact: true })).toHaveCount(0);
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await expect(page.getByLabel('Search conversations', { exact: true })).toHaveValue(title);
   await expect(row.locator('.conversation-status')).toHaveText('Completed');
   expect(

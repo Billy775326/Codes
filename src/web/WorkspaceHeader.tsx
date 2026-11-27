@@ -1,7 +1,7 @@
 import { useInterfaceLanguage } from './interface-language';
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { message } from './api';
-import { ConnectionStatus } from './ConnectionStatus';
+import { ConnectionStatus, type ConnectionStatusProps } from './ConnectionStatus';
 import { Icon, IconButton } from './primitives';
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
   cwd?: string;
   onChooseDirectory?: () => void;
   sidebarOpen: boolean;
-  connection: string;
+  connection: ConnectionStatusProps;
   theme: 'dark' | 'light';
   contextOpen: boolean;
   busy: boolean;
@@ -21,7 +21,6 @@ interface Props {
   onSettings: () => void;
   onToggleTheme: () => void;
   onReload: () => void;
-  onReconnect?: () => void;
   updateAvailable: boolean;
   onStatus: () => void;
   onToggleContext: () => void;
@@ -205,13 +204,7 @@ export function WorkspaceHeader(props: Props) {
           onClick={props.onReload}
         />
       </div>
-      {!props.sidebarOpen && (
-        <ConnectionStatus
-          status={props.connection}
-          placement="header"
-          onReconnect={props.onReconnect}
-        />
-      )}
+      {!props.sidebarOpen && <ConnectionStatus {...props.connection} placement="header" />}
       <div className="top-actions">
         <IconButton
           icon="folder"

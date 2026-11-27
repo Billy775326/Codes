@@ -1,13 +1,16 @@
 import { EventEmitter } from 'node:events';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { constants, existsSync } from 'node:fs';
 import { access, realpath, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { Rpc } from './rpc.js';
 import { AppError, record } from '../shared/errors.js';
 import { inspectNativeProtocol, installedCodexVersion, type NativeProtocol } from './protocol.js';
 import type { CodexCapabilities, System } from '../shared/types.js';
+
+const execute = promisify(execFile);
 
 export class Driver extends EventEmitter {
   epoch = randomUUID();
@@ -114,6 +117,7 @@ export class Driver extends EventEmitter {
     rpc.on('request', (value) => this.emit('request', value));
     rpc.once('offline', () => {
       this.state = 'unavailable';
+      this.error = 'The Codex App Server stopped.';
       this.emit('offline');
       this.retiring = this.terminate(child);
     });
@@ -164,6 +168,24 @@ export class Driver extends EventEmitter {
         412,
       );
     return this.rpc!.request(method, params, timeoutMs);
+  }
+  async terminalLoginStatus(): Promise<boolean | undefined> {
+    if (this.mode !== 'codex') return;
+    try {
+      await execute(this.options.binary ?? 'codex', ['login', 'status'], {
+        cwd: this.launchedDirectory,
+        timeout: 4000,
+        maxBuffer: 4096,
+      });
+      return true;
+    } catch (error) {
+      if (
+        record(error) &&
+        error.code === 1 &&
+        /^not logged in\s*$/im.test(String(error.stderr) + '\n' + String(error.stdout))
+      )
+        return false;
+    }
   }
   async startThread(cwd: string) {
     await this.start();

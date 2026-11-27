@@ -16,6 +16,7 @@ import { ProjectFiles } from './project-files.js';
 import { ProjectFileManagement } from './project-file-management.js';
 import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
 import { Images } from './images.js';
+import { CodexAccount } from './codex-account.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
 import { NativeInteractions, type ActionResolution } from './native-interactions.js';
@@ -43,6 +44,7 @@ import {
   type Summary,
   type QueuePayload,
   type ReviewTarget,
+  type ConnectionCheck,
 } from '../shared/types.js';
 
 const text = (value: unknown, maximum: number = limits.item) =>
@@ -59,6 +61,7 @@ export class Service {
   readonly queue: MessageQueue;
   private readonly conversationQueue: ConversationQueue;
   readonly modelSettings: ModelSettings;
+  private readonly codexAccount: CodexAccount;
   private readonly asyncQuestions: AsyncQuestions;
   private sending = new Map<string, number>();
   private maintenance?: { expiresAt: number; timer: ReturnType<typeof setTimeout> };
@@ -102,6 +105,7 @@ export class Service {
       boundary: (thread) => this.boundary(thread),
     });
     this.modelSettings = new ModelSettings(driver);
+    this.codexAccount = new CodexAccount(driver);
     this.queue = new MessageQueue(
       store.queue,
       async (id, messageId) => {
@@ -203,16 +207,24 @@ export class Service {
       this.modelSettings.invalidateCatalogs();
       this.events.publish('codex-catalog', {});
     };
-    driver.on('ready', catalogChanged);
+    driver.on('ready', () => {
+      this.codexAccount.invalidate();
+      this.events.publish('runtime', this.system());
+      catalogChanged();
+    });
     driver.on('notification', (event) => {
-      if (event.method === 'account/updated' || event.method === 'account/login/completed')
+      if (event.method === 'account/updated' || event.method === 'account/login/completed') {
+        this.codexAccount.invalidate();
+        this.events.publish('codex-account', {});
         catalogChanged();
+      }
       this.notification(event);
     });
     driver.on('request', (event) =>
       this.interactions.request(event, this.cache.get(event.params?.threadId)),
     );
     driver.on('offline', () => {
+      this.codexAccount.invalidate();
       this.modelSettings.invalidateCatalogs();
       this.loaded.clear();
       store.queue.pauseAll('The runtime stopped. Review outcomes before resuming.');
@@ -232,6 +244,28 @@ export class Service {
       this.interactions.clear();
       this.events.publish('runtime', this.system());
     });
+  }
+  async checkConnection(projectId?: string, retry = false): Promise<ConnectionCheck> {
+    if (retry || ['not_started', 'starting'].includes(this.driver.state)) {
+      try {
+        await this.driver.start();
+      } catch {
+        // The driver records a public diagnostic for a failed handshake.
+        return { system: this.system(), account: 'unknown' };
+      }
+    }
+    let provider: string | undefined;
+    if (this.driver.state === 'ready') {
+      const cwd = projectId ? this.project(projectId).path : this.initialWorkingDirectory;
+      try {
+        provider = (await this.modelSettings.configuration.read(cwd, false, 5000)).modelProvider;
+      } catch {
+        // Keep a reachable runtime visible even when project configuration is unavailable.
+      }
+    }
+    const account = await this.codexAccount.status(provider, retry);
+    const system = this.system();
+    return { system, account: system.state === 'ready' ? account : 'unknown' };
   }
   system() {
     const maintenance = this.maintenance;
@@ -712,9 +746,10 @@ export class Service {
       archived: await this.nativeDirectory.archived(row, Date.now() + 20_000, 'MANAGEMENT_UNKNOWN'),
     })!;
   }
-  async create(projectId: string, settings: Settings = {}) {
+  async create(projectId: string, settings: Settings = {}, forExecution = false) {
     const project = await this.requireProject(projectId);
     const native = await this.modelSettings.configuration.read(project.path);
+    if (forExecution) await this.codexAccount.requireForSend(native.modelProvider);
     const result = await this.driver.startThread(project.path);
     if (
       !record(result.thread) ||
@@ -734,6 +769,8 @@ export class Service {
       settings,
       diff: '',
       resolvedModel: nativeExecutionSettings(result).model,
+      modelProvider:
+        typeof result.thread.modelProvider === 'string' ? result.thread.modelProvider : undefined,
       nativeSettings: nativeExecutionSettings(result),
       queue: this.store.queue.state(result.thread.id),
     };
@@ -802,6 +839,7 @@ export class Service {
     const metadata = this.store.thread(id)!;
     const thread: Thread = {
       ...metadata,
+      modelProvider: typeof native.modelProvider === 'string' ? native.modelProvider : undefined,
       expiredQuestion: this.store.hasExpiredQuestion(id),
       state: metadata.executionPending ? 'unknown' : page.state,
       messages: page.messages,
@@ -1329,9 +1367,13 @@ export class Service {
         'This conversation already has an unfinished operation. Check its result first.',
         409,
       );
-    await this.conversationOwner(id);
+    const { native: owner } = await this.conversationOwner(id);
     await this.requireProject(project.id);
     const nativeInput = await this.input(project.id, prompt, attachments);
+    if (owner.modelProvider === 'openai') {
+      const { modelProvider } = await this.modelSettings.configuration.read(project.path);
+      await this.codexAccount.requireForSend(modelProvider, owner.modelProvider);
+    }
     const { existing } = this.store.begin(operationId, id, kind, input, prompt);
     if (existing) return existing;
     thread.pending = { id: operationId, text: prompt, state: 'dispatching', kind };

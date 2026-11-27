@@ -21,7 +21,7 @@ async function imported(page: Page, writer: 'busy' | 'once') {
     { project: project.id, id: thread.id },
   );
   await page.reload();
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await expect(page.getByLabel('Message Codex')).toBeEnabled();
   return thread.id as string;
 }

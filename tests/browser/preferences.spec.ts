@@ -401,7 +401,7 @@ test('font previews and chat typography persist alongside legacy interaction pre
     ),
   );
   await page.reload();
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await page.getByLabel('Message Codex').fill('Preserve draft across font changes');
   const sidebarWidth = (await page.locator('.sidebar').boundingBox())!.width;
   await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();

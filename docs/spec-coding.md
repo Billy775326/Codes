@@ -37,6 +37,12 @@ For changes to this contract, test a trusted project override, stale user-layer 
 - New drafts use the Codex App Server's startup directory by default and acquire a native thread ID on first send. A directory chosen for a draft becomes the explicit `cwd` passed to Codex. Use the returned native `cwd` to verify working-directory ownership. Existing conversation history, files, and execution use the directory reported by Codex for that thread.
 - Codes keeps local metadata only for web delivery, files, preferences, and compatibility with existing receipts and queues. Derive workspace keys from native cwd without requiring project registration. An unresolved directory change must not replay queued paths in a new directory.
 
+## Connection and account status
+
+- Check browser reachability with the authenticated workspace cursor and the event stream handshake. Keep one stream per visible tab, scoped to the selected conversation plus workspace metadata. Load the selected history separately and replay buffered events newer than its snapshot cursor. A history error only affects that conversation.
+- Check the Codex App Server handshake independently of browser authentication. Read account status with `account/read` and `refreshToken: false`. Refresh after native account changes, on focus when stale, on manual request, and before starting new execution when stale. Show unknown when the installed CLI or effective provider cannot confirm the state.
+- Block new execution only for a confirmed missing or stale account for the built-in OpenAI provider. Preserve drafts, receipts, and queue positions. Account checks never dispatch a task, resume a held queue, or restart a running App Server. If terminal login and App Server state differ, show the restart action for after active work finishes.
+
 ## Launcher lifecycle
 
 Keep foreground launch available. Background start waits for the initial listener and writes private logs. Lifecycle commands select the same data directory as startup and verify the current lock owner and database before stopping a process. Restart captures the original startup environment before shutdown and keeps it in memory. The launcher uses the server's graceful shutdown and lets the server release its own lock.

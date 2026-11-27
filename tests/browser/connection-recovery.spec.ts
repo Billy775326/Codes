@@ -39,9 +39,10 @@ test('a proxy HTML failure is identified on the first snapshot failure and expli
   ).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('HTTP 502');
   await expect(page.getByRole('alert')).not.toContainText('Check the result');
+  await expect(page.locator('.connection')).toHaveText('Ready');
   fail = false;
   await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByLabel('Message Codex')).toHaveValue(
     'Keep the draft through a proxy error',
@@ -62,7 +63,7 @@ test('a proven completed receipt is cleared after snapshot recovery without rese
     if (request.method() === 'POST' && request.url().endsWith('/send')) sends++;
   });
   await page.reload();
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await expect
     .poll(() => page.evaluate((id) => localStorage.getItem('codes.operation.' + id), id))
     .toBeNull();
@@ -86,7 +87,7 @@ test('an unknown operation receipt remains protected even when the snapshot has 
   );
   await page.getByLabel('Message Codex').fill('Do not resend an uncertain task');
   await page.reload();
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await expect(page.getByRole('button', { name: 'Check result', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
   expect(await page.evaluate((id) => localStorage.getItem('codes.operation.' + id), id)).toBe(
@@ -122,7 +123,7 @@ test('Check result refreshes a failed subscription after proving the browser req
   ).toBeVisible();
   fail = false;
   await page.getByRole('button', { name: 'Check result', exact: true }).click();
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   await expect(page.getByRole('alert')).toContainText('not recorded');
   expect(sends).toBe(0);
@@ -164,7 +165,7 @@ test('a hidden tab releases its event connection and resumes from a fresh snapsh
     });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
   await expect(page.getByLabel('Message Codex')).toHaveValue('Keep draft while the tab is hidden');
   await expect(page.getByTestId('message-user')).toHaveCount(1);
   expect(
@@ -195,19 +196,23 @@ for (const width of [1440, 320])
     await expect(page.getByRole('alert')).toContainText('HTTP 403');
     await page.getByLabel('Message Codex').fill('Keep the new draft through reconnection');
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
-    const reconnect = page.getByRole('button', { name: 'Reconnect updates', exact: true });
+    const reconnect = page.getByRole('button', { name: 'Reconnect web', exact: true });
     const connection = page.locator(
       width <= 700 ? '.header-connection-controls' : '.workspace-connection',
     );
-    await expect(
-      connection.getByRole('button', { name: 'Reconnect updates', exact: true }),
-    ).toBeInViewport();
+    const trigger = connection.getByRole('button', {
+      name: 'Connection: Web disconnected',
+      exact: true,
+    });
+    await expect(trigger).toBeInViewport();
+    await trigger.click();
+    await expect(reconnect).toBeInViewport();
     await expect(reconnect).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     fail = false;
     await reconnect.click();
     await expect(
-      connection.getByRole('status', { name: 'Connection: Connected', exact: true }),
+      connection.getByRole('button', { name: 'Connection: Ready', exact: true }),
     ).toBeVisible();
     await expect(reconnect).toHaveCount(0);
     await expect(page.getByRole('alert')).toHaveCount(0);
@@ -216,3 +221,74 @@ for (const width of [1440, 320])
     );
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
   });
+
+test('a signed-out Codex account keeps the web workspace and its draft available', async ({
+  page,
+}) => {
+  let account = 'signed-out';
+  let sends = 0;
+  await page.route('**/api/connection/codex?*', (route) =>
+    route.fulfill({
+      json: { system: { runtime: 'mock', state: 'ready', version: 'simulator' }, account },
+    }),
+  );
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/(threads|send)$/.test(request.url())) sends++;
+  });
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await page.getByLabel('Message Codex').fill('Keep my first Codex draft');
+  await page.getByRole('button', { name: 'Connection: Codex is not signed in.' }).click();
+  const connection = page.getByRole('dialog', { name: 'Connection status' });
+  await expect(connection).toContainText('Web connected');
+  await expect(connection).toContainText('Codex connected');
+  await expect(connection).toContainText('codex login');
+  await expect(connection.getByRole('button', { name: 'Copy sign-in command' })).toBeVisible();
+  const send = page.getByRole('button', { name: 'Send message', exact: true });
+  await expect(send).toBeDisabled();
+  account = 'reload-required';
+  await connection.getByRole('button', { name: 'Check again' }).click();
+  await expect(connection).toContainText('codes restart');
+  await expect(send).toBeDisabled();
+  account = 'signed-in';
+  await connection.getByRole('button', { name: 'Check again' }).click();
+  await expect(connection).toContainText('Signed in');
+  await page.keyboard.press('Escape');
+  await expect(connection).toBeHidden();
+  await expect(send).toBeEnabled();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('Keep my first Codex draft');
+  expect(sends).toBe(0);
+});
+
+test('a missing CLI offers a runtime retry within the connected browser workspace', async ({
+  page,
+}) => {
+  let runtime = 'unavailable';
+  await page.route('**/api/connection/codex?*', (route) =>
+    route.fulfill({
+      json: {
+        system: {
+          runtime: 'mock',
+          state: runtime,
+          version: 'simulator',
+          ...(runtime === 'unavailable'
+            ? { error: 'The Codex CLI executable could not be started.' }
+            : {}),
+        },
+        account: runtime === 'ready' ? 'signed-in' : 'unknown',
+      },
+    }),
+  );
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Connection: Codex disconnected' }).click();
+  const connection = page.getByRole('dialog', { name: 'Connection status' });
+  await expect(connection).toContainText('Web connected');
+  await expect(connection).toContainText('The Codex CLI executable could not be started.');
+  await expect(connection).toContainText('Not checked');
+  runtime = 'ready';
+  await connection.getByRole('button', { name: 'Retry Codex' }).click();
+  await expect(page.getByRole('button', { name: 'Connection: Ready' })).toBeVisible();
+});

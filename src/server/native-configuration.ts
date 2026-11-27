@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { effectiveModelProvider } from './codex-account.js';
 import type { Driver } from '../codex/driver.js';
 import { AppError, record } from '../shared/errors.js';
 import {
@@ -164,8 +165,12 @@ export class NativeConfiguration {
     }
   }
 
-  async read(cwd: string, layers = false) {
-    const raw = await this.driver.call('config/read', { cwd, includeLayers: layers });
+  async read(cwd: string | undefined, layers = false, timeoutMs?: number) {
+    const params = { cwd, includeLayers: layers };
+    const raw =
+      timeoutMs === undefined
+        ? await this.driver.call('config/read', params)
+        : await this.driver.call('config/read', params, timeoutMs);
     const parsed = responseSchema.safeParse(raw);
     if (!parsed.success)
       throw new AppError('PROTOCOL_ERROR', 'Codex returned invalid execution configuration.', 502);
@@ -176,6 +181,7 @@ export class NativeConfiguration {
     );
     return {
       key: digest([this.driver.epoch, raw.config, raw.origins ?? {}]),
+      modelProvider: effectiveModelProvider(raw.config),
       model: config.model ?? undefined,
       effort: config.model_reasoning_effort ?? undefined,
       planEffort: config.plan_mode_reasoning_effort ?? undefined,
@@ -198,7 +204,7 @@ export class NativeConfiguration {
   }
 
   async overview(cwd: string): Promise<NativeConfigurationSnapshot> {
-    const { key: _key, ...settings } = await this.read(cwd, true);
+    const { key: _key, modelProvider: _provider, ...settings } = await this.read(cwd, true);
     return settings;
   }
 

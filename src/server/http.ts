@@ -168,6 +168,14 @@ export async function application(
         }
         if (url.pathname === '/api/system' && method === 'GET')
           return json(response, service.system());
+        if (url.pathname === '/api/connection/codex' && (method === 'GET' || method === 'POST'))
+          return json(
+            response,
+            await service.checkConnection(
+              url.searchParams.get('projectId') ?? undefined,
+              method === 'POST',
+            ),
+          );
         if (url.pathname === '/api/maintenance' && method === 'POST') {
           const { action } = z
             .object({ action: z.enum(['start', 'cancel']) })
@@ -214,11 +222,15 @@ export async function application(
             'events',
             id,
             async () => {
-              if (id) {
+              const scope = url.searchParams.get('scope');
+              if (scope === 'workspace') {
+                if (id.length > 200)
+                  throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
+              } else if (id) {
                 const thread = service.store.thread(id);
                 if (!thread) throw new AppError('THREAD_NOT_FOUND', 'Conversation not found.', 404);
                 service.project(thread.projectId);
-              } else if (url.searchParams.get('scope') !== 'conversations')
+              } else if (scope !== 'conversations')
                 service.project(url.searchParams.get('projectId') ?? '');
               service.events.checkCapacity();
               response.writeHead(200, {

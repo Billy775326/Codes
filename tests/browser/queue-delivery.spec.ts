@@ -10,7 +10,7 @@ for (const width of [1440, 390])
       .getByLabel('Workspace access token')
       .fill('test-only-browser-token-not-a-real-secret');
     await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
-    await expect(page.locator('.connection')).toHaveText('Connected');
+    await expect(page.locator('.connection')).toHaveText('Ready');
     const input = page.getByLabel('Message Codex');
     await input.fill('[hold] Original task ' + Date.now());
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
@@ -26,7 +26,7 @@ for (const width of [1440, 390])
     await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
     await expect(queue).toHaveCount(0);
     await page.reload();
-    await expect(page.locator('.connection')).toHaveText('Connected');
+    await expect(page.locator('.connection')).toHaveText('Ready');
     await expect(page.getByRole('button', { name: 'Stop task', exact: true })).toBeEnabled();
     await expect(queue).toHaveCount(0);
     await input.fill('Remaining waiting message');

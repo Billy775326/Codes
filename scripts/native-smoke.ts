@@ -43,6 +43,10 @@ const service = new Service(
 
 try {
   const project = await service.addProject(cwd);
+  const connection = await service.checkConnection(project.id);
+  assert.equal(connection.system.state, 'ready', connection.system.error);
+  assert.equal(connection.account, 'signed-out');
+  await assert.rejects(service.create(project.id, {}, true), { code: 'CODEX_SIGN_IN_REQUIRED' });
   const configuration = service.modelSettings.configuration;
   const first = await configuration.read(cwd, true);
   assert.match(service.system().version, /^\d+\.\d+\.\d+/);

@@ -150,6 +150,7 @@ export interface Thread extends Summary {
   diff: string;
   diffTruncated?: boolean;
   resolvedModel?: string;
+  modelProvider?: string;
   nativeSettings?: NativeExecutionSettings;
   steering?: (Operation & { text: string; questionReply?: boolean })[];
   /** Native progress only; does not end the turn or release its execution lease. */
@@ -215,6 +216,12 @@ export interface CodexCapabilities {
   branch: boolean;
   review: boolean;
   turnSpeed: boolean;
+}
+export type CodexAccountStatus =
+  'signed-in' | 'signed-out' | 'not-required' | 'reload-required' | 'unknown';
+export interface ConnectionCheck {
+  system: System;
+  account: CodexAccountStatus;
 }
 export interface System {
   maintenance?: MaintenanceState;

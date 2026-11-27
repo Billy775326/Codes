@@ -47,6 +47,7 @@ import type {
 } from '../shared/types';
 import { ApiError, message, post, request, onAuthenticationRequired } from './api';
 import { Feed } from './feed';
+import { ConversationSnapshot } from './conversation-snapshot';
 import { Brand, Icon, IconButton } from './primitives';
 import { Login } from './Login';
 import { Conversations } from './Conversations';
@@ -72,7 +73,8 @@ import { ComposerControls, type ComposerControlsHandle } from './ComposerControl
 import { ControlTooltip } from './ControlTooltip';
 import { WorkingDirectoryDialog } from './WorkingDirectoryDialog';
 import { WorkspaceHeader } from './WorkspaceHeader';
-import { ConnectionStatus } from './ConnectionStatus';
+import { ConnectionStatus, type ConnectionStatusProps } from './ConnectionStatus';
+import { useCodexConnection } from './useCodexConnection';
 import { SidebarResize } from './SidebarResize';
 import './foundation.css';
 import './interactions.css';
@@ -81,6 +83,7 @@ import './style.css';
 import './workspace.css';
 import './preferences.css';
 import './composer.css';
+import './connection.css';
 
 const starters = [
   ['Explore this project', 'Explain the architecture of this project and its main entry points.'],
@@ -203,6 +206,8 @@ function App() {
   const [error, setError] = useState('');
   const [connection, setConnection] = useState('Connecting');
   const [connectionError, setConnectionError] = useState('');
+  const [conversationConnection, setConversationConnection] = useState('Connecting');
+  const [conversationError, setConversationError] = useState('');
   const [retry, setRetry] = useState(0);
   const [prefersDark, setPrefersDark] = useState(
     window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -273,14 +278,13 @@ function App() {
   const [directory, setDirectory] = useState('');
   const showHiddenFiles = preferences.showHiddenFiles;
   const [filePath, setFilePath] = useState<string>();
-  const feed = useRef<Feed | undefined>(undefined);
+  const selectedSnapshot = useRef<ConversationSnapshot | undefined>(undefined);
+  const webFeed = useRef<Feed<{ cursor: { seq: number; epoch: string } }> | undefined>(undefined);
   const projectRef = useRef(projectId);
   projectRef.current = projectId;
   const notice = useCallback((e: unknown) => {
     if (e instanceof ApiError && (e.code === 'AUTH_REQUIRED' || e.status === 401)) {
-      setError(
-        'Your session has expired. Sign in again to continue. Your draft is saved in this browser.',
-      );
+      setError('Codes session expired. Sign in again. Your draft is saved in this browser.');
       setBusy(false);
       setAuth('login');
     } else {
@@ -363,7 +367,10 @@ function App() {
   };
   const hasInput = !!draft.trim() || attachments.some((entry) => entry.kind === 'image');
   const connectionStatus = useCallback((status: string) => {
-    setConnection(status);
+    // A conversation switch replaces the subscription while the workspace stays reachable.
+    setConnection((current) =>
+      status === 'Connecting' && current === 'Connected' ? current : status,
+    );
     if (status === 'Connected') setConnectionError('');
   }, []);
   const connectionFailure = useCallback(
@@ -374,9 +381,34 @@ function App() {
     },
     [notice],
   );
-  const retryUpdates = () => {
-    setConnectionError('');
-    setRetry((value) => value + 1);
+  const retryConversation = () => {
+    setConversationError('');
+    if (selectedSnapshot.current) void selectedSnapshot.current.refresh();
+    else setRetry((value) => value + 1);
+  };
+  const codexConnection = useCodexConnection(
+    auth === 'ready' && connection === 'Connected',
+    contextProjectId,
+    setSystem,
+  );
+  const invalidateCodexConnection = codexConnection.invalidate;
+  const connectionControl: ConnectionStatusProps = {
+    web: connection,
+    webError: connectionError,
+    system,
+    account: codexConnection.account,
+    checking: codexConnection.checking,
+    checkFailed: codexConnection.checkFailed,
+    reconnect: () => void webFeed.current?.reconnect(),
+    retryCodex: codexConnection.retry,
+  };
+  const deliveryNotice = (error: unknown) => {
+    if (
+      error instanceof ApiError &&
+      ['CODEX_SIGN_IN_REQUIRED', 'CODEX_ACCOUNT_RELOAD'].includes(error.code)
+    )
+      invalidateCodexConnection();
+    notice(error);
   };
   const refreshProjects = useCallback(() => {
     const revision = ++projectMetadataRevision.current;
@@ -519,57 +551,6 @@ function App() {
       });
     return () => controller.abort();
   }, [projectId, threadId, auth, retry]);
-  useEffect(() => {
-    if (threadId || auth !== 'ready') return;
-    const stream = new Feed<{ cursor: { seq: number; epoch: string } }>(
-      '',
-      () => {},
-      (event) => {
-        if (event.kind === 'summary') {
-          const row = event.data as Summary;
-          if (notifyInBackground)
-            notifications.observe(
-              row,
-              true,
-              interfaceLanguages[latestPreferences.current.language].t,
-              latestPreferences.current.notificationEvents,
-            );
-          conversationUpdated(row, false);
-        } else if (event.kind === 'project') {
-          const { id, name } = event.data as Project;
-          projectUpdated({ id, name });
-        } else if (event.kind === 'project-archive') projectUpdated(event.data as ProjectUpdate);
-        else if (event.kind === 'codex-configuration') refreshConfiguration();
-        else if (event.kind === 'codex-catalog') {
-          refreshCatalog();
-          refreshConfiguration();
-        } else if (event.kind === 'runtime') setSystem(event.data as System);
-      },
-      connectionStatus,
-      'conversations',
-      connectionFailure,
-    );
-    const focus = () => {
-      if (notifyInBackground || document.visibilityState === 'visible') void stream.connect();
-      else stream.suspend();
-    };
-    focus();
-    if (!notifyInBackground) document.addEventListener('visibilitychange', focus);
-    window.addEventListener('online', focus);
-    return () => {
-      stream.close();
-      document.removeEventListener('visibilitychange', focus);
-      window.removeEventListener('online', focus);
-    };
-  }, [
-    threadId,
-    auth,
-    retry,
-    notifyInBackground,
-    notifications,
-    refreshCatalog,
-    refreshConfiguration,
-  ]);
   const select = useCallback(
     (id: string, owner = projectRef.current) => {
       const changed = id !== threadRef.current || owner !== projectRef.current;
@@ -583,8 +564,9 @@ function App() {
           leaving.projectId === projectRef.current
         )
           conversationViews.remember(leaving);
-        feed.current?.close();
-        setConnection(owner ? 'Connecting' : 'Ready');
+        selectedSnapshot.current?.close();
+        setConversationConnection('Connecting');
+        setConversationError('');
       }
       setThread((current) =>
         current?.id === id && current.projectId === owner ? current : undefined,
@@ -596,7 +578,6 @@ function App() {
         setDirectory('');
         setAttachments([]);
       }
-      setConnectionError('');
       setDiffTurn('');
       setDiffPath('');
       if (changed) setPanel(null);
@@ -605,6 +586,8 @@ function App() {
     [auth, conversationViews, switchConversation],
   );
   const loadingConversation = !!threadId && (!thread || thread.id !== threadId);
+  const deliveryConnection =
+    connection === 'Connected' && threadId ? conversationConnection : connection;
   const clearAcceptedDraft = (id: string, version: number, origin = id) => {
     // A network acknowledgement belongs to the captured draft, not whatever the
     // user has typed since dispatch. Preserve the next draft and its attachments.
@@ -637,7 +620,7 @@ function App() {
     stop,
   } = useMessageDelivery({
     auth,
-    connection,
+    connection: deliveryConnection,
     projectId,
     threadId,
     thread,
@@ -650,9 +633,9 @@ function App() {
     setBusy,
     setError,
     setThread,
-    notice,
-    connectionFailure,
-    reconnect: () => feed.current?.connect(),
+    notice: deliveryNotice,
+    connectionFailure: notice,
+    reconnect: () => selectedSnapshot.current?.refresh(),
     onCreated: (created) => {
       conversationUpdated(created);
       select(created.id);
@@ -697,7 +680,6 @@ function App() {
   }, [threadId, projectId, auth]);
   useEffect(() => {
     if (auth !== 'ready') return;
-    if (!threadId) return;
     const deltas = new Map<string, string>();
     let flushTimer: ReturnType<typeof setTimeout> | undefined;
     const flush = () => {
@@ -718,40 +700,6 @@ function App() {
       );
     };
     const event = (e: Envelope) => {
-      if (e.kind === 'codex-configuration') {
-        refreshConfiguration();
-        return;
-      }
-      if (e.kind === 'codex-catalog') {
-        refreshCatalog();
-        refreshConfiguration();
-        return;
-      }
-      if (e.kind === 'runtime') {
-        setSystem(e.data as System);
-        return;
-      }
-      if (e.kind === 'summary') {
-        const row = e.data as Summary;
-        if (notifyInBackground)
-          notifications.observe(
-            row,
-            true,
-            interfaceLanguages[latestPreferences.current.language].t,
-            latestPreferences.current.notificationEvents,
-          );
-        conversationUpdated(row, false);
-        return;
-      }
-      if (e.kind === 'project') {
-        const { id, name } = e.data as Project;
-        projectUpdated({ id, name });
-        return;
-      }
-      if (e.kind === 'project-archive') {
-        projectUpdated(e.data as ProjectUpdate);
-        return;
-      }
       if (e.threadId !== threadId) return;
       if (projectId && e.kind === 'item' && (e.data as Message).kind === 'change')
         fileCache.invalidate(projectId);
@@ -772,60 +720,109 @@ function App() {
       }
       setThread((thread) => applyConversationEvent(thread, e));
     };
-    const stream = new Feed(
+    const selected = threadId
+      ? new ConversationSnapshot(
+          threadId,
+          (snapshot) => {
+            if (threadRef.current !== threadId) return;
+            if (snapshot.thread.projectId !== projectId) {
+              fileCache.invalidate(projectId);
+              setSelection({ projectId: snapshot.thread.projectId, threadId });
+            }
+            if (snapshot.context) {
+              const workspace = snapshot.context.project;
+              setProjects((list) =>
+                list.some((entry) => entry.id === workspace.id) ? list : [...list, workspace],
+              );
+              setContext(snapshot.context);
+              if (!snapshot.context.directory.available) {
+                fileCache.invalidate(workspace.id);
+                setFilePath(undefined);
+              }
+            }
+            deltas.clear();
+            observeQueue();
+            setThread({
+              ...snapshot.thread,
+              messages: snapshot.thread.messages.slice(-historyLimit),
+            });
+            // Project summaries may arrive while subscriptions switch. The selected
+            // snapshot is also the authoritative summary for the navigation list.
+            if (notifyInBackground) notifications.observe(snapshot.thread, false);
+            conversationUpdated(snapshot.thread);
+          },
+          event,
+          (status, error) => {
+            if (status === 'Unavailable') conversationViews.forget(threadId);
+            setConversationConnection(status);
+            setConversationError(error ? message(error) : '');
+          },
+        )
+      : undefined;
+    selectedSnapshot.current = selected;
+
+    const stream = new Feed<{ cursor: { seq: number; epoch: string } }>(
       threadId,
-      (snapshot) => {
-        if (threadRef.current !== threadId) return;
-        if (snapshot.thread.id !== threadId)
-          throw new ApiError(
-            'The service returned a result for a different conversation.',
-            'INVALID_RESPONSE',
-          );
-        if (snapshot.thread.projectId !== projectId) {
-          fileCache.invalidate(projectId);
-          setSelection({ projectId: snapshot.thread.projectId, threadId });
-        }
-        if (snapshot.context) {
-          const workspace = snapshot.context.project;
-          setProjects((list) =>
-            list.some((entry) => entry.id === workspace.id) ? list : [...list, workspace],
-          );
-          setContext(snapshot.context);
-          if (!snapshot.context.directory.available) {
-            fileCache.invalidate(workspace.id);
-            setFilePath(undefined);
-          }
-        }
-        deltas.clear();
-        observeQueue();
-        setThread({ ...snapshot.thread, messages: snapshot.thread.messages.slice(-historyLimit) });
-        // Project summaries may arrive while subscriptions switch. The selected
-        // snapshot is also the authoritative summary for the navigation list.
-        if (notifyInBackground) notifications.observe(snapshot.thread, false);
-        conversationUpdated(snapshot.thread);
+      ({ cursor }) => selected?.prepare(cursor.epoch),
+      (event) => {
+        if (event.kind === 'summary') {
+          const row = event.data as Summary;
+          if (notifyInBackground)
+            notifications.observe(
+              row,
+              true,
+              interfaceLanguages[latestPreferences.current.language].t,
+              latestPreferences.current.notificationEvents,
+            );
+          conversationUpdated(row, false);
+        } else if (event.kind === 'project') {
+          const { id, name } = event.data as Project;
+          projectUpdated({ id, name });
+        } else if (event.kind === 'project-archive') projectUpdated(event.data as ProjectUpdate);
+        else if (event.kind === 'codex-configuration') refreshConfiguration();
+        else if (event.kind === 'codex-catalog') {
+          refreshCatalog();
+          refreshConfiguration();
+        } else if (event.kind === 'codex-account') invalidateCodexConnection();
+        else if (event.kind === 'runtime') {
+          setSystem(event.data as System);
+          invalidateCodexConnection();
+        } else selected?.receive(event);
       },
-      event,
       (status) => {
-        if (status === 'Unavailable' || status === 'Sign in required')
-          conversationViews.forget(threadId);
+        if (status === 'Connected') void selected?.refresh();
+        else selected?.close();
         connectionStatus(status);
       },
-      'threads',
+      'workspace',
       connectionFailure,
     );
-    feed.current = stream;
+    webFeed.current = stream;
+    const offline = () => stream.offline();
     const focus = () => {
-      if (notifyInBackground || document.visibilityState === 'visible') void stream.connect();
-      else stream.suspend();
+      if (!notifyInBackground && document.visibilityState !== 'visible') stream.suspend();
+      else if (!navigator.onLine) offline();
+      else void stream.connect();
     };
     focus();
     if (!notifyInBackground) document.addEventListener('visibilitychange', focus);
-    window.addEventListener('online', focus);
+    const online = () => {
+      setConnection('Connecting');
+      if (navigator.onLine && (notifyInBackground || document.visibilityState === 'visible'))
+        void stream.reconnect();
+      else focus();
+    };
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
     return () => {
       stream.close();
+      webFeed.current = undefined;
+      selected?.close();
+      selectedSnapshot.current = undefined;
+      window.removeEventListener('offline', offline);
       clearTimeout(flushTimer);
       document.removeEventListener('visibilitychange', focus);
-      window.removeEventListener('online', focus);
+      window.removeEventListener('online', online);
     };
   }, [
     threadId,
@@ -837,6 +834,11 @@ function App() {
     fileCache,
     refreshCatalog,
     refreshConfiguration,
+    invalidateCodexConnection,
+    connectionStatus,
+    connectionFailure,
+    conversationUpdated,
+    projectUpdated,
   ]);
   useComposerTextareaHeight(composer, draft, auth === 'ready' && !queueEditing);
   const changeDraft = useCallback(
@@ -970,7 +972,7 @@ function App() {
   ]);
   const send = () => {
     if (draft.trimStart().startsWith('/')) runCommand(draft.trim());
-    else void sendMessage();
+    else if (!sendReason) void sendMessage();
   };
   const submitAction = async (
     action: Action,
@@ -1033,7 +1035,9 @@ function App() {
       !thread.writerConflict &&
       ['running', 'waitingApproval', 'waitingInput', 'unknown'].includes(thread.state));
   const activity =
-    thread && !loadingConversation ? taskActivity(thread, connection === 'Connected') : undefined;
+    thread && !loadingConversation
+      ? taskActivity(thread, deliveryConnection === 'Connected')
+      : undefined;
   const outcome = isTurnOutcome(thread?.state) ? thread.state : undefined;
   const finishedTurn = outcome
     ? thread?.turns?.findLast((turn) => turn.id === thread.turnId && turn.status === outcome)
@@ -1213,12 +1217,24 @@ function App() {
   const deliveryMode = canSteer && preferences.followUp === 'steer' ? 'steer' : 'queue';
   const alternateDelivery = deliveryMode === 'queue' ? 'steer' : 'queue';
   const hasFollowUps = active || !!thread?.queue?.items.length;
+  const accountBlock =
+    !threadId || thread?.modelProvider === 'openai'
+      ? codexConnection.account === 'signed-out'
+        ? 'Codex is not signed in.'
+        : codexConnection.account === 'reload-required'
+          ? 'Restart Codes to load the updated Codex login.'
+          : undefined
+      : undefined;
   const deliveryReason = (
     [
       [thread?.archived, 'Conversation archived.'],
       [directoryBlocked, 'Project directory unavailable.'],
       [system?.maintenance, 'New tasks are paused for maintenance.'],
-      [connection !== 'Connected' || loadingConversation, 'Wait for the connection.'],
+      [connection !== 'Connected', 'Wait for the web connection.'],
+      [
+        loadingConversation || (threadId && conversationConnection !== 'Connected'),
+        'Wait for conversation updates.',
+      ],
       [thread?.writerConflict, 'Open in another Codex client'],
       [steerReceipt || queueRequest, 'Check the pending result first.'],
       [localAttachments.pending, 'Wait for attachments to upload.'],
@@ -1242,7 +1258,14 @@ function App() {
     ] as const
   ).find(([blocked]) => blocked)?.[1];
   const addNowReason = steerReason ?? deliveryReason;
-  const deliveryBlocked = !!deliveryReason;
+  const sendReason =
+    deliveryReason ??
+    (draft.trimStart().startsWith('/')
+      ? undefined
+      : system?.state === 'unavailable'
+        ? 'Codex disconnected'
+        : accountBlock);
+  const deliveryBlocked = !!sendReason;
   const queueBlocked = !!queueReason;
   const addBlocked = !!addNowReason;
   const tabQueues =
@@ -1267,7 +1290,7 @@ function App() {
     ? deliveryMode === 'queue'
       ? queueDescription
       : addNowDescription
-    : t('Starts a new turn.');
+    : t(sendReason ?? 'Starts a new turn.');
   const shortcut =
     phoneLayout ||
     preferences.enter === 'cmdAlways' ||
@@ -1380,10 +1403,13 @@ function App() {
     conversationModalOpen;
   const contextOverlay = contextDrawer && !(narrow && sidebar);
   const conversationLoadError =
-    connectionError ||
-    (['Unavailable', 'Disconnected'].includes(connection) ? 'Connection lost.' : '');
-  const canRetryUpdates = ['Reconnecting', 'Disconnected', 'Unavailable'].includes(connection);
-  const reconnect = canRetryUpdates && (!loadingConversation || preview) ? retryUpdates : undefined;
+    conversationError ||
+    (['Unavailable', 'Disconnected'].includes(conversationConnection)
+      ? 'Conversation updates unavailable.'
+      : '');
+  const canRetryConversation = ['Reconnecting', 'Disconnected', 'Unavailable'].includes(
+    conversationConnection,
+  );
   const withLanguage = (view: React.ReactNode) => (
     <InterfaceLanguageContext value={interfaceLanguage}>
       {view}
@@ -1480,7 +1506,7 @@ function App() {
           onModalChange={setConversationModalOpen}
         />
         <div className="workspace-footer" role="group" aria-label={t('Workspace controls')}>
-          <ConnectionStatus status={connection} placement="sidebar" onReconnect={reconnect} />
+          <ConnectionStatus {...connectionControl} placement="sidebar" />
           <div className="workspace-actions">
             <button
               className="icon-button"
@@ -1496,7 +1522,7 @@ function App() {
               onClick={() =>
                 void post('/logout')
                   .then(() => {
-                    feed.current?.close();
+                    webFeed.current?.close();
                     setAuth('login');
                   })
                   .catch(notice)
@@ -1531,7 +1557,7 @@ function App() {
           cwd={project?.path}
           onChooseDirectory={!threadId ? openDirectoryPicker : undefined}
           sidebarOpen={sidebar}
-          connection={connection}
+          connection={connectionControl}
           theme={theme}
           contextOpen={!!panel}
           busy={busy}
@@ -1540,7 +1566,6 @@ function App() {
           onNewConversation={newThread}
           onSettings={() => setDialog('preferences')}
           onReload={reloadPage}
-          onReconnect={reconnect}
           updateAvailable={updateAvailable}
           onToggleTheme={() =>
             changePreferences({ ...preferences, theme: theme === 'dark' ? 'light' : 'dark' })
@@ -1658,11 +1683,11 @@ function App() {
                     : t('Loading conversation…')}
                 </h2>
                 {conversationLoadError && <p role="alert">{t(conversationLoadError)}</p>}
-                {canRetryUpdates && (
+                {canRetryConversation && (
                   <button
                     onClick={() => {
                       setError('');
-                      retryUpdates();
+                      retryConversation();
                     }}
                   >
                     {t('Retry loading')}
@@ -1995,11 +2020,21 @@ function App() {
             />
           )}
 
-          {connectionError && (!loadingConversation || preview) && (
+          {connectionError && connection === 'Unavailable' && (
             <div className="error-banner" role="alert">
               <span>{t(connectionError)}</span>
             </div>
           )}
+          {conversationLoadError &&
+            (!loadingConversation || preview) &&
+            connection === 'Connected' && (
+              <div className="error-banner" role="alert">
+                <span>{t(conversationLoadError)}</span>
+                <button type="button" onClick={retryConversation}>
+                  {t('Retry loading')}
+                </button>
+              </div>
+            )}
           {thread?.writerConflict && (
             <section className="recovery" aria-label={t('Conversation ownership')}>
               <span>{t('Open in another Codex client')}</span>
@@ -2255,7 +2290,7 @@ function App() {
                     label={t('Send message')}
                     aria-keyshortcuts={keyShortcut}
                     aria-describedby="message-delivery-help"
-                    hint={t('Send message') + ' · ' + shortcut}
+                    hint={sendReason ? t(sendReason) : t('Send message') + ' · ' + shortcut}
                     onClick={() => void send()}
                     disabled={deliveryBlocked || !!receipt}
                   />
@@ -2336,7 +2371,7 @@ function App() {
           maintenanceBusy={maintenanceBusy}
           changeMaintenance={changeMaintenance}
           signInAfterTokenChange={(message) => {
-            feed.current?.close();
+            webFeed.current?.close();
             setDialog(undefined);
             setToken('');
             setError('');
@@ -2384,7 +2419,7 @@ function App() {
           changeMaintenance={changeMaintenance}
           thread={thread}
           configuration={codexDefaults}
-          connection={t(connection)}
+          connection={t(connection === 'Connected' ? 'Web connected' : connection)}
           close={() => setDialog(undefined)}
         />
       )}

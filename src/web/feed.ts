@@ -18,7 +18,7 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
     private snapshot: (snapshot: T) => void,
     private event: (event: Envelope) => void,
     private status: (state: string) => void,
-    private scope: 'threads' | 'conversations' = 'threads',
+    private scope: 'threads' | 'conversations' | 'workspace' = 'threads',
     private failure?: (error: unknown) => void,
   ) {}
   async connect() {
@@ -26,15 +26,20 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
     this.suspended = false;
     this.cleanup();
     const generation = ++this.generation;
-    this.status('Connecting');
+    this.status(this.attempts ? 'Reconnecting' : 'Connecting');
     this.ready = false;
     this.controller = new AbortController();
     try {
       const path =
-        this.scope === 'conversations'
-          ? '/conversations/snapshot'
-          : '/threads/' + encodeURIComponent(this.id) + '/snapshot';
-      const snapshot = await request<T>(path, {}, this.controller.signal);
+        this.scope === 'threads'
+          ? '/threads/' + encodeURIComponent(this.id) + '/snapshot'
+          : '/conversations/snapshot';
+      const snapshot = await request<T>(
+        path,
+        {},
+        this.controller.signal,
+        this.scope === 'threads' ? undefined : 5000,
+      );
       if (generation !== this.generation || this.disposed) return;
       if (
         !snapshot ||
@@ -49,8 +54,8 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
       this.snapshot(snapshot);
       let seq = snapshot.cursor.seq;
       const params = new URLSearchParams({ after: String(seq), epoch: snapshot.cursor.epoch });
-      if (this.scope === 'conversations') params.set('scope', 'conversations');
-      else params.set('threadId', this.id);
+      if (this.scope !== 'threads') params.set('scope', this.scope);
+      if (this.id) params.set('threadId', this.id);
       const source = new EventSource('/api/events?' + params);
       this.source = source;
       this.alive = Date.now();
@@ -145,6 +150,16 @@ export class Feed<T extends { cursor: { seq: number; epoch: string } } = Snapsho
     this.controller?.abort();
     clearTimeout(this.timer);
     clearInterval(this.health);
+  }
+  reconnect() {
+    this.attempts = 0;
+    return this.connect();
+  }
+  offline() {
+    if (this.disposed) return;
+    this.cleanup();
+    ++this.generation;
+    this.status('Disconnected');
   }
   /** Hidden tabs release HTTP/1 connections; execution stays on the server. */
   suspend() {

@@ -4,7 +4,7 @@ async function login(page: Page) {
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
-  await expect(page.locator('.connection')).toHaveText('Connected');
+  await expect(page.locator('.connection')).toHaveText('Ready');
 }
 test.afterEach(async ({ page }) => {
   const id = await page.evaluate(() => localStorage.getItem('codes.thread')).catch(() => null);

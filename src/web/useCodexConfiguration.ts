@@ -4,7 +4,7 @@ import type {
   NativeConfigurationSnapshot,
 } from '../shared/native-configuration';
 import type { Model, System } from '../shared/types';
-import { request } from './api';
+import { ApiError, request } from './api';
 
 interface CodexConfigurationOptions {
   auth: 'loading' | 'login' | 'ready';
@@ -88,7 +88,19 @@ export function useCodexConfiguration({
         setSystem(await request<System>('/system', {}, controller.signal));
       })
       .catch((error) => {
-        if (!controller.signal.aborted) notice(error);
+        if (controller.signal.aborted) return;
+        // The workspace connection status owns native startup diagnostics.
+        if (
+          error instanceof ApiError &&
+          [
+            'CLI_UNAVAILABLE',
+            'CLI_PROTOCOL_UNSUPPORTED',
+            'CLI_VERSION',
+            'RUNTIME_OFFLINE',
+          ].includes(error.code)
+        )
+          return;
+        notice(error);
       });
     return () => controller.abort();
   }, [auth, catalogRevision]);
