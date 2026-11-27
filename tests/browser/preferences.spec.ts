@@ -43,8 +43,8 @@ test('settings edit global Codex instructions without a selected project', async
     await page.getByRole('button', { name: 'General', exact: true }).click();
     await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('light');
     await tab.click();
-    await expect(editor).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-    await expect(editor).toHaveCSS('color', 'rgb(37, 37, 38)');
+    await expect(editor).toHaveCSS('background-color', 'rgb(251, 251, 252)');
+    await expect(editor).toHaveCSS('color', 'rgb(40, 45, 53)');
     await editor.press('Control+s');
     await expect(page.getByText('Global instructions saved.', { exact: true })).toBeVisible();
     await expect(tab).not.toHaveAttribute('aria-description');

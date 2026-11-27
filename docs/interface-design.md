@@ -14,7 +14,7 @@ Navigation selects a native conversation. The conversation owns reading and deli
 | File and document previews                        | [FilesPanel.tsx](../src/web/FilesPanel.tsx) and [files-panel.css](../src/web/files-panel.css)           |
 | Modal keyboard behavior                           | [InteractionDialog.tsx](../src/web/InteractionDialog.tsx)                                               |
 
-Use the shared palette for dark and light themes, including portaled dialogs. Chat and code default to 14 px. The browser can choose 12–24 px for chat and 10–20 px for code. Theme and language preferences stay in the current browser. [Settings by function](configuration.md#settings-by-function)
+Use the shared palette for dark and light themes, including portaled dialogs. Light mode uses neutral gray surfaces, brighter fields and dialogs, and blue-gray selection highlights. Chat and code default to 14 px. The browser can choose 12–24 px for chat and 10–20 px for code. Theme and language preferences stay in the current browser. [Settings by function](configuration.md#settings-by-function)
 
 Desktop sidebars resize by dragging the inner divider or using the arrow keys when it has focus. Double-click restores the default width. On desktop, the right panel docks when its preferred width and the navigation leave at least 560 px for the conversation. In smaller layouts or when the dock would leave too little room, it opens as a drawer. Drawers restore focus to their opener. Dialogs make the background inert, trap Tab, handle Escape, and return focus on close.
 

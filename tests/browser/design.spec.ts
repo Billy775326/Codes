@@ -178,11 +178,14 @@ test('light theme reaches sign-in and portaled archive dialogs', async ({ page }
   await page.getByLabel('Message Codex').fill(title);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
+  await expect(page.locator('.app .main')).toHaveCSS('background-color', 'rgb(243, 244, 245)');
+  await expect(page.locator('.app .sidebar')).toHaveCSS('background-color', 'rgb(236, 239, 242)');
+  await expect(page.locator('.app .composer')).toHaveCSS('background-color', 'rgb(251, 251, 252)');
   await page.getByRole('button', { name: 'Archive ' + title, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Archive this conversation?', exact: true });
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
-    'rgb(255, 255, 255)',
+    'rgb(251, 251, 252)',
   );
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
@@ -191,7 +194,7 @@ test('light theme reaches sign-in and portaled archive dialogs', async ({ page }
     await page
       .locator('.login-shell')
       .evaluate((element) => getComputedStyle(element).backgroundColor),
-  ).toBe('rgb(250, 250, 250)');
+  ).toBe('rgb(243, 244, 245)');
 });
 
 test('a phone archive confirmation owns the modal while navigation stays inert', async ({
