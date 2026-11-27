@@ -4,7 +4,7 @@ umask 077
 
 fail() { printf 'Codes: %s\n' "$*" >&2; exit 1; }
 
-version=v0.2.1
+version=v0.2.2
 case "$(uname -s):$(uname -m)" in
   Linux:x86_64) platform=linux-x64 ;;
   Linux:aarch64|Linux:arm64) platform=linux-arm64 ;;

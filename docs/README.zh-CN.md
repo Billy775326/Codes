@@ -13,7 +13,7 @@ Codes 是面向单用户的 Linux 自托管 Codex 网页工作台。可以在浏
 ### 安装 Codes
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.2.1/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.2.2/scripts/install.sh | bash
 ```
 
 在终端选择界面语言和监听端口。安装器会显示工作区地址和新生成的访问令牌。安装包包含 Node.js，并将 `codes` 启动命令安装到 `~/.local/bin`。[安装和升级](operations.md#install-or-upgrade-a-release)

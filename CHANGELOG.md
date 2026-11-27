@@ -2,19 +2,18 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-27
+
 ### Added
 
 - Show context-window usage beside the composer with token counts on hover or keyboard focus. Find plan limits, reset details, and recent activity under Usage & runtime when Codex reports them.
 - Redeem one earned usage-limit reset from Usage & runtime and see the refreshed limits and remaining resets.
 - License the Codes application source under MIT and include the license in Linux installation bundles.
+- Add English and Simplified Chinese guides for first-time contributors.
 
 ### Changed
 
-- Focus the message field on the first Tab from the unfocused workspace.
-
-### Fixed
-
-- Keep Tab navigation in the workspace after the composer controls so keyboard users can reach the header, conversation, and sidebars.
+- Start Tab navigation at the composer, then continue through the header, conversation, and sidebars.
 
 ## [0.2.1] - 2026-11-27
 

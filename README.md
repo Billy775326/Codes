@@ -23,7 +23,7 @@ Use a glibc-based Linux host (x86-64 or ARM64). Install Codex CLI as the Linux u
 ### Install Codes
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.2.1/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.2.2/scripts/install.sh | bash
 ```
 
 Choose the interface language and listener port in the terminal. The installer prints the workspace URL and a newly generated access token. The release includes Node.js and installs the `codes` launcher in `~/.local/bin`. [Install and upgrade](docs/operations.md#install-or-upgrade-a-release)
