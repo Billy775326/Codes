@@ -104,4 +104,6 @@ Thanks to the maintainers and contributors of the projects that shaped Codes.
 
 [Third-party components and licenses](LICENSES/THIRD-PARTY.md) · [Brand and attribution](docs/brand.md)
 
-The application source has no selected software license.
+## License
+
+The Codes application source is available under the [MIT License](LICENSE).

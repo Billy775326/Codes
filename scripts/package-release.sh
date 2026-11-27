@@ -18,7 +18,7 @@ trap 'rm -rf -- "$stage"' EXIT
 mkdir "$stage/runtime"
 cp -- "$(node -p 'process.execPath')" "$stage/runtime/node"
 cp -- "$(node -p 'require("node:path").resolve(process.execPath,"../../LICENSE")')" "$stage/runtime/LICENSE"
-cp -R -- dist bin LICENSES package.json package-lock.json README.md CHANGELOG.md "$stage/"
+cp -R -- dist bin LICENSE LICENSES package.json package-lock.json README.md CHANGELOG.md "$stage/"
 (cd "$stage" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
 mkdir -p "$output"
 archive=codes-v$version-$platform.tar.gz

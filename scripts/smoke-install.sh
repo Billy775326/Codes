@@ -71,6 +71,8 @@ printf '2\n0\n%s\n%s\n' "$(<"$stage/busy-port")" "$port" |
 codes=$CODES_BIN_DIR/codes
 version=$(node -p 'require("./package.json").version')
 [[ $("$codes" --version) == "v$version" ]]
+cmp LICENSE "$CODES_APP_DIR/current/LICENSE"
+[[ $(node -p 'require(process.argv[1]).license' "$CODES_APP_DIR/current/package.json") == MIT ]]
 first_token=$(<"$CODES_DATA_DIR/access-token")
 [[ $first_token =~ ^[a-f0-9]{64}$ ]]
 [[ $(stat -c '%a' "$CODES_DATA_DIR/access-token") == 600 ]]

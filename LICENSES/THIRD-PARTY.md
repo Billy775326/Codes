@@ -41,4 +41,4 @@ Thank you to the maintainers and contributors behind the projects Codes uses and
 | Playwright                | Browser acceptance tests                            | [Apache-2.0 · Playwright](https://github.com/microsoft/playwright)                                                    |
 | Prettier                  | Source and documentation formatting                 | [MIT · Prettier](https://github.com/prettier/prettier)                                                                |
 
-Linux release bundles carry the Node.js license and notices in `runtime/LICENSE`, the notices supplied by npm packages in `node_modules`, and the Inter license in `LICENSES/OFL-Inter.txt`.
+Linux release bundles carry the [Codes MIT license](../LICENSE) at the bundle root, the Node.js license and notices in `runtime/LICENSE`, the notices supplied by npm packages in `node_modules`, and the Inter license in `LICENSES/OFL-Inter.txt`.

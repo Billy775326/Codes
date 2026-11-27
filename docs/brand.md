@@ -23,4 +23,4 @@ The owner supplied the V3 identity. Navigation and sign-in use the original icon
 - [Dark lockup](../public/brand/codes-lockup-dark.svg)
 - [Standalone icon](../public/brand/codes-icon.svg)
 
-Preserve the approved assets. The wordmark derives from Inter. The [Inter license](../LICENSES/OFL-Inter.txt) covers its font attribution. See the [README](../README.md) for the application source licensing status.
+Preserve the approved assets. The wordmark derives from Inter. The [Inter license](../LICENSES/OFL-Inter.txt) covers its font attribution. The application source is covered by the [MIT License](../LICENSE).

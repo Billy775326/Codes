@@ -6,6 +6,7 @@
 
 - Show context-window usage beside the composer with token counts on hover or keyboard focus. Find plan limits, reset details, and recent activity under Usage & runtime when Codex reports them.
 - Redeem one earned usage-limit reset from Usage & runtime and see the refreshed limits and remaining resets.
+- License the Codes application source under MIT and include the license in Linux installation bundles.
 
 ### Changed
 

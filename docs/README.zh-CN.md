@@ -56,3 +56,7 @@ npm start
 - **1Panel** 为设置分类和快速安装流程提供设计参考。[1Panel-dev/1Panel](https://github.com/1Panel-dev/1Panel)
 
 [第三方组件与许可证](../LICENSES/THIRD-PARTY.md) · [品牌与字体来源](zh-CN/brand.md)
+
+## 许可证
+
+Codes 应用源码采用 [MIT 许可证](../LICENSE)。
