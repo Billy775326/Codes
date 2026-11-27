@@ -11,6 +11,7 @@ import { NativeConfigurationSettings, executionForm } from './NativeConfiguratio
 import { InteractionDialog } from './InteractionDialog';
 import { NetworkSettings, networkForm } from './NetworkSettings';
 import { RuntimeSettings, runtimeForm } from './RuntimeSettings';
+import { UsageSettings } from './UsageSettings';
 import { GlobalInstructionsSettings, instructionsForm } from './GlobalInstructionsSettings';
 import { Icon, IconButton } from './primitives';
 import { NotificationSettings } from './NotificationSettings';
@@ -61,9 +62,10 @@ const settingsSections = [
   {
     id: 'runtime',
     scope: 'codex',
-    label: 'Codex CLI',
+    label: 'Codex settings',
     icon: 'terminal',
-    keywords: 'runtime cli codex request timeout 运行环境 运行时 请求 超时',
+    keywords:
+      'runtime cli codex request timeout usage billing quota limits credits reset token 运行环境 运行时 请求 超时 用量 计费 套餐 额度 限额 重置 点数',
   },
   {
     id: 'maintenance',
@@ -151,6 +153,8 @@ function ResetSettings({
   );
 }
 export function PreferencesDialog({
+  initialSection = 'preferences',
+  usageRevision,
   value,
   sidebarWidths,
   restoreSidebarWidths,
@@ -168,6 +172,8 @@ export function PreferencesDialog({
   changeMaintenance,
   signInAfterTokenChange,
 }: {
+  initialSection?: SettingsSection;
+  usageRevision: number;
   value: Preferences;
   sidebarWidths: SidebarWidths;
   restoreSidebarWidths: () => boolean;
@@ -189,7 +195,7 @@ export function PreferencesDialog({
   configurationChanged: () => void;
 }) {
   const { t } = useInterfaceLanguage();
-  const [section, setSection] = useState<SettingsSection>('preferences');
+  const [section, setSection] = useState<SettingsSection>(initialSection);
   const [sidebarWidthStatus, setSidebarWidthStatus] = useState<'saved' | 'error'>();
   const [networkTransferTarget, setNetworkTransferTarget] = useState<HTMLElement | null>(null);
   const [visited, setVisited] = useState({
@@ -201,6 +207,7 @@ export function PreferencesDialog({
     notifications: false,
     maintenance: false,
     backup: false,
+    [initialSection]: true,
   });
   const [configurationDraft, setConfigurationDraft] = useState(emptyFormDraft);
   const [networkDraft, setNetworkDraft] = useState(emptyFormDraft);
@@ -710,7 +717,8 @@ export function PreferencesDialog({
               </div>
             )}
             {visited.runtime && (
-              <div className="preferences-page" hidden={section !== 'runtime'}>
+              <div className="preferences-content" hidden={section !== 'runtime'}>
+                {section === 'runtime' && <UsageSettings key={usageRevision} />}
                 <RuntimeSettings onDraft={setRuntimeDraft} />
               </div>
             )}

@@ -4,7 +4,7 @@
 
 ### Added
 
-- Show reported context-window usage beside the composer. Open Usage and billing to see Codex plan windows, reset times, credit information, and recent account activity when the installed CLI reports them.
+- Show context-window usage beside the composer with token counts on hover or keyboard focus. Find plan limits, reset details, and recent activity under Codex settings when the CLI reports them.
 
 ## [0.2.1] - 2026-11-27
 

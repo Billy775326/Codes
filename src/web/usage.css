@@ -33,11 +33,9 @@
   background: var(--panel);
   content: '';
 }
-.usage-dialog .usage-section {
+.usage-settings .usage-section {
   display: grid;
   gap: 8px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
 }
 .usage-section h3,
 .usage-section h4,
@@ -76,18 +74,18 @@
 .usage-window + .usage-window {
   margin-top: 6px;
 }
-.usage-dialog meter {
+.usage-settings meter {
   width: 100%;
   height: 8px;
 }
-.usage-dialog meter::-webkit-meter-bar {
+.usage-settings meter::-webkit-meter-bar {
   border: 0;
   background: var(--line);
 }
-.usage-dialog meter::-webkit-meter-optimum-value {
+.usage-settings meter::-webkit-meter-optimum-value {
   background: var(--accent);
 }
-.usage-dialog meter::-moz-meter-bar {
+.usage-settings meter::-moz-meter-bar {
   background: var(--accent);
 }
 .usage-days {
@@ -97,12 +95,23 @@
   gap: 6px;
   list-style: none;
 }
-.usage-dialog .usage-dashboard-link {
+.usage-reset-credit {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.usage-settings .usage-dashboard-link {
   display: inline-flex;
   align-items: center;
   min-height: var(--control-size);
   margin-top: 8px;
   color: var(--link);
+}
+.usage-settings + .codex-runtime-settings {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 .status-dialog-actions {
   display: flex;

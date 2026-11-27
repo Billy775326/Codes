@@ -143,7 +143,7 @@ Restore the original working directory or its access permissions and choose **Re
 
 ## Runtime settings
 
-Use **Settings → Codex CLI** to change the general native RPC deadline from 1,000 to 300,000 ms. The usual default is 30,000 ms. Specialized operations keep their own deadlines. The saved value takes effect on restart. To recover from invalid settings, stop Codes, preserve the old `runtime-settings.json` outside its active path, and restart using the desired environment. [Execution features](conversation-settings.md)
+Use **Settings → Codex settings** to change the general native RPC deadline from 1,000 to 300,000 ms. The usual default is 30,000 ms. Specialized operations keep their own deadlines. The saved value takes effect on restart. To recover from invalid settings, stop Codes, preserve the old `runtime-settings.json` outside its active path, and restart using the desired environment. [Execution features](conversation-settings.md)
 
 ## Browser notifications
 

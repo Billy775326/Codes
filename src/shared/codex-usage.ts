@@ -11,12 +11,20 @@ export interface UsageLimit {
   secondary?: UsageWindow;
 }
 
+export interface UsageResetCredit {
+  status: 'available' | 'redeeming' | 'redeemed' | 'unknown';
+  grantedAt: number;
+  expiresAt?: number | null;
+  title?: string;
+}
+
 export interface AccountLimits {
   plan?: string;
   windows: UsageLimit[];
   creditBalance?: string;
   unlimitedCredits?: boolean;
   availableResets?: number;
+  resetCredits?: UsageResetCredit[];
 }
 
 export interface AccountActivity {

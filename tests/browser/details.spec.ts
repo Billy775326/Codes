@@ -12,16 +12,28 @@ async function send(page: Page, text: string) {
   await page.getByLabel('Message Codex').fill(text);
   await page.getByRole('button', { name: 'Send message', exact: true }).click();
 }
-test('the composer opens context, account limits and activity on a phone', async ({ page }) => {
+test('context hover previews tokens and opens detailed Codex settings on a phone', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 320, height: 740 });
-  await page.route('**/api/connection/codex/usage*', (route) =>
-    route.fulfill({
+  let usageReads = 0;
+  await page.route('**/api/connection/codex/usage*', (route) => {
+    usageReads++;
+    return route.fulfill({
       json: {
         limits: {
           status: 'reported',
           value: {
             plan: 'plus',
             availableResets: 2,
+            resetCredits: [
+              {
+                status: 'available',
+                title: 'Codex reset',
+                grantedAt: 1_799_000_000,
+                expiresAt: 1_801_000_000,
+              },
+            ],
             windows: [
               {
                 id: 'codex',
@@ -32,21 +44,37 @@ test('the composer opens context, account limits and activity on a phone', async
         },
         activity: { status: 'reported', value: { days: [{ date: '2026-11-27', tokens: 3456 }] } },
       },
-    }),
-  );
+    });
+  });
   await login(page);
   await send(page, 'Usage indicator fixture');
   await expect(page.locator('.turn-status').getByText('Completed', { exact: true })).toBeVisible();
   const context = page.getByRole('button', { name: 'Context window · 1% used', exact: true });
   await expect(context).toBeInViewport();
+  await context.hover();
+  const hint = page.locator('.control-tooltip');
+  await expect(hint).toContainText('1,200 / 128,000 tokens');
+  expect(usageReads).toBe(0);
+  await page.mouse.move(2, 2);
+  await page.keyboard.press('Escape');
+  await expect(hint).toBeHidden();
+  await context.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(context).toBeFocused();
+  await expect(hint).toContainText('1,200 / 128,000 tokens');
   await context.click();
-  const dialog = page.getByRole('dialog', { name: 'Usage and billing', exact: true });
-  await expect(dialog).toContainText('1,200 / 128,000 tokens');
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await expect(dialog.getByRole('group', { name: 'Codex settings', exact: true })).toBeVisible();
   await expect(dialog.getByRole('meter', { name: '5-hour limit' })).toHaveAttribute(
     'aria-valuetext',
     '75% remaining',
   );
   await expect(dialog.getByText(/^Resets /)).toBeVisible();
+  const resets = dialog.getByRole('region', { name: 'Usage limit resets' });
+  await expect(resets).toContainText('Available resets');
+  await expect(resets.getByText('2', { exact: true })).toBeVisible();
+  await expect(resets).toContainText('Codex reset');
+  await expect(resets.getByText(/^Expires /)).toBeVisible();
   await expect(dialog).toContainText('3,456 tokens');
   await expect(dialog.getByRole('link', { name: 'Open Codex usage dashboard' })).toHaveAttribute(
     'target',

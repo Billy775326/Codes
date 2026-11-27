@@ -198,7 +198,7 @@ test('runtime settings save independently of the active configuration and surviv
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const open = async () => {
     await page.getByRole('button', { name: 'Interaction settings', exact: true }).click();
-    await chooseSettingsSection(dialog, 'Codex CLI');
+    await chooseSettingsSection(dialog, 'Codex settings');
   };
   const path = '/api/settings/runtime';
   const get = async (): Promise<RuntimeSettingsSnapshot> => (await page.request.get(path)).json();
@@ -258,11 +258,11 @@ test('network and runtime drafts survive a tab switch and require confirmation t
   const timeout = dialog.getByLabel('Native request timeout (milliseconds)');
   await chooseSettingsSection(dialog, 'Network & access');
   await port.fill('28787');
-  await chooseSettingsSection(dialog, 'Codex CLI');
+  await chooseSettingsSection(dialog, 'Codex settings');
   await timeout.fill('77123');
   await chooseSettingsSection(dialog, 'Network & access');
   await expect(port).toHaveValue('28787');
-  await chooseSettingsSection(dialog, 'Codex CLI');
+  await chooseSettingsSection(dialog, 'Codex settings');
   await expect(timeout).toHaveValue('77123');
   await dialog.getByRole('button', { name: 'Close dialog' }).click();
   const discard = dialog.getByRole('group', { name: 'Discard unsaved settings?' });
@@ -270,7 +270,7 @@ test('network and runtime drafts survive a tab switch and require confirmation t
   await expect(keep).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(categories).toBeFocused();
-  await expect(categories).toHaveText('Codex CLI');
+  await expect(categories).toHaveText('Codex settings');
   await expect(timeout).toHaveValue('77123');
   await page.keyboard.press('Escape');
   await discard.getByRole('button', { name: 'Discard changes' }).click();

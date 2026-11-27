@@ -1,6 +1,7 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Usage and billing': '用量与计费',
+  'Codex settings': 'Codex 相关',
   'Context window': '上下文窗口',
   'Context window · {percent}% used': '上下文窗口 · 已用 {percent}%',
   '{percent}% used': '已用 {percent}%',
@@ -15,6 +16,14 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Secondary limit': '次要限额',
   'Resets {time}': '重置于 {time}',
   'Available resets': '可用重置次数',
+  'Usage limit resets': '额度重置',
+  'Reset credit': '重置额度',
+  Available: '可用',
+  Redeeming: '正在兑换',
+  Redeemed: '已兑换',
+  'Granted {time}': '发放于 {time}',
+  'Expires {time}': '到期于 {time}',
+  'Never expires': '长期有效',
   'Credit balance': '点数余额',
   Unlimited: '不限量',
   'Refresh usage': '刷新用量',

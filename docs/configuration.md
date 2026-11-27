@@ -17,7 +17,7 @@ The dialog marks sections with drafts and lets you review them before closing. I
 | **Instructions**     | Edit Codex global instructions                                                                                                       | Active Codex home                                      |
 | **Execution**        | Effective project model, reasoning, speed, approvals, sandbox, and supported native features                                         | Codex configuration layers for the execution directory |
 | **Network & access** | Listener, allowed origins, authentication mode, sign-in lifetime, and file-backed token rotation                                     | Codes server                                           |
-| **Codex CLI**        | Native request deadline                                                                                                              | Codes server                                           |
+| **Codex settings**   | Account usage, limit resets, and the native request deadline                                                                         | Active Codex account and Codes server                  |
 | **Maintenance**      | Task admission and connection diagnostics. Expand **Runtime paths** for the CLI version, launcher, and Codes data directory.         | Running Codes server                                   |
 | **Backup & restore** | SQLite backup and offline restore preparation, network configuration files, and browser preference files                             | Workspace data, server configuration, or this browser  |
 

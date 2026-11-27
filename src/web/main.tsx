@@ -69,7 +69,7 @@ import { FilesReadCache } from './files-read-cache';
 import { applyConversationEvent } from './conversation-events';
 import { reloadStaleWebBuildAfterSignIn, useWebBuild } from './useWebBuild';
 import { InteractionDialog, ReviewDialog, StatusDialog } from './InteractionDialog';
-import { ContextUsageButton, UsageDialog } from './UsageDialog';
+import { ContextUsageButton } from './UsageSettings';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
 import { ControlTooltip } from './ControlTooltip';
 import { WorkingDirectoryDialog } from './WorkingDirectoryDialog';
@@ -2400,8 +2400,10 @@ function App() {
           close={() => setLinkedFile(undefined)}
         />
       )}
-      {dialog === 'preferences' && (
+      {(dialog === 'preferences' || dialog === 'usage' || dialog === 'usage-from-status') && (
         <PreferencesDialog
+          initialSection={dialog === 'preferences' ? 'preferences' : 'runtime'}
+          usageRevision={usageRevision}
           system={system}
           maintenanceBusy={maintenanceBusy}
           changeMaintenance={changeMaintenance}
@@ -2423,7 +2425,7 @@ function App() {
           configurationChanged={refreshConfiguration}
           saveError={preferencesError}
           close={() => {
-            setDialog(undefined);
+            setDialog(dialog === 'usage-from-status' ? 'status' : undefined);
           }}
           change={changePreferences}
           changeNotifications={(patch) =>
@@ -2464,13 +2466,6 @@ function App() {
           connection={t(connection === 'Connected' ? 'Web connected' : connection)}
           openUsage={() => setDialog('usage-from-status')}
           close={() => setDialog(undefined)}
-        />
-      )}
-      {(dialog === 'usage' || dialog === 'usage-from-status') && (
-        <UsageDialog
-          key={usageRevision}
-          usage={thread?.usage}
-          close={() => setDialog(dialog === 'usage-from-status' ? 'status' : undefined)}
         />
       )}
       {forking && (

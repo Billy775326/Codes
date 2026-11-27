@@ -32,7 +32,7 @@ test('English is the default and Simplified Chinese persists without changing dr
   await expect(page.getByRole('combobox', { name: '主题', exact: true })).toHaveValue('light');
   await page.getByRole('button', { name: '网络与访问', exact: true }).click();
   await expect(page.getByRole('combobox', { name: '监听地址', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Codex CLI', exact: true }).click();
+  await page.getByRole('button', { name: 'Codex 相关', exact: true }).click();
   await expect(page.getByLabel('原生请求超时（毫秒）')).toBeVisible();
   await page.getByRole('button', { name: '关闭弹窗', exact: true }).click();
   await expect(page.getByLabel('给 Codex 发送消息')).toHaveValue(draft);

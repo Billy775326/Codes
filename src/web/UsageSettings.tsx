@@ -3,7 +3,6 @@ import type { CodexUsageSnapshot, UsageWindow } from '../shared/codex-usage';
 import type { Thread } from '../shared/types';
 import { request } from './api';
 import { useInterfaceLanguage } from './interface-language';
-import { InteractionDialog } from './InteractionDialog';
 import { Icon, IconButton } from './primitives';
 import './usage.css';
 
@@ -22,12 +21,18 @@ export function ContextUsageButton({ usage, open }: { usage: ContextUsage; open:
     percent === undefined
       ? t('Context window')
       : t('Context window · {percent}% used', { percent: percent.toLocaleString(locale) });
+  const amount = t(usage.contextWindow ? '{count} tokens' : '{count} tokens; window unknown', {
+    count:
+      usage.contextTokens.toLocaleString(locale) +
+      (usage.contextWindow ? ' / ' + usage.contextWindow.toLocaleString(locale) : ''),
+  });
   return (
     <button
       type="button"
       className="icon-button context-usage-button"
       aria-label={label}
-      data-tooltip={label}
+      aria-description={amount}
+      data-tooltip={`${label} · ${amount}`}
       aria-haspopup="dialog"
       onClick={open}
     >
@@ -88,7 +93,7 @@ function LimitWindow({ window, fallback }: { window: UsageWindow; fallback: stri
   );
 }
 
-export function UsageDialog({ usage, close }: { usage?: ContextUsage; close: () => void }) {
+export function UsageSettings() {
   const { t, locale } = useInterfaceLanguage();
   const [refresh, setRefresh] = useState(0);
   const [snapshot, setSnapshot] = useState<CodexUsageSnapshot>();
@@ -114,39 +119,25 @@ export function UsageDialog({ usage, close }: { usage?: ContextUsage; close: () 
       });
     return () => controller.abort();
   }, [refresh]);
-  const percent = usage && contextPercent(usage);
   const limits = snapshot?.limits.status === 'reported' ? snapshot.limits.value : undefined;
   const activity = snapshot?.activity.status === 'reported' ? snapshot.activity.value : undefined;
   const date = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const timestamp = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  const creditStates = {
+    available: 'Available',
+    redeeming: 'Redeeming',
+    redeemed: 'Redeemed',
+    unknown: 'Unknown',
+  } as const;
   return (
-    <InteractionDialog title={t('Usage and billing')} close={close} className="usage-dialog">
-      <section className="usage-section">
-        <h3>{t('Context window')}</h3>
-        {usage ? (
-          <>
-            <div className="usage-row">
-              <span>
-                {t(usage.contextWindow ? '{count} tokens' : '{count} tokens; window unknown', {
-                  count:
-                    usage.contextTokens.toLocaleString(locale) +
-                    (usage.contextWindow ? ' / ' + usage.contextWindow.toLocaleString(locale) : ''),
-                })}
-              </span>
-              {percent !== undefined && (
-                <strong>{t('{percent}% used', { percent: percent.toLocaleString(locale) })}</strong>
-              )}
-            </div>
-            {percent !== undefined && (
-              <meter aria-label={t('Context window')} max={100} value={percent} />
-            )}
-          </>
-        ) : (
-          <p>{t('Not reported')}</p>
-        )}
-      </section>
-      <section className="usage-section" aria-busy={status === 'loading'}>
+    <div className="usage-settings">
+      <section
+        className="preferences-section usage-section"
+        aria-labelledby="codex-plan-usage"
+        aria-busy={status === 'loading'}
+      >
         <div className="usage-row usage-section-heading">
-          <h3>{t('Plan usage')}</h3>
+          <h3 id="codex-plan-usage">{t('Plan usage')}</h3>
           <IconButton
             icon="refresh"
             label={t('Refresh usage')}
@@ -176,12 +167,6 @@ export function UsageDialog({ usage, close }: { usage?: ContextUsage; close: () 
                 <strong>{limits.unlimitedCredits ? t('Unlimited') : limits.creditBalance}</strong>
               </div>
             )}
-            {limits.availableResets !== undefined && (
-              <div className="usage-row">
-                <span>{t('Available resets')}</span>
-                <strong>{limits.availableResets.toLocaleString(locale)}</strong>
-              </div>
-            )}
             {!limits.windows.length && <p>{t('No usage windows reported.')}</p>}
           </>
         ) : (
@@ -196,9 +181,43 @@ export function UsageDialog({ usage, close }: { usage?: ContextUsage; close: () 
           )
         )}
       </section>
+      {snapshot && (
+        <section className="preferences-section usage-section" aria-labelledby="codex-usage-resets">
+          <h3 id="codex-usage-resets">{t('Usage limit resets')}</h3>
+          <div className="usage-row">
+            <span>{t('Available resets')}</span>
+            <strong>{limits?.availableResets?.toLocaleString(locale) ?? t('Not reported')}</strong>
+          </div>
+          {!!limits?.resetCredits?.length && (
+            <ul className="usage-days">
+              {limits.resetCredits.map((credit, index) => (
+                <li key={`${credit.grantedAt}:${index}`} className="usage-reset-credit">
+                  <div className="usage-row">
+                    <span>{credit.title ?? t('Reset credit')}</span>
+                    <span>{t(creditStates[credit.status])}</span>
+                  </div>
+                  <p>{t('Granted {time}', { time: timestamp.format(credit.grantedAt * 1000) })}</p>
+                  {credit.expiresAt !== undefined && (
+                    <p>
+                      {credit.expiresAt === null
+                        ? t('Never expires')
+                        : t('Expires {time}', {
+                            time: timestamp.format(credit.expiresAt * 1000),
+                          })}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       {(activity || snapshot?.activity.status === 'unsupported') && (
-        <section className="usage-section">
-          <h3>{t('Recent token activity')}</h3>
+        <section
+          className="preferences-section usage-section"
+          aria-labelledby="codex-token-activity"
+        >
+          <h3 id="codex-token-activity">{t('Recent token activity')}</h3>
           {activity?.days?.length ? (
             <ul className="usage-days">
               {activity.days.map((day) => (
@@ -228,6 +247,6 @@ export function UsageDialog({ usage, close }: { usage?: ContextUsage; close: () 
       >
         {t('Open Codex usage dashboard')}
       </a>
-    </InteractionDialog>
+    </div>
   );
 }

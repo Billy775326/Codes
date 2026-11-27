@@ -60,7 +60,7 @@ export function RuntimeSettings({ onDraft }: { onDraft: (value: SettingsFormStat
 
   if (!snapshot)
     return (
-      <div className="preferences-content">
+      <div className="codex-runtime-settings">
         {error ? (
           <>
             <p role="alert">{t(error)}</p>
@@ -104,7 +104,7 @@ export function RuntimeSettings({ onDraft }: { onDraft: (value: SettingsFormStat
   return (
     <form
       id={runtimeForm}
-      className="preferences-content network-settings"
+      className="network-settings codex-runtime-settings"
       onSubmit={(event) => {
         event.preventDefault();
         void saveSettings();
