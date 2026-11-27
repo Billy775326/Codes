@@ -97,9 +97,12 @@
   gap: 6px;
   list-style: none;
 }
-.usage-dashboard-link {
-  display: inline-block;
-  margin-top: 12px;
+.usage-dialog .usage-dashboard-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-size);
+  margin-top: 8px;
+  color: var(--link);
 }
 .status-dialog-actions {
   display: flex;
