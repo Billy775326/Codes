@@ -2,7 +2,7 @@
 
 Codes 是面向单用户的 Linux 自托管 Codex 网页工作台。可以在浏览器里继续和管理 Codex 原生会话、审批操作、查看文件和代码变更。任务由 Linux 主机上的 Codex CLI 执行，关掉浏览器后，正在执行的任务会继续运行。
 
-[English quick start](../README.md#quick-start) · [完整文档索引](README.md)
+[English quick start](../README.md#quick-start) · [完整文档索引](README.md) · [参与开发](zh-CN/contributing.md)
 
 <a id="安装并启动"></a>
 

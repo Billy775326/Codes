@@ -2,7 +2,7 @@
 
 A self-hosted web UI for Codex CLI on Linux. Resume and manage Codex conversations, approve actions, preview files, and review code changes from your browser.
 
-[简体中文](docs/README.zh-CN.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md)
+[简体中文](docs/README.zh-CN.md) · [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 <a id="identity"></a>
 

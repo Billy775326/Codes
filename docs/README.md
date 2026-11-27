@@ -6,7 +6,7 @@ Start with the [English quick start](../README.md#quick-start) or [简体中文�
 
 | Goal                                                 | Guide                                                     |
 | ---------------------------------------------------- | --------------------------------------------------------- |
-| Register a directory and resume an existing chat     | [Projects and chats](conversations.md)                    |
+| Browse and resume native Codex conversations         | [Conversations](conversations.md)                         |
 | Send, queue, steer, branch, or answer Codex          | [Conversation workflow](conversation-workflow.md)         |
 | Upload files and choose what Codex receives          | [Composer attachments](image-attachments.md)              |
 | Preview files, read work history, or inspect changes | [Files, history, and changes](conversation-details.md)    |
@@ -19,6 +19,7 @@ Start with the [English quick start](../README.md#quick-start) or [简体中文�
 
 ## Develop and verify
 
+- [Contributor guide](../CONTRIBUTING.md) helps new contributors run a simulator, find the code for a feature, and select regression tests.
 - [Development](development.md) lists build commands, test fixtures, and the CLI compatibility checks.
 - [Regression test cases](test-cases.md) lists fixtures, actions, and expected results by feature.
 - [Architecture](architecture.md) explains process boundaries, task coordination, and resource limits.
