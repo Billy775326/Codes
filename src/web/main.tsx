@@ -69,7 +69,7 @@ import { FilesReadCache } from './files-read-cache';
 import { applyConversationEvent } from './conversation-events';
 import { reloadStaleWebBuildAfterSignIn, useWebBuild } from './useWebBuild';
 import { InteractionDialog, ReviewDialog, StatusDialog } from './InteractionDialog';
-import { ContextUsageButton, UsageDialog } from './UsageDialog';
+import { ContextUsageIndicator } from './UsageSettings';
 import { ComposerControls, type ComposerControlsHandle } from './ComposerControls';
 import { ControlTooltip } from './ControlTooltip';
 import { WorkingDirectoryDialog } from './WorkingDirectoryDialog';
@@ -153,7 +153,7 @@ function App() {
   const directoryBlocked = contextReady && !context.directory.available;
 
   const [dialog, setDialog] = useState<
-    'preferences' | 'review' | 'status' | 'codex-login' | 'usage' | 'usage-from-status'
+    'preferences' | 'review' | 'status' | 'codex-login' | 'usage-from-status'
   >();
   const [usageRevision, setUsageRevision] = useState(0);
   const [previewedImage, setPreviewedImage] = useState<string>();
@@ -2283,9 +2283,7 @@ function App() {
                     busy || loadingConversation || !!thread?.archived || !!thread?.managementPending
                   }
                 />
-                {thread?.usage && (
-                  <ContextUsageButton usage={thread.usage} open={() => setDialog('usage')} />
-                )}
+                {thread?.usage && <ContextUsageIndicator usage={thread.usage} />}
               </div>
               <div
                 className="composer-dispatch-actions"
@@ -2400,8 +2398,10 @@ function App() {
           close={() => setLinkedFile(undefined)}
         />
       )}
-      {dialog === 'preferences' && (
+      {(dialog === 'preferences' || dialog === 'usage-from-status') && (
         <PreferencesDialog
+          initialSection={dialog === 'preferences' ? 'preferences' : 'runtime'}
+          usageRevision={usageRevision}
           system={system}
           maintenanceBusy={maintenanceBusy}
           changeMaintenance={changeMaintenance}
@@ -2423,7 +2423,7 @@ function App() {
           configurationChanged={refreshConfiguration}
           saveError={preferencesError}
           close={() => {
-            setDialog(undefined);
+            setDialog(dialog === 'usage-from-status' ? 'status' : undefined);
           }}
           change={changePreferences}
           changeNotifications={(patch) =>
@@ -2464,13 +2464,6 @@ function App() {
           connection={t(connection === 'Connected' ? 'Web connected' : connection)}
           openUsage={() => setDialog('usage-from-status')}
           close={() => setDialog(undefined)}
-        />
-      )}
-      {(dialog === 'usage' || dialog === 'usage-from-status') && (
-        <UsageDialog
-          key={usageRevision}
-          usage={thread?.usage}
-          close={() => setDialog(dialog === 'usage-from-status' ? 'status' : undefined)}
         />
       )}
       {forking && (
