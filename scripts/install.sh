@@ -126,6 +126,7 @@ provision() {
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
+import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -138,6 +139,29 @@ const { host, port: listenerPort } = network.active;
 const localHost = host === '::1' ? '[::1]' : host;
 const localUrl = `http://${localHost}:${listenerPort}`;
 const browserUrl = network.active.origins.includes(new URL(localUrl).origin) ? localUrl : network.active.origins[0];
+
+function initialOrigins() {
+  const origins = network.active.origins;
+  if (env.CODES_PUBLIC_ORIGIN !== undefined) return origins;
+  let interfaces;
+  try {
+    interfaces = Object.values(networkInterfaces()).flat();
+  } catch (error) {
+    if (error.code !== 'ERR_SYSTEM_ERROR' || error.info?.syscall !== 'uv_interface_addresses') throw error;
+    console.warn(language === 'zh-CN'
+      ? '无法读取本机 IP，使用默认回环地址。'
+      : 'Could not read host IPs. Using the default loopback addresses.');
+    return origins;
+  }
+  const hostOrigins = interfaces
+    .filter((entry) => entry && !entry.internal && !entry.scopeid)
+    .map(({ address, family }) => {
+      const hostname = family === 'IPv6' ? `[${address}]` : address;
+      return new URL(`http://${hostname}:${listenerPort}`).origin;
+    });
+  // The network settings schema accepts up to 32 origins, including loopback.
+  return [...new Set([...origins, ...hostOrigins])].slice(0, 32);
+}
 
 if (fresh === '1') {
   const probe = createServer();
@@ -170,7 +194,7 @@ if (fresh === '1' || (fileToken && (reinstall === '1' || !existsSync(tokenPath))
       writeSettingsFile(join(directory, 'network-settings.json'), {
         version: 1,
         revision: 0,
-        settings: network.active,
+        settings: { ...network.active, origins: initialOrigins() },
       });
     }
     if (fileToken) {

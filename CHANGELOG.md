@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Prepopulate Allowed addresses with the host's IP addresses on fresh installations that use the default browser origins.
+
 ## [0.2.0] - 2026-11-27
 
 ### Added

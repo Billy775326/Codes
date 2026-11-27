@@ -32,6 +32,20 @@ done
 exit 1
 EOF
 chmod +x "$stage/downloads/curl"
+cat >"$stage/interfaces.mjs" <<'EOF'
+import { syncBuiltinESMExports } from 'node:module';
+import os from 'node:os';
+
+os.networkInterfaces = () => ({
+  lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
+  eth0: [
+    { address: '192.0.2.10', family: 'IPv4', internal: false },
+    { address: '2001:db8::10', family: 'IPv6', internal: false, scopeid: 0 },
+    { address: 'fe80::10', family: 'IPv6', internal: false, scopeid: 2 },
+  ],
+});
+syncBuiltinESMExports();
+EOF
 install() {
   PATH="$stage/downloads:$original_path" bash scripts/install.sh
 }
@@ -52,6 +66,7 @@ done
 [[ -s $stage/busy-port ]]
 printf '2\n0\n%s\n%s\n' "$(<"$stage/busy-port")" "$port" |
   env -u CODES_LANGUAGE -u CODES_PORT PATH="$stage/downloads:$original_path" \
+    NODE_OPTIONS="--import=$stage/interfaces.mjs" \
     script --quiet --return --command 'bash scripts/install.sh' /dev/null >"$stage/first-install"
 codes=$CODES_BIN_DIR/codes
 version=$(node -p 'require("./package.json").version')
@@ -65,11 +80,28 @@ grep -Fq '端口已被占用' "$stage/first-install"
 grep -Fq -- "令牌文件： $CODES_DATA_DIR/access-token" "$stage/first-install"
 grep -Fq -- "工作区访问令牌： $first_token" "$stage/first-install"
 grep -Fq -- "工作区地址： $origin" "$stage/first-install"
+node --input-type=module - "$CODES_DATA_DIR/network-settings.json" "$port" <<'NODE'
+import { deepStrictEqual, equal } from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const [path, port] = process.argv.slice(2);
+const { settings } = JSON.parse(readFileSync(path, 'utf8'));
+equal(settings.host, '127.0.0.1');
+deepStrictEqual(settings.origins, [
+  `http://127.0.0.1:${port}`,
+  `http://localhost:${port}`,
+  `http://[::1]:${port}`,
+  `http://192.0.2.10:${port}`,
+  `http://[2001:db8::10]:${port}`,
+]);
+NODE
+network_before=$(sha256sum "$CODES_DATA_DIR/network-settings.json")
 env -u CODES_PORT "$codes" start
 "$codes" status
 curl --fail --silent --show-error "$origin/" >"$stage/index.html"
 grep -q '<title>Codes</title>' "$stage/index.html"
 grep -q '<html lang="zh-CN">' "$stage/index.html"
+curl --fail --silent --show-error --header "Host: 192.0.2.10:$port" "$origin/" >/dev/null
 if install >"$stage/running-reinstall" 2>&1; then
   echo 'The installer reset the token while Codes was running.' >&2
   exit 1
@@ -78,6 +110,7 @@ fi
 "$codes" stop
 
 CODES_PORT=1 install >"$stage/reinstall"
+[[ $(sha256sum "$CODES_DATA_DIR/network-settings.json") == "$network_before" ]]
 new_token=$(<"$CODES_DATA_DIR/access-token")
 [[ $new_token =~ ^[a-f0-9]{64}$ && $new_token != "$first_token" ]]
 grep -Fq -- "工作区访问令牌： $new_token" "$stage/reinstall"
@@ -109,3 +142,14 @@ install >"$stage/upgrade"
 if grep -Fq -- "$new_token" "$stage/upgrade"; then exit 1; fi
 [[ $(readlink "$CODES_APP_DIR/current") == "releases/v$version" && -d $previous ]]
 [[ $(sha256sum "$CODES_DATA_DIR/codes.sqlite" "$CODES_DATA_DIR/access-token") == "$before" ]]
+[[ $(sha256sum "$CODES_DATA_DIR/network-settings.json") == "$network_before" ]]
+
+CODES_DATA_DIR="$stage/explicit" CODES_PUBLIC_ORIGIN=https://codes.example.test \
+  NODE_OPTIONS="--import=$stage/interfaces.mjs" install >"$stage/explicit-install"
+node --input-type=module - "$stage/explicit/network-settings.json" <<'NODE'
+import { deepStrictEqual } from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const { settings } = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+deepStrictEqual(settings.origins, ['https://codes.example.test']);
+NODE
