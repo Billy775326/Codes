@@ -84,8 +84,8 @@
 @media (max-width: 700px) {
   .app button.header-connection {
     width: auto;
-    height: auto;
-    max-width: min(38vw, 145px);
+    height: var(--control-size);
+    max-width: min(100%, 145px);
   }
   .connection-popover[data-placement='header'] {
     top: 86px;

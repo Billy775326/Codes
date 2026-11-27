@@ -1230,7 +1230,7 @@ function App() {
           ? 'Restart Codes to load the updated Codex login.'
           : undefined
       : undefined;
-  const deliveryReason = (
+  const deliveryReadiness = (
     [
       [thread?.archived, 'Conversation archived.'],
       [directoryBlocked, 'Project directory unavailable.'],
@@ -1245,9 +1245,10 @@ function App() {
       [localAttachments.pending, 'Wait for attachments to upload.'],
       [busy || thread?.managementPending, 'Wait for the current request.'],
       [!contextReady, 'Wait for project context.'],
-      [!hasInput, 'Write a message first.'],
     ] as const
   ).find(([blocked]) => blocked)?.[1];
+  const draftRequired = hasInput ? undefined : 'Write a message first.';
+  const deliveryReason = deliveryReadiness ?? draftRequired;
   const queueFull = (thread?.queue?.items.length ?? 0) >= 10;
   const queueReason = queueFull ? 'Queue full. Remove a queued message.' : deliveryReason;
   const steerReason = (
@@ -1263,13 +1264,14 @@ function App() {
     ] as const
   ).find(([blocked]) => blocked)?.[1];
   const addNowReason = steerReason ?? deliveryReason;
-  const sendReason =
-    deliveryReason ??
+  const sendReadiness =
+    deliveryReadiness ??
     (draft.trimStart().startsWith('/')
       ? undefined
       : system?.state === 'unavailable'
         ? 'Codex disconnected'
         : accountBlock);
+  const sendReason = sendReadiness ?? draftRequired;
   const deliveryBlocked = !!sendReason;
   const queueBlocked = !!queueReason;
   const addBlocked = !!addNowReason;
@@ -1295,7 +1297,7 @@ function App() {
     ? deliveryMode === 'queue'
       ? queueDescription
       : addNowDescription
-    : t(sendReason ?? 'Starts a new turn.');
+    : t(sendReadiness ?? 'Starts a new turn.');
   const shortcut =
     phoneLayout ||
     preferences.enter === 'cmdAlways' ||
