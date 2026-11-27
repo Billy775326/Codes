@@ -1398,24 +1398,9 @@ function App() {
   useEffect(() => {
     if (auth !== 'ready') return;
     const shortcut = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing) return;
       if (
-        event.key === 'Tab' &&
-        !event.shiftKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        !event.repeat &&
-        event.target === document.body
-      ) {
-        const input = composer.current;
-        if (input && !input.readOnly && input.checkVisibility() && !input.closest('[inert]')) {
-          event.preventDefault();
-          input.focus({ preventScroll: true });
-        }
-        return;
-      }
-      if (
+        !event.defaultPrevented &&
+        !event.isComposing &&
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === 'n' &&
         !event.shiftKey &&
@@ -1499,91 +1484,454 @@ function App() {
       }
       className={`app ${contextDrawer ? 'context-drawer' : panel ? 'has-panel' : ''} ${sidebar ? 'history-open' : ''}`}
     >
-      {sidebar && <div className="scrim" onClick={closeNavigation} />}
-      <aside
-        ref={navigationElement}
-        id="sidebar-navigation"
-        className={`sidebar ${sidebar ? 'open' : ''}`}
-        aria-label={t('Workspace navigation')}
-        inert={modalOpen || contextOverlay || undefined}
-        role={narrow && sidebar && !modalOpen ? 'dialog' : undefined}
-        aria-modal={narrow && sidebar && !modalOpen ? true : undefined}
-      >
-        <div className="sidebar-brand">
-          <Brand />
-          <IconButton
-            ref={navigationClose}
-            className="navigation-close"
-            icon="sidebar-collapse"
-            label={t('Close navigation')}
-            size={18}
-            onClick={closeNavigation}
-          />
-          <button
-            className="navigation-new"
-            type="button"
-            aria-label={t('New conversation')}
-            disabled={busy}
-            onClick={newThread}
-          >
-            <Icon name="newchat" size={16} />
-            {phoneLayout ? t('New') : t('New conversation')}
-          </button>
-        </div>
-        <Conversations
-          projects={projects}
-          currentDirectory={project?.path}
-          selectedId={threadId}
-          updates={sidebarUpdates}
-          connection={connection}
-          disabled={busy}
-          supportsCreatedSort={
-            system?.runtime === 'mock' || system?.capabilities?.conversationSort === true
-          }
-          onSelect={select}
-          onUpdated={conversationUpdated}
-          onModalChange={setConversationModalOpen}
-        />
-        <div className="workspace-footer" role="group" aria-label={t('Workspace controls')}>
-          <ConnectionStatus {...connectionControl} placement="sidebar" />
-          <div className="workspace-actions">
-            <button
-              className="icon-button"
-              aria-label={t('Interaction settings')}
-              data-tooltip=""
-              onClick={() => setDialog('preferences')}
-            >
-              <Icon name="settings" size={16} />
-            </button>
-            <IconButton
-              icon="logout"
-              label={t('Sign out')}
-              onClick={() =>
-                void post('/logout')
-                  .then(() => {
-                    webFeed.current?.close();
-                    setAuth('login');
-                  })
-                  .catch(notice)
-              }
-              className="workspace-sign-out"
-            />
-          </div>
-        </div>
-      </aside>
-      {sidebar && !narrow && !modalOpen && !contextOverlay && (
-        <SidebarResize
-          side="navigation"
-          range={sidebarLayout.navigation}
-          workspace={workspaceElement}
-          change={changeNavigationWidth}
-        />
-      )}
       <main
         className="main"
         aria-label={t('Conversation workspace')}
         inert={modalOpen || (narrow && sidebar) || contextOverlay || undefined}
       >
+        <div className="composer-area">
+          <div
+            className={`composer ${active ? 'is-active' : ''}`}
+            style={{ display: queueEditing || (!projectId && !threadId) ? 'none' : undefined }}
+          >
+            <textarea
+              onPaste={localAttachments.paste}
+              aria-label={t('Message Codex')}
+              aria-describedby="message-delivery-help"
+              aria-keyshortcuts={
+                keyShortcut + (threadId ? ' ArrowUp ArrowDown' : '') + (tabQueues ? ' Tab' : '')
+              }
+              ref={composer}
+              value={draft}
+              readOnly={!!thread?.archived || !!thread?.managementPending}
+              onChange={(e) => changeDraft(e.target.value)}
+              placeholder={
+                thread?.archived
+                  ? t('Restore this conversation to continue…')
+                  : thread?.managementPending
+                    ? t('Check conversation status to continue…')
+                    : t('Ask Codex anything')
+              }
+              maxLength={50_000}
+              onKeyDown={(e) => {
+                const recall = recallComposerMessage(e, composerHistory.current, () =>
+                  thread?.id === threadId && thread.projectId === projectId
+                    ? reviewMessages
+                    : (preview?.messages ?? []),
+                );
+                if (recall) {
+                  e.preventDefault();
+                  composerHistory.current = recall.history;
+                  const input = e.currentTarget;
+                  input.setSelectionRange(input.value.length, input.value.length);
+                  if (recall.text !== input.value) changeDraft(recall.text, true);
+                  return;
+                }
+                if (e.key === 'Escape' && draft.startsWith('/')) {
+                  e.preventDefault();
+                  changeDraft('');
+                  return;
+                }
+                if (e.nativeEvent.isComposing || e.altKey) return;
+                const modifier = e.ctrlKey || e.metaKey;
+                if (e.key === 'Tab' && tabQueues && !modifier && !e.shiftKey && !e.repeat) {
+                  e.preventDefault();
+                  followUp('queue');
+                  return;
+                }
+                if (e.key !== 'Enter') return;
+                if (modifier && e.shiftKey && active) {
+                  e.preventDefault();
+                  if (!busy && !steerReceipt && !queueRequest) followUp(alternateDelivery);
+                  return;
+                }
+                const sendKey =
+                  modifier ||
+                  (!phoneLayout &&
+                    preferences.enter !== 'cmdAlways' &&
+                    (preferences.enter !== 'cmdIfMultiline' || !draft.includes('\n')));
+                if (!e.shiftKey && sendKey) {
+                  e.preventDefault();
+                  if (busy || steerReceipt || queueRequest) return;
+                  if (hasFollowUps) followUp();
+                  else if (!receipt) void send();
+                }
+              }}
+            />
+            <div className="composer-toolbar">
+              <div className="composer-tools">
+                <PanelMenu
+                  label={t('Attach files')}
+                  className="composer-attachment-menu"
+                  disabled={attachmentBlocked}
+                  iconOnly
+                  trigger={<Icon name="plus" size={17} />}
+                >
+                  <button
+                    type="button"
+                    data-close-menu
+                    onClick={() => localAttachments.picker.current?.click()}
+                  >
+                    <Icon name="upload" size={16} />
+                    {t('Upload from device')}
+                  </button>
+                  <button type="button" data-close-menu onClick={() => setPanel('files')}>
+                    <Icon name="folder" size={16} />
+                    {t('Browse project files')}
+                  </button>
+                </PanelMenu>
+                <input
+                  hidden
+                  ref={localAttachments.picker}
+                  type="file"
+                  multiple
+                  aria-label={t('Choose local files')}
+                  onChange={localAttachments.choose}
+                />
+                <ComposerControls
+                  ref={composerControls}
+                  mode={mode}
+                  changeMode={setMode}
+                  configuration={codexDefaults}
+                  models={models}
+                  autoReviewReady={autoReviewReady}
+                  saveConfiguration={saveComposerConfiguration}
+                  planReady={planReady}
+                  disabled={
+                    busy || loadingConversation || !!thread?.archived || !!thread?.managementPending
+                  }
+                />
+                {thread?.usage && <ContextUsageIndicator usage={thread.usage} />}
+              </div>
+              <div
+                className="composer-dispatch-actions"
+                role="group"
+                aria-label={t('Message actions')}
+                data-follow-up={hasFollowUps || undefined}
+              >
+                {hasFollowUps ? (
+                  <IconButton
+                    icon="queue"
+                    size={17}
+                    label={t('Queue message')}
+                    className={deliveryMode === 'queue' ? 'delivery-primary' : undefined}
+                    aria-keyshortcuts={
+                      queueBlocked
+                        ? undefined
+                        : deliveryMode === 'queue'
+                          ? keyShortcut
+                          : tabQueues
+                            ? 'Tab ' + alternateKeyShortcut
+                            : alternateKeyShortcut
+                    }
+                    aria-description={queueDescription}
+                    hint={
+                      t('Queue for next turn') +
+                      ' · ' +
+                      (deliveryMode === 'queue' ? shortcut : tabQueues ? 'Tab' : alternateShortcut)
+                    }
+                    unavailable={queueReason ? t(queueReason) : undefined}
+                    onClick={() => followUp('queue')}
+                  />
+                ) : (
+                  <IconButton
+                    className="send-button"
+                    icon="arrow"
+                    size={18}
+                    label={t('Send message')}
+                    aria-keyshortcuts={keyShortcut}
+                    aria-describedby="message-delivery-help"
+                    hint={sendReason ? t(sendReason) : t('Send message') + ' · ' + shortcut}
+                    onClick={() => void send()}
+                    disabled={deliveryBlocked || !!receipt}
+                  />
+                )}
+                {active && (
+                  <>
+                    <IconButton
+                      icon="steer"
+                      size={17}
+                      label={t('Add to current task')}
+                      className={deliveryMode === 'steer' ? 'delivery-primary' : undefined}
+                      aria-keyshortcuts={
+                        addBlocked
+                          ? undefined
+                          : deliveryMode === 'steer'
+                            ? keyShortcut
+                            : alternateKeyShortcut
+                      }
+                      aria-description={addNowDescription}
+                      hint={
+                        t('Add to current task') +
+                        ' · ' +
+                        (deliveryMode === 'steer' ? shortcut : alternateShortcut)
+                      }
+                      unavailable={addNowReason ? addNowDescription : undefined}
+                      onClick={() => followUp('steer')}
+                    />
+                    <IconButton
+                      icon="stop"
+                      className="stop-button"
+                      label={t('Stop task')}
+                      hint={t(
+                        thread?.queue?.items.length && !thread.queue.paused
+                          ? 'Stop task · Pause queue'
+                          : 'Stop task',
+                      )}
+                      aria-description={t(
+                        'Stop the current task and pause queued work. Completed file changes remain.',
+                      )}
+                      unavailable={stopReason ? t(stopReason) : undefined}
+                      onClick={stop}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+            {attachments.length > 0 && (
+              <div
+                className={
+                  'attachments' +
+                  (attachments.some((entry) => entry.kind === 'image') ? ' has-images' : '')
+                }
+              >
+                {attachments.map((a) =>
+                  a.kind === 'image' ? (
+                    <ImageAttachmentView
+                      key={a.id}
+                      image={a}
+                      projectId={contextProjectId}
+                      remove={() => {
+                        draftRevision.current++;
+                        setAttachments((list) => list.filter((entry) => entry !== a));
+                      }}
+                    />
+                  ) : (
+                    <span key={a.kind === 'uploaded-file' ? a.id : a.path}>
+                      <Icon name="file" size={13} />
+                      <span
+                        className="attachment-name"
+                        title={a.kind === 'uploaded-file' ? a.name : a.path}
+                      >
+                        {a.kind === 'uploaded-file'
+                          ? a.name
+                          : a.kind === 'file-reference'
+                            ? a.path
+                            : `${a.path}:${a.fromLine}–${a.toLine}`}
+                      </span>
+                      <IconButton
+                        icon="close"
+                        size={14}
+                        label={t('Remove {name}', {
+                          name: a.kind === 'uploaded-file' ? a.name : a.path,
+                        })}
+                        onClick={() => {
+                          draftRevision.current++;
+                          setAttachments((list) => list.filter((x) => x !== a));
+                        }}
+                      />
+                    </span>
+                  ),
+                )}
+              </div>
+            )}
+            {!!localAttachments.pending && (
+              <p className="attachment-upload-status" role="status">
+                {t('Uploading {count} attachment(s)…', { count: localAttachments.pending })}
+              </p>
+            )}
+          </div>
+          {thread && !loadingConversation && !atLatest && (
+            <div
+              className="history-navigation"
+              role="status"
+              aria-label={t('Conversation position')}
+            >
+              <span>
+                {history && liveRevision(thread) !== history.liveRevision
+                  ? t('New activity')
+                  : t('Earlier messages')}
+              </span>
+              <IconButton
+                icon="latest"
+                label={t('Back to latest messages')}
+                onClick={returnToLatest}
+              />
+            </div>
+          )}
+          {!!unresolvedQuestions.length && (
+            <div className="question-attention" role="status">
+              <span>
+                {t(
+                  unresolvedQuestions.length === 1
+                    ? '{count} request needs your input.'
+                    : '{count} requests need your input.',
+                  { count: unresolvedQuestions.length },
+                )}
+              </span>
+              <button
+                onClick={() => {
+                  const card = document.getElementById('action-' + unresolvedQuestions[0]!.id);
+                  setFollowing(false);
+                  card?.scrollIntoView({ block: 'center' });
+                  card
+                    ?.querySelector<HTMLElement>('input:not(:disabled),button:not(:disabled)')
+                    ?.focus({ preventScroll: true });
+                }}
+              >
+                {t('Answer questions')}
+              </button>
+            </div>
+          )}
+          {steerReceipt && (
+            <div className="recovery">
+              <span>{t('Follow-up acceptance unconfirmed')}</span>
+              <button disabled={busy} onClick={() => void checkSteer()}>
+                {t('Check follow-up receipt')}
+              </button>
+            </div>
+          )}
+          {!!pendingFollowUps.length && (
+            <section className="steering-receipt" aria-label={t('Immediate follow-ups')}>
+              {pendingFollowUps.map((entry) => (
+                <p key={entry.id}>
+                  {entry.state === 'unknown'
+                    ? t('Follow-up acceptance unconfirmed')
+                    : t('Sending follow-up')}{' '}
+                  · {entry.text.slice(0, 200)}
+                </p>
+              ))}
+              {pendingFollowUps.some(
+                (entry) => entry.state === 'unknown' && entry.id !== steerReceipt?.operationId,
+              ) && (
+                <button disabled={busy} onClick={() => void checkFollowUpStatus()}>
+                  {t('Check follow-up results')}
+                </button>
+              )}
+            </section>
+          )}
+          {queueRequest && (
+            <div className="recovery">
+              <span>{t('Queue receipt unconfirmed. Check before sending again.')}</span>
+              <button
+                disabled={busy || loadingConversation}
+                onClick={() => void checkQueueReceipt()}
+              >
+                {t('Check queue receipt')}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  changeDraft(queueRequest.payload.text);
+                  changeSettings(queueRequest.payload.settings);
+                  setAttachments(queueRequest.payload.attachments);
+                }}
+              >
+                {t('Restore pending draft')}
+              </button>
+            </div>
+          )}
+          {thread?.queue && (
+            <QueuePanel
+              dispatchUnavailable={
+                directoryBlocked
+                  ? 'Project directory unavailable.'
+                  : !contextReady
+                    ? 'Wait for project context.'
+                    : undefined
+              }
+              projectId={contextProjectId}
+              key={threadId}
+              threadId={threadId}
+              state={thread.queue}
+              onChange={applyQueue}
+              onCheck={reconcile}
+              turnId={canSteer ? thread?.turnId : undefined}
+              onEditingChange={setQueueEditing}
+              onStop={active && thread?.turnId ? stop : undefined}
+            />
+          )}
+
+          {connectionError && connection === 'Unavailable' && (
+            <div className="error-banner" role="alert">
+              <span>{t(connectionError)}</span>
+            </div>
+          )}
+          {conversationLoadError &&
+            (!loadingConversation || preview) &&
+            connection === 'Connected' && (
+              <div className="error-banner" role="alert">
+                <span>{t(conversationLoadError)}</span>
+                <button type="button" onClick={retryConversation}>
+                  {t('Retry loading')}
+                </button>
+              </div>
+            )}
+          {accountBlock === 'Codex is not signed in.' && connectionControl.onSignIn && (
+            <div className="recovery codex-signin-prompt">
+              <span role="status">{t('Codex is not signed in.')}</span>
+              <button type="button" onClick={connectionControl.onSignIn}>
+                {t('Sign in to Codex')}
+              </button>
+            </div>
+          )}
+          {thread?.writerConflict && (
+            <section className="recovery" aria-label={t('Conversation ownership')}>
+              <span>{t('Open in another Codex client')}</span>
+              <button disabled={busy || !!thread.pending} onClick={() => void checkWriter()}>
+                {t('Check availability')}
+              </button>
+              <button disabled={busy || !!thread.pending} onClick={() => void recoverBranch()}>
+                {t('Continue in branch')}
+              </button>
+            </section>
+          )}
+          {error && (
+            <div className="error-banner" role="alert">
+              <span>{t(error)}</span>
+              <IconButton
+                icon="close"
+                label={t('Dismiss error')}
+                size={15}
+                onClick={() => setError('')}
+              />
+            </div>
+          )}
+          {(thread?.state === 'unknown' || (receipt && !thread?.pending)) && (
+            <div className="recovery">
+              <span>
+                {thread?.expiredQuestion
+                  ? t(
+                      'The pending question expired when Codex stopped. Its answer can no longer be submitted. Check the task result before continuing.',
+                    )
+                  : t('A request may still be running. Check before continuing.')}
+              </span>
+              <button disabled={busy} onClick={() => void reconcile()}>
+                {t('Check result')}
+              </button>
+              {thread?.expiredQuestion && (
+                <button disabled={busy} onClick={() => void recoverBranch()}>
+                  {t('Continue in branch')}
+                </button>
+              )}
+            </div>
+          )}
+          {!queueEditing && draft.startsWith('/') && !draft.includes('\n') && (
+            <div className="slash-commands" role="group" aria-label={t('Commands')}>
+              {commands
+                .filter((entry) => entry.name.startsWith(draft.split(/\s+/)[0] ?? ''))
+                .map((entry) => (
+                  <button key={entry.name} onClick={() => runCommand(entry.name)}>
+                    <strong>{entry.name}</strong>
+                    <span>{t(entry.detail)}</span>
+                  </button>
+                ))}
+            </div>
+          )}
+          <span hidden id="message-delivery-help">
+            {deliveryHelp}
+          </span>
+        </div>
         <WorkspaceHeader
           title={
             preview?.title ??
@@ -1947,450 +2295,87 @@ function App() {
             )}
           </div>
         </div>
-        <div className="composer-area">
-          {thread && !loadingConversation && !atLatest && (
-            <div
-              className="history-navigation"
-              role="status"
-              aria-label={t('Conversation position')}
-            >
-              <span>
-                {history && liveRevision(thread) !== history.liveRevision
-                  ? t('New activity')
-                  : t('Earlier messages')}
-              </span>
-              <IconButton
-                icon="latest"
-                label={t('Back to latest messages')}
-                onClick={returnToLatest}
-              />
-            </div>
-          )}
-          {!!unresolvedQuestions.length && (
-            <div className="question-attention" role="status">
-              <span>
-                {t(
-                  unresolvedQuestions.length === 1
-                    ? '{count} request needs your input.'
-                    : '{count} requests need your input.',
-                  { count: unresolvedQuestions.length },
-                )}
-              </span>
-              <button
-                onClick={() => {
-                  const card = document.getElementById('action-' + unresolvedQuestions[0]!.id);
-                  setFollowing(false);
-                  card?.scrollIntoView({ block: 'center' });
-                  card
-                    ?.querySelector<HTMLElement>('input:not(:disabled),button:not(:disabled)')
-                    ?.focus({ preventScroll: true });
-                }}
-              >
-                {t('Answer questions')}
-              </button>
-            </div>
-          )}
-          {steerReceipt && (
-            <div className="recovery">
-              <span>{t('Follow-up acceptance unconfirmed')}</span>
-              <button disabled={busy} onClick={() => void checkSteer()}>
-                {t('Check follow-up receipt')}
-              </button>
-            </div>
-          )}
-          {!!pendingFollowUps.length && (
-            <section className="steering-receipt" aria-label={t('Immediate follow-ups')}>
-              {pendingFollowUps.map((entry) => (
-                <p key={entry.id}>
-                  {entry.state === 'unknown'
-                    ? t('Follow-up acceptance unconfirmed')
-                    : t('Sending follow-up')}{' '}
-                  · {entry.text.slice(0, 200)}
-                </p>
-              ))}
-              {pendingFollowUps.some(
-                (entry) => entry.state === 'unknown' && entry.id !== steerReceipt?.operationId,
-              ) && (
-                <button disabled={busy} onClick={() => void checkFollowUpStatus()}>
-                  {t('Check follow-up results')}
-                </button>
-              )}
-            </section>
-          )}
-          {queueRequest && (
-            <div className="recovery">
-              <span>{t('Queue receipt unconfirmed. Check before sending again.')}</span>
-              <button
-                disabled={busy || loadingConversation}
-                onClick={() => void checkQueueReceipt()}
-              >
-                {t('Check queue receipt')}
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  changeDraft(queueRequest.payload.text);
-                  changeSettings(queueRequest.payload.settings);
-                  setAttachments(queueRequest.payload.attachments);
-                }}
-              >
-                {t('Restore pending draft')}
-              </button>
-            </div>
-          )}
-          {thread?.queue && (
-            <QueuePanel
-              dispatchUnavailable={
-                directoryBlocked
-                  ? 'Project directory unavailable.'
-                  : !contextReady
-                    ? 'Wait for project context.'
-                    : undefined
-              }
-              projectId={contextProjectId}
-              key={threadId}
-              threadId={threadId}
-              state={thread.queue}
-              onChange={applyQueue}
-              onCheck={reconcile}
-              turnId={canSteer ? thread?.turnId : undefined}
-              onEditingChange={setQueueEditing}
-              onStop={active && thread?.turnId ? stop : undefined}
-            />
-          )}
-
-          {connectionError && connection === 'Unavailable' && (
-            <div className="error-banner" role="alert">
-              <span>{t(connectionError)}</span>
-            </div>
-          )}
-          {conversationLoadError &&
-            (!loadingConversation || preview) &&
-            connection === 'Connected' && (
-              <div className="error-banner" role="alert">
-                <span>{t(conversationLoadError)}</span>
-                <button type="button" onClick={retryConversation}>
-                  {t('Retry loading')}
-                </button>
-              </div>
-            )}
-          {accountBlock === 'Codex is not signed in.' && connectionControl.onSignIn && (
-            <div className="recovery codex-signin-prompt">
-              <span role="status">{t('Codex is not signed in.')}</span>
-              <button type="button" onClick={connectionControl.onSignIn}>
-                {t('Sign in to Codex')}
-              </button>
-            </div>
-          )}
-          {thread?.writerConflict && (
-            <section className="recovery" aria-label={t('Conversation ownership')}>
-              <span>{t('Open in another Codex client')}</span>
-              <button disabled={busy || !!thread.pending} onClick={() => void checkWriter()}>
-                {t('Check availability')}
-              </button>
-              <button disabled={busy || !!thread.pending} onClick={() => void recoverBranch()}>
-                {t('Continue in branch')}
-              </button>
-            </section>
-          )}
-          {error && (
-            <div className="error-banner" role="alert">
-              <span>{t(error)}</span>
-              <IconButton
-                icon="close"
-                label={t('Dismiss error')}
-                size={15}
-                onClick={() => setError('')}
-              />
-            </div>
-          )}
-          {(thread?.state === 'unknown' || (receipt && !thread?.pending)) && (
-            <div className="recovery">
-              <span>
-                {thread?.expiredQuestion
-                  ? t(
-                      'The pending question expired when Codex stopped. Its answer can no longer be submitted. Check the task result before continuing.',
-                    )
-                  : t('A request may still be running. Check before continuing.')}
-              </span>
-              <button disabled={busy} onClick={() => void reconcile()}>
-                {t('Check result')}
-              </button>
-              {thread?.expiredQuestion && (
-                <button disabled={busy} onClick={() => void recoverBranch()}>
-                  {t('Continue in branch')}
-                </button>
-              )}
-            </div>
-          )}
-          {!queueEditing && draft.startsWith('/') && !draft.includes('\n') && (
-            <div className="slash-commands" role="group" aria-label={t('Commands')}>
-              {commands
-                .filter((entry) => entry.name.startsWith(draft.split(/\s+/)[0] ?? ''))
-                .map((entry) => (
-                  <button key={entry.name} onClick={() => runCommand(entry.name)}>
-                    <strong>{entry.name}</strong>
-                    <span>{t(entry.detail)}</span>
-                  </button>
-                ))}
-            </div>
-          )}
-          <div
-            className={`composer ${active ? 'is-active' : ''}`}
-            style={{ display: queueEditing || (!projectId && !threadId) ? 'none' : undefined }}
-          >
-            {attachments.length > 0 && (
-              <div
-                className={
-                  'attachments' +
-                  (attachments.some((entry) => entry.kind === 'image') ? ' has-images' : '')
-                }
-              >
-                {attachments.map((a) =>
-                  a.kind === 'image' ? (
-                    <ImageAttachmentView
-                      key={a.id}
-                      image={a}
-                      projectId={contextProjectId}
-                      remove={() => {
-                        draftRevision.current++;
-                        setAttachments((list) => list.filter((entry) => entry !== a));
-                      }}
-                    />
-                  ) : (
-                    <span key={a.kind === 'uploaded-file' ? a.id : a.path}>
-                      <Icon name="file" size={13} />
-                      <span
-                        className="attachment-name"
-                        title={a.kind === 'uploaded-file' ? a.name : a.path}
-                      >
-                        {a.kind === 'uploaded-file'
-                          ? a.name
-                          : a.kind === 'file-reference'
-                            ? a.path
-                            : `${a.path}:${a.fromLine}–${a.toLine}`}
-                      </span>
-                      <IconButton
-                        icon="close"
-                        size={14}
-                        label={t('Remove {name}', {
-                          name: a.kind === 'uploaded-file' ? a.name : a.path,
-                        })}
-                        onClick={() => {
-                          draftRevision.current++;
-                          setAttachments((list) => list.filter((x) => x !== a));
-                        }}
-                      />
-                    </span>
-                  ),
-                )}
-              </div>
-            )}
-            {!!localAttachments.pending && (
-              <p className="attachment-upload-status" role="status">
-                {t('Uploading {count} attachment(s)…', { count: localAttachments.pending })}
-              </p>
-            )}
-            <textarea
-              onPaste={localAttachments.paste}
-              aria-label={t('Message Codex')}
-              aria-describedby="message-delivery-help"
-              aria-keyshortcuts={
-                keyShortcut + (threadId ? ' ArrowUp ArrowDown' : '') + (tabQueues ? ' Tab' : '')
-              }
-              ref={composer}
-              value={draft}
-              readOnly={!!thread?.archived || !!thread?.managementPending}
-              onChange={(e) => changeDraft(e.target.value)}
-              placeholder={
-                thread?.archived
-                  ? t('Restore this conversation to continue…')
-                  : thread?.managementPending
-                    ? t('Check conversation status to continue…')
-                    : t('Ask Codex anything')
-              }
-              maxLength={50_000}
-              onKeyDown={(e) => {
-                const recall = recallComposerMessage(e, composerHistory.current, () =>
-                  thread?.id === threadId && thread.projectId === projectId
-                    ? reviewMessages
-                    : (preview?.messages ?? []),
-                );
-                if (recall) {
-                  e.preventDefault();
-                  composerHistory.current = recall.history;
-                  const input = e.currentTarget;
-                  input.setSelectionRange(input.value.length, input.value.length);
-                  if (recall.text !== input.value) changeDraft(recall.text, true);
-                  return;
-                }
-                if (e.key === 'Escape' && draft.startsWith('/')) {
-                  e.preventDefault();
-                  changeDraft('');
-                  return;
-                }
-                if (e.nativeEvent.isComposing || e.altKey) return;
-                const modifier = e.ctrlKey || e.metaKey;
-                if (e.key === 'Tab' && tabQueues && !modifier && !e.shiftKey && !e.repeat) {
-                  e.preventDefault();
-                  followUp('queue');
-                  return;
-                }
-                if (e.key !== 'Enter') return;
-                if (modifier && e.shiftKey && active) {
-                  e.preventDefault();
-                  if (!busy && !steerReceipt && !queueRequest) followUp(alternateDelivery);
-                  return;
-                }
-                const sendKey =
-                  modifier ||
-                  (!phoneLayout &&
-                    preferences.enter !== 'cmdAlways' &&
-                    (preferences.enter !== 'cmdIfMultiline' || !draft.includes('\n')));
-                if (!e.shiftKey && sendKey) {
-                  e.preventDefault();
-                  if (busy || steerReceipt || queueRequest) return;
-                  if (hasFollowUps) followUp();
-                  else if (!receipt) void send();
-                }
-              }}
-            />
-            <div className="composer-toolbar">
-              <div className="composer-tools">
-                <PanelMenu
-                  label={t('Attach files')}
-                  className="composer-attachment-menu"
-                  disabled={attachmentBlocked}
-                  iconOnly
-                  trigger={<Icon name="plus" size={17} />}
-                >
-                  <button
-                    type="button"
-                    data-close-menu
-                    onClick={() => localAttachments.picker.current?.click()}
-                  >
-                    <Icon name="upload" size={16} />
-                    {t('Upload from device')}
-                  </button>
-                  <button type="button" data-close-menu onClick={() => setPanel('files')}>
-                    <Icon name="folder" size={16} />
-                    {t('Browse project files')}
-                  </button>
-                </PanelMenu>
-                <input
-                  hidden
-                  ref={localAttachments.picker}
-                  type="file"
-                  multiple
-                  aria-label={t('Choose local files')}
-                  onChange={localAttachments.choose}
-                />
-                <ComposerControls
-                  ref={composerControls}
-                  mode={mode}
-                  changeMode={setMode}
-                  configuration={codexDefaults}
-                  models={models}
-                  autoReviewReady={autoReviewReady}
-                  saveConfiguration={saveComposerConfiguration}
-                  planReady={planReady}
-                  disabled={
-                    busy || loadingConversation || !!thread?.archived || !!thread?.managementPending
-                  }
-                />
-                {thread?.usage && <ContextUsageIndicator usage={thread.usage} />}
-              </div>
-              <div
-                className="composer-dispatch-actions"
-                role="group"
-                aria-label={t('Message actions')}
-                data-follow-up={hasFollowUps || undefined}
-              >
-                {hasFollowUps ? (
-                  <IconButton
-                    icon="queue"
-                    size={17}
-                    label={t('Queue message')}
-                    className={deliveryMode === 'queue' ? 'delivery-primary' : undefined}
-                    aria-keyshortcuts={
-                      queueBlocked
-                        ? undefined
-                        : deliveryMode === 'queue'
-                          ? keyShortcut
-                          : tabQueues
-                            ? 'Tab ' + alternateKeyShortcut
-                            : alternateKeyShortcut
-                    }
-                    aria-description={queueDescription}
-                    hint={
-                      t('Queue for next turn') +
-                      ' · ' +
-                      (deliveryMode === 'queue' ? shortcut : tabQueues ? 'Tab' : alternateShortcut)
-                    }
-                    unavailable={queueReason ? t(queueReason) : undefined}
-                    onClick={() => followUp('queue')}
-                  />
-                ) : (
-                  <IconButton
-                    className="send-button"
-                    icon="arrow"
-                    size={18}
-                    label={t('Send message')}
-                    aria-keyshortcuts={keyShortcut}
-                    aria-describedby="message-delivery-help"
-                    hint={sendReason ? t(sendReason) : t('Send message') + ' · ' + shortcut}
-                    onClick={() => void send()}
-                    disabled={deliveryBlocked || !!receipt}
-                  />
-                )}
-                {active && (
-                  <>
-                    <IconButton
-                      icon="steer"
-                      size={17}
-                      label={t('Add to current task')}
-                      className={deliveryMode === 'steer' ? 'delivery-primary' : undefined}
-                      aria-keyshortcuts={
-                        addBlocked
-                          ? undefined
-                          : deliveryMode === 'steer'
-                            ? keyShortcut
-                            : alternateKeyShortcut
-                      }
-                      aria-description={addNowDescription}
-                      hint={
-                        t('Add to current task') +
-                        ' · ' +
-                        (deliveryMode === 'steer' ? shortcut : alternateShortcut)
-                      }
-                      unavailable={addNowReason ? addNowDescription : undefined}
-                      onClick={() => followUp('steer')}
-                    />
-                    <IconButton
-                      icon="stop"
-                      className="stop-button"
-                      label={t('Stop task')}
-                      hint={t(
-                        thread?.queue?.items.length && !thread.queue.paused
-                          ? 'Stop task · Pause queue'
-                          : 'Stop task',
-                      )}
-                      aria-description={t(
-                        'Stop the current task and pause queued work. Completed file changes remain.',
-                      )}
-                      unavailable={stopReason ? t(stopReason) : undefined}
-                      onClick={stop}
-                    />
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          <span hidden id="message-delivery-help">
-            {deliveryHelp}
-          </span>
-        </div>
       </main>
+      {sidebar && <div className="scrim" onClick={closeNavigation} />}
+      <aside
+        ref={navigationElement}
+        id="sidebar-navigation"
+        className={`sidebar ${sidebar ? 'open' : ''}`}
+        aria-label={t('Workspace navigation')}
+        inert={modalOpen || contextOverlay || undefined}
+        role={narrow && sidebar && !modalOpen ? 'dialog' : undefined}
+        aria-modal={narrow && sidebar && !modalOpen ? true : undefined}
+      >
+        <div className="sidebar-brand">
+          <Brand />
+          <IconButton
+            ref={navigationClose}
+            className="navigation-close"
+            icon="sidebar-collapse"
+            label={t('Close navigation')}
+            size={18}
+            onClick={closeNavigation}
+          />
+          <button
+            className="navigation-new"
+            type="button"
+            aria-label={t('New conversation')}
+            disabled={busy}
+            onClick={newThread}
+          >
+            <Icon name="newchat" size={16} />
+            {phoneLayout ? t('New') : t('New conversation')}
+          </button>
+        </div>
+        <Conversations
+          projects={projects}
+          currentDirectory={project?.path}
+          selectedId={threadId}
+          updates={sidebarUpdates}
+          connection={connection}
+          disabled={busy}
+          supportsCreatedSort={
+            system?.runtime === 'mock' || system?.capabilities?.conversationSort === true
+          }
+          onSelect={select}
+          onUpdated={conversationUpdated}
+          onModalChange={setConversationModalOpen}
+        />
+        <div className="workspace-footer" role="group" aria-label={t('Workspace controls')}>
+          <ConnectionStatus {...connectionControl} placement="sidebar" />
+          <div className="workspace-actions">
+            <button
+              className="icon-button"
+              aria-label={t('Interaction settings')}
+              data-tooltip=""
+              onClick={() => setDialog('preferences')}
+            >
+              <Icon name="settings" size={16} />
+            </button>
+            <IconButton
+              icon="logout"
+              label={t('Sign out')}
+              onClick={() =>
+                void post('/logout')
+                  .then(() => {
+                    webFeed.current?.close();
+                    setAuth('login');
+                  })
+                  .catch(notice)
+              }
+              className="workspace-sign-out"
+            />
+          </div>
+        </div>
+      </aside>
+      {sidebar && !narrow && !modalOpen && !contextOverlay && (
+        <SidebarResize
+          side="navigation"
+          range={sidebarLayout.navigation}
+          workspace={workspaceElement}
+          change={changeNavigationWidth}
+        />
+      )}
       {previewedImage && (
         <ImagePreviewDialog
           path={previewedImage}

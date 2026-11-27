@@ -11,6 +11,10 @@
 
 - Focus the message field on the first Tab from the unfocused workspace.
 
+### Fixed
+
+- Keep Tab navigation in the workspace after the composer controls so keyboard users can reach the header, conversation, and sidebars.
+
 ## [0.2.1] - 2026-11-27
 
 ### Added

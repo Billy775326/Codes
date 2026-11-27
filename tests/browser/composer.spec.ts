@@ -55,9 +55,28 @@ for (const width of [1440, 320]) {
     await expect(input).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(
+      page.getByRole('button', { name: 'Codex permissions', exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press('Tab');
+    const model = page.getByRole('button', { name: 'Model and reasoning', exact: true });
+    await expect(model).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.topbar :focus')).toHaveCount(1);
+    await page.keyboard.press('Shift+Tab');
+    await expect(model).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Shift+Tab');
     await expect(input).toBeFocused();
     await input.fill('A short draft');
+    await model.focus();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.topbar :focus')).toHaveCount(1);
+    await input.focus();
     await expect(input).toBeFocused();
     expect(await input.evaluate((e) => getComputedStyle(e).outlineStyle)).toBe('none');
     expect(await input.evaluate((e) => getComputedStyle(e).fontSize)).toBe(

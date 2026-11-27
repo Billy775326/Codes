@@ -1,10 +1,22 @@
 /* The composer owns focus and menu overflow; inner controls keep their own focus cues. */
+/* Source order starts at the composer. Flex ordering keeps its visual position. */
 .app .composer-area {
+  display: flex;
+  flex-direction: column;
+  order: 1;
   container-type: inline-size;
+}
+.app .composer-area > .composer {
+  display: flex;
+  flex-direction: column;
+  order: 1;
 }
 .app .composer {
   overflow: visible;
   border-radius: 14px;
+}
+.app .composer-area > .composer > :is(.attachments, .attachment-upload-status) {
+  order: -1;
 }
 .app .composer:focus-within {
   border-color: var(--muted);
