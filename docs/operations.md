@@ -8,6 +8,10 @@ The [release installer](../README.md#install-codes) needs Bash, curl, GNU tar an
 
 Install runs as your user and places releases in `$XDG_DATA_HOME/codes-app` or `~/.local/share/codes-app`, with a launcher in `~/.local/bin`. Configure these locations with `CODES_APP_DIR` and `CODES_BIN_DIR` respectively. The launcher directs commands to the installed version. The workspace database and token use the usual data directory.
 
+The interactive installer in the development branch asks for an initial browser language and listener port on a new workspace. With no terminal, it uses English and port 6670. Set `CODES_LANGUAGE` to `en` or `zh-CN` and `CODES_PORT` to an available loopback port to supply those answers. The browser keeps language preferences already saved on that device.
+
+The installer generates a private workspace token and prints the token, file path, and workspace URL. Reinstalling the same version while Codes is stopped replaces the file-backed token and prints the replacement. Stop Codes before reinstalling. An upgrade to a different release keeps the existing token. Workspaces using `CODES_ACCESS_TOKEN` obtain their token from the startup environment.
+
 Before upgrading, let work finish and stop Codes with the current launcher. Run the installer for the desired release, then start Codes with the same environment. An existing source-checkout launcher can coexist by setting `CODES_BIN_DIR` to a different directory. To open data from a checkout that uses `.local`, set `CODES_DATA_DIR` to that directory and stop the old instance before starting the installed release. The source checkout and Codex home remain in place.
 
 ## Network and access

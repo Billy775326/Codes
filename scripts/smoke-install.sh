@@ -6,9 +6,16 @@ TEST_RELEASE_ASSETS=$(realpath "${1:?Specify a release asset directory}")
 stage=$(mktemp -d)
 original_path=$PATH
 export CODES_APP_DIR="$stage/installed app" CODES_BIN_DIR="$stage/installed bin"
-export CODES_RUNTIME=mock CODES_PORT=19180 CODES_HOST=127.0.0.1
+export CODES_RUNTIME=mock CODES_PORT=${CODES_INSTALL_TEST_PORT:-19180} CODES_HOST=127.0.0.1
+unset CODES_ACCESS_TOKEN CODES_PUBLIC_ORIGIN
 export CODES_DATA_DIR=$stage/workspace
-trap 'if [[ -e $CODES_DATA_DIR/server.lock ]]; then "$CODES_BIN_DIR/codes" stop; fi; rm -rf -- "$stage"' EXIT
+blocker=
+cleanup() {
+  if [[ -n $blocker ]]; then kill "$blocker" 2>/dev/null || true; wait "$blocker" || true; fi
+  if [[ -e $CODES_DATA_DIR/server.lock ]]; then "$CODES_BIN_DIR/codes" stop; fi
+  rm -rf -- "$stage"
+}
+trap cleanup EXIT
 mkdir -p "$stage/downloads"
 cat >"$stage/downloads/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -25,18 +32,66 @@ done
 exit 1
 EOF
 chmod +x "$stage/downloads/curl"
-PATH="$stage/downloads:$original_path" bash scripts/install.sh
+install() {
+  PATH="$stage/downloads:$original_path" bash scripts/install.sh
+}
+port=$CODES_PORT
+origin=http://127.0.0.1:$port
+node --input-type=module - "$stage/busy-port" <<'NODE' &
+import { writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
+
+const server = createServer();
+server.listen(0, '127.0.0.1', () => writeFileSync(process.argv[2], String(server.address().port)));
+NODE
+blocker=$!
+for ((attempt = 0; attempt < 40; attempt++)); do
+  [[ ! -s $stage/busy-port ]] || break
+  sleep 0.05
+done
+[[ -s $stage/busy-port ]]
+printf '2\n0\n%s\n%s\n' "$(<"$stage/busy-port")" "$port" |
+  env -u CODES_LANGUAGE -u CODES_PORT PATH="$stage/downloads:$original_path" \
+    script --quiet --return --command 'bash scripts/install.sh' /dev/null >"$stage/first-install"
 codes=$CODES_BIN_DIR/codes
 version=$(node -p 'require("./package.json").version')
 [[ $("$codes" --version) == "v$version" ]]
-"$codes" start
+first_token=$(<"$CODES_DATA_DIR/access-token")
+[[ $first_token =~ ^[a-f0-9]{64}$ ]]
+[[ $(stat -c '%a' "$CODES_DATA_DIR/access-token") == 600 ]]
+grep -Fq '监听端口' "$stage/first-install"
+grep -Fq '请输入 1 到 65535' "$stage/first-install"
+grep -Fq '端口已被占用' "$stage/first-install"
+grep -Fq -- "令牌文件： $CODES_DATA_DIR/access-token" "$stage/first-install"
+grep -Fq -- "工作区访问令牌： $first_token" "$stage/first-install"
+grep -Fq -- "工作区地址： $origin" "$stage/first-install"
+env -u CODES_PORT "$codes" start
 "$codes" status
-curl --fail --silent --show-error http://127.0.0.1:19180/ >"$stage/index.html"
+curl --fail --silent --show-error "$origin/" >"$stage/index.html"
 grep -q '<title>Codes</title>' "$stage/index.html"
-PATH="$stage/downloads:$original_path" bash scripts/install.sh
-"$codes" status
+grep -q '<html lang="zh-CN">' "$stage/index.html"
+if install >"$stage/running-reinstall" 2>&1; then
+  echo 'The installer reset the token while Codes was running.' >&2
+  exit 1
+fi
+[[ $(<"$CODES_DATA_DIR/access-token") == "$first_token" ]]
 "$codes" stop
-[[ -s $CODES_DATA_DIR/codes.sqlite && -s $CODES_DATA_DIR/access-token ]]
+
+CODES_PORT=1 install >"$stage/reinstall"
+new_token=$(<"$CODES_DATA_DIR/access-token")
+[[ $new_token =~ ^[a-f0-9]{64}$ && $new_token != "$first_token" ]]
+grep -Fq -- "工作区访问令牌： $new_token" "$stage/reinstall"
+grep -Fq -- "工作区地址： $origin" "$stage/reinstall"
+env -u CODES_PORT "$codes" start
+login_status() {
+  curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --header "Origin: $origin" --header 'Content-Type: application/json' \
+    --data-binary @- "$origin/api/login"
+}
+[[ $(printf '{"token":"%s"}' "$first_token" | login_status) == 401 ]]
+[[ $(printf '{"token":"%s"}' "$new_token" | login_status) == 200 ]]
+"$codes" stop
+[[ -s $CODES_DATA_DIR/codes.sqlite ]]
 
 # Exercise a version switch against an existing workspace and a running prior slot.
 current=$CODES_APP_DIR/releases/v$version
@@ -44,12 +99,13 @@ previous=$CODES_APP_DIR/releases/smoke-prior
 cp -al "$current" "$previous"
 ln -sfn releases/smoke-prior "$CODES_APP_DIR/current"
 "$codes" start
-if PATH="$stage/downloads:$original_path" bash scripts/install.sh; then
+if install; then
   echo 'The installer switched versions while Codes was running.' >&2
   exit 1
 fi
 "$codes" stop
 before=$(sha256sum "$CODES_DATA_DIR/codes.sqlite" "$CODES_DATA_DIR/access-token")
-PATH="$stage/downloads:$original_path" bash scripts/install.sh
+install >"$stage/upgrade"
+if grep -Fq -- "$new_token" "$stage/upgrade"; then exit 1; fi
 [[ $(readlink "$CODES_APP_DIR/current") == "releases/v$version" && -d $previous ]]
 [[ $(sha256sum "$CODES_DATA_DIR/codes.sqlite" "$CODES_DATA_DIR/access-token") == "$before" ]]

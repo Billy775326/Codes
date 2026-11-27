@@ -4,6 +4,8 @@
 
 ### Added
 
+- Choose the initial browser language and port during interactive installation. The installer displays the new workspace token and replaces it when reinstalling the same version.
+
 - Start Codex device-code sign-in from the workspace when a compatible App Server reports a signed-out account.
 
 - Open Connection status to check the browser, Codex runtime, and Codex account independently. A slow conversation can load while the browser remains connected. Signed-out users can keep editing drafts, and waiting messages stay queued until the owner resumes dispatch.

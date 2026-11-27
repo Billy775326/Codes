@@ -173,3 +173,28 @@ test('changes a file-backed access token and keeps the draft through sign-in', a
     await observer.close();
   }
 });
+
+test('the installed language applies before sign-in and yields to a saved browser language', async ({
+  page,
+}) => {
+  await page.route(
+    (url) => url.pathname === '/',
+    async (route) => {
+      const response = await route.fetch();
+      const source = await response.text();
+      await route.fulfill({
+        response,
+        body: source.replace('<html lang="en">', '<html lang="zh-CN">'),
+      });
+    },
+  );
+  await page.goto('/');
+  await expect(page.getByLabel('工作区访问令牌')).toBeEnabled();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+  await page.evaluate(() => {
+    localStorage.setItem('codes.preferences', JSON.stringify({ language: 'en' }));
+  });
+  await page.reload();
+  await expect(page.getByLabel('Workspace access token')).toBeEnabled();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+});

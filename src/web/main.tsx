@@ -162,7 +162,10 @@ function App() {
     return () => clearTimeout(timer);
   }, [fileScopeWarning]);
   const [preferences, setPreferences] = useState(() =>
-    readBrowserPreferences(saved(browserPreferencesKey)),
+    readBrowserPreferences(
+      saved(browserPreferencesKey),
+      document.documentElement.lang === 'zh-CN' ? 'zh-CN' : 'en',
+    ),
   );
   const interfaceLanguage = interfaceLanguages[preferences.language];
   const { t } = interfaceLanguage;

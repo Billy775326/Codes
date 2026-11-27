@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, join, extname, relative } from 'node:path';
 import { z } from 'zod';
-import { AppError, asError } from '../shared/errors.js';
+import { AppError, asError, record } from '../shared/errors.js';
 import type { Service } from './service.js';
 import { body, json, type HttpRequest } from './http-io.js';
 import { conversationRoutes } from './routes/conversations.js';
@@ -16,6 +16,7 @@ import { readReplay, traceRead, ReadDiagnostics } from './read-diagnostics.js';
 import type { NetworkConfiguration } from './network-settings.js';
 import type { RuntimeConfiguration } from './runtime-settings.js';
 import type { AccessToken } from './access-token.js';
+import { readSettingsFile } from './settings-file.js';
 import { accessTokenLimits } from '../shared/access-token.js';
 import type { JWTVerifyGetKey } from 'jose';
 import { cloudflareAuthenticator } from './cloudflare-access.js';
@@ -32,6 +33,9 @@ export async function application(
     cloudflareKey?: JWTVerifyGetKey;
   },
 ) {
+  const installed = readSettingsFile(join(service.store.directory, 'installation-settings.json'));
+  const initialChinese =
+    record(installed) && installed.version === 1 && installed.language === 'zh-CN';
   const active = options.network.active;
   const origins = active.origins.map((origin) => new URL(origin));
   const authenticateAccess =
@@ -294,7 +298,10 @@ export async function application(
       } catch {
         file = join(directory, 'index.html');
       }
-      const bytes = await readFile(file);
+      const bytes =
+        initialChinese && file === join(directory, 'index.html')
+          ? (await readFile(file, 'utf8')).replace('<html lang="en">', '<html lang="zh-CN">')
+          : await readFile(file);
       const mime: Record<string, string> = {
         '.html': 'text/html',
         '.js': 'text/javascript',

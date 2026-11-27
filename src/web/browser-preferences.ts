@@ -42,7 +42,10 @@ export const defaultBrowserPreferences: Preferences = {
   showHiddenFiles: false,
 };
 
-export function readBrowserPreferences(raw: string): Preferences {
+export function readBrowserPreferences(
+  raw: string,
+  initialLanguage: InterfaceLanguage = defaultBrowserPreferences.language,
+): Preferences {
   try {
     const value = JSON.parse(raw || '{}');
     return {
@@ -52,7 +55,8 @@ export function readBrowserPreferences(raw: string): Preferences {
       newConversationDirectory: value.newConversationDirectory === 'choose' ? 'choose' : 'current',
       review: value.review === 'detached' ? 'detached' : 'inline',
       theme: ['dark', 'light', 'system'].includes(value.theme) ? value.theme : 'dark',
-      language: value.language === 'zh-CN' ? 'zh-CN' : 'en',
+      language:
+        value.language === 'zh-CN' || value.language === 'en' ? value.language : initialLanguage,
       autoScroll: value.autoScroll !== false,
       notifications: value.notifications === true,
       notificationEvents: Array.isArray(value.notificationEvents)
@@ -63,6 +67,6 @@ export function readBrowserPreferences(raw: string): Preferences {
       codeFontSize: codeFontSizes.includes(value.codeFontSize) ? value.codeFontSize : undefined,
     };
   } catch {
-    return defaultBrowserPreferences;
+    return { ...defaultBrowserPreferences, language: initialLanguage };
   }
 }
