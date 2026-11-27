@@ -20,9 +20,7 @@ test('settings edit global Codex instructions without a selected project', async
   await page.goto('/');
   await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Choose a working directory', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Conversations', exact: true })).toBeVisible();
   const projects = await (await page.request.get('/api/projects')).json();
   const project = projects.find((entry: { name: string }) => entry.name === 'sample-project');
   const projectInstructions = join(project.path, 'AGENTS.md');

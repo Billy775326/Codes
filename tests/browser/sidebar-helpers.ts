@@ -12,9 +12,7 @@ export function conversationList(page: Page) {
 }
 
 export async function chooseWorkingDirectory(page: Page, path: string) {
-  const trigger = page.getByRole('button', { name: 'Change working directory', exact: true });
-  const empty = page.getByRole('button', { name: 'Choose a working directory', exact: true });
-  await trigger.or(empty).click();
+  await page.getByRole('button', { name: 'Change working directory', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'Choose a working directory' });
   await picker.getByLabel('Working directory', { exact: true }).fill(path);
   await picker.getByRole('button', { name: 'Use directory', exact: true }).click();

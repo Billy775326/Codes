@@ -12,7 +12,9 @@ Switching conversations restores unsent text and leaves live work running. See t
 
 ## Working directories
 
-A new draft uses the current working directory when available. Change it with the folder control in the draft header or choose one when starting without a directory. The server checks that it is an accessible, existing Linux directory before creating the native thread.
+On first visit, Codes loads the native conversation list and opens a draft in the directory Codes was started from. `CODES_PROJECT_ROOT` overrides that initial directory. A new draft uses the current available directory, then falls back to the startup directory. Change it with the folder control in the draft header. The server verifies that the directory exists and is accessible before creating the native thread.
+
+For the v0.1.0 release, set `CODES_PROJECT_ROOT` before startup to provide the initial directory.
 
 An existing conversation uses the working directory returned by Codex for effective configuration, execution, files, and review. A missing directory preserves history and blocks directory operations. Restore the directory or permissions and use **Retry directory**. If Codex reports a different directory while older work or file references are pending, resolve the receipt or remove the affected queue entries before continuing.
 

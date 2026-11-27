@@ -103,6 +103,7 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
         delete (env as Partial<typeof env>).CODES_DATA_DIR;
         delete (env as Partial<typeof env>).CODES_ACCESS_TOKEN;
       }
+      if (mode === 'default') delete (env as Partial<typeof env>).CODES_PROJECT_ROOT;
       const data = relativeData
         ? join(caller, 'private/state')
         : mode === 'legacy'
@@ -158,8 +159,10 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
         expect(duplicate.stderr).toContain('Data directory: ' + data);
         expect(duplicate.stderr).not.toContain('file://');
         expect(duplicate.stderr).not.toContain('at ModuleJob');
-        expect((await client.get('/api/system')).status()).toBe(200);
-        if (relativeData) {
+        expect(await (await client.get('/api/system')).json()).toMatchObject({
+          initialWorkingDirectory: caller,
+        });
+        if (mode !== 'legacy') {
           try {
             const restart = run(
               ['restart'],
@@ -184,6 +187,9 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
             expect(await (await client.get('/api/projects')).json()).toEqual([
               expect.objectContaining({ path: caller }),
             ]);
+            expect(await (await client.get('/api/system')).json()).toMatchObject({
+              initialWorkingDirectory: caller,
+            });
           } finally {
             const stopped = run(['stop']);
             expect(stopped.status, stopped.stderr).toBe(0);
@@ -203,6 +209,14 @@ for (const mode of ['default', 'legacy', 'relative'] as const) {
         try {
           expect(background.status, background.stderr).toBe(0);
           expect(background.stdout).toContain('codes is ready at ' + origin);
+          expect(
+            (
+              await client.post('/api/login', { data: { token }, headers: { Origin: origin } })
+            ).status(),
+          ).toBe(200);
+          expect(await (await client.get('/api/system')).json()).toMatchObject({
+            initialWorkingDirectory: caller,
+          });
           const pid = await readFile(join(data, 'server.lock'), 'utf8');
           expect(run(['start']).stdout).toContain('PID ' + pid);
           expect(run(['ststus']).status).toBe(0);

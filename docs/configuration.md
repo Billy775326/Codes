@@ -33,19 +33,19 @@ Use **Data → Backup & restore** for all settings imports and exports and for d
 
 Set these values in the environment of the process that runs Codes.
 
-| Variable                         | Default                                     | Purpose                                                                                                     |
-| -------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `CODES_RUNTIME`                  | `codex`                                     | Use real Codex or the `mock` simulator                                                                      |
-| `CODES_DATA_DIR`                 | `~/.local/share/codes`                      | Private database, token, settings, uploads, and service lock                                                |
-| `CODES_PROJECT_ROOT`             | Unset                                       | Optional initial working directory for a new draft. The native session list is independent of this setting. |
-| `CODES_CODEX_BINARY`             | `codex`                                     | Name or path of the Codex executable                                                                        |
-| `CODES_CODEX_REQUEST_TIMEOUT_MS` | `30000`                                     | Initial general RPC deadline, 1,000–300,000 ms                                                              |
-| `CODES_HOST`                     | `127.0.0.1`                                 | Initial loopback listener                                                                                   |
-| `CODES_PORT`                     | `6670`                                      | Initial port, 1–65535                                                                                       |
-| `CODES_PUBLIC_ORIGIN`            | Local loopback origins on the listener port | One exact initial browser origin when specified                                                             |
-| `CODES_ACCESS_TOKEN`             | A private generated token file              | Optional environment-backed workspace token                                                                 |
-| `CODES_READ_DIAGNOSTICS`         | Unset                                       | Set to `1` to log successful diagnostic reads from startup                                                  |
-| `CODEX_HOME`                     | The service user's `~/.codex`               | Native Codex configuration, login, and histories                                                            |
+| Variable                         | Default                                     | Purpose                                                                                                  |
+| -------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `CODES_RUNTIME`                  | `codex`                                     | Use real Codex or the `mock` simulator                                                                   |
+| `CODES_DATA_DIR`                 | `~/.local/share/codes`                      | Private database, token, settings, uploads, and service lock                                             |
+| `CODES_PROJECT_ROOT`             | Directory where Codes was started           | Overrides the initial working directory for a new draft. The native session list covers all directories. |
+| `CODES_CODEX_BINARY`             | `codex`                                     | Name or path of the Codex executable                                                                     |
+| `CODES_CODEX_REQUEST_TIMEOUT_MS` | `30000`                                     | Initial general RPC deadline, 1,000–300,000 ms                                                           |
+| `CODES_HOST`                     | `127.0.0.1`                                 | Initial loopback listener                                                                                |
+| `CODES_PORT`                     | `6670`                                      | Initial port, 1–65535                                                                                    |
+| `CODES_PUBLIC_ORIGIN`            | Local loopback origins on the listener port | One exact initial browser origin when specified                                                          |
+| `CODES_ACCESS_TOKEN`             | A private generated token file              | Optional environment-backed workspace token                                                              |
+| `CODES_READ_DIAGNOSTICS`         | Unset                                       | Set to `1` to log successful diagnostic reads from startup                                               |
+| `CODEX_HOME`                     | The service user's `~/.codex`               | Native Codex configuration, login, and histories                                                         |
 
 The server reads process environment variables at startup. Use shell exports or your service manager to supply values. A saved `network-settings.json` overrides the listener environment defaults. A saved `runtime-settings.json` overrides the initial RPC deadline. Listener and deadline changes apply on restart. Token rotation and future sign-in lifetime have their own controls. [Network and access](operations.md#network-and-access)
 

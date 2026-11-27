@@ -951,13 +951,25 @@ function App() {
     [select],
   );
   const newThread = useCallback(() => {
-    if (preferences.newConversationDirectory === 'current' && projectId && !directoryBlocked)
+    if (preferences.newConversationDirectory === 'choose') {
+      openDirectoryPicker();
+      return;
+    }
+    if (projectId && !directoryBlocked) {
       newThreadIn(projectId);
-    else openDirectoryPicker();
+      return;
+    }
+    const fallback = projects.find(
+      (entry) => entry.path === system?.initialWorkingDirectory && entry.id !== projectId,
+    );
+    if (fallback) newThreadIn(fallback.id);
+    else setError('The startup working directory is unavailable.');
   }, [
     preferences.newConversationDirectory,
     projectId,
     directoryBlocked,
+    projects,
+    system?.initialWorkingDirectory,
     newThreadIn,
     openDirectoryPicker,
   ]);
@@ -1515,7 +1527,9 @@ function App() {
         <WorkspaceHeader
           title={
             preview?.title ??
-            (loadingConversation ? t('Conversation') : (thread?.title ?? t('New conversation')))
+            (loadingConversation
+              ? t('Conversation')
+              : (thread?.title ?? t(projectId ? 'New conversation' : 'Conversations')))
           }
           conversationId={thread?.id === threadId ? threadId : undefined}
           renameDisabled={busy || !!thread?.managementPending}
@@ -1660,22 +1674,15 @@ function App() {
                   </button>
                 )}
               </section>
-            ) : !visibleMessages.length && !active ? (
+            ) : !visibleMessages.length && !active && projectId ? (
               <section className="conversation-start" aria-label={t('New conversation')}>
-                {projectId ? (
-                  <div className="conversation-starters">
-                    {starters.map(([label, text]) => (
-                      <button key={label} type="button" onClick={() => changeDraft(text)}>
-                        {t(label)}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <button className="primary" onClick={openDirectoryPicker}>
-                    <Icon name="folder" />
-                    {t('Choose a working directory')}
-                  </button>
-                )}
+                <div className="conversation-starters">
+                  {starters.map(([label, text]) => (
+                    <button key={label} type="button" onClick={() => changeDraft(text)}>
+                      {t(label)}
+                    </button>
+                  ))}
+                </div>
               </section>
             ) : (
               <>
@@ -2053,7 +2060,7 @@ function App() {
           )}
           <div
             className={`composer ${active ? 'is-active' : ''}`}
-            style={{ display: queueEditing ? 'none' : undefined }}
+            style={{ display: queueEditing || (!projectId && !threadId) ? 'none' : undefined }}
           >
             {attachments.length > 0 && (
               <div

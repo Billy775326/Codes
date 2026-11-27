@@ -24,6 +24,7 @@ async function stop(child: ChildProcess) {
 }
 it('uses the saved port and allows local and HTTPS proxy origins after restart', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'codes-network-startup-'));
+  const launchDirectory = await realpath(process.cwd());
   const initialPort = await port();
   let nextPort = await port();
   while (nextPort === initialPort) nextPort = await port();
@@ -120,10 +121,10 @@ it('uses the saved port and allows local and HTTPS proxy origins after restart',
           restartRequired: false,
         });
         const system = await (await fetch(base + '/api/system', { headers: { cookie } })).json();
-        expect(system).not.toHaveProperty('initialWorkingDirectory');
+        expect(system.initialWorkingDirectory).toBe(launchDirectory);
         expect(system).not.toHaveProperty('codeQuestions');
         expect(await (await fetch(base + '/api/projects', { headers: { cookie } })).json()).toEqual(
-          [],
+          [expect.objectContaining({ path: launchDirectory })],
         );
         const state = await (await fetch(base + path, { headers: { cookie } })).json();
         expect(state).toMatchObject({

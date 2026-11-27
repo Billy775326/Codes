@@ -350,29 +350,34 @@ test('working-directory choice validates the path and reuses a canonical directo
   );
 });
 
-test('an installation without a selected directory can browse and choose one for its first draft', async ({
+test('a first visit lists native sessions and opens a draft in the startup directory', async ({
   page,
+  browser,
 }) => {
   await login(page);
-  const dirs = await (await page.request.get('/api/projects')).json();
-  const initial = dirs.find((item: { name: string }) => item.name === 'sample-project');
-  await page.route('**/api/projects', (route) => route.fulfill({ json: [] }));
-  await page.evaluate(() => {
-    localStorage.removeItem('codes.project');
-    localStorage.removeItem('codes.thread');
-  });
-  await page.reload();
-  await expect(
-    page.getByRole('button', { name: 'Choose a working directory', exact: true }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'New conversation', exact: true }).click();
-  const picker = page.getByRole('dialog', { name: 'Choose a working directory' });
-  await expect(picker).toBeVisible();
-  await picker.getByLabel('Working directory', { exact: true }).fill(initial.path);
-  await picker.getByRole('button', { name: 'Browse directories', exact: true }).click();
-  await picker.getByRole('button', { name: 'conversation-fixtures', exact: true }).click();
-  await picker.getByRole('button', { name: 'Use directory', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Change working directory' })).toHaveText(
-    join(initial.path, 'conversation-fixtures'),
-  );
+  const { a, second, path } = await fixture(page);
+  const firstVisit = await browser.newPage({ baseURL: origin });
+  try {
+    await login(firstVisit);
+    const existingThread = row(firstVisit, second.id);
+    await expect(existingThread).toContainText(path);
+    await expect(firstVisit.getByRole('button', { name: 'Change working directory' })).toHaveText(
+      a.path,
+    );
+    await expect(
+      firstVisit.getByRole('button', { name: 'Choose a working directory' }),
+    ).toHaveCount(0);
+    await firstVisit.getByRole('button', { name: 'New conversation', exact: true }).click();
+    await expect(firstVisit.getByLabel('Message Codex')).toBeFocused();
+    await expect(
+      firstVisit.getByRole('dialog', { name: 'Choose a working directory' }),
+    ).toHaveCount(0);
+    await existingThread.locator('.thread-link').click();
+    await expect(firstVisit.locator('.workspace-directory')).toHaveText(path);
+    await expect(
+      firstVisit.getByRole('heading', { name: second.title, exact: true }),
+    ).toBeVisible();
+  } finally {
+    await firstVisit.close();
+  }
 });

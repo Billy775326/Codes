@@ -66,7 +66,7 @@ Build the application first with npm run build in ${root}`);
   const { dataDirectory } = await import('../dist/server/data-directory.js');
   const directory = dataDirectory();
   try {
-    if (managing) process.exitCode = await manageService(command, root, directory);
+    if (managing) process.exitCode = await manageService(command, root, directory, caller);
     else if (logging) {
       process.stdout.on('error', (error) => {
         if (error.code === 'EPIPE') process.exit(0);
@@ -75,6 +75,7 @@ Build the application first with npm run build in ${root}`);
       process.exitCode = await showServiceLog(directory, following);
     } else {
       const entry = restoring ? '../dist/server/restore-command.js' : '../dist/server/main.js';
+      if (!restoring) process.env.CODES_PROJECT_ROOT ||= caller;
       await import(new URL(entry, import.meta.url).href);
       if (!restoring) {
         try {

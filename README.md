@@ -34,7 +34,7 @@ The release includes Node.js and installs the `codes` launcher in `~/.local/bin`
 ~/.local/bin/codes start
 ```
 
-Open [http://127.0.0.1:6670](http://127.0.0.1:6670) and sign in with the workspace token. On first startup, Codes prints the path to the token file. Select a Codex conversation in the sidebar or choose a working directory for a new one.
+Open [http://127.0.0.1:6670](http://127.0.0.1:6670) and sign in with the workspace token. On first startup, Codes prints the path to the token file. Continue a native Codex conversation from the sidebar or start a new one. [Working directories](docs/conversations.md#working-directories)
 
 <a id="remote-access"></a>
 

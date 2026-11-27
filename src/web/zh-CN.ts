@@ -492,6 +492,7 @@ export const simplifiedChinese: Readonly<Record<string, string>> = {
   'Save the current settings form': '保存当前设置表单',
   'On phones, Enter adds a line.': '手机上按 Enter 换行。',
   'New conversation directory': '新会话目录',
+  'The startup working directory is unavailable.': '启动时的工作目录不可用。',
   'Use current directory': '沿用当前目录',
   'Choose each time': '每次选择',
   Layout: '布局',

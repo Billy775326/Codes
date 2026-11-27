@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Open the first draft in the startup working directory while loading native conversations in the sidebar. Default new conversations use the current available directory.
+
 ## [0.1.0] - 2026-11-26
 
 ### Added

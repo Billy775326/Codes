@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import { lookup } from 'node:dns/promises';
 import { resolve, join } from 'node:path';
 import { Driver } from '../codex/driver.js';
@@ -28,23 +29,22 @@ const mode = process.env.CODES_RUNTIME ?? 'codex';
 if (mode !== 'mock' && mode !== 'codex') throw new Error('CODES_RUNTIME must be codex or mock.');
 const configuredProjectPath = process.env.CODES_PROJECT_ROOT
   ? resolve(process.env.CODES_PROJECT_ROOT)
-  : undefined;
+  : process.cwd();
+const store = new Store(directory);
+// A previously registered directory can be temporarily unavailable.
+const registered = store.projects().find((project) => project.path === configuredProjectPath);
+const initialWorkingDirectory = registered?.path ?? (await realpath(configuredProjectPath));
 const service = new Service(
-  new Store(directory),
+  store,
   new Driver(mode, {
     binary: process.env.CODES_CODEX_BINARY,
     stateFile: join(directory, 'mock-history.json'),
     timeoutMs: runtime.active.requestTimeoutMs,
   }),
-  configuredProjectPath,
-  configuredProjectPath,
+  initialWorkingDirectory,
+  initialWorkingDirectory,
 );
-// Existing registrations must stay readable when a directory is temporarily absent.
-if (
-  configuredProjectPath &&
-  !service.store.projects().some((project) => project.path === configuredProjectPath)
-)
-  await service.addProject(configuredProjectPath);
+if (!registered) await service.addProject(initialWorkingDirectory);
 const app = await application(service, {
   network,
   runtime,

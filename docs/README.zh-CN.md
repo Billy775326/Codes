@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/Billy775326/Codes/v0.1.0/scripts/in
 ~/.local/bin/codes start
 ```
 
-打开 [http://127.0.0.1:6670](http://127.0.0.1:6670)，使用首次启动时提示的令牌文件登录。可从侧栏继续已有会话，或选择工作目录新建会话。界面默认英文，在 **Settings → General → Appearance** 可切换为简体中文。跨设备访问见[网络与访问](operations.md#network-and-access)。
+打开 [http://127.0.0.1:6670](http://127.0.0.1:6670)，使用首次启动时提示的令牌文件登录。可从侧栏继续 Codex 原生会话，也可新建会话。界面默认英文，在 **Settings → General → Appearance** 可切换为简体中文。[工作目录](conversations.md#working-directories) · [网络与访问](operations.md#network-and-access)
 
 ## 从源码运行
 

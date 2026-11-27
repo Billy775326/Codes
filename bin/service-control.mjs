@@ -109,7 +109,13 @@ export function resolveLaunchPaths(env, cwd) {
 }
 
 export function rememberLaunchDirectory(directory, cwd, initialEnv) {
-  if (process.platform !== 'linux' || !hasRelativeProjectPaths(initialEnv)) return;
+  // The foreground launcher changes into the installation before serving files.
+  // Restart still needs the caller directory for defaults and relative settings.
+  if (
+    process.platform !== 'linux' ||
+    (initialEnv.CODES_PROJECT_ROOT && !hasRelativeProjectPaths(initialEnv))
+  )
+    return;
   if (lockOwner(directory) !== process.pid) return;
   const target = join(directory, 'launcher-cwd.json');
   const temp = target + '.' + randomUUID();
@@ -136,15 +142,23 @@ export function serviceEnvironment(owner, directory) {
       .map((entry) => [entry.slice(0, entry.indexOf('=')), entry.slice(entry.indexOf('=') + 1)]),
   );
   let cwd = owner.cwd;
-  if (owner.launcher && hasRelativeProjectPaths(env)) {
+  const relative = hasRelativeProjectPaths(env);
+  if (owner.launcher && (relative || !env.CODES_PROJECT_ROOT)) {
     const record = JSON.parse(readOptional(join(directory, 'launcher-cwd.json')) || 'null');
-    if (record?.pid !== owner.pid || record.started !== owner.started || !isAbsolute(record.cwd))
+    if (
+      record?.pid === owner.pid &&
+      record.started === owner.started &&
+      typeof record.cwd === 'string' &&
+      isAbsolute(record.cwd)
+    )
+      cwd = record.cwd;
+    else if (relative)
       throw new Error(
         'Cannot recover the original path for a relative startup setting. Use codes stop, then codes start with the intended environment.',
       );
-    cwd = record.cwd;
   }
   env.CODES_DATA_DIR = directory;
+  env.CODES_PROJECT_ROOT ||= cwd;
   resolveLaunchPaths(env, cwd);
   return env;
 }
@@ -198,7 +212,7 @@ async function start(root, directory, env, executable, cwd, { path, fd }) {
   throw new Error(`Codes startup has not been confirmed. Run codes status and inspect ${path}.`);
 }
 
-export async function manageService(command, root, directory) {
+export async function manageService(command, root, directory, caller) {
   if (process.platform !== 'linux') throw new Error('Codes service commands require Linux.');
   const owner = serviceInstance(root, directory);
   if (command === 'status' || (command === 'start' && owner)) {
@@ -211,7 +225,9 @@ export async function manageService(command, root, directory) {
     else console.log('Codes is already stopped.');
     return 0;
   }
-  const env = owner ? serviceEnvironment(owner, directory) : process.env;
+  const env = owner
+    ? serviceEnvironment(owner, directory)
+    : { ...process.env, CODES_PROJECT_ROOT: process.env.CODES_PROJECT_ROOT || caller };
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const log = openServiceLog(directory, true);
   try {
