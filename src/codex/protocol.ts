@@ -77,6 +77,7 @@ export async function inspectNativeProtocol(
   const directory = await mkdtemp(join(tmpdir(), 'codes-protocol-'));
   let client: Map<string, Set<string>>;
   let server: Map<string, Set<string>>;
+  let deviceLogin = false;
   try {
     await execute(
       binary,
@@ -91,7 +92,17 @@ export async function inspectNativeProtocol(
       readFile(join(directory, 'ClientRequest.json'), 'utf8'),
       readFile(join(directory, 'ServerRequest.json'), 'utf8'),
     ]);
-    client = methods(JSON.parse(clientSchema));
+    const schema = JSON.parse(clientSchema);
+    client = methods(schema);
+    const loginVariants = schema.definitions?.LoginAccountParams?.oneOf;
+    deviceLogin =
+      client.has('account/login/start') &&
+      client.get('account/login/cancel')?.has('loginId') === true &&
+      Array.isArray(loginVariants) &&
+      loginVariants.some(
+        (variant: unknown) =>
+          record(variant) && variant.properties?.type?.enum?.includes('chatgptDeviceCode') === true,
+      );
     server = methods(JSON.parse(serverSchema));
   } catch {
     throw new AppError(
@@ -124,6 +135,7 @@ export async function inspectNativeProtocol(
       412,
     );
   const capabilities: CodexCapabilities = {
+    deviceLogin,
     conversationSearch: supports('thread/list', ['searchTerm']),
     conversationIdFilter: supports('thread/list', ['includedThreadIds']),
     conversationSort: supports('thread/list', ['sortKey']),

@@ -75,6 +75,7 @@ import { WorkingDirectoryDialog } from './WorkingDirectoryDialog';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import { ConnectionStatus, type ConnectionStatusProps } from './ConnectionStatus';
 import { useCodexConnection } from './useCodexConnection';
+import { CodexSignInDialog } from './CodexSignInDialog';
 import { SidebarResize } from './SidebarResize';
 import './foundation.css';
 import './interactions.css';
@@ -150,7 +151,7 @@ function App() {
   const contextReady = !!contextProjectId && context?.project.id === contextProjectId;
   const directoryBlocked = contextReady && !context.directory.available;
 
-  const [dialog, setDialog] = useState<'preferences' | 'review' | 'status'>();
+  const [dialog, setDialog] = useState<'preferences' | 'review' | 'status' | 'codex-login'>();
   const [previewedImage, setPreviewedImage] = useState<string>();
   const [linkedFile, setLinkedFile] = useState<ProjectFileReference>();
   const [fileScopeWarning, setFileScopeWarning] = useState(0);
@@ -401,6 +402,7 @@ function App() {
     checkFailed: codexConnection.checkFailed,
     reconnect: () => void webFeed.current?.reconnect(),
     retryCodex: codexConnection.retry,
+    onSignIn: system?.capabilities?.deviceLogin ? () => setDialog('codex-login') : undefined,
   };
   const deliveryNotice = (error: unknown) => {
     if (
@@ -2035,6 +2037,14 @@ function App() {
                 </button>
               </div>
             )}
+          {accountBlock === 'Codex is not signed in.' && connectionControl.onSignIn && (
+            <div className="recovery codex-signin-prompt">
+              <span role="status">{t('Codex is not signed in.')}</span>
+              <button type="button" onClick={connectionControl.onSignIn}>
+                {t('Sign in to Codex')}
+              </button>
+            </div>
+          )}
           {thread?.writerConflict && (
             <section className="recovery" aria-label={t('Conversation ownership')}>
               <span>{t('Open in another Codex client')}</span>
@@ -2410,6 +2420,13 @@ function App() {
             !thread?.queue?.items.length &&
             !receipt
           }
+        />
+      )}
+      {dialog === 'codex-login' && (
+        <CodexSignInDialog
+          close={() => setDialog(undefined)}
+          signedIn={codexConnection.retry}
+          connected={connection === 'Connected'}
         />
       )}
       {dialog === 'status' && (

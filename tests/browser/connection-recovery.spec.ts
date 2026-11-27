@@ -292,3 +292,61 @@ test('a missing CLI offers a runtime retry within the connected browser workspac
   await connection.getByRole('button', { name: 'Retry Codex' }).click();
   await expect(page.getByRole('button', { name: 'Connection: Ready' })).toBeVisible();
 });
+
+test('device sign-in is available beside the unsent draft and refreshes the account on completion', async ({
+  page,
+}) => {
+  const loginId = '4c4d1ccf-cc9f-44a0-8fcc-17aa0bf4aaf8';
+  let status = 'idle';
+  await page.route('**/api/connection/codex?*', (route) =>
+    route.fulfill({
+      json: {
+        system: {
+          runtime: 'mock',
+          state: 'ready',
+          version: 'fixture',
+          capabilities: { deviceLogin: true },
+        },
+        account: status === 'succeeded' ? 'signed-in' : 'signed-out',
+      },
+    }),
+  );
+  await page.route('**/api/connection/codex/login', (route) => {
+    if (route.request().method() === 'POST') status = 'pending';
+    if (route.request().method() === 'DELETE') {
+      expect(route.request().postDataJSON()).toEqual({ loginId });
+      status = 'idle';
+    }
+    return route.fulfill({
+      json:
+        status === 'pending'
+          ? {
+              status,
+              loginId,
+              verificationUrl: 'https://auth.openai.com/codex/device',
+              userCode: 'ABCD-1234',
+            }
+          : { status },
+    });
+  });
+  await page.goto('/');
+  await page.getByLabel('Workspace access token').fill('test-only-browser-token-not-a-real-secret');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await page.getByLabel('Message Codex').fill('Keep this draft until I sign in');
+  await page.getByRole('button', { name: 'Sign in to Codex', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Sign in to Codex' });
+  await dialog.getByRole('button', { name: 'Get device code' }).click();
+  await expect(dialog.getByText('ABCD-1234', { exact: true })).toBeVisible();
+  const link = dialog.getByRole('link', { name: 'Open OpenAI sign-in' });
+  await expect(link).toHaveAttribute('href', 'https://auth.openai.com/codex/device');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await dialog.getByRole('button', { name: 'Cancel sign-in' }).click();
+  await expect(link).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Get device code' }).click();
+  await expect(link).toBeVisible();
+  status = 'succeeded';
+  await expect(dialog.getByText('Codex is signed in.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByLabel('Message Codex')).toHaveValue('Keep this draft until I sign in');
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+});

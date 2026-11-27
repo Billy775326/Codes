@@ -43,6 +43,8 @@ For changes to this contract, test a trusted project override, stale user-layer 
 - Check the Codex App Server handshake independently of browser authentication. Read account status with `account/read` and `refreshToken: false`. Refresh after native account changes, on focus when stale, on manual request, and before starting new execution when stale. Show unknown when the installed CLI or effective provider cannot confirm the state.
 - Block new execution only for a confirmed missing or stale account for the built-in OpenAI provider. Preserve drafts, receipts, and queue positions. Account checks never dispatch a task, resume a held queue, or restart a running App Server. If terminal login and App Server state differ, show the restart action for after active work finishes.
 
+- Offer in-browser sign-in when the installed App Server supports native device login and the OpenAI account is confirmed signed out. Let Codex manage the login session and credentials. Expose an active one-time code only to the authenticated workspace, correlate native completion and cancellation, and recheck account readiness after completion.
+
 ## Launcher lifecycle
 
 Keep foreground launch available. Background start waits for the initial listener and writes private logs. Lifecycle commands select the same data directory as startup and verify the current lock owner and database before stopping a process. Restart captures the original startup environment before shutdown and keeps it in memory. The launcher uses the server's graceful shutdown and lets the server release its own lock.

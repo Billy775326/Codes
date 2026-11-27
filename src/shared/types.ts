@@ -209,6 +209,7 @@ export interface MaintenanceState {
   ready: boolean;
 }
 export interface CodexCapabilities {
+  deviceLogin?: boolean;
   conversationSearch?: boolean;
   conversationIdFilter?: boolean;
   conversationSort?: boolean;

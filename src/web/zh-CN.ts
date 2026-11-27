@@ -1,5 +1,24 @@
 /* Interface copy. Native and user-authored text falls back to the original. */
 export const simplifiedChinese: Readonly<Record<string, string>> = {
+  'Sign in to Codex': '登录 Codex',
+  'Enter this one-time code on the OpenAI sign-in page.':
+    '请在 OpenAI 登录页面输入此一次性验证码。',
+  'Select and copy the code above.': '请选中并复制上方的验证码。',
+  'Open OpenAI sign-in': '打开 OpenAI 登录页',
+  'Waiting for Codex sign-in…': '等待 Codex 登录…',
+  'Cancel sign-in': '取消登录',
+  'Codex is signed in.': 'Codex 已登录。',
+  'Codex sign-in did not finish. Request a new code to try again.':
+    'Codex 登录未完成，请获取新验证码后重试。',
+  'Use a one-time code to sign in with your ChatGPT account.':
+    '使用一次性验证码登录你的 ChatGPT 账号。',
+  'Starting sign-in…': '正在发起登录…',
+  'Get device code': '获取验证码',
+  'Browser sign-in is unavailable with this Codex CLI.': '当前 Codex CLI 版本不支持网页登录。',
+  'Could not start Codex sign-in. Check that device code login is enabled.':
+    '无法发起 Codex 登录。请确认已开启设备码登录。',
+  'Check Codex login status before signing in.': '请先检查 Codex 登录状态。',
+  'Could not cancel Codex sign-in. Try again.': '无法取消 Codex 登录，请重试。',
   Background: '标签页在后台',
   'The service returned an invalid conversation snapshot.': '会话快照无效。',
   'The conversation changed while loading. Retry loading.': '加载期间会话发生变更，请重试。',

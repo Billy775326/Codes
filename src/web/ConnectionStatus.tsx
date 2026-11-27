@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { CodexAccountStatus, System } from '../shared/types';
 import { useInterfaceLanguage } from './interface-language';
 
@@ -11,6 +11,7 @@ export interface ConnectionStatusProps {
   checkFailed: boolean;
   reconnect: () => void;
   retryCodex: () => void;
+  onSignIn?: () => void;
 }
 
 export function ConnectionStatus({
@@ -22,10 +23,13 @@ export function ConnectionStatus({
   checkFailed,
   reconnect,
   retryCodex,
+  onSignIn,
   placement,
 }: ConnectionStatusProps & { placement: 'header' | 'sidebar' }) {
   const { t } = useInterfaceLanguage();
   const id = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const popover = useRef<HTMLElement>(null);
   const [copyResult, setCopyResult] = useState('');
   const inHeader = placement === 'header';
   const webReady = web === 'Connected';
@@ -80,6 +84,7 @@ export function ConnectionStatus({
     <div className={inHeader ? 'header-connection-controls' : 'workspace-connection'}>
       <button
         type="button"
+        ref={trigger}
         className={(inHeader ? 'header-connection' : 'connection') + (healthy ? ' connected' : '')}
         aria-label={t('Connection: {status}', { status: label })}
         aria-haspopup="dialog"
@@ -89,6 +94,7 @@ export function ConnectionStatus({
         <span aria-live="polite">{label}</span>
       </button>
       <section
+        ref={popover}
         className="connection-popover"
         data-placement={placement}
         popover="auto"
@@ -144,6 +150,19 @@ export function ConnectionStatus({
               </p>
             )}
             <div className="connection-actions">
+              {account === 'signed-out' && onSignIn && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    popover.current?.hidePopover();
+                    trigger.current?.focus();
+                    onSignIn();
+                  }}
+                >
+                  {t('Sign in to Codex')}
+                </button>
+              )}
               {account === 'signed-out' && (
                 <button type="button" onClick={() => void copy()}>
                   {t('Copy sign-in command')}

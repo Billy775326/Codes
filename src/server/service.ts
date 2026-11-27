@@ -17,6 +17,7 @@ import { ProjectFileManagement } from './project-file-management.js';
 import type { GlobalInstructions, ProjectInstructions } from '../shared/project-instructions.js';
 import { Images } from './images.js';
 import { CodexAccount } from './codex-account.js';
+import { CodexDeviceLogin } from './codex-device-login.js';
 import { ModelSettings } from './model-settings.js';
 import { AsyncQuestions } from './async-questions.js';
 import { NativeInteractions, type ActionResolution } from './native-interactions.js';
@@ -62,6 +63,7 @@ export class Service {
   private readonly conversationQueue: ConversationQueue;
   readonly modelSettings: ModelSettings;
   private readonly codexAccount: CodexAccount;
+  readonly codexLogin: CodexDeviceLogin;
   private readonly asyncQuestions: AsyncQuestions;
   private sending = new Map<string, number>();
   private maintenance?: { expiresAt: number; timer: ReturnType<typeof setTimeout> };
@@ -106,6 +108,7 @@ export class Service {
     });
     this.modelSettings = new ModelSettings(driver);
     this.codexAccount = new CodexAccount(driver);
+    this.codexLogin = new CodexDeviceLogin(driver, this.codexAccount);
     this.queue = new MessageQueue(
       store.queue,
       async (id, messageId) => {
@@ -213,6 +216,16 @@ export class Service {
       catalogChanged();
     });
     driver.on('notification', (event) => {
+      if (event.method === 'account/login/completed') {
+        const { loginId, success } = event.params ?? {};
+        if (typeof loginId === 'string' && typeof success === 'boolean')
+          this.codexLogin.complete(loginId, success);
+      } else if (
+        event.method === 'account/updated' &&
+        event.params?.authMode === null &&
+        this.codexLogin.current().status === 'succeeded'
+      )
+        this.codexLogin.reset();
       if (event.method === 'account/updated' || event.method === 'account/login/completed') {
         this.codexAccount.invalidate();
         this.events.publish('codex-account', {});
@@ -224,6 +237,7 @@ export class Service {
       this.interactions.request(event, this.cache.get(event.params?.threadId)),
     );
     driver.on('offline', () => {
+      this.codexLogin.reset();
       this.codexAccount.invalidate();
       this.modelSettings.invalidateCatalogs();
       this.loaded.clear();

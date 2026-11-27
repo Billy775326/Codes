@@ -176,6 +176,17 @@ export async function application(
               method === 'POST',
             ),
           );
+        if (url.pathname === '/api/connection/codex/login') {
+          if (method === 'GET') return json(response, service.codexLogin.current());
+          if (method === 'POST') return json(response, await service.codexLogin.start());
+          if (method === 'DELETE') {
+            const { loginId } = z
+              .object({ loginId: z.uuid() })
+              .strict()
+              .parse(await body(request));
+            return json(response, await service.codexLogin.cancel(loginId));
+          }
+        }
         if (url.pathname === '/api/maintenance' && method === 'POST') {
           const { action } = z
             .object({ action: z.enum(['start', 'cancel']) })
