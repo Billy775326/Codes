@@ -449,7 +449,7 @@ test('the running dot pulses only while live updates and motion are enabled', as
     resume = resolve;
   });
   await page.route(
-    '**/api/threads/*/snapshot',
+    '**/api/conversations/snapshot',
     async (route) => {
       await reconnect;
       await route.continue();
